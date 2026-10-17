@@ -10,7 +10,7 @@ rmSync(output,{recursive:true,force:true});mkdirSync(output,{recursive:true});
 cpSync(source,output,{recursive:true,filter:(path)=>path===source||!extname(path)||allow.has(extname(path))});
 const filename=resolve(output,'index.html');
 let html=readFileSync(filename,'utf8');
-html=html.replace("connect-src 'none'","connect-src 'self'");
+html=html.replace("connect-src 'none'","connect-src 'self' http://127.0.0.1:8765");
 html=html.replace('<title>ArtiSys PDV</title>','<title>PDV Total | ArtiSys</title>');
 html=html.replace("../../packages/core/shared/order-composer.js","./order-composer.js");
 for(const desktopScript of ['first-access-ui.js','updater-ui.js','hardware-scale-ui.js','telemetry-ui.js','reload-transition-ui.js']){
