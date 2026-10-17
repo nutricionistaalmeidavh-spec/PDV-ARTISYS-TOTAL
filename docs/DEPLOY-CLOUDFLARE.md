@@ -1,7 +1,7 @@
 # Implantação do PDV Artisys Total na Cloudflare
 
 Este Worker é **somente a fundação de identidade P1/P2**, não o PDV online completo.
-A versão original Electron está congelada em `legacy/pdv-artisys`: não é publicada, alterada nem licenciada por este Worker.
+O PDV Artisys original está preservado **somente em seu próprio repositório**. Neste repositório, o núcleo reaproveitado vive em `packages/core/` e a única UI sob adaptação em `apps/web/`. Electron e instaladores desktop não são publicados aqui.
 
 ## Integração do GitHub
 
@@ -17,7 +17,7 @@ Na Cloudflare, em **Workers & Pages → pdv-artisys-total → Configurações �
 | Deploy | `npx wrangler deploy` |
 | Preview | `npx wrangler preview` |
 
-`wrangler.jsonc` da raiz é a **única fonte canônica de configuração**. Não use os configs antigos em `legacy`. O merge em `main` aciona o serviço de builds da Cloudflare **se a conexão Git estiver ativa e o build do painel estiver correto**; GitHub Actions executa apenas QA e não publica uma segunda cópia.
+`wrangler.jsonc` da raiz é a **única fonte canônica de configuração**. Não existe configuração `legacy/` ativa neste repositório. O merge em `main` aciona o serviço de builds da Cloudflare **se a conexão Git estiver ativa e o build do painel estiver correto**; GitHub Actions executa apenas QA e não publica uma segunda cópia.
 
 ## D1, R2 e segredos
 
