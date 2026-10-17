@@ -686,3 +686,34 @@ test('P3 line note is atomic and idempotent, preserved in completed sale and can
   assert.equal(history.body.history.items[0].items[0].note,'Sem gelo; com limão');
  }finally{x.close();}
 });
+
+test('P3 home indicators are canonical live data, tenant-isolated and authorization-gated',async()=>{
+ const x=await setup();try{
+  const asOf=new Date().toISOString().slice(0,10);
+  const path='reports/home?branchId=branch-a&asOf='+asOf;
+  const before=await x.get('a',path);
+  assert.equal(before.status,200,JSON.stringify(before.body));
+  assert.equal(before.body.home.salesCount,0);
+  assert.equal(before.body.home.cashOpen,false);
+  const p=await x.id('Produto para alerta','HOME-LIVE-1',1);
+  const cash=await x.write('a','cash/open',{branchId:'branch-a',openingCents:1000});
+  assert.equal(cash.status,201,JSON.stringify(cash.body));
+  const sale=(await x.write('a','sales',{branchId:'branch-a'})).body.sale;
+  await x.write('a','sales/'+sale.id+'/items',{branchId:'branch-a',productId:p,quantity:1});
+  const completed=await x.write('a','sales/'+sale.id+'/complete',{branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]});
+  assert.equal(completed.status,200,JSON.stringify(completed.body));
+  const after=await x.get('a',path);
+  assert.equal(after.status,200,JSON.stringify(after.body));
+  assert.equal(after.body.home.salesCount,1);
+  assert.equal(after.body.home.netSalesCents,1000);
+  assert.equal(after.body.home.cashOpen,true);
+  assert.equal(after.body.home.outOfStockCount,1);
+  const other=await x.get('b','reports/home?branchId=branch-b&asOf='+asOf,x.other);
+  assert.equal(other.status,200,JSON.stringify(other.body));
+  assert.equal(other.body.home.salesCount,0);
+  assert.equal(other.body.home.cashOpen,false);
+  assert.equal((await x.get('a',path,x.viewer)).status,200);
+  assert.equal((await x.get('a','reports/home?branchId=branch-b&asOf='+asOf)).status,404);
+  assert.equal((await x.get('a','reports/home?branchId=branch-a&asOf=2026-02-30')).status,400);
+ }finally{x.close();}
+});

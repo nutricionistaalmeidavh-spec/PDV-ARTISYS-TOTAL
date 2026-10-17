@@ -57,12 +57,19 @@
         {
           "id": "home-003",
           "name": "Indicadores operacionais reais e alertas no início",
-          "status": "gap",
+          "status": "partial",
           "owner": "web-shell",
           "dependsOn": [
             "home-001"
           ],
-          "acceptance": "Indicadores operacionais reais e alertas no início. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Indicadores operacionais reais e alertas no início. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async homeIndicators(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 home indicators are canonical live data"
+          },
+          "reviewNote": "Dashboard web com vendas líquidas, devoluções, sessão aberta e alerta de disponibilidade a partir de APIs com escopo de empresa/filial. Ainda faltam metas, avisos completos e homologação do desktop."
         },
         {
           "id": "home-004",

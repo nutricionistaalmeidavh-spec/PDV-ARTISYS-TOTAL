@@ -341,6 +341,37 @@
     const operatorName=state.user?.name||'';
     content.innerHTML=`<section id="classic-home-grid" class="classic-home-grid" aria-label="Início de ${escapeHtml(view.label)}"><header class="classic-home-head"><div><span class="classic-home-eyebrow">Início · ${escapeHtml(view.label)}</span><h1>${escapeHtml(view.title)}</h1><p>${escapeHtml(view.subtitle)}</p></div>${operatorName?`<span class="classic-home-operator">${escapeHtml(operatorName)}</span>`:''}</header>${view.sections.map(section=>`<section class="classic-home-section" data-home-section="${escapeHtml(section.key)}">${section.label?`<h2>${escapeHtml(section.label)}</h2>`:''}<div class="classic-home-tiles">${section.tiles.map(tile=>`<button type="button" class="home-tile tone-${escapeHtml(tile.tone||'blue')}" data-home-route="${escapeHtml(tile.route)}" aria-label="Abrir ${escapeHtml(tile.label)}"><span class="tile-icon">${icon(tile.icon,46)}</span><h3>${escapeHtml(tile.label)}</h3><p>${escapeHtml(tile.description)}</p>${tile.shortcut?`<span class="shortcut-badge">${escapeHtml(tile.shortcut)}</span>`:''}</button>`).join('')}</div></section>`).join('')}</section>`;
     document.body.classList.add('home-view-classic');
+    if(api.webMode&&window.PdvAccessPolicy?.hasCapability(state.user,'reports.view')){
+      const heading=content.querySelector('.classic-home-head');
+      heading?.insertAdjacentHTML('afterend',`<section class="ops-card" id="web-home-live"
+        aria-live="polite"><h2>Indicadores operacionais</h2>
+        <p class="ops-muted">Consultando vendas, caixa e estoque registrados nesta filial...</p></section>`);
+      const host=content.querySelector('#web-home-live');
+      void api.homeIndicators().then(data=>{
+        if(!host||!host.isConnected||document.body.dataset.activeRoute!=='home')return;
+        const metric=(label,value)=>`<article class="ops-metric"><span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong></article>`;
+        host.innerHTML=`<h2>Indicadores operacionais · ${escapeHtml(data.asOf)}</h2>
+          <div class="ops-metrics">
+            ${metric('Vendas concluídas',String(data.salesCount))}
+            ${metric('Vendas líquidas',ui.formatCents(data.netSalesCents))}
+            ${metric('Devoluções',ui.formatCents(data.refundedCents))}
+            ${metric('Caixa da filial',data.cashOpen?'Aberto':'Fechado')}
+            ${metric('Sem estoque disponível',String(data.outOfStockCount))}
+          </div>
+          <p class="ops-muted">Dados do caixa, vendas e estoque canônicos. ${
+            data.stockCoverageUnknown?'Sem base de consumo para estimar cobertura de '+data.stockCoverageUnknown+' produto(s).':
+            'Cobertura estimada a partir de movimentações reais.'}</p>
+          ${data.outOfStockCount>0?`<p role="alert">${data.outOfStockCount}
+            produto(s) sem disponibilidade após reservas. Consulte Estoque.</p>`:''}
+          ${!data.cashOpen?'<p class="ops-muted">Não existe caixa aberto nesta filial.</p>':''}`;
+      }).catch(error=>{
+        if(host?.isConnected&&document.body.dataset.activeRoute==='home')
+          host.innerHTML=`<h2>Indicadores operacionais</h2><p class="ops-muted">
+            Não foi possível consultar os indicadores: ${escapeHtml(error.message)}</p>`;
+      });
+    }
+
     content.querySelectorAll('[data-home-route]').forEach(button=>button.addEventListener('click',async()=>{
       const tile=view.sections.flatMap(section=>section.tiles).find(item=>item.route===button.dataset.homeRoute);
       await navigate(button.dataset.homeRoute);

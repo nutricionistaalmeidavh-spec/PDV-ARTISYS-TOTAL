@@ -770,6 +770,22 @@ export function createCommerceService(db,{now=nowISO}={}){
       }
       return result;
     },
+    async homeIndicators(tenant,branch,{asOf=stamp().slice(0,10)}={}){
+      period({from:asOf,to:asOf});
+      const [report,open,coverage]=await Promise.all([
+        this.reports(tenant,branch,{from:asOf,to:asOf}),
+        this.cash(tenant,branch),
+        this.reportStockCoverage(tenant,branch,{asOf,days:30})
+      ]);
+      return {asOf,salesCount:report.sales.count,
+        netSalesCents:report.sales.totalCents,
+        refundedCents:report.sales.refundedCents,
+        cashOpen:Boolean(open),
+        outOfStockCount:coverage.zeroOrReservedOut,
+        trackedProducts:coverage.products.length,
+        stockCoverageUnknown:coverage.coverageUnknown,
+        source:'CANONICAL_SALES_CASH_STOCK'};
+    },
     async reports(tenant,branch,{from,to}={}){
       await branchExists(tenant,branch);
       const {a,b}=period({from,to});
