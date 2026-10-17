@@ -87,11 +87,21 @@ CREATE TABLE finance_cost_centers(
  UNIQUE(tenant_id,branch_id,id),
  FOREIGN KEY(tenant_id,branch_id) REFERENCES branches(tenant_id,id) ON DELETE RESTRICT
 );
+CREATE TABLE finance_categories(
+ id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,
+ name TEXT NOT NULL CHECK(length(name) BETWEEN 2 AND 100),
+ kind TEXT NOT NULL CHECK(kind IN('INCOME','EXPENSE','BOTH')),
+ dre_group_id TEXT,
+ UNIQUE(tenant_id,branch_id,id),
+ FOREIGN KEY(tenant_id,branch_id) REFERENCES branches(tenant_id,id) ON DELETE RESTRICT,
+ FOREIGN KEY(tenant_id,branch_id,dre_group_id) REFERENCES finance_dre_groups(tenant_id,branch_id,id) ON DELETE RESTRICT
+);
 CREATE TABLE finance_entry_dimensions(
  tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,entry_id TEXT NOT NULL,
- dre_group_id TEXT,cost_center_id TEXT,
+ dre_group_id TEXT,cost_center_id TEXT,category_id TEXT,
  PRIMARY KEY(tenant_id,branch_id,entry_id),
  FOREIGN KEY(tenant_id,branch_id,entry_id) REFERENCES finance_entries(tenant_id,branch_id,id) ON DELETE RESTRICT,
  FOREIGN KEY(tenant_id,branch_id,dre_group_id) REFERENCES finance_dre_groups(tenant_id,branch_id,id) ON DELETE RESTRICT,
- FOREIGN KEY(tenant_id,branch_id,cost_center_id) REFERENCES finance_cost_centers(tenant_id,branch_id,id) ON DELETE RESTRICT
+ FOREIGN KEY(tenant_id,branch_id,cost_center_id) REFERENCES finance_cost_centers(tenant_id,branch_id,id) ON DELETE RESTRICT,
+ FOREIGN KEY(tenant_id,branch_id,category_id) REFERENCES finance_categories(tenant_id,branch_id,id) ON DELETE RESTRICT
 );
