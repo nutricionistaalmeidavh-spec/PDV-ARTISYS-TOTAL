@@ -85,10 +85,10 @@ async function login(request,env,db,now){
     // Contagem persistente; se não existir conta a resposta continua genérica.
     await db.prepare(`INSERT INTO login_throttles(email_hash,failed_count,locked_until,updated_at)
       VALUES(?,1,0,?) ON CONFLICT(email_hash) DO UPDATE SET
-      failed_count=CASE WHEN login_throttles.locked_until<? THEN 1 ELSE login_throttles.failed_count+1 END,
-      locked_until=CASE WHEN login_throttles.locked_until<? AND login_throttles.failed_count>=5 THEN 0
+      failed_count=CASE WHEN login_throttles.updated_at<? THEN 1 ELSE login_throttles.failed_count+1 END,
+      locked_until=CASE WHEN login_throttles.updated_at<? THEN 0
         WHEN login_throttles.failed_count+1>=5 THEN ? ELSE login_throttles.locked_until END,
-      updated_at=?`).bind(key,now,now,now,now+15*60*1000,now).run();
+      updated_at=?`).bind(key,now,now-15*60*1000,now-15*60*1000,now+15*60*1000,now).run();
     return failure(401,'Credenciais inválidas.');
   }
   const memberships=await membershipsFor(db,user.id);
