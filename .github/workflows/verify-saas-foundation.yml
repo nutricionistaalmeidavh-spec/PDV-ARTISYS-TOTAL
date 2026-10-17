@@ -86,6 +86,8 @@ jobs:
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0010_purchase_orders.sql
       - name: Test P2 private product images schema in local D1
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0011_product_media.sql
+      - name: Test canonical P3 sale item note migration in local D1
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0012_sale_item_notes.sql
       - name: Install one Chromium for all browser regression gates
         run: |
           npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0

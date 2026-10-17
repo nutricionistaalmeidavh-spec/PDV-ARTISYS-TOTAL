@@ -16,13 +16,14 @@ const reversals=readFileSync(new URL('../migrations/0008_transaction_reversals.s
 const catalog=readFileSync(new URL('../migrations/0009_catalog_inventory.sql',import.meta.url),'utf8');
 const purchasing=readFileSync(new URL('../migrations/0010_purchase_orders.sql',import.meta.url),'utf8');
 const media=readFileSync(new URL('../migrations/0011_product_media.sql',import.meta.url),'utf8');
+const notesMigration=readFileSync(new URL('../migrations/0012_sale_item_notes.sql',import.meta.url),'utf8');
 const NOW=Date.parse('2026-10-17T14:00:00Z');
 const date='2026-10-17T14:00:00.000Z';
 const password='SafeTestPasswordForPdv2026!';
 let num=0;
 const next=()=>('mutation-'+(++num)+'-long');
 async function setup(){
-  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);
+  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);
   const pass=await hashPassword(password);
   for(const [id,email] of [['owner','owner@test.com'],['other','other@test.com'],['viewer','viewer@test.com']])
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
@@ -658,5 +659,30 @@ test('P4 stock coverage derives reserved availability and demand from immutable 
   assert.equal(line.minimumQuantity,null,'no invented minimum quantity for products without policy');
   assert.equal((await x.get('b','reports/stock-coverage?branchId=branch-b&asOf=2026-10-17',x.other)).body.coverage.products.length,0);
   assert.equal((await x.get('a','reports/stock-coverage?branchId=branch-a&days=0')).status,400);
+ }finally{x.close();}
+});
+
+test('P3 line note is atomic and idempotent, preserved in completed sale and cannot be edited afterwards',async()=>{
+ const x=await setup();try{
+  const product=await x.id('Suco natural','ITEM-NOTE',5);
+  await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+  const sale=(await x.write('a','sales',{branchId:'branch-a'})).body.sale;
+  const added=await x.write('a','sales/'+sale.id+'/items',{branchId:'branch-a',productId:product,quantity:1});
+  const item=added.body.sale.items[0];const url='sales/'+sale.id+'/items/'+item.id+'/note';
+  const mutation=next();
+  const updated=await x.write('a',url,{branchId:'branch-a',note:'Sem gelo; com limão'},{method:'PUT',key:mutation});
+  assert.equal(updated.status,200,JSON.stringify(updated.body));
+  assert.equal(updated.body.sale.items[0].note,'Sem gelo; com limão');
+  const replay=await x.write('a',url,{branchId:'branch-a',note:'Sem gelo; com limão'},{method:'PUT',key:mutation});
+  assert.deepEqual(replay.body,updated.body);
+  assert.equal((await x.write('a',url,{branchId:'branch-a',note:'hack'},{method:'PUT',who:x.viewer})).status,403);
+  assert.equal((await x.write('a',url,{branchId:'branch-b',note:'hack'},{method:'PUT'})).status,404);
+  assert.equal((await x.write('a',url,{branchId:'branch-a',note:'x'.repeat(241)},{method:'PUT'})).status,400);
+  const paid=await x.write('a','sales/'+sale.id+'/complete',{branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]});
+  assert.equal(paid.status,200,JSON.stringify(paid.body));
+  assert.equal((await x.get('a','sales/'+sale.id+'?branchId=branch-a')).body.sale.items[0].note,'Sem gelo; com limão');
+  assert.equal((await x.write('a',url,{branchId:'branch-a',note:'Alterar após venda'},{method:'PUT'})).status,409);
+  const history=await x.get('a','sales/history?branchId=branch-a');
+  assert.equal(history.body.history.items[0].items[0].note,'Sem gelo; com limão');
  }finally{x.close();}
 });
