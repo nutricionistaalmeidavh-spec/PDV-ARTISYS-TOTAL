@@ -60,6 +60,7 @@
         else if(original.startsWith('/api/v1/finance-advanced/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/reports/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/sales'))operation=original.slice(apiRoot.length);
+        else if(/^\/api\/v1\/(customers|suppliers|sellers|restaurant|wholesale|commissions|credit)(\/|$)/.test(original))operation=original.slice(apiRoot.length);
         else throw new Error('Este módulo ainda não está disponível na versão online.');
         targetPath=apiRoot+'tenants/'+encodeURIComponent(this.tenantId)+'/'+operation;
         if(method==='GET'||method==='DELETE')url.searchParams.set('branchId',this.branchId);
@@ -92,12 +93,17 @@
       }
       if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
+      if(operation==='customers')return method==='GET'?value.customers:value.customer;
+      if(operation==='suppliers')return method==='GET'?value.suppliers:value.supplier;
+      if(operation==='sellers')return value.sellers;
+      if(operation.startsWith('restaurant/')||operation.startsWith('wholesale/')||operation.startsWith('commissions')||operation.startsWith('credit/'))return value;
       if(operation==='inventory')return value.stock;
       if(operation==='inventory/receipts')return value.movement;
       if(operation==='cash')return value.session;
       if(operation==='cash/open')return {session:value.session};
       if(operation==='cash/sessions')return value.sessions;
       if(operation.startsWith('cash/sessions/'))return operation.endsWith('/movements')?value.movements:value.result;
+      if(/^sales\/[^/]+\/(customer|seller)$/.test(operation))return value.sale;
       if(operation==='finance/summary')return value.summary;
       if(operation==='finance/entries')return method==='GET'?value.entries:value.entry;
       if(operation.startsWith('finance/entries/'))return value.settlement||value.result||value.entry;

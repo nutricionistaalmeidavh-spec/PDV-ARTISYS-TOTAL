@@ -6,7 +6,7 @@
   const { ApiClient } = window.PdvApiClient;
   const api = new ApiClient();
   const routeRegistry = window.PdvRouteRegistry;
-  const WEB_ROUTES=new Set(['home','checkout','products','sales','cash','finance','finance-banks','finance-recurrences','management','reports']);
+  const WEB_ROUTES=new Set(['home','checkout','products','sales','cash','finance','finance-banks','finance-recurrences','management','reports','customers','suppliers','sellers','FOOD','WHOLESALE','credit','commissions']);
   if (!routeRegistry) throw new Error('PdvRouteRegistry must load before app.js.');
 
   const ROUTES = {
@@ -16,6 +16,9 @@
     WHOLESALE: { label: 'Atacado', shortLabel:'Atacado', icon: 'document' },
     products: { label: 'Produtos', icon: 'document' },
     customers: { label: 'Clientes', icon: 'users' },
+    suppliers: { label: 'Fornecedores', icon: 'document' },
+    credit: { label: 'Crediário', icon: 'cash' },
+    commissions: { label: 'Comissões', icon: 'chart' },
     inventory: { label: 'Estoque', icon: 'cubes', phase: 'E13' },
     finance: { label: 'Financeiro', icon: 'chart', phase: 'E16' },
     'finance-banks': { label: 'Bancos e conciliação', icon: 'chart', phase: 'E16' },
@@ -193,14 +196,18 @@
   }
 
   function canAccessRoute(route) {
-    if(api.webMode&&!WEB_ROUTES.has(route))return false;
+    if(api.webMode){
+      if(!WEB_ROUTES.has(route))return false;
+      const permission={suppliers:'suppliers.view',credit:'customers.view',commissions:'finance.view',FOOD:'restaurant.access',WHOLESALE:'wholesale.access'}[route];
+      if(permission)return Boolean(window.PdvAccessPolicy?.hasCapability(state.user,permission));
+    }
     return Boolean(window.PdvAccessPolicy?.canAccessRoute(state.user, route, moduleAccessOptions()));
   }
 
   function renderSidebar() {
     const nav = document.getElementById('sidebar-nav');
     const accessPolicy = window.PdvAccessPolicy;
-    const items = api.webMode ? ['home','checkout','products','sales','cash','finance','finance-banks','finance-recurrences','management','reports'].filter(route=>canAccessRoute(route))
+    const items = api.webMode ? ['home','checkout','customers','suppliers','sellers','FOOD','WHOLESALE','credit','commissions','products','sales','cash','finance','finance-banks','finance-recurrences','management','reports'].filter(route=>canAccessRoute(route))
       : (accessPolicy?.routesForUser(state.user, moduleAccessOptions()) || ['home']).filter(route=>route!=='settings');
     const parentRoute = {
       finance:'financial-management',
@@ -246,8 +253,9 @@
   async function loadCommonData() {
     if(api.webMode){
       state.products=await api.products();
-      state.categories=[];state.customers=[];state.users=[];
-      state.sellers=[{id:state.user.id,name:state.user.name}];
+      state.categories=[];state.users=[];
+      state.customers=window.PdvAccessPolicy?.hasCapability(state.user,'customers.view')?await api.customers():[];
+      state.sellers=window.PdvAccessPolicy?.hasCapability(state.user,'sellers.view')?await api.sellers():[{id:state.user.id,name:state.user.name}];
       state.selectedSellerId=state.user.id;
       state.cashSession=await api.openCash(state.config.terminalId).catch(()=>null);
       return;
@@ -392,7 +400,7 @@
     content.querySelector('.sale-panel')?.insertAdjacentHTML('afterbegin', `<div class="customer-block"><label class="checkout-context-label" for="seller-select">Vendedor / Garçom</label><select id="seller-select" class="secondary-button checkout-seller-select">${state.sellers.map((seller) => `<option value="${seller.id}" ${seller.id === (sale?.sellerId || state.selectedSellerId) ? 'selected' : ''}>${escapeHtml(seller.name)}</option>`).join('')}</select></div>`);
     if(api.webMode){
       content.querySelector('#checkout-documents')?.remove();
-      content.querySelectorAll('.customer-block').forEach(block=>{block.hidden=true;});
+      if(!window.PdvAccessPolicy?.hasCapability(state.user,'customers.view'))content.querySelectorAll('.customer-block').forEach(block=>{block.hidden=true;});
       content.querySelector('#scan-focus')?.setAttribute('title','Digite ou use um leitor USB como teclado');
       content.querySelector('#clear-cart')?.setAttribute('title','Remove itens desta venda, sem apagá-la');
       content.querySelector('#discount-percent')?.toggleAttribute('disabled',!window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount'));
@@ -701,7 +709,7 @@
   function allowedPaymentMethodsForCurrentSale() {
     const policy=(state.sale?.items||[]).map(item=>item.configuration?.commercialPolicySnapshot).find(Boolean);
     const values=Array.isArray(policy?.allowedPaymentMethods)?policy.allowedPaymentMethods:null;
-    if(api.webMode)return ['CASH','PIX','DEBIT_CARD','CREDIT_CARD'];
+    if(api.webMode)return state.sale?.customerId?['CASH','PIX','DEBIT_CARD','CREDIT_CARD','STORE_CREDIT']:['CASH','PIX','DEBIT_CARD','CREDIT_CARD'];
     return values&&values.length?values:['CASH','PIX','DEBIT_CARD','CREDIT_CARD','STORE_CREDIT'];
   }
 
@@ -1537,8 +1545,11 @@ function openCategoryForm() {
     const ownedRoutes = {
       home: () => renderHome(),
       checkout: () => renderCheckout(),
-      customers: () => renderCustomers(),
-      sellers: () => renderSellers(),
+      customers: () => api.webMode?window.PdvWebParityUi?.show('customers'):renderCustomers(),
+      suppliers: () => window.PdvWebParityUi?.show('suppliers'),
+      sellers: () => api.webMode?window.PdvWebParityUi?.show('sellers'):renderSellers(),
+      credit: () => window.PdvWebParityUi?.show('credit'),
+      commissions: () => window.PdvWebParityUi?.show('commissions'),
       management: () => {
         if (!window.PdvAccessPolicy?.hasCapability(state.user,'management.view')) return renderPermissionDenied('Gestão');
         return (api.webMode?window.PdvAdvancedFinanceWeb?.renderDre?.():window.PdvErpFinanceUi?.renderManagement?.()) || renderPlaceholder('management');
