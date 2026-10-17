@@ -39,7 +39,8 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
   const key=request.headers.get('x-mutation-id');
   try {
     if(!['products','inventory','cash','sales'].includes(feature))return null;
-    const body=writeMethods.has(method)?await payload(request):{};
+    const body=writeMethods.has(method) ? (method==='DELETE'&&!request.headers.has('content-type')?{}:await payload(request)) : {};
+    if(!['GET','HEAD','POST','PUT','PATCH','DELETE'].includes(method))return null;
     const branch=body.branchId||url.searchParams.get('branchId');
     const service=createCommerceService(db);
     if(!branch)throw Object.assign(new Error('Selecione a filial antes de continuar.'),{status:400});
