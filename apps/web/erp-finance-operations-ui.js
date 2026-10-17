@@ -295,9 +295,11 @@
     routeRegistry.updated(route,{surface:'finance-alerts'});
   }
 
-  routeRegistry.register('finance-banks',{owner:'erp-finance-operations',render:renderBanks});
-  routeRegistry.register('finance-recurrences',{owner:'erp-finance-operations',render:renderRecurrences});
-  routeRegistry.register('finance-alerts',{owner:'erp-finance-operations',render:renderAlerts});
+  if(!api.webMode){
+    routeRegistry.register('finance-banks',{owner:'erp-finance-operations',render:renderBanks});
+    routeRegistry.register('finance-recurrences',{owner:'erp-finance-operations',render:renderRecurrences});
+    routeRegistry.register('finance-alerts',{owner:'erp-finance-operations',render:renderAlerts});
+  }
 
   root.PdvFinanceOperationsUi=Object.freeze({
     navigation,
