@@ -300,6 +300,8 @@ export function createCommerceService(db,{now=nowISO}={}){
       await branchExists(tenant,branch);
       const key=requiredMutation(body,header),scope='product.update:'+id;
       const previous=await applied(tenant,scope,key);if(previous)return previous;
+      if(!['name','sku','salePriceCents','unit','active'].some(field=>Object.hasOwn(body,field)))
+        throw error(400,'Informe ao menos um campo de produto para editar.');
       const old=await first('SELECT * FROM products WHERE tenant_id=? AND id=?',tenant,id);
       if(!old)throw error(404,'Produto não encontrado.');
       const name=Object.hasOwn(body,'name')?text(body.name,120):old.name;
@@ -320,37 +322,6 @@ export function createCommerceService(db,{now=nowISO}={}){
       await batch([
         q('UPDATE products SET name=?,sku=?,sale_price_cents=?,unit=?,active=?,updated_at=? WHERE id=? AND tenant_id=?',
           name,sku,price,unit,active?1:0,result.updatedAt,id,tenant),
-        audit(tenant,scope,key,result)
-      ]);
-      return result;
-    },
-    async updateProduct(tenant,branch,id,body,header){
-      await branchExists(tenant,branch);
-      const key=requiredMutation(body,header),scope='product.update:'+id;
-      const prior=await applied(tenant,scope,key);if(prior)return prior;
-      const original=await first('SELECT * FROM products WHERE id=? AND tenant_id=?',id,tenant);
-      if(!original)throw error(404,'Produto não encontrado neste estabelecimento.');
-      if(!['name','sku','salePriceCents','unit','active'].some(field=>has(body,field)))
-        throw error(400,'Informe ao menos um campo de produto para editar.');
-      const name=has(body,'name')?text(body.name,120):original.name;
-      const sku=has(body,'sku')?text(body.sku,64).toUpperCase():original.sku;
-      if(name.length<2||!/^[A-Z0-9][A-Z0-9._-]{0,63}$/.test(sku))
-        throw error(400,'Informe nome e SKU válidos.');
-      const salePriceCents=has(body,'salePriceCents')
-        ?requiredNumber(body.salePriceCents,'Preço'):original.sale_price_cents;
-      const unit=has(body,'unit')?String(body.unit||'').trim().toUpperCase():original.unit;
-      if(!new Set(['UN','KG','G','L','M','M2','M3','CX','PCT']).has(unit))
-        throw error(400,'Unidade de produto inválida.');
-      if(has(body,'active')&&typeof body.active!=='boolean')
-        throw error(400,'Situação do produto inválida.');
-      const active=has(body,'active')?body.active:Boolean(original.active);
-      const updatedAt=stamp();
-      const result={id,name,sku,salePriceCents,unit,
-        trackStock:Boolean(original.track_stock),active,updatedAt};
-      await batch([
-        q(`UPDATE products SET name=?,sku=?,sale_price_cents=?,unit=?,active=?,updated_at=?
-          WHERE id=? AND tenant_id=?`,
-          name,sku,salePriceCents,unit,active?1:0,updatedAt,id,tenant),
         audit(tenant,scope,key,result)
       ]);
       return result;
