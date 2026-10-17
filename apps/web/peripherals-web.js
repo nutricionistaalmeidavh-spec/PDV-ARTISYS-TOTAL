@@ -48,10 +48,9 @@
   async function getPort(kind,requestPermission=false) {
     const api=serialApi();
     if(ports[kind]) return ports[kind];
-    const existing=await api.getPorts();
-    if(existing.length===1) {ports[kind]=existing[0];return ports[kind];}
     if(requestPermission){ports[kind]=await api.requestPort();return ports[kind];}
-    throw new Error('Selecione a porta do dispositivo em Dispositivos locais.');
+    // Never silently reuse a different peripheral's granted port.
+    throw new Error('Conecte este dispositivo explicitamente em Dispositivos locais.');
   }
   async function connect(kind) {
     if(!Object.hasOwn(ports,kind)) throw new Error('Dispositivo inválido.');
