@@ -1041,6 +1041,41 @@
     }});
   }
 
+
+  function openWebEditProductForm(product){
+    const price=(Number(product.salePriceCents||0)/100).toFixed(2).replace('.',',');
+    const unitOptions=['UN','KG','G','L','M','M2','M3','CX','PCT'];
+    openModal('Editar produto',`<form id="web-edit-product-form">
+      <div class="field"><label for="web-edit-product-name">Nome do produto</label><input id="web-edit-product-name" name="name" required minlength="2" maxlength="120" value="${escapeHtml(product.name)}"></div>
+      <div class="field-grid"><div class="field"><label for="web-edit-product-sku">SKU</label><input id="web-edit-product-sku" name="sku" required maxlength="64" value="${escapeHtml(product.sku)}"></div>
+      <div class="field"><label for="web-edit-product-price">Preço de venda (R$)</label><input id="web-edit-product-price" name="price" required inputmode="decimal" value="${escapeHtml(price)}"></div></div>
+      <div class="field"><label for="web-edit-product-unit">Unidade</label><select id="web-edit-product-unit" name="unit">${unitOptions.map(unit=>`<option value="${unit}" ${unit===product.unit?'selected':''}>${unit}</option>`).join('')}</select></div>
+      <label class="web-checkbox"><input type="checkbox" name="active" ${product.active!==false?'checked':''}> Produto ativo (desativar preserva vendas e estoque histórico)</label>
+      <p class="web-form-feedback" role="status" aria-live="polite"></p>
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" type="submit">Salvar alterações</button></div>
+    </form>`,{onMount(root){
+      const form=root.querySelector('#web-edit-product-form');
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();if(form.dataset.pending==='true')return;
+        const button=form.querySelector('[type=submit]'),status=form.querySelector('.web-form-feedback');
+        form.dataset.pending='true';button.disabled=true;
+        try{
+          if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+          const result=await api.updateProduct(product.id,{
+            name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
+            salePriceCents:centsFromInput(form.elements.price.value),unit:form.elements.unit.value,
+            active:form.elements.active.checked
+          },form.dataset.operationKey);
+          state.products=await api.products();
+          if(showInactiveWebProducts){const all=await api.products(true);inactiveWebProducts=all.filter(item=>item.active===false);}
+          closeModal();renderWebProducts();
+          showToast(result.active?'Produto atualizado.':'Produto desativado sem apagar vendas e estoque.','success');
+        }catch(error){status.textContent=error.message;}
+        finally{form.dataset.pending='false';button.disabled=false;}
+      });
+    }});
+  }
+
   function openWebStockForm(product){
     openModal('Registrar entrada no estoque',`<form id="web-stock-form">
       <p>Produto: <strong>${escapeHtml(product.name)}</strong> · Saldo atual: ${quantityLabel(product.balance)}</p>
