@@ -40,3 +40,9 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 - [Setup e deploy Cloudflare](docs/DEPLOY-CLOUDFLARE.md)
 - [Proveniência do código original (histórica)](docs/IMPORT-MANIFEST.md)
 - [Contrato de fluxo e experiência](docs/ux/P1-P2-CONTRATO-EXPERIENCIA.md)
+
+## Auditoria de paridade desktop/web
+
+A matriz operacional em `docs/parity/desktop-web-matrix.json` verifica 68 contratos de sete telas e o inventário em `docs/parity/desktop-capability-inventory.json` cobre **todas as 56 capacidades publicadas** no manifesto `release/capabilities.json` do desktop original, fixado em `7efea9c`. A cópia verificável por SHA Git fica em `docs/parity/desktop-capabilities-baseline.json`. O escopo estendido não é prova de que todos os subfluxos já estejam catalogados ou equivalentes.
+
+A paridade permanece **incompleta**. `npm run test:parity` executa testes de regressão do gate e valida links para as asserções dos testes Node/Chromium, a integridade de IDs, responsáveis, pré-requisitos e reivindicações; a CI executa os testes de domínio e E2E correspondentes. **Não** equiparar a existência de um arquivo a funcionalidade comprovada; teste físico de periféricos e prova independente de homologação são etapas separadas. Os estados `complete` só são aceitos com cobertura 100% do escopo e atestado rastreável de revisão/CI. Ver `docs/parity/P0-AUDIT-PLAN.md`.
