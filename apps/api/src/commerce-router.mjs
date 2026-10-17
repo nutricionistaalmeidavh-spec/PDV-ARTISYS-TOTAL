@@ -229,7 +229,7 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       if(parts.length===3&&parts[2]==='cancel'&&method==='POST'){
         requireAccess(member,'sales.cancel',user);
         const sale=await service.sale(tenant,branch,id);
-        if(sale.status==='COMPLETED'){
+        if(sale.status==='COMPLETED'||sale.status==='CANCELLED'){
           const result=await service.cancelCompletedSale(tenant,branch,id,user,body,key);
           return json({sale:{...sale,status:'CANCELLED'},result});
         }
