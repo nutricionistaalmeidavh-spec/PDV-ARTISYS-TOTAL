@@ -825,6 +825,11 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(result.meta?.changes!==1)throw error(409,'A venda mudou de estado; atualize antes de continuar.');
       return snapshot(tenant,branch,id);
     },
+    async allSaleReturns(tenant,branch){
+      await branchExists(tenant,branch);
+      return all("SELECT r.id,r.sale_id AS saleId,s.sale_number AS saleNumber,r.reason,r.kind,r.amount_cents AS totalCents,r.created_at AS createdAt,CASE WHEN r.kind='CANCEL' THEN 'CANCELLED' ELSE 'COMPLETED' END AS status FROM sale_returns r JOIN sales s ON s.tenant_id=r.tenant_id AND s.branch_id=r.branch_id AND s.id=r.sale_id WHERE r.tenant_id=? AND r.branch_id=? ORDER BY r.created_at DESC,r.id DESC LIMIT 200",tenant,branch);
+    },
+    async quoteSaleReturn(tenant,branch,id,body){return saleReversals.quote(tenant,branch,id,body,'RETURN');},
     async saleReturns(tenant,branch,id){return saleReversals.list(tenant,branch,id);},
     async returnSale(tenant,branch,id,user,body,key){return saleReversals.reverse(tenant,branch,id,user,body,key,'RETURN');},
     async cancelCompletedSale(tenant,branch,id,user,body,key){return saleReversals.reverse(tenant,branch,id,user,body,key,'CANCEL');},
