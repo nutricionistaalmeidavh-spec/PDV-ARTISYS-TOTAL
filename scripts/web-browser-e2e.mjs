@@ -147,6 +147,9 @@ try{
   assert.deepEqual(errors,[],'online browser console or script failures');
   // P5: An offline reload may display only cached public UI. Never queue or cache sales.
   await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
+  // ready only guarantees an active registration; wait for this page to be
+  // actually controlled before testing offline navigation via the shell.
+  await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller),null,{timeout:12000});
   await context.setOffline(true);
   await page.goto(origin+'/',{waitUntil:'domcontentloaded'});
   await page.locator('#web-offline-alert').waitFor({state:'visible'});
