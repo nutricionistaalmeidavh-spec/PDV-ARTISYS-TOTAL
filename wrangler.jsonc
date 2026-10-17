@@ -3,7 +3,7 @@
   // IMPORTANT: this name must match the Worker already created in Cloudflare.
   "name": "pdv-artisys-total",
   "main": "apps/api/src/worker.mjs",
-  "compatibility_date": "2026-10-01",
+  "compatibility_date": "2026-09-28",
   "workers_dev": true,
   // Wrangler 4 auto-provisions missing resource IDs; do not invent UUIDs.
   // Do not ever bind the desktop licensing D1 database here.
