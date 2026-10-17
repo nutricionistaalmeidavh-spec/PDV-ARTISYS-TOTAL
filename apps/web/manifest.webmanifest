@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "PDV Total | ArtiSys",
+  "short_name": "PDV Total",
+  "description": "Balcão, estoque, caixa e gestão da sua loja com os mesmos dados canônicos.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#081a35",
+  "theme_color": "#081a35",
+  "icons": [
+    {"src":"/icons/pdv-total-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"/icons/pdv-total-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ],
+  "categories": ["business", "productivity"]
+}
