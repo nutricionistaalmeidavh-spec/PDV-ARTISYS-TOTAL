@@ -969,11 +969,13 @@
         placeholder="Buscar produto, SKU ou código de barras" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
       <div class="data-card web-product-table" id="web-products-list">
         ${listed.length?listed.map(p=>`<div class="data-row web-product-row">
-          <div class="web-product-identity"><span class="web-product-monogram">${escapeHtml(initials(p.name))}</span>
+          <div class="web-product-identity">${p.photo?`<img src="${escapeHtml(api.webProductPhotoUrl(p.id))}" alt="Foto de ${escapeHtml(p.name)}" loading="lazy" style="width:42px;height:42px;border-radius:9px;object-fit:cover">`:`<span class="web-product-monogram">${escapeHtml(initials(p.name))}</span>`}
           <div><strong>${escapeHtml(p.name)}</strong><small>${p.active===false?'Inativo · ':''}${escapeHtml(p.sku)}</small><small>${escapeHtml([p.brand,p.barcode,p.variantLabel].filter(Boolean).join(' · '))}</small></div></div>
           <div><small>Preço</small><strong>${ui.formatCents(p.salePriceCents)}</strong></div>
           <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.available??p.balance):'Por componentes'}</strong></div>
           ${canManage?`<button type="button" class="secondary-button" data-web-edit="${escapeHtml(p.id)}">Editar</button>`:''}
+          ${canManage?`<button type="button" class="secondary-button" data-web-photo="${escapeHtml(p.id)}">${p.photo?'Trocar foto':'Adicionar foto'}</button>`:''}
+          ${canManage&&p.photo?`<button type="button" class="secondary-button" data-web-photo-remove="${escapeHtml(p.id)}">Remover foto</button>`:''}
           ${canManage&&!p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-kit="${escapeHtml(p.id)}">Componentes do kit</button>`:''}
           ${canStock&&p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-reserve="${escapeHtml(p.id)}">Reservar</button><button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
           <button type="button" class="secondary-button" data-web-adjust="${escapeHtml(p.id)}">Ajustar saldo</button>
@@ -992,6 +994,39 @@
         showInactiveWebProducts=!showInactiveWebProducts;renderWebProducts();
       }catch(error){showToast(error.message,'error');button.disabled=false;}
     });
+    content.querySelectorAll('[data-web-photo]').forEach(button=>button.addEventListener('click',()=>{
+      const product=catalogItems.find(p=>p.id===button.dataset.webPhoto);
+      if(!product)return;
+      const input=document.createElement('input');
+      input.type='file';input.accept='image/png,image/jpeg,image/webp';input.hidden=true;
+      document.body.appendChild(input);
+      input.addEventListener('change',async()=>{
+        const file=input.files?.[0];input.remove();if(!file)return;
+        button.disabled=true;
+        try{
+          await api.uploadWebProductPhoto(product.id,file);
+          state.products=await api.products();
+          if(showInactiveWebProducts){
+            const all=await api.products(true);inactiveWebProducts=all.filter(p=>p.active===false);
+          }
+          renderWebProducts();showToast('Foto privada atualizada.','success');
+        }catch(error){showToast(error.message,'error');button.disabled=false;}
+      },{once:true});
+      input.click();
+    }));
+    content.querySelectorAll('[data-web-photo-remove]').forEach(button=>button.addEventListener('click',async()=>{
+      const id=button.dataset.webPhotoRemove;
+      if(!window.confirm('Remover a foto deste produto?'))return;
+      button.disabled=true;
+      try{
+        await api.removeWebProductPhoto(id);
+        state.products=await api.products();
+        if(showInactiveWebProducts){
+          const all=await api.products(true);inactiveWebProducts=all.filter(p=>p.active===false);
+        }
+        renderWebProducts();showToast('Foto removida.','success');
+      }catch(error){showToast(error.message,'error');button.disabled=false;}
+    }));
     content.querySelectorAll('[data-web-edit]').forEach(button=>button.addEventListener('click',()=>{
       const item=catalogItems.find(product=>product.id===button.dataset.webEdit);
       if(item)openWebEditProductForm(item);
