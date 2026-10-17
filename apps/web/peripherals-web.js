@@ -150,7 +150,7 @@
   }
   async function printSale(sale,opts={}) {
     if(!sale||sale.status!=='COMPLETED'||!sale.id)throw new Error('Venda concluída obrigatória.');
-    if(settings().printerMode==='serial') {
+    if(settings().printerMode==='serial' && !opts.forceBrowser) {
       // On-demand serial transport; never send an automatic second copy through browser.
       await writeSerial('printer',escpos(receiptText(sale),{cut:settings().cut}),settings().printerBaud);
       return {sentToSerial:true};
