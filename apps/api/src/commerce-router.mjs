@@ -229,6 +229,13 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       }
     }
     if(feature==='reports'){
+      if(parts.length===2&&parts[1]==='margins'&&method==='GET'){
+        requireAccess(member,'reports.view',user);
+        return json({margin:await service.marginReport(tenant,branch,{
+          from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',
+          productId:url.searchParams.get('productId')||''
+        })});
+      }
       if(parts.length===2&&parts[1]==='compare'&&method==='GET'){
         requireAccess(member,'reports.view',user);
         return json({comparison:await service.compareReports(tenant,branch,{
