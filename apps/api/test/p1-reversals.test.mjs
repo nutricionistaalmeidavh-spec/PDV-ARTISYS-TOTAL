@@ -204,3 +204,19 @@ test('P1 web return route quotes discounted refund on server, saves once, and li
   }finally{x.close();}
 });
 
+
+test('P1 rejects finance compensation linked to a prior bank reconciliation',async()=>{
+ const x=await setup();try{
+   const entry=(await x.write('finance/entries',{kind:'PAYABLE',description:'Bank invoice',dueDate:'2026-10-17',amountCents:3500})).body.entry;
+   const paid=(await x.write('finance/entries/'+entry.id+'/settle',{amountCents:3500,method:'BANK_TRANSFER'})).body.settlement;
+   const run=(sql,...args)=>x.db.prepare(sql).bind(...args).run();
+   await run('INSERT INTO finance_bank_accounts(id,tenant_id,branch_id,name,created_by,created_at) VALUES(?,?,?,?,?,?)','account-1','a','branch-a','Local bank','manager',stamp);
+   await run('INSERT INTO finance_statement_batches(id,tenant_id,branch_id,account_id,source_name,content_hash,imported_at,imported_by) VALUES(?,?,?,?,?,?,?,?)','batch-1','a','branch-a','account-1','statement.csv','hash-one',stamp,'manager');
+   await run('INSERT INTO finance_bank_transactions(id,tenant_id,branch_id,account_id,batch_id,transaction_key,tx_date,amount_cents,description,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)','tx-1','a','branch-a','account-1','batch-1','tx-key-1','2026-10-17',-3500,'Bank payment',stamp);
+   await run('INSERT INTO finance_bank_reconciliations(id,tenant_id,branch_id,transaction_id,decision,entry_id,settlement_id,operator_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)','recon-1','a','branch-a','tx-1','MATCH',entry.id,paid.id,'manager',stamp);
+   const response=await x.write('finance/entries/'+entry.id+'/settlements/'+paid.id+'/reverse',{reason:'Do not reverse matched settlement'});
+   assert.equal(response.status,409,JSON.stringify(response.body));
+   assert.equal(await scalar(x.db,'SELECT COUNT(*) AS n FROM finance_settlement_reversals WHERE settlement_id=?',paid.id),0);
+   assert.equal((await x.read('finance/summary')).body.summary.payableOpenCents,0);
+ }finally{x.close();}
+});
