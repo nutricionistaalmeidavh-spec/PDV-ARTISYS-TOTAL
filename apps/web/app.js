@@ -6,6 +6,7 @@
   const { ApiClient } = window.PdvApiClient;
   const api = new ApiClient();
   const routeRegistry = window.PdvRouteRegistry;
+  const WEB_ROUTES=new Set(['home','checkout','products','sales']);
   if (!routeRegistry) throw new Error('PdvRouteRegistry must load before app.js.');
 
   const ROUTES = {
@@ -54,6 +55,7 @@
     discountPercent: 0,
     paymentDraft: [],
     selectedSellerId: '',
+    pendingNewSaleKey:null,
     photoSyncStatus: null,
     productionRoutes: []
   };
@@ -124,7 +126,7 @@
     footer?.classList.toggle('offline', !state.online);
     if (status) {
       const mode=state.config?.dataServer?.mode;
-      const connectedLabel=mode==='local'?'Neste computador':mode==='lan-host'?'PC principal':'Servidor conectado';
+      const connectedLabel=mode==='cloud'?'Cloudflare · online':mode==='local'?'Neste computador':mode==='lan-host'?'PC principal':'Servidor conectado';
       status.querySelector('span').textContent = state.online ? connectedLabel : 'Servidor indisponível';
     }
   }
@@ -191,13 +193,15 @@
   }
 
   function canAccessRoute(route) {
+    if(api.webMode&&!WEB_ROUTES.has(route))return false;
     return Boolean(window.PdvAccessPolicy?.canAccessRoute(state.user, route, moduleAccessOptions()));
   }
 
   function renderSidebar() {
     const nav = document.getElementById('sidebar-nav');
     const accessPolicy = window.PdvAccessPolicy;
-    const items = (accessPolicy?.routesForUser(state.user, moduleAccessOptions()) || ['home']).filter(route=>route!=='settings');
+    const items = api.webMode ? ['home','checkout','products','sales'].filter(route=>canAccessRoute(route))
+      : (accessPolicy?.routesForUser(state.user, moduleAccessOptions()) || ['home']).filter(route=>route!=='settings');
     const parentRoute = {
       finance:'financial-management',
       'finance-banks':'financial-management',
@@ -240,6 +244,14 @@
   }
 
   async function loadCommonData() {
+    if(api.webMode){
+      state.products=await api.products();
+      state.categories=[];state.customers=[];state.users=[];
+      state.sellers=[{id:state.user.id,name:state.user.name}];
+      state.selectedSellerId=state.user.id;
+      state.cashSession=await api.openCash(state.config.terminalId).catch(()=>null);
+      return;
+    }
     const plan=window.PdvAccessPolicy?.commonDataLoadPlan?.(state.user)||{
       categories:false,products:false,productPhotos:false,customers:false,sellers:false,users:false,cash:false
     };
@@ -264,6 +276,13 @@
   }
 
   async function restoreCheckoutState() {
+    if(api.webMode){
+      const [open,suspended]=await Promise.all([api.sales('OPEN',25),api.sales('SUSPENDED',25)]);
+      state.suspendedSales=suspended;
+      if(!state.sale||state.sale.status!=='OPEN')state.sale=open.find(sale=>sale.operatorId===state.user?.id)||null;
+      state.discountPercent=state.sale?.subtotalCents?Number((state.sale.discountCents/state.sale.subtotalCents*100).toFixed(2)):0;
+      return;
+    }
     const [openSales,suspended,documents]=await Promise.all([
       api.sales('OPEN',20),
       api.sales('SUSPENDED',30),
@@ -309,7 +328,8 @@
   }
 
   function renderHome() {
-    const view=homeRoleModel?.homeForUser?.(state.user,ui.HOME_TILES)||{label:'Operação',title:'Início',subtitle:'Acesso rápido.',sections:[{key:'main',label:'',tiles:ui.HOME_TILES}]};
+    const original=homeRoleModel?.homeForUser?.(state.user,ui.HOME_TILES)||{label:'Operação',title:'Início',subtitle:'Acesso rápido.',sections:[{key:'main',label:'',tiles:ui.HOME_TILES}]};
+    const view=api.webMode?{...original,sections:original.sections.map(section=>({...section,tiles:section.tiles.filter(tile=>canAccessRoute(tile.route))})).filter(section=>section.tiles.length)}:original;
     const operatorName=state.user?.name||'';
     content.innerHTML=`<section id="classic-home-grid" class="classic-home-grid" aria-label="Início de ${escapeHtml(view.label)}"><header class="classic-home-head"><div><span class="classic-home-eyebrow">Início · ${escapeHtml(view.label)}</span><h1>${escapeHtml(view.title)}</h1><p>${escapeHtml(view.subtitle)}</p></div>${operatorName?`<span class="classic-home-operator">${escapeHtml(operatorName)}</span>`:''}</header>${view.sections.map(section=>`<section class="classic-home-section" data-home-section="${escapeHtml(section.key)}">${section.label?`<h2>${escapeHtml(section.label)}</h2>`:''}<div class="classic-home-tiles">${section.tiles.map(tile=>`<button type="button" class="home-tile tone-${escapeHtml(tile.tone||'blue')}" data-home-route="${escapeHtml(tile.route)}" aria-label="Abrir ${escapeHtml(tile.label)}"><span class="tile-icon">${icon(tile.icon,46)}</span><h3>${escapeHtml(tile.label)}</h3><p>${escapeHtml(tile.description)}</p>${tile.shortcut?`<span class="shortcut-badge">${escapeHtml(tile.shortcut)}</span>`:''}</button>`).join('')}</div></section>`).join('')}</section>`;
     document.body.classList.add('home-view-classic');
@@ -363,11 +383,31 @@
 
   function renderCheckout() {
     if (!isRouteActive('checkout')) return;
+    const focusId=document.activeElement?.id;
+    const oldSearch=document.getElementById('product-search');
+    const oldStart=oldSearch?.selectionStart,oldEnd=oldSearch?.selectionEnd;
+    const oldList=content.querySelector('.cart-list')?.scrollTop||0;
     const customer = selectedCustomer(); const sale = state.sale;
     content.innerHTML = `<section class="checkout-layout"><div class="checkout-main"><div class="checkout-hero"><div><h1>Balcão</h1><p>Venda rápida e prática para o seu cliente</p></div><em>Agilidade no atendimento,<br>mais vendas todos os dias.</em></div><div class="checkout-tools"><label class="search-field" for="product-search">${icon('document')}<input id="product-search" aria-label="Buscar produto por nome, código ou código de barras" autocomplete="off" placeholder="Buscar produto por nome, código ou código de barras..." value="${escapeHtml(state.productQuery)}"><span>▥</span></label><button id="scan-focus" class="scan-button" type="button">▥ &nbsp; Ler código (F2)</button><button id="checkout-documents" class="scan-button" type="button">${icon('history',18)} &nbsp; Comandas e pedidos</button></div><div class="category-chips"><button class="category-chip ${!state.categoryId ? 'active' : ''}" data-category="">Todos</button>${state.categories.map((category) => `<button class="category-chip ${state.categoryId === category.id ? 'active' : ''}" data-category="${category.id}">${escapeHtml(category.name)}</button>`).join('')}</div><div class="product-grid">${checkoutProductGridHtml()}</div><div class="checkout-actions"><h3>Ações da venda</h3><div class="action-grid"><button class="action-button" id="new-sale" type="button">▶ &nbsp; Iniciar venda <small>F1</small></button><button class="action-button orange" id="remove-item" type="button">⌫ &nbsp; Cancelar item <small>F3</small></button><button class="action-button red" id="cancel-sale" type="button">⊗ &nbsp; Cancelar venda <small>F4</small></button><button class="action-button blue" id="suspend-sale" type="button">Ⅱ &nbsp; Suspender <small>F6</small></button></div></div></div><aside class="sale-panel">${checkoutDocumentContextMarkup()}<div class="customer-block"><h3>Cliente <small class="optional-label">(opcional)</small></h3><label class="search-field" for="customer-search">⌕<input id="customer-search" aria-label="Buscar cliente" autocomplete="off" placeholder="Buscar cliente..." value="${escapeHtml(state.customerQuery)}"></label><div id="customer-suggestions"></div>${customer ? `<div class="customer-selected"><span class="avatar">${escapeHtml(initials(customer.name))}</span><div><strong>${escapeHtml(customer.name)}</strong><small>${escapeHtml(customer.document || 'Sem documento')}</small></div><button id="remove-customer" type="button" aria-label="Remover cliente">×</button></div>` : ''}</div><div class="cart-head"><h3>Itens da venda (${sale?.items?.length || 0})</h3><button id="clear-cart" class="secondary-button" type="button">Limpar carrinho</button></div><div class="cart-list">${sale?.items?.map((item) => cartLine(item)).join('') || '<div class="empty-state">Nenhum item na venda.</div>'}</div><div class="totals"><div class="total-row"><span>Subtotal</span><strong>${ui.formatCents(sale?.subtotalCents || 0)}</strong></div><div class="total-row"><span>Desconto</span><div class="discount-control"><span>%</span><input id="discount-percent" type="number" aria-label="Percentual de desconto" min="0" max="100" step="0.01" value="${state.discountPercent || 0}"><strong>${ui.formatCents(sale?.discountCents || 0)}</strong></div></div><div class="total-row grand-total"><span>Total da venda</span><strong>${ui.formatCents(sale?.totalCents || 0)}</strong></div></div><div class="payment-strip"><button class="pay-button" data-pay="cash">Dinheiro</button><button class="pay-button card" data-pay="card">Cartão</button><button class="pay-button pix" data-pay="pix">PIX</button></div><button class="finalize-button" id="finalize-sale" type="button">Finalizar venda (F12) &nbsp; ›</button></aside></section>`;
     content.querySelector('.sale-panel')?.insertAdjacentHTML('afterbegin', `<div class="customer-block"><label class="checkout-context-label" for="seller-select">Vendedor / Garçom</label><select id="seller-select" class="secondary-button checkout-seller-select">${state.sellers.map((seller) => `<option value="${seller.id}" ${seller.id === (sale?.sellerId || state.selectedSellerId) ? 'selected' : ''}>${escapeHtml(seller.name)}</option>`).join('')}</select></div>`);
+    if(api.webMode){
+      content.querySelector('#checkout-documents')?.remove();
+      content.querySelectorAll('.customer-block').forEach(block=>{block.hidden=true;});
+      content.querySelector('#scan-focus')?.setAttribute('title','Digite ou use um leitor USB como teclado');
+      content.querySelector('#clear-cart')?.setAttribute('title','Remove itens desta venda, sem apagá-la');
+      content.querySelector('#discount-percent')?.toggleAttribute('disabled',!window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount'));
+      content.querySelectorAll('[data-category]').forEach(node=>node.hidden=Boolean(node.dataset.category));
+    }
     hydrateProductPhotos();
     bindCheckoutEvents();
+    if(api.webMode){
+      const oldScroll=content.querySelector('.cart-list');if(oldScroll)oldScroll.scrollTop=oldList;
+      if(focusId){
+        const focusTarget=document.getElementById(focusId);
+        if(focusTarget){focusTarget.focus({preventScroll:true});
+          if(focusId==='product-search'&&oldStart!=null&&oldEnd!=null)focusTarget.setSelectionRange(oldStart,oldEnd);}
+      }
+    }
     routeRegistry.updated('checkout', { surface:'checkout' });
   }
 
@@ -403,7 +443,7 @@
     const weightLabel=weight?`${quantityLabel(Number(weight.grams||0))} g · ${escapeHtml(String(weight.source||'MANUAL')==='SCALE'?'balança':String(weight.source||'MANUAL')==='BARCODE'?'etiqueta':'manual')}`:null;
     const documentLabel=sourceDocument?`${escapeHtml(sourceDocument.orderNumber||sourceDocument.id||'Pedido')} · preço do pedido`:null;
     const priceDetails = changed ? `<small><s>${ui.formatCents(item.catalogUnitPriceCents)}</s> → ${ui.formatCents(item.unitPriceCents)}${item.priceOverrideReason ? ` · ${escapeHtml(item.priceOverrideReason)}` : ''}${documentLabel?` · ${documentLabel}`:''}</small>` : `<small>${ui.formatCents(item.unitPriceCents)}${weightLabel?` · ${weightLabel}`:''}${documentLabel?` · ${documentLabel}`:''}</small>`;
-    const priceButton = !sourceDocument&&window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount') ? `<button type="button" class="secondary-button cart-price-edit" data-price-item="${item.id}">Alterar preço</button>` : '';
+    const priceButton = !api.webMode&&!sourceDocument&&window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount') ? `<button type="button" class="secondary-button cart-price-edit" data-price-item="${item.id}">Alterar preço</button>` : '';
     const quantityControl=sourceDocument?`<div class="qty-control"><span>${quantityLabel(item.quantity)} · pedido</span></div>`:weight?`<div class="qty-control"><span>${weightLabel}</span></div>`:configured?`<div class="qty-control"><button type="button" data-configured-qty-minus="${item.id}">−</button><span>${quantityLabel(item.quantity)}</span><button type="button" data-configured-qty-plus="${item.id}">＋</button></div>`:`<div class="qty-control"><button type="button" data-qty-minus="${item.productId}">−</button><span>${quantityLabel(item.quantity)}</span><button type="button" data-qty-plus="${item.productId}">＋</button></div>`;
     const remove=sourceDocument?'':weight?`<button type="button" class="cart-remove-button" data-remove-weighted="${item.id}" aria-label="Remover pesagem">×</button>`:configured?`<button type="button" class="cart-remove-button" data-remove-configured="${item.id}" aria-label="Remover esta configuração">×</button>`:`<button type="button" class="cart-remove-button" data-remove="${item.productId}">×</button>`;
     return `<div class="cart-line ${state.selectedProductId === item.productId ? 'selected' : ''}" data-select-product="${item.productId}"><div><strong>${escapeHtml(item.productName)}</strong>${configurationSummary?`<small>${escapeHtml(configurationSummary)}</small>`:''}${priceDetails}${priceButton}</div>${quantityControl}<div class="line-total">${ui.formatCents(item.totalCents)} ${remove}</div></div>`;
@@ -507,7 +547,8 @@
   async function ensureSale() {
     if (state.sale?.status === 'OPEN') return state.sale;
     const saleNumber = `${new Date().toISOString().slice(2,10).replace(/-/g,'')}-${Date.now().toString().slice(-6)}`;
-    clearCheckoutDocumentContext(); state.sale = await api.openSale({ saleNumber, terminalId: state.config.terminalId, sellerId: state.selectedSellerId || state.user.id }); state.discountPercent = 0; return state.sale;
+    if(api.webMode&&!state.pendingNewSaleKey)state.pendingNewSaleKey=api.mutationId();
+    clearCheckoutDocumentContext(); state.sale = await api.openSale({ saleNumber, terminalId: state.config.terminalId, sellerId: state.selectedSellerId || state.user.id },state.pendingNewSaleKey); state.pendingNewSaleKey=null; state.discountPercent = 0; return state.sale;
   }
 
   async function setSelectedSeller(event) {
@@ -535,6 +576,13 @@
     if(!product)return showToast('Produto não encontrado.','error');
     if(['KG','G'].includes(String(product.unit||'').toUpperCase()))return openWeightedProduct(product);
     try {
+      if(api.webMode){
+        const sale=await ensureSale();
+        state.sale=await api.addSaleItem(sale.id,productId,1);
+        state.selectedProductId=productId;
+        renderCheckout();
+        return;
+      }
       const configuration=await api.productConfiguration(productId);
       if(window.PdvOrderComposer?.hasConfiguration?.(configuration)){
         await window.PdvRestaurantOrderComposerUi.configure({
@@ -653,6 +701,7 @@
   function allowedPaymentMethodsForCurrentSale() {
     const policy=(state.sale?.items||[]).map(item=>item.configuration?.commercialPolicySnapshot).find(Boolean);
     const values=Array.isArray(policy?.allowedPaymentMethods)?policy.allowedPaymentMethods:null;
+    if(api.webMode)return ['CASH','PIX','DEBIT_CARD','CREDIT_CARD'];
     return values&&values.length?values:['CASH','PIX','DEBIT_CARD','CREDIT_CARD','STORE_CREDIT'];
   }
 
@@ -894,8 +943,96 @@
     if(label) label.textContent=productPhotoSyncLabel();
   }
 
+
+  function renderWebProducts(){
+    const canManage=window.PdvAccessPolicy?.hasCapability(state.user,'products.manage');
+    const canStock=window.PdvAccessPolicy?.hasCapability(state.user,'inventory.adjust');
+    const listed=state.products.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku).includes(ui.normalizeSearch(state.productQuery)));
+    content.innerHTML=`<section class="page web-products-page"><header class="page-head">
+      <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
+      <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
+      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button>':''}</header>
+      <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
+        placeholder="Buscar produto ou SKU" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
+      <div class="data-card web-product-table" id="web-products-list">
+        ${listed.length?listed.map(p=>`<div class="data-row web-product-row">
+          <div class="web-product-identity"><span class="web-product-monogram">${escapeHtml(initials(p.name))}</span>
+          <div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku)}</small></div></div>
+          <div><small>Preço</small><strong>${ui.formatCents(p.salePriceCents)}</strong></div>
+          <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.balance):'Livre'}</strong></div>
+          ${canStock&&p.trackStock?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>`:''}
+        </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
+      </div></section>`;
+    content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
+    content.querySelector('#web-product-search')?.addEventListener('input',e=>{
+      state.productQuery=e.target.value;
+      const focused=document.activeElement===e.target,caret=e.target.selectionStart;
+      renderWebProducts();
+      if(focused){const el=content.querySelector('#web-product-search');el.focus({preventScroll:true});el.setSelectionRange(caret,caret);}
+    });
+    content.querySelectorAll('[data-web-stock]').forEach(b=>b.addEventListener('click',()=>{
+      const product=state.products.find(p=>p.id===b.dataset.webStock);
+      if(product)openWebStockForm(product);
+    }));
+    routeRegistry.updated('products',{surface:'products'});
+  }
+
+  function openWebProductForm(){
+    openModal('Novo produto',`<form id="web-product-form">
+      <div class="field"><label for="web-product-name">Nome do produto</label><input id="web-product-name" name="name" required minlength="2" maxlength="120" autocomplete="off" placeholder="Ex.: Café tradicional"></div>
+      <div class="field-grid"><div class="field"><label for="web-product-sku">SKU / código</label><input id="web-product-sku" name="sku" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]*" placeholder="Ex.: CAFE-001"></div>
+      <div class="field"><label for="web-product-price">Preço de venda (R$)</label><input id="web-product-price" name="price" inputmode="decimal" required placeholder="0,00"></div></div>
+      <label class="web-checkbox"><input name="track" type="checkbox" checked> Controlar saldo no estoque</label>
+      <p class="web-form-feedback" role="status" aria-live="polite"></p>
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button>
+      <button class="primary-button" type="submit">Salvar produto</button></div>
+    </form>`,{onMount(root){
+      const form=root.querySelector('#web-product-form');
+      form.addEventListener('submit',async e=>{
+        e.preventDefault();if(form.dataset.pending==='true')return;
+        const button=form.querySelector('[type=submit]'),status=form.querySelector('.web-form-feedback');
+        form.dataset.pending='true';button.disabled=true;button.textContent='Salvando…';
+        try{
+          if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+          const product=await api.saveProduct({name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
+            salePriceCents:centsFromInput(form.elements.price.value),trackStock:form.elements.track.checked},form.dataset.operationKey);
+          state.products=await api.products();
+          closeModal();renderWebProducts();showToast('Produto '+product.name+' cadastrado.','success');
+        }catch(error){status.textContent=error.message;}
+        finally{form.dataset.pending='false';button.disabled=false;button.textContent='Salvar produto';}
+      });
+    }});
+  }
+
+  function openWebStockForm(product){
+    openModal('Registrar entrada no estoque',`<form id="web-stock-form">
+      <p>Produto: <strong>${escapeHtml(product.name)}</strong> · Saldo atual: ${quantityLabel(product.balance)}</p>
+      <div class="field"><label for="web-stock-qty">Quantidade recebida</label>
+      <input id="web-stock-qty" name="quantity" type="number" min="0.001" step="0.001" required placeholder="0"></div>
+      <p class="web-form-feedback" role="status" aria-live="polite"></p>
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button>
+      <button class="primary-button" type="submit">Registrar entrada</button></div></form>`,{onMount(root){
+      const form=root.querySelector('#web-stock-form');
+      form.addEventListener('submit',async e=>{
+        e.preventDefault();if(form.dataset.pending==='true')return;
+        const button=form.querySelector('[type=submit]'),status=form.querySelector('.web-form-feedback');
+        form.dataset.pending='true';button.disabled=true;button.textContent='Registrando…';
+        try{
+          if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+          await api.request('/api/v1/inventory/movements',{method:'POST',mutationId:form.dataset.operationKey,body:{
+            productId:product.id,quantity:Number(form.elements.quantity.value),type:'purchase'
+          }});
+          state.products=await api.products();
+          closeModal();renderWebProducts();showToast('Entrada de estoque registrada para '+product.name+'.','success');
+        }catch(error){status.textContent=error.message;}
+        finally{form.dataset.pending='false';button.disabled=false;button.textContent='Registrar entrada';}
+      });
+    }});
+  }
+
   function renderProducts() {
     if (!isRouteActive('products')) return;
+    if(api.webMode)return renderWebProducts();
     const syncLabel=productPhotoSyncLabel();
     void refreshProductionRoutes().then(()=>{if(isRouteActive('products'))renderProductsList();});
     content.innerHTML = `<section class="page" data-products-canonical="true"><header class="page-head"><div><h1>Cardápio</h1><p>Itens disponíveis para venda, preços e categorias. Produtos e fichas são cadastrados no Estoque.</p></div><div class="menu-head-actions"><details class="products-secondary-actions" data-products-secondary-actions><summary class="secondary-button">Mais ações</summary><div class="products-secondary-actions-menu" data-products-secondary-actions-menu><button class="products-secondary-action" id="sync-product-photos" type="button">↻ Sincronizar fotos</button><button class="products-secondary-action" id="new-category" type="button">+ Categoria</button></div></details><button class="primary-button" id="new-product">+ Adicionar ao Cardápio</button></div></header><div class="toolbar"><label class="search-field">⌕<input id="product-page-search" placeholder="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label><select id="product-category-filter" class="secondary-button"><option value="">Todas categorias</option>${state.categories.map((category) => `<option value="${category.id}" ${state.categoryId === category.id ? 'selected' : ''}>${escapeHtml(category.name)}</option>`).join('')}</select><small>${escapeHtml(syncLabel)}</small></div><div class="data-card" id="products-list">${productsListHtml()}</div></section>`;
@@ -1234,7 +1371,14 @@ function openCategoryForm() {
     }
   }
 
-  function logout() { api.logout(); state.user = null; window.PdvCurrentAccess=null; state.sale = null; clearCheckoutDocumentContext(); updateTopbar(); showLogin(); }
+  async function logout() {
+    if(api.webMode){
+      try{await api.logout();}catch(error){showToast('Não foi possível encerrar a sessão. Tente novamente.', 'error');return;}
+      state.user=null;window.PdvCurrentAccess=null;state.sale=null;clearCheckoutDocumentContext();updateTopbar();renderSidebar();showWebLogin();
+      return;
+    }
+    api.logout();state.user=null;window.PdvCurrentAccess=null;state.sale=null;clearCheckoutDocumentContext();updateTopbar();showLogin();
+  }
 
   async function executeShortcut(action) {
     if (!action || !state.user) return;
@@ -1248,6 +1392,7 @@ function openCategoryForm() {
   }
 
   function bindGlobalEvents() {
+    if(api.webMode){document.querySelector('.window-controls')?.remove();}
     document.querySelectorAll('[data-window]').forEach((button) => button.addEventListener('click', () => window.artisysDesktop.window[button.dataset.window]?.()));
     document.getElementById('operator-button').addEventListener('click', () => { if (!state.user) return; openModal('Operador', `<div class="operator-modal-content"><div class="auth-logo operator-modal-avatar">${escapeHtml(initials(state.user.name))}</div><h3>${escapeHtml(state.user.name)}</h3><p>${escapeHtml(state.user.profile?.name||'Equipe')}</p><button id="logout-button" class="danger-button">Sair desta sessão</button></div>`, { onMount(root) { root.querySelector('#logout-button').addEventListener('click', () => { closeModal(); logout(); }); } }); });
     document.addEventListener('keydown', (event) => { if (!/^F\d+$/.test(event.key)) return; const action = ui.resolveShortcut(event.key, document.body.dataset.activeRoute || state.route); if (action) { event.preventDefault(); void executeShortcut(action); } });
@@ -1278,8 +1423,83 @@ function openCategoryForm() {
     showLogin(!dataServer.selected&&dataServer.setupIntent==='new-installation'?'Entre como administrador para concluir a configuração deste computador.':'');
   }
 
+
+  // This is the original renderer's browser boot path. No second app or state tree.
+  function showWebLogin(message=''){
+    authOverlay.classList.remove('hidden');
+    authOverlay.innerHTML=`<section class="auth-card web-login-card"><div class="auth-logo">A</div>
+      <div class="web-login-eyebrow">ARTISYS / PDV TOTAL</div>
+      <h1>Entre na sua loja</h1><p>Suas vendas, seu caixa e seu estoque em um só lugar.</p>
+      <form id="web-login-form">
+        <div class="field"><label for="web-email">E-mail</label><input id="web-email" name="email" type="email" autocomplete="username" required autofocus></div>
+        <div class="field"><label for="web-password">Senha</label><input id="web-password" name="password" type="password" autocomplete="current-password" required></div>
+        <p class="web-login-feedback" id="web-login-feedback" role="status" aria-live="polite">${escapeHtml(message)}</p>
+        <button class="primary-button" type="submit">Entrar no PDV</button>
+      </form><small>O acesso depende da liberação do estabelecimento pela ArtiSys.</small></section>`;
+    const form=authOverlay.querySelector('#web-login-form');
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      if(form.dataset.pending==='true')return;
+      const button=form.querySelector('button[type=submit]'),feedback=form.querySelector('#web-login-feedback');
+      const email=String(form.elements.email.value||'').trim();
+      const password=String(form.elements.password.value||'');
+      form.dataset.pending='true';button.disabled=true;button.textContent='Entrando…';
+      try{
+        const session=await api.login({email,password});
+        await activateWebSession(session);
+      }catch(error){
+        feedback.textContent=error.status===503?'O acesso online ainda não foi liberado. Seus dados estão preservados.':error.message;
+        form.elements.password.focus({preventScroll:true});
+      }finally{form.dataset.pending='false';button.disabled=false;button.textContent='Entrar no PDV';}
+    });
+    window.PdvUiLifecycle?.emit('auth:rendered',{surface:'login'});
+  }
+
+  async function activateWebSession(session){
+    const membership=session?.memberships?.[0];
+    if(!membership)throw new Error('Você não possui estabelecimento ativo.');
+    const {branch,context}=await api.chooseWebTenant(membership);
+    state.config={...state.config,
+      storeName:context.name||membership.name,
+      terminalName:branch.name,
+      terminalId:branch.id,
+      dataServer:{mode:'cloud',selected:true}
+    };
+    state.user={
+      id:session.user.id,name:session.user.displayName,
+      permissions:context.capabilities||[],profileId:'profile-'+String(context.profileKey||'operator').toLowerCase(),
+      profile:{name:String(context.profileKey||'Equipe'),permissions:context.capabilities||[]}
+    };
+    updateTopbar();
+    setOnline(true);
+    await loadCommonData();
+    renderSidebar();
+    authOverlay.classList.add('hidden');authOverlay.innerHTML='';
+    await navigate('checkout');
+    window.PdvUiLifecycle?.emit('auth:hidden',{reason:'authenticated'});
+  }
+
+  async function bootWeb(){
+    document.body.dataset.runtime='web';
+    state.config=await api.initialize();
+    document.body.dataset.activeRoute='home';
+    renderSidebar();
+    updateTopbar();
+    try{
+      const health=await api.health();
+      if(!health.ok)throw new Error('Serviço indisponível.');
+      const session=await api.currentSession();
+      await activateWebSession(session);
+    }catch(error){
+      setOnline(false);
+      renderHome();
+      showWebLogin(error.status===503?'O acesso online ainda não foi liberado.':'');
+    }
+  }
+
   async function boot() {
     hydrateStaticIcons(); bindGlobalEvents(); updateClock(); setInterval(updateClock, 30000);
+    if(api.webMode){await bootWeb();return;}
     try {
       state.config = await api.initialize();
       updateTopbar();

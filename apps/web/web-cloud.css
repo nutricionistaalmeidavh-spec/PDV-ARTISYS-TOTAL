@@ -1,0 +1,58 @@
+/* Cloudflare adaptation of the sole original PDV renderer. Primary tokens belong
+   to styles.css; do not define a second theme or component library. */
+body[data-runtime="web"]{min-width:0}
+body[data-runtime="web"] .window-controls{display:none}
+body[data-runtime="web"] .desktop-frame{min-width:0}
+body[data-runtime="web"] .topbar{gap:12px}
+body[data-runtime="web"] .app-footer{font-size:12px}
+body[data-runtime="web"] .status-pill{background:rgba(16,185,129,.09);border-color:rgba(16,185,129,.18)}
+body[data-runtime="web"] .status-pill.offline{background:rgba(239,51,64,.07);border-color:rgba(239,51,64,.2)}
+body[data-runtime="web"] .web-login-card{width:min(440px,calc(100vw - 32px));padding:clamp(24px,5vw,42px);box-shadow:0 26px 70px rgba(8,26,53,.2)}
+body[data-runtime="web"] .web-login-eyebrow,
+body[data-runtime="web"] .web-section-kicker{display:block;color:var(--artisys-blue);letter-spacing:.13em;font-size:11px;font-weight:800;text-transform:uppercase;margin:15px 0 7px}
+body[data-runtime="web"] .web-login-card h1{font-size:clamp(26px,4vw,34px);letter-spacing:-.045em;color:var(--navy);margin:8px 0}
+body[data-runtime="web"] .web-login-card p{line-height:1.55}
+body[data-runtime="web"] .web-login-card .field label{font-weight:700}
+body[data-runtime="web"] .web-login-card input{width:100%;font:inherit}
+body[data-runtime="web"] .web-login-card .primary-button{width:100%;justify-content:center;min-height:48px}
+body[data-runtime="web"] .web-login-feedback,
+body[data-runtime="web"] .web-form-feedback{min-height:20px;margin:10px 0;color:var(--danger);font-size:13px;line-height:1.45}
+body[data-runtime="web"] .web-login-card small{color:var(--muted);line-height:1.4;display:block;margin-top:12px}
+body[data-runtime="web"] :is(button,a,input,select,textarea):focus-visible{outline:3px solid var(--artisys-blue);outline-offset:3px}
+body[data-runtime="web"] :is(button,a){cursor:pointer}
+body[data-runtime="web"] button:disabled{opacity:.56;cursor:not-allowed}
+body[data-runtime="web"] .web-product-identity{display:flex;align-items:center;gap:14px;min-width:0}
+body[data-runtime="web"] .web-product-monogram{width:46px;height:46px;flex:none;display:grid;place-items:center;border-radius:13px;background:var(--surface-soft);color:var(--artisys-blue);font-weight:800}
+body[data-runtime="web"] .web-product-identity strong{overflow-wrap:anywhere}
+body[data-runtime="web"] .web-checkbox{display:flex;align-items:center;gap:10px;cursor:pointer;padding:12px 0;color:var(--ink)}
+body[data-runtime="web"] .web-checkbox input{accent-color:var(--artisys-blue);width:18px;height:18px}
+body[data-runtime="web"] .web-products-page .web-product-table{min-width:0}
+body[data-runtime="web"] .web-product-row{display:grid;grid-template-columns:minmax(160px,2fr) minmax(100px,.7fr) minmax(95px,.7fr) auto;gap:16px;align-items:center}
+body[data-runtime="web"] .web-product-row>div>small{display:block;color:var(--muted);margin-bottom:3px}
+body[data-runtime="web"] .web-products-page .page-head{gap:14px;flex-wrap:wrap}
+body[data-runtime="web"] .checkout-hero em{display:none}
+body[data-runtime="web"] .checkout-main{min-width:0}
+@media(max-width:900px){
+  body[data-runtime="web"] .web-product-row{grid-template-columns:1fr 1fr;gap:14px}
+  body[data-runtime="web"] .web-product-row .web-product-identity{grid-column:1/-1}
+  body[data-runtime="web"] .web-product-row [data-web-stock]{grid-column:1/-1;width:100%}
+  body[data-runtime="web"] .topbar-context .context-pill:nth-child(3){display:none}
+}
+@media(max-width:680px){
+  body[data-runtime="web"] .web-login-card{padding:24px 20px}
+  body[data-runtime="web"] .page-head{align-items:flex-start}
+  body[data-runtime="web"] .web-products-page{padding:14px}
+  body[data-runtime="web"] .web-product-row{grid-template-columns:1fr 1fr}
+  body[data-runtime="web"] .web-product-row .web-product-identity{grid-column:1/-1}
+  body[data-runtime="web"] .checkout-layout{min-width:0}
+  body[data-runtime="web"] .checkout-tools{flex-wrap:wrap}
+  body[data-runtime="web"] .checkout-tools .search-field{flex:1 1 100%}
+  body[data-runtime="web"] .checkout-actions{max-width:100%}
+  body[data-runtime="web"] .sale-panel{min-width:0}
+}
+@media(prefers-reduced-motion:reduce){
+  body[data-runtime="web"] *,body[data-runtime="web"] *::before,body[data-runtime="web"] *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+
+/* Keep the original checkout layout owners mounted while hiding desktop-only controls. */
+body[data-runtime="web"] [hidden]{display:none!important}

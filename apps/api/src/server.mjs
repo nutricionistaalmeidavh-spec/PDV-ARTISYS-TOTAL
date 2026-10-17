@@ -8,9 +8,10 @@ import {createApi} from './worker.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const db=openLocalDatabase(process.env.LOCAL_DB_PATH || resolve(here,'../.local/pdv-total.sqlite'));
 db.exec(readFileSync(resolve(here,'../migrations/0001_identity.sql'),'utf8'));
+db.exec(readFileSync(resolve(here,'../migrations/0002_commerce.sql'),'utf8'));
 const host=process.env.PDV_HOST||'127.0.0.1',port=Number(process.env.PORT||4175);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('PORT inválida.');
-const api=createApi({DB:db,COOKIE_SECURE:'false'});
+const api=createApi({DB:db,COOKIE_SECURE:'false',AUTH_ENABLED:process.env.AUTH_ENABLED||'false'});
 const server=createServer(async(req,res)=>{
   try{
     const origin=`http://${req.headers.host||'127.0.0.1:'+port}`;

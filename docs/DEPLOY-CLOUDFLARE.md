@@ -1,6 +1,6 @@
 # Implantação do PDV Artisys Total na Cloudflare
 
-Este Worker é **somente a fundação de identidade P1/P2**, não o PDV online completo.
+Este Worker tem **identidade P1/P2 e recorte transacional P3** (catálogo, ledger de estoque, abertura de caixa e vendas). Ainda não é um SaaS pronto para clientes ou cobrança recorrente.
 O PDV Artisys original está preservado **somente em seu próprio repositório**. Neste repositório, o núcleo reaproveitado vive em `packages/core/` e a única UI sob adaptação em `apps/web/`. Electron e instaladores desktop não são publicados aqui.
 
 ## Integração do GitHub
@@ -23,7 +23,7 @@ Na Cloudflare, em **Workers & Pages → pdv-artisys-total → Configurações �
 
 O Worker declara o D1 **`DB`** com nome **`pdv-artisys-total`** e um binding R2 **`FILES`** reservado. São recursos novos e separados dos serviços de licença do PDV Artisys desktop. Wrangler 4 aceita auto-provisionamento sem IDs fictícios; o ID real pode permanecer somente no ambiente Cloudflare. Confira os bindings reais em **Settings → Bindings** antes de ativar clientes.
 
-- O deploy **não executa automaticamente** `apps/api/migrations/0001_identity.sql` no D1 remoto. Quando o D1 existir, aplique a migração conscientemente no banco **novo** (Cloudflare D1 Console ou `wrangler d1 execute pdv-artisys-total --remote --file apps/api/migrations/0001_identity.sql`). Nunca execute no D1 de licenciamento desktop.
+- O deploy **não executa automaticamente** migrações no D1 remoto. Em banco **novo e isolado**, aplique em ordem `apps/api/migrations/0001_identity.sql` e `apps/api/migrations/0002_commerce.sql` (Cloudflare D1 Console ou `wrangler d1 execute pdv-artisys-total --remote --file <arquivo>`). Nunca execute no D1 do PDV original. Validar backup e o estado do banco antes de migrar dados reais.
 - Antes da migração, `/api/v1/health` devolve **503 setup-required**; depois dela, **200 identity-ready**.
 - `FILES` ainda não lê nem grava anexos. Não contratar plano pago automaticamente para habilitar R2.
 - **Não existe `CLOUDFLARE_API_TOKEN` necessário no código**. O build Git autenticado e os bindings da plataforma são suficientes. Nunca versionar tokens de conta no GitHub.
@@ -32,15 +32,22 @@ O Worker declara o D1 **`DB`** com nome **`pdv-artisys-total`** e um binding R2 
 
 ## Bloqueio intencional para acesso público
 
-O `wrangler.jsonc` define **`AUTH_ENABLED=false`**, portanto login responde 503 sem persistir tentativas de autenticação. Este é o estado seguro para um Worker de identidade que ainda não tem onboarding de clientes, MFA, recuperação de senha, defesa por IP nem operações de venda. A API `/api/v1/health` pode responder à sondagem, mas **não há painel, venda, estoque, caixa ou cobrança online**. Ativar login somente após gates de segurança e schema remoto verificado.
+O `wrangler.jsonc` define **`AUTH_ENABLED=false`**, portanto login responde 503 sem persistir tentativas de autenticação. Este é o estado seguro para um Worker cujo frontend P3 e backend transacional estão sob QA e ainda não têm onboarding de clientes, recuperação de senha, defesa de abuso e monitoramento de produção. A interface estática pode ser carregada, mas **login e operações comerciais são bloqueados** no servidor. Não há cobrança online integrada. Ativar login somente após gates de segurança e schema remoto verificado.
 
 ## Verificação de entrega
 
 - Código: `npm run build`, `cd apps/api && npm test`.
 - Worker: `npx wrangler deploy --dry-run`.
-- Testes de integração: GitHub Actions `Verify SaaS canonical foundation` roda Wrangler em Workerd com D1 local, PBKDF2, login, isolamento por empresa, sessão e logout.
+- Testes de integração: GitHub Actions `Verify SaaS canonical foundation` roda Wrangler/Workerd, D1 local, PBKDF2, isolamento de empresa, ciclo completo de venda e duas jornadas reais no Chromium (incluindo 390 px). Os testes atuais registram 57 testes do núcleo e 14 da API.
 - Publicação real: abra **Implantações/Builds** do projeto Cloudflare e confirme que o commit da `main` passou. **Um GitHub Actions verde não comprova uma publicação verde.**
 
 Se a Cloudflare marcar o check **Workers Builds: pdv-artisys-total** como falho, abra o próprio link do build no painel e confira a primeira mensagem de erro. A integração Cloudflare não disponibiliza os logs privados no GitHub; não tratar esse check como sucesso sem verificá-lo.
 
-**Próximas etapas:** adaptar transações do domínio canônico ao D1, criar onboarding seguro, habilitar assinaturas mensais e implementar a interface web **sem renderer e mutations duplicados**, após testes de paridade.
+### Bloqueio real de publicação observado
+
+O check de integração **Workers Builds: pdv-artisys-total** no GitHub retornou falha tanto na `main` anterior ao P3 (commit `97c7626d`) quanto na PR #5. O diagnóstico do erro remoto precisa do log do painel Cloudflare; Wrangler dry-run e GitHub CI **passarem não eliminam esse bloqueio**.
+
+Conferir `https://dash.cloudflare.com/` → Workers & Pages → `pdv-artisys-total` → Builds/Implantações → build com falha; copiar a **primeira mensagem técnica de erro**, checar comandos Build/Deploy configurados e o status dos bindings D1 `DB` e R2 `FILES`. Não preencher IDs e tokens inventados, e não habilitar recursos pagos para contornar o problema. Sem esse log, não há comprovação de deploy remoto.
+
+**Próximas etapas:** resolver o build remoto, aplicar e verificar as migrações no banco isolado, criar onboarding seguro, habilitar assinaturas mensais sob controle, e ampliar gradualmente a paridade online do núcleo e da interface **sem renderer ou mutations duplicados**.
+

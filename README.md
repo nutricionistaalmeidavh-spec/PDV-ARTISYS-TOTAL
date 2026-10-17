@@ -5,19 +5,21 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 ## Estrutura do produto
 
 - `packages/core/js/`: serviços **canônicos** de produtos, vendas, eventos, ledger de estoque, caixa, pagamentos, devoluções, restaurantes, relatórios e autorização, vindos do PDV original. Regras existentes são adaptadas, **não reimplementadas em paralelo**.
-- `packages/core/server/`: contratos/rotas do servidor original usados **apenas como base de transição**, não publicados pela Cloudflare; rotas de negócio só serão expostas quando houver transações/idempotência corretas no D1.
+- `packages/core/server/`: contratos/rotas do servidor original usados **apenas como base de transição**, não publicados pela Cloudflare; rotas comerciais P3 usam a borda única `apps/api/src/commerce-router.mjs`, com idempotência e transações D1.
 - `packages/core/shared/` e `packages/core/vendor/`: componentes de domínio e bibliotecas de apoio reutilizados; nenhuma segunda cópia dos arquivos originais.
-- `apps/web/`: a **única interface de operação** transferida do renderer existente para transformação no navegador. Não está pronta para servir ao público: seus acessos IPC/Electron deverão ser substituídos pelo cliente HTTP canônico, com testes de equivalência e manutenção de estado.
-- `apps/api/`: borda Cloudflare Workers + D1, com opção local Node + SQLite. Hoje tem apenas identidade, empresas, sessões, filiais e permissões.
+- `apps/web/`: a **única interface de operação** transferida do renderer existente para transformação no navegador. Servida como assets do Worker na fase P3, com login web, produtos, estoque, caixa, vendas e histórico básico. Recursos restantes do Electron/IPC não são expostos no modo web.
+- `apps/api/`: borda Cloudflare Workers + D1, com opção local Node + SQLite. Já tem identidade, empresas, sessões e filiais, além do recorte P3 de produtos, estoque, caixa e vendas com D1 (`0002_commerce.sql`).
 - `docs/`: migração, UX, limites de segurança e implantação.
 
 **Não existe uma segunda árvore `legacy/` no código ativo**. O commit original importado e os 900 arquivos continuam auditáveis no histórico Git; instaladores, Electron, auto-update Windows/macOS, CI do desktop, licença desktop e artefatos específicos não são carregados aqui.
 
-## Estado atual
+## Estado atual — P3 validada em QA
 
-A infraestrutura de identidade foi testada com Node, SQLite, Workerd e D1 local. **O PDV web ainda não é operacional**: o renderer transferido não está servido pela API, e as mutations comerciais (venda, caixa, estoque, pagamentos) permanecem fechadas até a migração transacional do núcleo. O login público é desativado por padrão.
+A interface única do PDV (`apps/web/`) agora é empacotada como assets do Worker (`npm run build`). Em ambiente **local Workerd/D1**, passou pelo fluxo de login, cadastro de produto, entrada no estoque, abertura de caixa, venda, pagamento **registrado** e baixa única de estoque. O núcleo reaproveita os cálculos canônicos de preço/pagamento/quantidade e preserva o ledger como fonte do saldo.
 
-**Não cobrar assinaturas nem habilitar clientes enquanto faltarem UI funcional, domínio transacional D1, onboarding, controle de assinatura e QA.**
+**Produção não foi liberada:** `wrangler.jsonc` conserva `AUTH_ENABLED=false`. O sistema **não cobra de fato via PIX/cartão**; registra a forma informada. Falta validar o D1 remoto, concluir o onboarding, assinaturas, recursos avançados, fechamento/rotinas fiscais, impressão e segurança operacional. **Não vender assinaturas nem liberar clientes ainda.**
+
+**Evidência de QA:** 57 testes de núcleo, 14 de API, esquema D1 no Wrangler, Workerd/D1 local, jornada Chromium e tela 390px. O check de build da **Cloudflare no GitHub falhava já na main anterior ao P3**; Actions verde **não comprova deploy remoto**. Para diagnosticar, obter a primeira mensagem de erro em Cloudflare → Workers & Pages → pdv-artisys-total → Builds.
 
 ## Segurança e canonicidade
 

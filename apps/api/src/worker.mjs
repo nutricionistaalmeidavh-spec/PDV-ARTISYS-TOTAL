@@ -1,4 +1,5 @@
 import { sha256, verifyPassword, newSessionToken } from './password.mjs';
+import {commerceRoute} from './commerce-router.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import legacyProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
 import legacyPrincipals from '../../../packages/core/js/core/auth/principal-resolver.js';
@@ -162,8 +163,15 @@ export function createApi(env,{now=()=>Date.now()}={}){
           WHERE m.tenant_id=? AND m.active=1 AND u.active=1 ORDER BY u.display_name,u.id`).bind(membership.tenantId).all();
         return response({tenantId:membership.tenantId,members:results});
       }
-      // No domain-write route is implemented here. Sale/stock/cash mutations MUST be
-      // wired only through the original canonical services after D1 transaction parity.
+      // Commerce belongs to the only canonical PDV core and its D1 transaction adapter.
+      const commerceMatch=path.match(/^\/api\/v1\/tenants\/([^/]+)\/(.+)$/);
+      if(commerceMatch){
+        const tenantId=decodeURIComponent(commerceMatch[1]);
+        const membership=await requireMembership(db,session.userId,tenantId);
+        if(!membership)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
+        const commerce=await commerceRoute(request,db,session,membership,tenantId,commerceMatch[2]);
+        if(commerce)return commerce;
+      }
       return failure(404,'Rota não disponível neste estágio da migração.');
     }catch(error){
       if(env.LOG_ERRORS==='true')console.error('pdv-total request failed',error?.name||'Error');

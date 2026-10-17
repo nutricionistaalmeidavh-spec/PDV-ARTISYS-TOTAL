@@ -35,6 +35,8 @@ jobs:
         run: npm run build
       - name: Test canonical sales, inventory, cash and authorization contracts
         run: npm run test:core
+      - name: Validate original renderer web syntax (no second app)
+        run: npm run check:web
       - name: Validate entrypoints
         working-directory: apps/api
         run: npm run check
@@ -57,8 +59,15 @@ jobs:
         run: npx --yes wrangler@4.137.0 deploy --dry-run --outdir dist-check
       - name: Test isolated D1 schema in Wrangler local emulator
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0001_identity.sql
+      - name: Test commerce D1 schema and immutable stock ledger in Wrangler
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0002_commerce.sql
+      - name: Install one Chromium for all browser regression gates
+        run: |
+          npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0
+          npx playwright install --with-deps chromium
       - name: Smoke real Cloudflare Workerd with local D1 and 100k PBKDF2
         env:
+          RUN_BROWSER_SMOKE: 'true'
           PDV_OWNER_EMAIL: owner@example.test
           PDV_OWNER_NAME: Local Owner
           PDV_TENANT_SLUG: workerd-test
@@ -68,6 +77,15 @@ jobs:
           node --experimental-sqlite apps/api/src/provision.mjs
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/.local/provision.seed.sql
           node scripts/smoke-workerd.mjs
+      - name: E2E original PDV renderer in Chromium (desktop + mobile)
+        run: node scripts/web-browser-e2e.mjs
+      - name: Save browser visual QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdv-total-browser-qa
+          path: qa-artifacts/
+          if-no-files-found: ignore
       - name: Verify a single maintained product, with no legacy desktop copy
         shell: bash
         run: |

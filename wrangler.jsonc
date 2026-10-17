@@ -5,6 +5,11 @@
   "main": "apps/api/src/worker.mjs",
   "compatibility_date": "2026-09-28",
   "workers_dev": true,
+  "assets": {
+    "directory": "./dist/web",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
   // API remains read-only / locked while the SaaS is not provisioned for customers.
   "vars": { "AUTH_ENABLED": "false" },
   // Wrangler 4 auto-provisions missing resource IDs; do not invent UUIDs.
