@@ -133,8 +133,8 @@
     const payments=(sale.payments||[]).map(p=>'<div>'+escapeHtml(p.method)+': '+escapeHtml(amount(p.amountCents))+'</div>').join('');
     return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Cupom não fiscal</title><style>@page{size:'+prefs.paperMm+'mm auto;margin:3mm}body{font:12px monospace;margin:0;color:#000}h1{text-align:center;font-size:15px}table{width:100%;border-collapse:collapse}td{border-bottom:1px dotted #aaa;padding:6px 2px}td:not(:first-child){text-align:right}strong{font-size:15px}.total{display:flex;justify-content:space-between;margin:12px 0}</style></head><body><h1>PDV TOTAL</h1><p>CUPOM NÃO FISCAL</p><p>Venda '+escapeHtml(sale.saleNumber||sale.id)+'</p><p>'+escapeHtml(sale.completedAt||'')+'</p><table><tbody>'+items+'</tbody></table><div class="total"><strong>TOTAL</strong><strong>'+escapeHtml(amount(sale.totalCents))+'</strong></div>'+payments+'<div>Troco: '+escapeHtml(amount(sale.changeCents))+'</div><hr><p>Obrigado pela preferência.</p></body></html>';
   }
-  function openPrintDocument(html) {
-    const popup=root.open('','_blank');
+  function openPrintDocument(html,providedPopup) {
+    const popup=providedPopup||root.open('','_blank');
     if(!popup)throw new Error('O navegador bloqueou a janela de impressão. Autorize pop-ups para este site.');
     popup.document.open();
     popup.document.write(html);
@@ -144,15 +144,18 @@
     // Browser cannot reliably observe physical spooler success or PDF save.
     return {dialogOpened:true};
   }
+  function receiptText(sale) {
+    const fmt=n=>(Number(n||0)/100).toFixed(2);
+    return ['PDV TOTAL','CUPOM NAO FISCAL','Venda '+String(sale.saleNumber||sale.id),String(sale.completedAt||''),...((sale.items||[]).map(i=>String(i.productName||i.sku||i.productId||'Produto')+'  '+String(i.quantity)+' x '+fmt(i.unitPriceCents)+' = '+fmt(i.totalCents??Math.round(i.quantity*i.unitPriceCents)))),'TOTAL: '+fmt(sale.totalCents),...((sale.payments||[]).map(p=>String(p.method)+': '+fmt(p.amountCents))),'Troco: '+fmt(sale.changeCents),'Obrigado pela preferencia.','',''].join('\n');
+  }
   async function printSale(sale,opts={}) {
+    if(!sale||sale.status!=='COMPLETED'||!sale.id)throw new Error('Venda concluída obrigatória.');
     if(settings().printerMode==='serial') {
       // On-demand serial transport; never send an automatic second copy through browser.
-      const html=receiptHtml(sale,settings());
-      const text=String(html.replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&')).slice(0,1000);
-      await writeSerial('printer',escpos(text,{cut:settings().cut}),settings().printerBaud);
+      await writeSerial('printer',escpos(receiptText(sale),{cut:settings().cut}),settings().printerBaud);
       return {sentToSerial:true};
     }
-    return openPrintDocument(receiptHtml(sale,settings()));
+    return openPrintDocument(receiptHtml(sale,settings()),opts.popup);
   }
   function showSettings() {
     const previous=root.document.getElementById('pdv-peripherals-dialog');
@@ -189,7 +192,7 @@
     return printSale({id:'TESTE',status:'COMPLETED',saleNumber:'TESTE',completedAt:new Date().toISOString(),items:[],payments:[],totalCents:0,changeCents:0});
   }
   root.PdvWebHardware=Object.freeze({settings,saveSettings,readWeight,connect,openDrawer,printSale,printTest,showSettings});
-  root.PdvWebHardwareUtils=Object.freeze({parseWeight,normalizeSettings,receiptHtml,escpos,escapeHtml});
+  root.PdvWebHardwareUtils=Object.freeze({parseWeight,normalizeSettings,receiptHtml,receiptText,escpos,escapeHtml});
   root.document?.addEventListener('click',e=>{
     if(e.target?.closest?.('#peripherals-settings'))showSettings();
   });
