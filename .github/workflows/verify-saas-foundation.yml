@@ -12,6 +12,9 @@ on:
       - 'scripts/verify-cloudflare-build.mjs'
       - 'packages/core/**'
       - 'apps/web/**'
+      - 'docs/parity/**'
+      - 'scripts/check-desktop-parity.mjs'
+      - 'scripts/web-browser-e2e.mjs'
       - '.github/workflows/verify-saas-foundation.yml'
   workflow_dispatch:
 
@@ -33,6 +36,8 @@ jobs:
           node-version: '22'
       - name: Validate Cloudflare repository-root deployment contract
         run: npm run build
+      - name: Audit evidence of seven desktop-to-web module contracts
+        run: npm run test:parity
       - name: Test canonical sales, inventory, cash and authorization contracts
         run: npm run test:core
       - name: Validate original renderer web syntax (no second app)
@@ -67,6 +72,10 @@ jobs:
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0004_advanced_finance.sql
       - name: Test vertical parity D1 migration in real local D1
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0005_vertical_parity.sql
+      - name: Test additive desktop parity migration in local D1
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0006_desktop_parity.sql
+      - name: Test canonical stock transfer migration in real local D1
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0007_stock_transfers.sql
       - name: Install one Chromium for all browser regression gates
         run: |
           npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0

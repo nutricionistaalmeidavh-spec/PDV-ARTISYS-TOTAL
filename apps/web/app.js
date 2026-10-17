@@ -451,7 +451,7 @@
     const weightLabel=weight?`${quantityLabel(Number(weight.grams||0))} g · ${escapeHtml(String(weight.source||'MANUAL')==='SCALE'?'balança':String(weight.source||'MANUAL')==='BARCODE'?'etiqueta':'manual')}`:null;
     const documentLabel=sourceDocument?`${escapeHtml(sourceDocument.orderNumber||sourceDocument.id||'Pedido')} · preço do pedido`:null;
     const priceDetails = changed ? `<small><s>${ui.formatCents(item.catalogUnitPriceCents)}</s> → ${ui.formatCents(item.unitPriceCents)}${item.priceOverrideReason ? ` · ${escapeHtml(item.priceOverrideReason)}` : ''}${documentLabel?` · ${documentLabel}`:''}</small>` : `<small>${ui.formatCents(item.unitPriceCents)}${weightLabel?` · ${weightLabel}`:''}${documentLabel?` · ${documentLabel}`:''}</small>`;
-    const priceButton = !api.webMode&&!sourceDocument&&window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount') ? `<button type="button" class="secondary-button cart-price-edit" data-price-item="${item.id}">Alterar preço</button>` : '';
+    const priceButton = !sourceDocument&&window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount') ? `<button type="button" class="secondary-button cart-price-edit" data-price-item="${item.id}">Alterar preço</button>` : '';
     const quantityControl=sourceDocument?`<div class="qty-control"><span>${quantityLabel(item.quantity)} · pedido</span></div>`:weight?`<div class="qty-control"><span>${weightLabel}</span></div>`:configured?`<div class="qty-control"><button type="button" data-configured-qty-minus="${item.id}">−</button><span>${quantityLabel(item.quantity)}</span><button type="button" data-configured-qty-plus="${item.id}">＋</button></div>`:`<div class="qty-control"><button type="button" data-qty-minus="${item.productId}">−</button><span>${quantityLabel(item.quantity)}</span><button type="button" data-qty-plus="${item.productId}">＋</button></div>`;
     const remove=sourceDocument?'':weight?`<button type="button" class="cart-remove-button" data-remove-weighted="${item.id}" aria-label="Remover pesagem">×</button>`:configured?`<button type="button" class="cart-remove-button" data-remove-configured="${item.id}" aria-label="Remover esta configuração">×</button>`:`<button type="button" class="cart-remove-button" data-remove="${item.productId}">×</button>`;
     return `<div class="cart-line ${state.selectedProductId === item.productId ? 'selected' : ''}" data-select-product="${item.productId}"><div><strong>${escapeHtml(item.productName)}</strong>${configurationSummary?`<small>${escapeHtml(configurationSummary)}</small>`:''}${priceDetails}${priceButton}</div>${quantityControl}<div class="line-total">${ui.formatCents(item.totalCents)} ${remove}</div></div>`;
@@ -952,26 +952,45 @@
   }
 
 
+  let inactiveWebProducts=[];
+  let showInactiveWebProducts=false;
   function renderWebProducts(){
     const canManage=window.PdvAccessPolicy?.hasCapability(state.user,'products.manage');
     const canStock=window.PdvAccessPolicy?.hasCapability(state.user,'inventory.adjust');
-    const listed=state.products.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku).includes(ui.normalizeSearch(state.productQuery)));
+    const catalogItems=showInactiveWebProducts?[...state.products,...inactiveWebProducts]:state.products;
+    const listed=catalogItems.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku).includes(ui.normalizeSearch(state.productQuery)));
     content.innerHTML=`<section class="page web-products-page"><header class="page-head">
       <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
       <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
-      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button>':''}</header>
+      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button>':''}
+      ${canManage?`<button id="web-toggle-inactive" class="secondary-button" type="button">${showInactiveWebProducts?'Ocultar inativos':'Mostrar inativos'}</button>`:''}</header>
       <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
         placeholder="Buscar produto ou SKU" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
       <div class="data-card web-product-table" id="web-products-list">
         ${listed.length?listed.map(p=>`<div class="data-row web-product-row">
           <div class="web-product-identity"><span class="web-product-monogram">${escapeHtml(initials(p.name))}</span>
-          <div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku)}</small></div></div>
+          <div><strong>${escapeHtml(p.name)}</strong><small>${p.active===false?'Inativo · ':''}${escapeHtml(p.sku)}</small></div></div>
           <div><small>Preço</small><strong>${ui.formatCents(p.salePriceCents)}</strong></div>
           <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.balance):'Livre'}</strong></div>
-          ${canStock&&p.trackStock?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>`:''}
+          ${canManage?`<button type="button" class="secondary-button" data-web-edit="${escapeHtml(p.id)}">Editar</button>`:''}
+          ${canStock&&p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
+          <button type="button" class="secondary-button" data-web-adjust="${escapeHtml(p.id)}">Ajustar saldo</button>
+          <button type="button" class="secondary-button" data-web-transfer="${escapeHtml(p.id)}">Transferir</button>`:''}
+          ${p.trackStock?`<button type="button" class="secondary-button" data-web-moves="${escapeHtml(p.id)}">Movimentações</button>`:''}
         </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
       </div></section>`;
     content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
+    content.querySelector('#web-toggle-inactive')?.addEventListener('click',async event=>{
+      const button=event.currentTarget;button.disabled=true;
+      try{
+        if(!showInactiveWebProducts){const all=await api.products(true);inactiveWebProducts=all.filter(product=>product.active===false);}
+        showInactiveWebProducts=!showInactiveWebProducts;renderWebProducts();
+      }catch(error){showToast(error.message,'error');button.disabled=false;}
+    });
+    content.querySelectorAll('[data-web-edit]').forEach(button=>button.addEventListener('click',()=>{
+      const item=catalogItems.find(product=>product.id===button.dataset.webEdit);
+      if(item)openWebEditProductForm(item);
+    }));
     content.querySelector('#web-product-search')?.addEventListener('input',e=>{
       state.productQuery=e.target.value;
       const focused=document.activeElement===e.target,caret=e.target.selectionStart;
@@ -981,6 +1000,24 @@
     content.querySelectorAll('[data-web-stock]').forEach(b=>b.addEventListener('click',()=>{
       const product=state.products.find(p=>p.id===b.dataset.webStock);
       if(product)openWebStockForm(product);
+    }));
+    content.querySelectorAll('[data-web-adjust]').forEach(button=>button.addEventListener('click',()=>{
+      const product=state.products.find(p=>p.id===button.dataset.webAdjust);
+      if(product)openWebStockAdjustment(product);
+    }));
+    content.querySelectorAll('[data-web-transfer]').forEach(button=>button.addEventListener('click',async()=>{
+      const item=state.products.find(product=>product.id===button.dataset.webTransfer);
+      if(!item)return;
+      button.disabled=true;
+      try{await openWebStockTransfer(item);}catch(error){showToast(error.message,'error');}
+      finally{button.disabled=false;}
+    }));
+    content.querySelectorAll('[data-web-moves]').forEach(button=>button.addEventListener('click',async()=>{
+      const product=state.products.find(p=>p.id===button.dataset.webMoves);
+      if(!product)return;
+      button.disabled=true;
+      try{await openWebInventoryHistory(product);}catch(error){showToast(error.message,'error');}
+      finally{button.disabled=false;}
     }));
     routeRegistry.updated('products',{surface:'products'});
   }
@@ -1012,6 +1049,41 @@
     }});
   }
 
+
+  function openWebEditProductForm(product){
+    const price=(Number(product.salePriceCents||0)/100).toFixed(2).replace('.',',');
+    const unitOptions=['UN','KG','G','L','M','M2','M3','CX','PCT'];
+    openModal('Editar produto',`<form id="web-edit-product-form">
+      <div class="field"><label for="web-edit-product-name">Nome do produto</label><input id="web-edit-product-name" name="name" required minlength="2" maxlength="120" value="${escapeHtml(product.name)}"></div>
+      <div class="field-grid"><div class="field"><label for="web-edit-product-sku">SKU</label><input id="web-edit-product-sku" name="sku" required maxlength="64" value="${escapeHtml(product.sku)}"></div>
+      <div class="field"><label for="web-edit-product-price">Preço de venda (R$)</label><input id="web-edit-product-price" name="price" required inputmode="decimal" value="${escapeHtml(price)}"></div></div>
+      <div class="field"><label for="web-edit-product-unit">Unidade</label><select id="web-edit-product-unit" name="unit">${unitOptions.map(unit=>`<option value="${unit}" ${unit===product.unit?'selected':''}>${unit}</option>`).join('')}</select></div>
+      <label class="web-checkbox"><input type="checkbox" name="active" ${product.active!==false?'checked':''}> Produto ativo (desativar preserva vendas e estoque histórico)</label>
+      <p class="web-form-feedback" role="status" aria-live="polite"></p>
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" type="submit">Salvar alterações</button></div>
+    </form>`,{onMount(root){
+      const form=root.querySelector('#web-edit-product-form');
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();if(form.dataset.pending==='true')return;
+        const button=form.querySelector('[type=submit]'),status=form.querySelector('.web-form-feedback');
+        form.dataset.pending='true';button.disabled=true;
+        try{
+          if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+          const result=await api.updateProduct(product.id,{
+            name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
+            salePriceCents:centsFromInput(form.elements.price.value),unit:form.elements.unit.value,
+            active:form.elements.active.checked
+          },form.dataset.operationKey);
+          state.products=await api.products();
+          if(showInactiveWebProducts){const all=await api.products(true);inactiveWebProducts=all.filter(item=>item.active===false);}
+          closeModal();renderWebProducts();
+          showToast(result.active?'Produto atualizado.':'Produto desativado sem apagar vendas e estoque.','success');
+        }catch(error){status.textContent=error.message;}
+        finally{form.dataset.pending='false';button.disabled=false;}
+      });
+    }});
+  }
+
   function openWebStockForm(product){
     openModal('Registrar entrada no estoque',`<form id="web-stock-form">
       <p>Produto: <strong>${escapeHtml(product.name)}</strong> · Saldo atual: ${quantityLabel(product.balance)}</p>
@@ -1036,6 +1108,93 @@
         finally{form.dataset.pending='false';button.disabled=false;button.textContent='Registrar entrada';}
       });
     }});
+  }
+
+  function openWebStockAdjustment(product){
+    openModal('Ajustar estoque',`<form id="web-adjust-form">
+      <p>Produto: <strong>${escapeHtml(product.name)}</strong> · Saldo atual: ${quantityLabel(product.balance)}</p>
+      <div class="field"><label for="web-adjust-qty">Variação no saldo (+ entrada / − saída)</label>
+      <input id="web-adjust-qty" name="quantityDelta" type="number" step="0.001" required placeholder="Ex.: -1 ou 2.5"></div>
+      <div class="field"><label for="web-adjust-reason">Justificativa obrigatória</label>
+      <textarea id="web-adjust-reason" name="reason" rows="3" minlength="3" maxlength="240" required placeholder="Ex.: perda identificada na contagem"></textarea></div>
+      <p class="web-form-feedback" role="status" aria-live="polite"></p>
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button>
+      <button class="primary-button" type="submit">Registrar ajuste</button></div></form>`,{onMount(root){
+      const form=root.querySelector('#web-adjust-form');
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();if(form.dataset.pending==='true')return;
+        if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+        const button=form.querySelector('[type=submit]'),feedback=form.querySelector('[role=status]');
+        button.disabled=true;form.dataset.pending='true';
+        try{
+          await api.request('/api/v1/inventory/adjustments',{method:'POST',
+            mutationId:form.dataset.operationKey,body:{
+              productId:product.id,quantityDelta:Number(form.elements.quantityDelta.value),
+              reason:form.elements.reason.value.trim()
+            }});
+          state.products=await api.products();
+          closeModal();renderWebProducts();showToast('Ajuste registrado no histórico de estoque.','success');
+        }catch(error){feedback.textContent=error.message;}
+        finally{button.disabled=false;form.dataset.pending='false';}
+      });
+    }});
+  }
+
+
+  async function openWebStockTransfer(product){
+    const data=await api.tenantBranches();
+    const targets=(data.branches||[]).filter(branch=>branch.id!==api.branchId&&branch.active!==false);
+    if(!targets.length){showToast('Cadastre uma segunda filial ativa antes de transferir estoque.','error');return;}
+    openModal('Transferir estoque entre filiais',`<form id="web-stock-transfer-form">
+      <p>Origem: <strong>${escapeHtml(product.name)}</strong> · Disponível: ${quantityLabel(product.balance)}</p>
+      <div class="field"><label for="web-transfer-to">Filial de destino</label>
+      <select id="web-transfer-to" name="toBranchId" required>${targets.map(branch=>`<option value="${escapeHtml(branch.id)}">${escapeHtml(branch.name||branch.code||branch.id)}</option>`).join('')}</select></div>
+      <div class="field"><label for="web-transfer-qty">Quantidade</label><input id="web-transfer-qty" name="quantity" type="number" min="0.001" max="${Number(product.balance)}" step="0.001" required></div>
+      <div class="field"><label for="web-transfer-reason">Justificativa</label><textarea id="web-transfer-reason" name="reason" rows="3" minlength="3" maxlength="240" required></textarea></div>
+      <p class="web-form-feedback" role="status" aria-live="polite"></p>
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" type="submit">Confirmar transferência</button></div>
+    </form>`,{onMount(root){
+      const form=root.querySelector('#web-stock-transfer-form');
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();if(form.dataset.pending==='true')return;
+        const button=form.querySelector('[type=submit]'),feedback=form.querySelector('[role=status]');
+        button.disabled=true;form.dataset.pending='true';
+        try{
+          if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+          await api.transferStock({
+            productId:product.id,toBranchId:form.elements.toBranchId.value,
+            quantity:Number(form.elements.quantity.value),reason:form.elements.reason.value.trim()
+          },form.dataset.operationKey);
+          state.products=await api.products();
+          closeModal();renderWebProducts();
+          showToast('Transferência registrada em ambas as filiais.','success');
+        }catch(error){feedback.textContent=error.message;}
+        finally{button.disabled=false;form.dataset.pending='false';}
+      });
+    }});
+  }
+
+  async function openWebInventoryHistory(product){
+    const result=await api.request('/api/v1/inventory/movements'+api.params({
+      productId:product.id,limit:50
+    }));
+    const rows=result.items||[];
+    const named={opening:'Saldo inicial',purchase:'Entrada',adjustment:'Ajuste',
+      sale:'Venda',return:'Devolução'};
+    const formatDate=value=>value?new Date(value).toLocaleString('pt-BR'):'—';
+    openModal('Histórico de estoque — '+product.name,`<div class="web-stock-history">
+      <p>Movimentações imutáveis deste produto na filial atual.</p>
+      <div class="ops-table-wrap"><table class="ops-table"><thead>
+        <tr><th>Quando</th><th>Operação</th><th>Variação</th><th>Motivo</th></tr>
+      </thead><tbody>${rows.length?rows.map(row=>`<tr>
+        <td>${escapeHtml(formatDate(row.occurredAt))}</td>
+        <td>${escapeHtml(named[row.type]||row.type)}</td>
+        <td>${row.quantityDelta>0?'+':''}${quantityLabel(row.quantityDelta)}</td>
+        <td>${escapeHtml(row.reason||'—')}</td></tr>`).join(''):
+        '<tr><td colspan="4">Nenhuma movimentação registrada.</td></tr>'}
+      </tbody></table></div>${result.total>rows.length?`<p class="web-history-note">Exibindo as primeiras ${rows.length} de ${result.total} movimentações.</p>`:''}
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Fechar</button></div>
+    </div>`);
   }
 
   function renderProducts() {

@@ -191,13 +191,71 @@
     }));
   }
 
-  async function renderSalesHistory(){
-    await ready();const sales=api.webMode?await api.sales('COMPLETED',50):await api.salesHistory({limit:200});
-    const body=`<section class="ops-card"><div class="ops-card-head"><h2>Vendas concluídas</h2><input id="ops-sales-search" class="ops-input compact" placeholder="Venda, cliente, vendedor ou operador"></div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Venda</th><th>Data</th><th>Vendedor</th><th>Operador</th><th>Cliente</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="ops-sales-body">${sales.map(row=>`<tr data-search="${escapeHtml(`${row.saleNumber||''} ${row.customerName||''} ${row.sellerName||''} ${row.operatorName||''}`.toLowerCase())}"><td><strong>${escapeHtml(row.saleNumber||row.id)}</strong></td><td>${when(row.completedAt||row.openedAt)}</td><td>${escapeHtml(row.sellerName||row.sellerId||'—')}</td><td>${escapeHtml(row.operatorName||row.operatorId||'—')}</td><td>${escapeHtml(row.customerName||'Consumidor')}</td><td>${money(row.totalCents)}</td><td>${badge(row.status)}</td><td><button class="ops-link" data-sale-details="${escapeHtml(row.id)}">Detalhes</button></td></tr>`).join('')||`<tr><td colspan="8">${empty('Nenhuma venda concluída.')}</td></tr>`}</tbody></table></div></section><section id="ops-sale-detail"></section>`;
-    if(!routeActive('sales'))return;
+  let salesHistoryRenderSequence=0;
+  async function renderSalesHistory(filters={}){
+    const renderSequence=++salesHistoryRenderSequence;
+    await ready();
+    const historyFilter={status:filters.status??'COMPLETED',
+      from:filters.from||'',to:filters.to||'',query:filters.query||'',
+      limit:25,offset:Number(filters.offset)||0};
+    const history=api.webMode?await api.salesHistory(historyFilter):null;
+    const sales=api.webMode?history.items:await api.salesHistory({limit:200});
+    const historyTools=api.webMode?`<section class="ops-card"><form id="web-sales-filter" class="web-report-filter">
+      <label>Busca por número<input name="query" class="ops-input" value="${escapeHtml(historyFilter.query)}" placeholder="Código da venda"></label>
+      <label>De<input type="date" class="ops-input" name="from" value="${escapeHtml(historyFilter.from)}"></label>
+      <label>Até<input type="date" class="ops-input" name="to" value="${escapeHtml(historyFilter.to)}"></label>
+      <label>Situação<select class="ops-input" name="status">
+        ${[['COMPLETED','Concluídas'],['OPEN','Abertas'],['SUSPENDED','Suspensas'],['CANCELLED','Canceladas'],['','Todas']].map(([key,label])=>`<option value="${key}" ${historyFilter.status===key?'selected':''}>${label}</option>`).join('')}
+        </select></label>
+      <button class="ops-primary" type="submit">Filtrar vendas</button></form>
+      <p class="ops-muted">Encontradas ${history.total} vendas · página ${Math.floor(history.offset/history.limit)+1}</p>
+      </section>`:'';
+    const body=`${historyTools}<section class="ops-card"><div class="ops-card-head"><h2>${api.webMode?'Histórico de vendas':'Vendas concluídas'}</h2>${api.webMode?'':'<input id="ops-sales-search" class="ops-input compact" placeholder="Venda, cliente, vendedor ou operador">'}</div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Venda</th><th>Data</th><th>Vendedor</th><th>Operador</th><th>Cliente</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="ops-sales-body" data-history-query="${escapeHtml(historyFilter.query)}" data-history-status="${escapeHtml(historyFilter.status)}">${sales.map(row=>`<tr data-search="${escapeHtml(`${row.saleNumber||''} ${row.customerName||''} ${row.sellerName||''} ${row.operatorName||''}`.toLowerCase())}"><td><strong>${escapeHtml(row.saleNumber||row.id)}</strong></td><td>${when(row.completedAt||row.openedAt)}</td><td>${escapeHtml(row.sellerName||row.sellerId||'—')}</td><td>${escapeHtml(row.operatorName||row.operatorId||'—')}</td><td>${escapeHtml(row.customerName||'Consumidor')}</td><td>${money(row.totalCents)}</td><td>${badge(row.status)}</td><td><button class="ops-link" type="button" data-sale-details="${escapeHtml(row.id)}">Detalhes</button></td></tr>`).join('')||`<tr><td colspan="8">${empty('Nenhuma venda concluída.')}</td></tr>`}</tbody></table></div>${api.webMode?`<div class="ops-actions">
+      <button class="ops-secondary" type="button" data-history-page="-1" ${history.offset===0?'disabled':''}>← Anterior</button>
+      <button class="ops-secondary" type="button" data-history-page="1" ${history.offset+history.items.length>=history.total?'disabled':''}>Próxima →</button>
+    </div>`:''}</section><section id="ops-sale-detail"></section>`;
+    if(!routeActive('sales')||renderSequence!==salesHistoryRenderSequence)return;
     content.innerHTML=page('Últimas vendas','Histórico imutável, pagamentos, itens e devoluções.',body);
+    content.querySelector('#web-sales-filter')?.addEventListener('submit',event=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      if(form.elements.from.value&&form.elements.to.value&&form.elements.from.value>form.elements.to.value){
+        showToast('A data inicial não pode ser posterior à final.','error');return;
+      }
+      // Prevent clicks on stale sale rows while the filtered history is loading.
+      // Otherwise the in-flight render replaces the detail panel after a user
+      // opens a sale, silently discarding the correct server response.
+      const pendingButtons=[...content.querySelectorAll('[data-sale-details], [data-history-page]')];
+      pendingButtons.forEach(button=>{button.disabled=true;button.setAttribute('aria-busy','true');});
+      void renderSalesHistory({from:form.elements.from.value,to:form.elements.to.value,
+        status:form.elements.status.value,query:form.elements.query.value,offset:0})
+        .catch(error=>{showToast(error.message,'error');})
+        .finally(()=>pendingButtons.forEach(button=>{button.disabled=false;button.removeAttribute('aria-busy');}));
+    });
+    content.querySelectorAll('[data-history-page]').forEach(button=>button.addEventListener('click',()=>{
+      if(button.disabled)return;
+      const offset=Math.max(0,history.offset+Number(button.dataset.historyPage)*history.limit);
+      void renderSalesHistory({...historyFilter,offset});
+    }));
     document.getElementById('ops-sales-search')?.addEventListener('input',event=>{const q=event.target.value.toLowerCase();document.querySelectorAll('#ops-sales-body tr[data-search]').forEach(row=>row.hidden=!row.dataset.search.includes(q));});
-    content.querySelectorAll('[data-sale-details]').forEach(button=>button.addEventListener('click',async()=>{try{const sale=api.webMode?await api.sale(button.dataset.saleDetails):await api.saleDetails(button.dataset.saleDetails);const jobs=api.webMode?[]:await api.printJobs({entityType:'sale',entityId:sale.id});if(!routeActive('sales'))return;const detail=document.getElementById('ops-sale-detail');if(!detail)return;detail.innerHTML=`<section class="ops-card"><div class="ops-card-head"><div><h2>Venda ${escapeHtml(sale.saleNumber||sale.id)}</h2><p>${when(sale.completedAt||sale.cancelledAt)} · Vendedor: ${escapeHtml(sale.sellerName||sale.sellerId||'—')} · Operador: ${escapeHtml(sale.operatorName||sale.operatorId||'—')}${sale.cancelReason?` · Cancelamento: ${escapeHtml(sale.cancelReason)}`:''}</p></div>${jobs[0]?`<button class="ops-secondary" data-reprint="${escapeHtml(jobs[0].id)}">Reimprimir comprovante</button>`:''}</div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Item</th><th>Qtd.</th><th>Preço original</th><th>Preço aplicado</th><th>Justificativa</th><th>Total</th></tr></thead><tbody>${(sale.items||[]).map(item=>`<tr><td>${escapeHtml(item.productName)}</td><td>${qty(item.quantity)}</td><td>${money(item.catalogUnitPriceCents??item.unitPriceCents)}</td><td>${money(item.unitPriceCents)}</td><td>${escapeHtml(item.priceOverrideReason||'—')}</td><td>${money(item.totalCents)}</td></tr>`).join('')}</tbody></table></div><div class="ops-summary-line"><span>Desconto ${money(sale.discountCents||0)}</span><strong>Total ${money(sale.totalCents)}</strong></div></section>`;document.querySelector('[data-reprint]')?.addEventListener('click',async event=>{try{await api.reprint(event.currentTarget.dataset.reprint);showToast('Reimpressão adicionada à fila.','success');}catch(error){showToast(error.message,'error');}});routeRegistry.updated('sales',{surface:'sale-detail'});}catch(error){showToast(error.message,'error');}}));
+    content.querySelectorAll('[data-sale-details]').forEach(button=>{
+      let lastOpenAt=0;
+      // A real browser can deliver pointerup without a subsequent click after
+      // history filtering. Do not rely on an equal pointerId from pointerdown:
+      // some Chromium/device adapters report a different value, leaving
+      // otherwise valid user activation silently ignored.
+      // Keyboard activation still uses the click handler below. Its 500ms
+      // guard de-duplicates the native click following pointerup.
+      button.addEventListener('pointerup',event=>{
+        if(!event.isPrimary||event.button!==0||button.disabled)return;
+        button.click();
+      });
+      button.addEventListener('click',async event=>{
+        event.preventDefault();
+        if(Date.now()-lastOpenAt<500)return;
+        lastOpenAt=Date.now();
+        try{const sale=api.webMode?await api.sale(button.dataset.saleDetails):await api.saleDetails(button.dataset.saleDetails);const jobs=api.webMode?[]:await api.printJobs({entityType:'sale',entityId:sale.id});if(!routeActive('sales'))return;const detail=document.getElementById('ops-sale-detail');if(!detail)return;detail.innerHTML=`<section class="ops-card"><div class="ops-card-head"><div><h2>Venda ${escapeHtml(sale.saleNumber||sale.id)}</h2><p>${when(sale.completedAt||sale.cancelledAt)} · Vendedor: ${escapeHtml(sale.sellerName||sale.sellerId||'—')} · Operador: ${escapeHtml(sale.operatorName||sale.operatorId||'—')}${sale.cancelReason?` · Cancelamento: ${escapeHtml(sale.cancelReason)}`:''}</p></div>${api.webMode&&sale.status==='COMPLETED'?`<button class="ops-secondary" type="button" data-history-print-sale>Reimprimir comprovante</button>`:(jobs[0]?`<button class="ops-secondary" data-reprint="${escapeHtml(jobs[0].id)}">Reimprimir comprovante</button>`:'')}</div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Item</th><th>Qtd.</th><th>Preço original</th><th>Preço aplicado</th><th>Justificativa</th><th>Total</th></tr></thead><tbody>${(sale.items||[]).map(item=>`<tr><td>${escapeHtml(item.productName)}</td><td>${qty(item.quantity)}</td><td>${money(item.catalogUnitPriceCents??item.unitPriceCents)}</td><td>${money(item.unitPriceCents)}</td><td>${escapeHtml(item.priceOverrideReason||'—')}</td><td>${money(item.totalCents)}</td></tr>`).join('')}</tbody></table></div><div class="ops-summary-line"><span>Desconto ${money(sale.discountCents||0)}</span><strong>Total ${money(sale.totalCents)}</strong></div></section>`;document.querySelector('[data-reprint]')?.addEventListener('click',async event=>{try{await api.reprint(event.currentTarget.dataset.reprint);showToast('Reimpressão adicionada à fila.','success');}catch(error){showToast(error.message,'error');}});document.querySelector('[data-history-print-sale]')?.addEventListener('click',async event=>{const button=event.currentTarget;button.disabled=true;try{if(!root.PdvWebHardware?.printSale)throw new Error('Impressão indisponível neste navegador.');const result=await root.PdvWebHardware.printSale(sale,{forceBrowser:true});showToast(result?.dialogOpened?'Diálogo de impressão aberto. Confirme o resultado na impressora.':'Confira a fila ou o diálogo de impressão.','success');}catch(error){showToast(error?.message||'Não foi possível abrir a impressão.','error');}finally{button.disabled=false;}});routeRegistry.updated('sales',{surface:'sale-detail'});}catch(error){showToast(error.message,'error');}});
+    });
   }
 
   async function renderReturns(){

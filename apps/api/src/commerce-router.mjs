@@ -46,10 +46,15 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
     if(!branch)throw Object.assign(new Error('Selecione a filial antes de continuar.'),{status:400});
     const tenant=tenantId,user=session.userId;
     if(feature==='products'){
+      if(parts.length===2&&parts[1].length<=128&&method==='PATCH'){
+        requireAccess(member,'products.manage',user);
+        return json({product:await service.updateProduct(tenant,branch,parts[1],body,key)});
+      }
       if(parts.length!==1)return null;
       if(method==='GET'){
-        requireAccess(member,'products.view',user);
-        return json({products:await service.products(tenant,branch,{limit:100})});
+        const includeInactive=url.searchParams.get('includeInactive')==='true';
+        requireAccess(member,includeInactive?'products.manage':'products.view',user);
+        return json({products:await service.products(tenant,branch,{limit:100,includeInactive})});
       }
       if(method==='POST'){
         requireAccess(member,'products.manage',user);
@@ -57,6 +62,26 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       }
     }
     if(feature==='inventory'){
+      if(parts[1]==='transfers'&&parts.length===2&&method==='GET'){
+        requireAccess(member,'inventory.view',user);
+        return json({transfers:await service.stockTransfers(tenant,branch,{limit:url.searchParams.get('limit')||50})});
+      }
+      if(parts[1]==='transfers'&&parts.length===2&&method==='POST'){
+        requireAccess(member,'inventory.adjust',user);
+        return json({transfer:await service.transferStock(tenant,branch,user,body,key)},201);
+      }
+      if(parts[1]==='movements'&&parts.length===2&&method==='GET'){
+        requireAccess(member,'inventory.view',user);
+        return json({movements:await service.inventoryMovements(tenant,branch,{
+          productId:url.searchParams.get('productId')||'',type:url.searchParams.get('type')||'',
+          from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',
+          limit:url.searchParams.get('limit')||100,offset:url.searchParams.get('offset')||0
+        })});
+      }
+      if(parts[1]==='adjustments'&&parts.length===2&&method==='POST'){
+        requireAccess(member,'inventory.adjust',user);
+        return json({movement:await service.adjustStock(tenant,branch,body,key)},201);
+      }
       if(parts.length===1&&method==='GET'){
         requireAccess(member,'inventory.view',user);
         return json({stock:await service.stock(tenant,branch)});
@@ -137,6 +162,15 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       }
     }
     if(feature==='sales'){
+      if(parts.length===2&&parts[1]==='history'&&method==='GET'){
+        requireAccess(member,'sales.view',user);
+        return json({history:await service.salesHistory(tenant,branch,{
+          from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',
+          status:url.searchParams.get('status')||'',query:url.searchParams.get('query')||'',
+          operatorId:url.searchParams.get('operatorId')||'',
+          limit:url.searchParams.get('limit')||25,offset:url.searchParams.get('offset')||0
+        })});
+      }
       if(parts.length===1&&method==='GET'){
         requireAccess(member,'sales.view',user);
         return json({sales:await service.listSales(tenant,branch,Number(url.searchParams.get('limit')||25),url.searchParams.get('status')||null)});
@@ -161,6 +195,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       if(parts[2]==='weight-items'&&parts.length===4&&method==='DELETE')
         return json({sale:await service.removeWeightedItem(tenant,branch,id,parts[3])});
       if(parts[2]==='items'){
+        if(parts.length===5&&parts[4]==='price'&&method==='PUT'){
+          requireAccess(member,'sales.discount',user);
+          return json({sale:await service.overrideItemPrice(tenant,branch,id,decodeURIComponent(parts[3]),user,body,key)});
+        }
         if(parts.length===3&&method==='POST')
           return json({sale:await service.addItem(tenant,branch,id,body,key)});
         if(parts.length===4&&method==='PUT')

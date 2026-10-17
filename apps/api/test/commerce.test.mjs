@@ -10,13 +10,15 @@ const identity=readFileSync(new URL('../migrations/0001_identity.sql',import.met
 const commerce=readFileSync(new URL('../migrations/0002_commerce.sql',import.meta.url),'utf8');
 const finance=readFileSync(new URL('../migrations/0003_cash_finance.sql',import.meta.url),'utf8');
 const vertical=readFileSync(new URL('../migrations/0005_vertical_parity.sql',import.meta.url),'utf8');
+const parity=readFileSync(new URL('../migrations/0006_desktop_parity.sql',import.meta.url),'utf8');
+const transfers=readFileSync(new URL('../migrations/0007_stock_transfers.sql',import.meta.url),'utf8');
 const NOW=Date.parse('2026-10-17T14:00:00Z');
 const date='2026-10-17T14:00:00.000Z';
 const password='SafeTestPasswordForPdv2026!';
 let num=0;
 const next=()=>('mutation-'+(++num)+'-long');
 async function setup(){
-  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);
+  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);
   const pass=await hashPassword(password);
   for(const [id,email] of [['owner','owner@test.com'],['other','other@test.com'],['viewer','viewer@test.com']])
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
@@ -310,5 +312,180 @@ test('P6 gram-denominated weighted product prices in grams without kilogram conv
     assert.equal(added.status,200,added.body.error);
     assert.equal(added.body.sale.items[0].quantity,125);
     assert.equal(added.body.sale.totalCents,1250);
+  }finally{x.close();}
+});
+
+test('Desktop parity: price override requires manager permission and preserves original SKU/price in immutable audit',async()=>{
+  const x=await setup();try{
+    const pid=await x.id('Teclado Mecânico','TECLA-01',8);
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    const sid=opened.body.sale.id;
+    const added=await x.write('a',`sales/${sid}/items`,{branchId:'branch-a',productId:pid,quantity:2});
+    assert.equal(added.status,200,added.body.error);
+    const itemId=added.body.sale.items[0].id;
+    const mutation=next();
+    const uri=`sales/${sid}/items/${itemId}/price`;
+    const body={branchId:'branch-a',unitPriceCents:850,reason:'Promoção autorizada pelo gerente'};
+    assert.equal((await x.write('a',uri,body,{who:x.viewer,method:'PUT'})).status,403);
+    assert.equal((await x.write('a',uri,{...body,reason:'a'},{method:'PUT'})).status,400);
+    assert.equal((await x.write('a',uri,{...body,reason:'teste'},{who:x.other,method:'PUT'})).status,404);
+    const changed=await x.write('a',uri,body,{key:mutation,method:'PUT'});
+    assert.equal(changed.status,200,JSON.stringify(changed.body));
+    assert.equal(changed.body.sale.items[0].unitPriceCents,850);
+    assert.equal(changed.body.sale.items[0].catalogUnitPriceCents,1000);
+    assert.equal(changed.body.sale.items[0].priceOverrideReason,body.reason);
+    assert.equal(changed.body.sale.totalCents,1700);
+    const replay=await x.write('a',uri,body,{key:mutation,method:'PUT'});
+    assert.equal(replay.status,200);
+    assert.equal(replay.body.sale.totalCents,1700);
+    let rows=await x.db.prepare('SELECT old_price_cents AS old,new_price_cents AS next,reason FROM sale_item_price_overrides').bind().all();
+    assert.equal(rows.results.length,1);
+    assert.equal(rows.results[0].old,1000);
+    assert.equal(rows.results[0].next,850);
+    await assert.rejects(x.db.prepare('DELETE FROM sale_item_price_overrides').bind().run(),/IMMUTABLE/);
+    await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+    const paid=await x.write('a',`sales/${sid}/complete`,{branchId:'branch-a',payments:[{method:'PIX',amountCents:1700}]});
+    assert.equal(paid.status,200,paid.body.error);
+    assert.equal((await x.write('a',uri,{...body,unitPriceCents:750},{method:'PUT'})).status,409);
+    const result=await x.get('a',`sales/${sid}?branchId=branch-a`);
+    assert.equal(result.body.sale.items[0].catalogUnitPriceCents,1000);
+    assert.equal(result.body.sale.items[0].unitPriceCents,850);
+  }finally{x.close();}
+});
+
+test('Desktop parity: stock adjustment has signed immutable ledger, reason, idempotency, oversell protection and filters',async()=>{
+  const x=await setup();try{
+    const pid=await x.id('Pote de vidro','POTE01',3.125);
+    const path='inventory/adjustments';
+    const key=next();
+    const negative={branchId:'branch-a',productId:pid,quantityDelta:-1.125,reason:'Perda operacional validada'};
+    assert.equal((await x.write('a',path,negative,{who:x.viewer})).status,403);
+    assert.equal((await x.write('b',path,negative)).status,404);
+    assert.equal((await x.write('a',path,{...negative,reason:'a'})).status,400);
+    const moved=await x.write('a',path,negative,{key});
+    assert.equal(moved.status,201,moved.body.error);
+    assert.equal((await x.write('a',path,negative,{key})).body.movement.movementId,moved.body.movement.movementId);
+    const stock=await x.get('a','inventory?branchId=branch-a');
+    assert.equal(stock.body.stock[0].quantity,2);
+    const failed=await x.write('a',path,{...negative,quantityDelta:-3});
+    assert.equal(failed.status,409,JSON.stringify(failed.body));
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock[0].quantity,2);
+    const records=await x.get('a',`inventory/movements?branchId=branch-a&productId=${pid}&limit=10`);
+    assert.equal(records.status,200,JSON.stringify(records.body));
+    assert.equal(records.body.movements.total,2);
+    assert.equal(records.body.movements.items[0].quantityDelta,-1.125);
+    assert.equal(records.body.movements.items[0].reason,negative.reason);
+    assert.equal((await x.get('a','inventory/movements?branchId=branch-a&type=invalid')).status,400);
+    assert.equal((await x.get('a','inventory/movements?branchId=branch-b')).status,404);
+    assert.equal((await x.get('b','inventory/movements?branchId=branch-b',x.other)).body.movements.total,0);
+    const count=await x.db.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE type='adjustment'").bind().first();
+    assert.equal(count.n,1);
+  }finally{x.close();}
+});
+
+test('Desktop parity: paginated sale history scopes status, date, operator, search, offset and tenant',async()=>{
+  const x=await setup();try{
+    const open1=await x.write('a','sales',{branchId:'branch-a'});
+    const open2=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(open1.status,201);assert.equal(open2.status,201);
+    const sid=open1.body.sale.id;
+    const suspended=await x.write('a',`sales/${sid}/suspend`,{branchId:'branch-a'});
+    assert.equal(suspended.status,200,suspended.body.error);
+    const complete=await x.get('a','sales/history?branchId=branch-a&status=COMPLETED');
+    assert.equal(complete.status,200);assert.equal(complete.body.history.total,0);
+    const one=await x.get('a','sales/history?branchId=branch-a&status=OPEN&limit=1');
+    assert.equal(one.status,200,JSON.stringify(one.body));
+    assert.equal(one.body.history.total,1);
+    assert.equal(one.body.history.items[0].status,'OPEN');
+    const all=await x.get('a','sales/history?branchId=branch-a&limit=1&offset=1');
+    assert.equal(all.body.history.total,2);
+    assert.equal(all.body.history.items.length,1);
+    const num=open1.body.sale.saleNumber;
+    const searched=await x.get('a',`sales/history?branchId=branch-a&query=${encodeURIComponent(num)}`);
+    assert.equal(searched.body.history.total,1);
+    assert.equal(searched.body.history.items[0].id,sid);
+    const someone=await x.get('a','sales/history?branchId=branch-a&operatorId=other');
+    assert.equal(someone.body.history.total,0);
+    const today=new Date().toISOString().slice(0,10);
+    const time=await x.get('a',`sales/history?branchId=branch-a&from=${today}&to=${today}`);
+    assert.equal(time.body.history.total,2);
+    assert.equal((await x.get('a','sales/history?branchId=branch-a&limit=101')).status,400);
+    assert.equal((await x.get('a','sales/history?branchId=branch-a&status=MADEUP')).status,400);
+    assert.equal((await x.get('a','sales/history?branchId=branch-b')).status,404);
+    assert.equal((await x.get('b','sales/history?branchId=branch-b',x.other)).body.history.total,0);
+    assert.equal((await x.get('a','sales/history?branchId=branch-a',x.viewer)).status,200);
+  }finally{x.close();}
+});
+
+test('product editing and deactivation retain canonical sale snapshots, enforce tenant RBAC and idempotency',async()=>{
+  const x=await setup();try{
+    const created=await x.write('a','products',{branchId:'branch-a',name:'Produto Original',sku:'ORIG1',salePriceCents:1000,unit:'UN',trackStock:false});
+    assert.equal(created.status,201,created.body.error);
+    const id=created.body.product.id;
+    const open=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(open.status,201,open.body.error);
+    await x.write('a',`sales/${open.body.sale.id}/items`,{branchId:'branch-a',productId:id,quantity:1});
+    const body={branchId:'branch-a',name:'Produto Atualizado',sku:'NEW1',salePriceCents:2400,unit:'UN',active:false};
+    const path=`products/${id}`,key=next();
+    assert.equal((await x.write('a',path,body,{method:'PATCH'})).status,409,'Open sales must block deactivation');
+    await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+    const done=await x.write('a',`sales/${open.body.sale.id}/complete`,{branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]});
+    assert.equal(done.status,200,JSON.stringify(done.body));
+    assert.equal((await x.write('a',path,{branchId:'branch-a',unit:'KG'},{method:'PATCH'})).status,409,'Historic unit must not be silently converted');
+    await assert.rejects(x.db.prepare('UPDATE products SET unit=? WHERE tenant_id=? AND id=?').bind('KG','a',id).run(),/PRODUCT_UNIT_WITH_HISTORY/);
+    assert.equal((await x.write('a',path,body,{who:x.viewer,method:'PATCH'})).status,403);
+    assert.equal((await x.write('b',path,{...body,branchId:'branch-b'},{who:x.other,method:'PATCH'})).status,404);
+    assert.equal((await x.write('a',path,{...body,name:'A'},{method:'PATCH'})).status,400);
+    assert.equal((await x.write('a',path,{...body,unit:'INVALID'},{method:'PATCH'})).status,400);
+    const updated=await x.write('a',path,body,{method:'PATCH',key});
+    assert.equal(updated.status,200,JSON.stringify(updated.body));
+    assert.equal(updated.body.product.name,'Produto Atualizado');
+    assert.equal(updated.body.product.salePriceCents,2400);
+    assert.equal(updated.body.product.active,false);
+    const repeated=await x.write('a',path,body,{method:'PATCH',key});
+    assert.deepEqual(repeated.body,updated.body);
+    assert.equal((await x.get('a','products?branchId=branch-a')).body.products.length,0);
+    assert.equal((await x.get('a','products?branchId=branch-a&includeInactive=true',x.viewer)).status,403);
+    const inactive=await x.get('a','products?branchId=branch-a&includeInactive=true');
+    assert.equal(inactive.body.products.length,1);
+    assert.equal(inactive.body.products[0].active,false);
+    const archived=await x.get('a',`sales/${open.body.sale.id}?branchId=branch-a`);
+    assert.equal(archived.body.sale.items[0].productName,'Produto Original');
+    assert.equal(archived.body.sale.items[0].unitPriceCents,1000);
+    const reactivated=await x.write('a',path,{branchId:'branch-a',active:true},{method:'PATCH'});
+    assert.equal(reactivated.status,200,JSON.stringify(reactivated.body));
+    assert.equal((await x.get('a','products?branchId=branch-a')).body.products[0].sku,'NEW1');
+  }finally{x.close();}
+});
+
+test('inventory transfer moves one immutable stock quantity across two tenant branches atomically',async()=>{
+  const x=await setup();try{
+    await x.db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)')
+      .bind('branch-a-2','a','ALT','Filial 2',date).run();
+    const pid=await x.id('Caixa de materiais','TRANSFER1',3.125);
+    const path='inventory/transfers';
+    const body={branchId:'branch-a',toBranchId:'branch-a-2',productId:pid,quantity:1.125,reason:'Reposição entre filiais'};
+    assert.equal((await x.write('a',path,body,{who:x.viewer})).status,403);
+    assert.equal((await x.write('a',path,{...body,toBranchId:'branch-b'})).status,404);
+    assert.equal((await x.write('a',path,{...body,toBranchId:'branch-a'})).status,400);
+    assert.equal((await x.write('a',path,{...body,quantity:0})).status,400);
+    const key=next();
+    const first=await x.write('a',path,body,{key});
+    assert.equal(first.status,201,JSON.stringify(first.body));
+    const again=await x.write('a',path,body,{key});
+    assert.deepEqual(again.body,first.body);
+    const src=await x.get('a','inventory?branchId=branch-a');
+    const dst=await x.get('a','inventory?branchId=branch-a-2');
+    assert.equal(src.body.stock[0].quantity,2);
+    assert.equal(dst.body.stock[0].quantity,1.125);
+    assert.equal((await x.write('a',path,{...body,quantity:5})).status,409);
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock[0].quantity,2);
+    assert.equal((await x.get('a','inventory?branchId=branch-a-2')).body.stock[0].quantity,1.125);
+    const history=await x.get('a','inventory/transfers?branchId=branch-a-2');
+    assert.equal(history.status,200,JSON.stringify(history.body));
+    assert.equal(history.body.transfers.length,1);
+    const records=await x.db.prepare('SELECT count(*) AS n FROM inventory_transfers WHERE tenant_id=?').bind('a').first();
+    assert.equal(records.n,1);
+    await assert.rejects(x.db.prepare('DELETE FROM inventory_transfers').bind().run(),/IMMUTABLE/);
   }finally{x.close();}
 });

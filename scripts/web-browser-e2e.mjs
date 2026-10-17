@@ -28,6 +28,8 @@ try{
   const context=await browser.newContext({viewport:{width:1366,height:860},deviceScaleFactor:1});
   const page=await context.newPage();
   const unexpectedHttp=[];
+  const navigationTrace=[];
+  page.on('framenavigated',frame=>{if(frame===page.mainFrame())navigationTrace.push({url:frame.url(),at:Date.now()});});
   page.on('pageerror',error=>errors.push(error.message));
   page.on('response',response=>{
     if(response.status()<400)return;
@@ -59,10 +61,27 @@ try{
   await page.locator('#web-product-form button[type=submit]').click();
   await page.locator('.web-product-row').filter({hasText:sku}).waitFor();
   const row=page.locator('.web-product-row').filter({hasText:sku});
+  await row.locator('[data-web-edit]').click();
+  await page.locator('#web-edit-product-form').waitFor({timeout:12000});
+  await page.locator('#web-edit-product-name').fill('Produto Web QA');
+  await page.locator('#web-edit-product-form button[type=submit]').click();
+  await page.locator('#web-edit-product-form').waitFor({state:'detached',timeout:12000});
+  await row.locator('[data-web-transfer]').waitFor({state:'visible',timeout:12000});
   await row.locator('[data-web-stock]').click();
   await page.locator('#web-stock-qty').fill('2');
   await page.locator('#web-stock-form button[type=submit]').click();
   await page.locator('.web-product-row').filter({hasText:sku}).getByText('2',{exact:true}).waitFor();
+  // Parity: signed stock adjustment and immutable movement audit in the SAME products UI.
+  await row.locator('[data-web-adjust]').click();
+  await page.locator('#web-adjust-qty').fill('-0.5');
+  await page.locator('#web-adjust-reason').fill('Contagem física QA no balcão');
+  await page.locator('#web-adjust-form button[type=submit]').click();
+  await page.locator('#web-adjust-form').waitFor({state:'detached',timeout:12000});
+  await row.locator('[data-web-moves]').click();
+  await page.getByText('Contagem física QA no balcão').waitFor({timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-parity-stock-history.png',fullPage:true});
+  await page.locator('.web-stock-history [data-close-modal]').click();
+
   await page.locator('#app-sidebar [data-route=checkout]').click();
   const product=page.locator('[data-add-product]').filter({hasText:'Produto Web QA'});
   await product.waitFor({timeout:12000});
@@ -71,6 +90,14 @@ try{
   const cart=page.locator('.cart-line').filter({hasText:'Produto Web QA'});
   await cart.waitFor({timeout:12000});
   assert.equal(await page.locator('#product-search').inputValue(),'Web QA','search query survives cart mutation');
+  // Parity: manager price override keeps the original catalog price and reason.
+  await cart.locator('[data-price-item]').click();
+  await page.locator('#price-override-form [name=unitPrice]').fill('11,90');
+  await page.locator('#price-override-form [name=reason]').fill('Autorizado pelo gerente no teste de paridade');
+  await page.locator('#price-override-form button[type=submit]').click();
+  await page.locator('#price-override-form').waitFor({state:'detached',timeout:12000});
+  assert.match(await cart.innerText(),/11,90/);
+
   await page.locator('#finalize-sale').click();
   const cashButton=page.locator('#confirm-open-cash'),paymentButton=page.locator('#confirm-payment');
   await cashButton.or(paymentButton).first().waitFor({timeout:12000});
@@ -82,10 +109,128 @@ try{
   // Use the full remaining sale total; the prior browser smoke leaves a legitimate open draft.
   // The canonical payment modal pre-fills the exact server-calculated remainder.
   await page.locator('#add-payment').click();
+  const completionResponse=page.waitForResponse(response=>
+    response.request().method()==='POST'&&new URL(response.url()).pathname.endsWith('/complete')&&
+    new URL(response.url()).pathname.includes('/sales/'),{timeout:12000});
   await page.locator('#confirm-payment').click();
+  const completedPayload=await (await completionResponse).json();
+  const completedSaleNumber=completedPayload.sale?.saleNumber;
+  assert.ok(completedSaleNumber,'completion response must identify the exact sale for parity follow-up');
   await page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
   await page.waitForFunction(()=>document.querySelectorAll('.cart-line').length===0,null,{timeout:12000});
+  // Post-sale receipt dialog is part of the original renderer. Dismiss it
+  // through the same accessible close action an operator uses, not force-clicking
+  // through its modal overlay or disabling it in production.
+  const closePostSale=page.locator('#post-sale-close');
+  await closePostSale.waitFor({state:'visible',timeout:1400}).catch(()=>{});
+  if(await closePostSale.isVisible())await closePostSale.click();
+
   assert.equal(await page.locator('.cart-line').count(),0,'completed sale clears the cart once');
+  // Parity: the original sales-history route now offers server-side search and paging.
+  await page.locator('#app-sidebar [data-route=sales]').click();
+  await page.locator('#web-sales-filter').waitFor({timeout:12000});
+  // Filter by the sale actually completed above; prior Workerd smoke leaves
+  // legitimate independent sales in the same test D1.
+  await page.locator('#web-sales-filter [name=query]').fill(completedSaleNumber);
+  // This route previously erased the details after a click during a pending
+  // history query. Assert the GET has completed, rather than matching an old row.
+  const filteredHistoryResponse=page.waitForResponse(response=>{
+    const url=new URL(response.url());
+    return response.request().method()==='GET'&&url.pathname.endsWith('/sales/history')&&
+      url.searchParams.get('query')===completedSaleNumber;
+  },{timeout:12000});
+  await page.locator('#web-sales-filter button[type=submit]').click();
+  const filterResult=await filteredHistoryResponse;
+  assert.equal(filterResult.status(),200,'filtered history API must succeed');
+  // Network completion does not imply the async view was committed. A matching
+  // sale can already be visible in the *old* unfiltered table and its click
+  // listener will be destroyed when the filter response later replaces the DOM.
+  await page.waitForFunction(reference=>
+    document.querySelector('#ops-sales-body')?.dataset.historyQuery===reference,
+    completedSaleNumber,{timeout:12000});
+  // Wait for the requested sale to replace any pre-filter row before clicking.
+  // A prior smoke sale can also make the row COUNT equal to one while filtering
+  // is still in flight, causing the old detail pane to be cleared on re-render.
+  const matchingSale=page.locator('#ops-sales-body tr[data-search]').filter({hasText:completedSaleNumber});
+  await matchingSale.waitFor({state:'visible',timeout:12000});
+  assert.equal(await matchingSale.count(),1,'filtered history shows the exact completed sale');
+  await page.evaluate(()=>{
+    const trace=[];window.__saleDetailTrace=trace;
+    trace.push({event:'installed',href:location.href,origin:performance.timeOrigin,buttonType:document.querySelector('[data-sale-details]')?.type,formId:document.querySelector('[data-sale-details]')?.form?.id||null});
+    const proto=window.PdvApiClient.ApiClient.prototype;
+    const original=proto.sale;
+    proto.sale=async function(id){
+      trace.push({event:'api-sale-start',id});
+      try{const result=await original.call(this,id);trace.push({event:'api-sale-ok',id,status:result?.status});return result;}
+      catch(error){trace.push({event:'api-sale-error',id,message:error.message});throw error;}
+    };
+    // Diagnose pointer dispatch as well as re-render races. A locator click can
+    // finish after the target was replaced between pointerdown and pointerup.
+    for(const name of ['pointerdown','pointerup','click']){
+      window.addEventListener(name,event=>{
+        if(trace.length>35)return;
+        const el=event.target;
+        trace.push({event:name,tag:el?.tagName,buttonId:el?.closest?.('[data-sale-details]')?.dataset.saleDetails||null});
+      },true);
+    }
+    const observer=new MutationObserver(()=>{
+      if(trace.length>35)return;
+      trace.push({event:'history-dom-mutation',filter:document.querySelector('#ops-sales-body')?.dataset.historyQuery,
+        buttons:document.querySelectorAll('[data-sale-details]').length});
+    });
+    observer.observe(document.getElementById('route-content'),{childList:true,subtree:true});
+    const identities=new WeakMap();let serial=0;
+    const identity=element=>{if(!identities.has(element))identities.set(element,++serial);return identities.get(element);};
+    for(const type of ['pointerdown','mousedown','pointerup','mouseup','click']){
+      document.addEventListener(type,event=>{
+        const target=event.target;
+        const button=target.closest?.('[data-sale-details]');
+        trace.push({event:type,tag:target.tagName,id:button?.dataset.saleDetails||null,node:identity(target),
+          disabled:button?.disabled??null,connected:target.isConnected,prevented:event.defaultPrevented});
+      },true);
+    }
+    const host=document.getElementById('route-content');
+    new MutationObserver(records=>{
+      const count=records.filter(r=>r.removedNodes?.length||r.addedNodes?.length).length;
+      if(count)trace.push({event:'dom-mutation',count,present:Boolean(document.querySelector('#ops-sales-body [data-sale-details]')),
+       disabled:document.querySelector('#ops-sales-body [data-sale-details]')?.disabled});
+    }).observe(host,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled']});
+  });
+  const buttonGeometry=await page.evaluate(()=>{const el=document.querySelector('#ops-sales-body [data-sale-details]');if(!el)return null;const r=el.getBoundingClientRect();return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},display:getComputedStyle(el).display,visibility:getComputedStyle(el).visibility,centerElement:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML.slice(0,210)}});console.log('SALE_DETAILS_BUTTON_GEOMETRY',JSON.stringify(buttonGeometry));
+  await matchingSale.locator('[data-sale-details]').click();
+  const postClick=await page.evaluate(()=>({trace:window.__saleDetailTrace||null,origin:performance.timeOrigin,href:location.href,route:document.body.dataset.activeRoute}));
+  console.log('SALE_DETAIL_CLICK_RESULT',JSON.stringify(postClick));
+  try {
+    await page.getByText('Autorizado pelo gerente no teste de paridade').waitFor({timeout:12000});
+  } catch (error) {
+    const debug={
+      reference:completedSaleNumber,
+      results:await page.locator('#ops-sales-body').innerText(),
+      details:await page.locator('#ops-sale-detail').innerText(),
+      route:await page.locator('body').getAttribute('data-active-route'),
+      notices:await page.locator('[role="alert"],.toast,[role="status"]').allTextContents(),
+      trace:await page.evaluate(()=>window.__saleDetailTrace||[]),
+      traceDefined:await page.evaluate(()=>Object.hasOwn(window,'__saleDetailTrace')),
+      navigations:navigationTrace,
+      apiSale:await page.evaluate(async()=>{
+        const id=document.querySelector('[data-sale-details]')?.dataset.saleDetails;
+        try{
+          const client=new window.PdvApiClient.ApiClient();
+          const sale=await client.sale(id);
+          return {id,number:sale?.saleNumber,items:sale?.items?.map(i=>({
+            productName:i.productName,unitPriceCents:i.unitPriceCents,
+            catalogUnitPriceCents:i.catalogUnitPriceCents,priceOverrideReason:i.priceOverrideReason
+          }))};
+        }catch(e){return {id,error:e.message,status:e.status};}
+      })
+    };
+    console.error('HISTORY_PRICE_OVERRIDE_DIAGNOSTIC',JSON.stringify(debug));
+    throw error;
+  }
+  // Sale history must expose a receipt reprint after the canonical sale loads.
+  await page.locator('#ops-sale-detail [data-history-print-sale]').waitFor({state:'visible',timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-parity-sales-history.png',fullPage:true});
+
   mkdirSync('qa-artifacts',{recursive:true});
   await page.screenshot({path:'qa-artifacts/pdv-web-desktop.png',fullPage:true});
   await page.setViewportSize({width:390,height:844});

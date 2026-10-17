@@ -51,8 +51,11 @@
       if(!direct.includes(original)&&!original.startsWith('/api/v1/tenants/')){
         if(!this.tenantId||!this.branchId)throw new Error('Escolha o estabelecimento e a filial antes de continuar.');
         if(original==='/api/v1/products')operation='products';
+        else if(original.startsWith('/api/v1/products/'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/inventory')operation='inventory';
-        else if(original==='/api/v1/inventory/movements')operation='inventory/receipts';
+        else if(original==='/api/v1/inventory/movements')operation=method==='GET'?'inventory/movements':'inventory/receipts';
+        else if(original==='/api/v1/inventory/adjustments')operation='inventory/adjustments';
+        else if(original==='/api/v1/inventory/transfers')operation='inventory/transfers';
         else if(original==='/api/v1/cash/open')operation='cash';
         else if(original==='/api/v1/cash/sessions')operation=method==='POST'?'cash/open':'cash/sessions';
         else if(original.startsWith('/api/v1/cash/sessions/'))operation=original.slice(apiRoot.length);
@@ -93,12 +96,15 @@
       }
       if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
+      if(operation.startsWith('products/'))return value.product;
       if(operation==='customers')return method==='GET'?value.customers:value.customer;
       if(operation==='suppliers')return method==='GET'?value.suppliers:value.supplier;
       if(operation==='sellers')return value.sellers;
       if(operation.startsWith('restaurant/')||operation.startsWith('wholesale/')||operation.startsWith('commissions')||operation.startsWith('credit/'))return value;
       if(operation==='inventory')return value.stock;
-      if(operation==='inventory/receipts')return value.movement;
+      if(operation==='inventory/receipts'||operation==='inventory/adjustments')return value.movement;
+      if(operation==='inventory/movements')return value.movements;
+      if(operation==='inventory/transfers')return method==='GET'?value.transfers:value.transfer;
       if(operation==='cash')return value.session;
       if(operation==='cash/open')return {session:value.session};
       if(operation==='cash/sessions')return value.sessions;
@@ -110,6 +116,7 @@
       if(operation==='reports/summary')return value.report;
       if(operation==='reports/sales.csv')return value;
       if(operation==='sales'||operation.startsWith('sales?'))return method==='GET'?value.sales:value.sale;
+      if(operation==='sales/history')return value.history;
       if(operation.startsWith('sales/'))return operation.endsWith('/complete')?{sale:value.sale}:value.sale;
       return value;
     }
@@ -156,6 +163,7 @@
     saveCategory(body) { return this.request('/api/v1/categories', { method: 'POST', body }); }
     products(includeInactive = false) { return this.request(`/api/v1/products${includeInactive ? '?includeInactive=true' : ''}`); }
     saveProduct(body,mutationId) { return this.request('/api/v1/products', { method: 'POST', body,mutationId }); }
+    updateProduct(id,body,mutationId) { return this.request(`/api/v1/products/${encodeURIComponent(id)}`, { method:'PATCH', body,mutationId }); }
     removeProduct(productId) { return this.request(`/api/v1/products/${encodeURIComponent(productId)}`, { method: 'DELETE' }); }
     recipe(productId) { return this.request(`/api/v1/vertical/recipes/${encodeURIComponent(productId)}`); }
     saveRecipe(productId, body) { return this.request(`/api/v1/vertical/recipes/${encodeURIComponent(productId)}`, { method: 'PUT', body }); }
@@ -187,6 +195,9 @@
     inventoryBalances(filters = {}) { return this.request(`/api/v1/inventory${this.params(filters)}`); }
     inventoryLowStock() { return this.request('/api/v1/inventory/low-stock'); }
     inventoryMovements(filters = {}) { return this.request(`/api/v1/inventory/movements${this.params(filters)}`); }
+    stockTransfers(filters = {}) { return this.request(`/api/v1/inventory/transfers${this.params(filters)}`); }
+    transferStock(body,mutationId) { return this.request('/api/v1/inventory/transfers',{method:'POST',body,mutationId}); }
+    tenantBranches(){if(!this.webMode||!this.tenantId)throw new Error('Selecione o estabelecimento.');return this.webRequest('/api/v1/tenants/'+encodeURIComponent(this.tenantId)+'/branches');}
     async saveInventoryMovement(body) {
       let payload = { ...body };
       if (payload.type === 'inventory-count' && payload.countedQuantity !== undefined) {
