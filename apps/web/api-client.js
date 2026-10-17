@@ -59,6 +59,7 @@
         else if(original.startsWith('/api/v1/inventory/reservations'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/inventory/purchase-costs')operation='inventory/purchase-costs';
         else if(original==='/api/v1/inventory/receipts')operation='inventory/receipts';
+        else if(original.startsWith('/api/v1/purchasing/'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/cash/open')operation='cash';
         else if(original==='/api/v1/cash/sessions')operation=method==='POST'?'cash/open':'cash/sessions';
         else if(original.startsWith('/api/v1/cash/sessions/'))operation=original.slice(apiRoot.length);
@@ -114,6 +115,10 @@
       if(operation==='inventory/reservations')return method==='GET'?value.reservations:value.reservation;
       if(/^inventory\/reservations\/[^/]+\/release$/.test(operation))return value.reservation;
       if(operation==='inventory/purchase-costs')return value.costs;
+      if(operation==='purchasing/orders')return method==='GET'?value.orders:value.order;
+      if(operation==='purchasing/cost-averages')return value.averages;
+      if(/^purchasing\/orders\/[^/]+\/receive$/.test(operation))return value.receipt;
+      if(operation.startsWith('purchasing/orders/'))return value.order;
       if(operation==='cash')return value.session;
       if(operation==='cash/open')return {session:value.session};
       if(operation==='cash/sessions')return value.sessions;
@@ -211,6 +216,12 @@
     releaseStockReservation(id,mutationId){return this.request('/api/v1/inventory/reservations/'+encodeURIComponent(id)+'/release',{method:'POST',body:{},mutationId});}
     purchaseCostHistory(filters={}){return this.request('/api/v1/inventory/purchase-costs'+this.params(filters));}
     purchaseReceipt(body,mutationId){return this.request('/api/v1/inventory/receipts',{method:'POST',body,mutationId});}
+    purchaseOrders(){return this.request('/api/v1/purchasing/orders');}
+    createPurchaseOrder(body,mutationId){return this.request('/api/v1/purchasing/orders',{method:'POST',body,mutationId});}
+    purchaseOrder(id){return this.request('/api/v1/purchasing/orders/'+encodeURIComponent(id));}
+    receivePurchaseOrder(id,items,mutationId){return this.request('/api/v1/purchasing/orders/'+encodeURIComponent(id)+'/receive',{method:'POST',body:{items},mutationId});}
+    cancelPurchaseOrder(id,reason,mutationId){return this.request('/api/v1/purchasing/orders/'+encodeURIComponent(id)+'/cancel',{method:'POST',body:{reason},mutationId});}
+    purchaseCostAverages(filters={}){return this.request('/api/v1/purchasing/cost-averages'+this.params(filters));}
     inventoryBalances(filters = {}) { return this.request(`/api/v1/inventory${this.params(filters)}`); }
     inventoryLowStock() { return this.request('/api/v1/inventory/low-stock'); }
     inventoryMovements(filters = {}) { return this.request(`/api/v1/inventory/movements${this.params(filters)}`); }

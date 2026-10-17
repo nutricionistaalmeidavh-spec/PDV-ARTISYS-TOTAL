@@ -20,6 +20,7 @@ must(existsSync(resolve(root,'apps/api/migrations/0006_desktop_parity.sql')),'de
 must(existsSync(resolve(root,'apps/api/migrations/0007_stock_transfers.sql')),'canonical cross-branch stock transfer schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0008_transaction_reversals.sql')),'atomic reversal schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0009_catalog_inventory.sql')),'P2 canonical catalog and reserved stock schema missing');
+must(existsSync(resolve(root,'apps/api/migrations/0010_purchase_orders.sql')),'P2 canonical purchase orders schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0002_commerce.sql')),'commerce schema missing');
 must(existsSync(resolve(root,'packages/core/js/domains/sales/sale-service.js')),'canonical sales core missing');
 must(existsSync(resolve(root,'packages/core/js/domains/inventory/inventory-service.js')),'canonical inventory core missing');

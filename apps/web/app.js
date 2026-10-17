@@ -963,6 +963,7 @@
       <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
       <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
       ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button><button id="web-new-category" class="secondary-button" type="button">+ Categoria</button>':''}
+      ${canStock?'<button id="web-purchase-orders" class="secondary-button" type="button">Pedidos de compra</button>':''}
       ${canManage?`<button id="web-toggle-inactive" class="secondary-button" type="button">${showInactiveWebProducts?'Ocultar inativos':'Mostrar inativos'}</button>`:''}</header>
       <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
         placeholder="Buscar produto, SKU ou código de barras" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
@@ -982,6 +983,7 @@
       </div></section>`;
     content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
     content.querySelector('#web-new-category')?.addEventListener('click',openWebCategoryForm);
+    content.querySelector('#web-purchase-orders')?.addEventListener('click',()=>void openWebPurchaseOrders());
     content.querySelector('#web-toggle-inactive')?.addEventListener('click',async event=>{
       const button=event.currentTarget;button.disabled=true;
       try{
@@ -1024,6 +1026,131 @@
       finally{button.disabled=false;}
     }));
     routeRegistry.updated('products',{surface:'products'});
+  }
+
+  async function openWebPurchaseOrders(){
+    try{
+      const orders=await api.purchaseOrders();
+      const body=`<div class="web-stock-history">
+        <p>Recebimentos parciais entram no histórico de estoque uma única vez. Preços e quantidades do pedido não podem mudar após criado.</p>
+        <div class="modal-actions"><button type="button" class="primary-button" data-new-purchase>+ Novo pedido</button></div>
+        <div class="data-card">${orders.map(o=>`<div class="data-row">
+          <div><strong>${escapeHtml(o.supplierId)}</strong>
+          <small>${escapeHtml(o.status)} · ${o.items.length} itens · ${ui.formatCents(o.totalReceivedCents)} recebidos de ${ui.formatCents(o.totalOrderedCents)}</small></div>
+          <button class="secondary-button" type="button" data-purchase-detail="${escapeHtml(o.id)}">Detalhes</button>
+        </div>`).join('')||'<div class="empty-state">Sem pedidos de compra.</div>'}</div>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Fechar</button></div></div>`;
+      openModal('Pedidos a fornecedores',body,{wide:true,onMount(root){
+        root.querySelector('[data-new-purchase]')?.addEventListener('click',()=>void openWebCreatePurchaseOrder());
+        root.querySelectorAll('[data-purchase-detail]').forEach(b=>b.addEventListener('click',()=>{
+          const order=orders.find(o=>o.id===b.dataset.purchaseDetail);
+          if(order)void openWebPurchaseDetail(order.id);
+        }));
+      }});
+    }catch(e){showToast(e.message,'error');}
+  }
+
+  async function openWebCreatePurchaseOrder(){
+    try{
+      const [suppliers,products]=await Promise.all([api.suppliers(),api.products()]);
+      const activeProducts=products.filter(p=>p.active!==false&&p.trackStock);
+      if(!suppliers.length||!activeProducts.length){
+        showToast('Cadastre um fornecedor e um produto com estoque antes de criar o pedido.','error');return;
+      }
+      const optionHtml=activeProducts.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} · ${escapeHtml(p.sku)}</option>`).join('');
+      const rowHtml=()=>`<div class="field-grid" data-purchase-row>
+          <div class="field"><label>Produto<select name="productId" required>${optionHtml}</select></label></div>
+          <div class="field"><label>Quantidade<input name="quantity" type="number" min="0.001" step="0.001" required></label></div>
+          <div class="field"><label>Custo unitário (R$)<input name="cost" inputmode="decimal" placeholder="0,00" required></label></div>
+          <button type="button" class="secondary-button" data-remove-line>Retirar</button>
+        </div>`;
+      openModal('Novo pedido de compra',`<form id="web-buy-form">
+        <div class="field"><label>Fornecedor<select name="supplierId" required>
+        ${suppliers.filter(p=>p.active!==false).map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('')}
+        </select></label></div><div data-buy-rows>${rowHtml()}</div>
+        <button type="button" class="secondary-button" data-add-line>+ Adicionar item</button>
+        <p role="status" class="web-form-feedback"></p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Cancelar</button>
+        <button type="submit" class="primary-button">Criar pedido</button></div></form>`,{wide:true,onMount(root){
+        const form=root.querySelector('#web-buy-form'),holder=form.querySelector('[data-buy-rows]');
+        form.querySelector('[data-add-line]').addEventListener('click',()=>{
+          if(holder.querySelectorAll('[data-purchase-row]').length>=40)return;
+          holder.insertAdjacentHTML('beforeend',rowHtml());
+        });
+        holder.addEventListener('click',event=>{
+          if(event.target.closest('[data-remove-line]')&&holder.querySelectorAll('[data-purchase-row]').length>1)
+            event.target.closest('[data-purchase-row]').remove();
+        });
+        form.addEventListener('submit',async event=>{
+          event.preventDefault();if(form.dataset.pending)return;
+          const items=[...holder.querySelectorAll('[data-purchase-row]')].map(row=>({
+            productId:row.querySelector('[name=productId]').value,
+            quantity:Number(row.querySelector('[name=quantity]').value),
+            unitCostCents:centsFromInput(row.querySelector('[name=cost]').value)
+          }));
+          if(new Set(items.map(x=>x.productId)).size!==items.length){
+            form.querySelector('[role=status]').textContent='Agrupe quantidades do mesmo produto em uma linha.';return;
+          }
+          form.dataset.pending='1';form.querySelector('[type=submit]').disabled=true;
+          try{
+            if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+            const order=await api.createPurchaseOrder({supplierId:form.elements.supplierId.value,items},form.dataset.operationKey);
+            showToast('Pedido de compra criado.','success');await openWebPurchaseDetail(order.id);
+          }catch(e){form.querySelector('[role=status]').textContent=e.message;}
+          finally{form.dataset.pending='';form.querySelector('[type=submit]').disabled=false;}
+        });
+      }});
+    }catch(e){showToast(e.message,'error');}
+  }
+
+  async function openWebPurchaseDetail(id){
+    try{
+      const order=await api.purchaseOrder(id);
+      openModal('Pedido de compra',`<form id="web-purchase-receipt-form">
+        <p>Fornecedor: ${escapeHtml(order.supplierId)} · Status: ${escapeHtml(order.status)}.
+          Recebido: ${ui.formatCents(order.totalReceivedCents)} de ${ui.formatCents(order.totalOrderedCents)}.</p>
+        <div class="data-card">${order.items.map(item=>`<div class="data-row">
+          <span><strong>${escapeHtml(item.name)}</strong><small>Pedido ${quantityLabel(item.quantity)}
+          · recebido ${quantityLabel(item.receivedQuantity)} · falta ${quantityLabel(item.remainingQuantity)}
+          · ${ui.formatCents(item.unitCostCents)} / unidade</small></span>
+          ${order.status==='OPEN'||order.status==='PARTIAL'?
+          `<label>Receber agora<input type="number" data-receive-line="${escapeHtml(item.id)}"
+          min="0" max="${Number(item.remainingQuantity)}" step="0.001" value="0"></label>`:''}
+        </div>`).join('')}</div>
+        <p role="status" class="web-form-feedback"></p>
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" data-close-modal>Fechar</button>
+          ${order.status==='OPEN'||order.status==='PARTIAL'?
+          '<button type="button" class="secondary-button" data-cancel-purchase>Cancelar saldo</button><button type="submit" class="primary-button">Confirmar recebimento parcial</button>':''}
+        </div>
+      </form>`,{wide:true,onMount(root){
+        const form=root.querySelector('form');
+        form.querySelector('[data-cancel-purchase]')?.addEventListener('click',()=>{
+          const reason=window.prompt('Motivo do cancelamento do saldo pendente:');
+          if(reason==null)return;
+          void (async()=>{try{
+            await api.cancelPurchaseOrder(order.id,reason.trim());
+            showToast('Saldo pendente cancelado; entradas anteriores preservadas.','success');
+            await openWebPurchaseDetail(order.id);
+          }catch(e){form.querySelector('[role=status]').textContent=e.message;}})();
+        });
+        form.addEventListener('submit',async event=>{
+          event.preventDefault();if(form.dataset.pending)return;
+          const items=[...form.querySelectorAll('[data-receive-line]')].map(input=>({
+            lineId:input.dataset.receiveLine,quantity:Number(input.value)
+          })).filter(x=>x.quantity>0);
+          if(!items.length){form.querySelector('[role=status]').textContent='Informe as quantidades recebidas.';return;}
+          form.dataset.pending='1';form.querySelector('[type=submit]').disabled=true;
+          try{
+            if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+            await api.receivePurchaseOrder(order.id,items,form.dataset.operationKey);
+            state.products=await api.products();
+            showToast('Entrada parcial registrada no estoque.','success');await openWebPurchaseDetail(order.id);
+          }catch(e){form.querySelector('[role=status]').textContent=e.message;}
+          finally{form.dataset.pending='';form.querySelector('[type=submit]')?.removeAttribute('disabled');}
+        });
+      }});
+    }catch(e){showToast(e.message,'error');}
   }
 
   function openWebCategoryForm(){
