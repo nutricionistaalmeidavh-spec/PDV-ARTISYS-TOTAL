@@ -36,8 +36,7 @@
     button.disabled=true;
     notice('Carregando venda do servidor…');
     try{
-      const response=await api.sale(currentSale.id);
-      const sale=response?.sale;
+      const sale=await api.sale(currentSale.id);
       if(sale?.status!=='COMPLETED')throw new Error('Venda não concluída ou indisponível.');
       await root.PdvWebHardware.printSale(sale,{popup,forceBrowser:pdf});
       notice(pdf?'No diálogo, escolha Salvar como PDF.':'Diálogo de impressão aberto ou comando enviado. Confirme o resultado na impressora.');
