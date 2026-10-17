@@ -564,3 +564,49 @@ test('P4 comparative report compares periods with no division by zero or cross-t
   assert.equal((await x.get('a','reports/compare?branchId=branch-b&from=2026-10-17&to=2026-10-17&compareFrom=2026-10-16&compareTo=2026-10-16')).status,404);
  }finally{x.close();}
 });
+
+test('P4 historical margin snapshots cost at sale time, correctly nets refunds, and never rewrites cost after a later purchase',async()=>{
+ const x=await setup();try{
+  const product=(await x.write('a','products',{branchId:'branch-a',sku:'MARGIN-1',name:'Produto com custo',salePriceCents:1000,trackStock:true})).body.product;
+  await x.write('a','inventory/receipts',{branchId:'branch-a',productId:product.id,quantity:3,unitCostCents:400});
+  await x.write('a','cash/open',{branchId:'branch-a',openingCents:1000});
+  const sale=(await x.write('a','sales',{branchId:'branch-a'})).body.sale;
+  await x.write('a','sales/'+sale.id+'/items',{branchId:'branch-a',productId:product.id,quantity:2});
+  await x.write('a','sales/'+sale.id+'/complete',{branchId:'branch-a',payments:[{method:'PIX',amountCents:2000}]});
+  const path='reports/margins?branchId=branch-a&from=2026-10-17&to=2026-10-17';
+  const original=await x.get('a',path);
+  assert.equal(original.status,200,JSON.stringify(original.body));
+  assert.equal(original.body.margin.revenueCents,2000);
+  assert.equal(original.body.margin.costCents,800);
+  assert.equal(original.body.margin.marginCents,1200);
+  await x.write('a','inventory/receipts',{branchId:'branch-a',productId:product.id,quantity:1,unitCostCents:850});
+  const afterPurchase=(await x.get('a',path)).body.margin;
+  assert.equal(afterPurchase.costCents,800,'historical cost snapshots must not change after new acquisitions');
+  const detail=(await x.get('a','sales/'+sale.id+'?branchId=branch-a')).body.sale;
+  const ret=await x.write('a','sales/'+sale.id+'/returns',{
+   branchId:'branch-a',reason:'Devolução de uma unidade',
+   items:[{saleItemId:detail.items[0].id,quantity:1}],refunds:[{method:'PIX',amountCents:1000}]});
+  assert.equal(ret.status,201,JSON.stringify(ret.body));
+  const net=(await x.get('a',path)).body.margin;
+  assert.equal(net.revenueCents,1000);
+  assert.equal(net.costCents,400);
+  assert.equal(net.marginCents,600);
+  assert.equal(net.products.find(p=>p.productId===product.id).returnedCents,1000);
+  assert.equal((await x.get('a','reports/margins?branchId=branch-b',x.other)).status,404);
+ }finally{x.close();}
+});
+
+test('P4 historical margin does not claim proven profit for products without recorded acquisition costs',async()=>{
+ const x=await setup();try{
+  const product=await x.id('Custo desconhecido','COST-UNKNOWN',2);
+  await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+  const opened=(await x.write('a','sales',{branchId:'branch-a'})).body.sale;
+  await x.write('a','sales/'+opened.id+'/items',{branchId:'branch-a',productId:product,quantity:1});
+  await x.write('a','sales/'+opened.id+'/complete',{branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]});
+  const result=await x.get('a','reports/margins?branchId=branch-a&from=2026-10-17&to=2026-10-17');
+  assert.equal(result.status,200,JSON.stringify(result.body));
+  assert.equal(result.body.margin.missingCostLines,1);
+  assert.equal(result.body.margin.marginCents,null);
+  assert.equal(result.body.margin.products.find(x=>x.productId===product).marginCents,null);
+ }finally{x.close();}
+});
