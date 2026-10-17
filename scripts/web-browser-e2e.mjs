@@ -104,6 +104,13 @@ try{
   await page.locator('#confirm-payment').click();
   await page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
   await page.waitForFunction(()=>document.querySelectorAll('.cart-line').length===0,null,{timeout:12000});
+  // Post-sale receipt dialog is part of the original renderer. Dismiss it
+  // through the same accessible close action an operator uses, not force-clicking
+  // through its modal overlay or disabling it in production.
+  const closePostSale=page.locator('#post-sale-close');
+  await closePostSale.waitFor({state:'visible',timeout:1400}).catch(()=>{});
+  if(await closePostSale.isVisible())await closePostSale.click();
+
   assert.equal(await page.locator('.cart-line').count(),0,'completed sale clears the cart once');
   // Parity: the original sales-history route now offers server-side search and paging.
   await page.locator('#app-sidebar [data-route=sales]').click();
