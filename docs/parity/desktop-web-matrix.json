@@ -383,7 +383,14 @@
         {
           "id": "history-039",
           "name": "Reimpressão e exportação do histórico detalhado",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/web/operational-pages.js",
+            "contains": "data-history-print-sale",
+            "testFile": "scripts/web-browser-e2e.mjs",
+            "testContains": "data-history-print-sale"
+          },
+          "reviewNote": "Reimpressão de vendas concluídas implementada no histórico web com recibo canônico; exportação histórica detalhada e validação em hardware físico ainda pendentes."
         }
       ]
     },
