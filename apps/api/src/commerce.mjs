@@ -181,6 +181,84 @@ export function createCommerceService(db,{now=nowISO}={}){
     return Promise.all(rows.map(row=>snapshot(tenant,branch,row.id)));
   };
   return {
+    async salesHistory(tenant,branch,filters={}){
+      await branchExists(tenant,branch);
+      const status=text(filters.status||'',32).toUpperCase();
+      if(status&&!['OPEN','SUSPENDED','COMPLETED','CANCELLED'].includes(status))
+        throw error(400,'Situação de venda inválida.');
+      const {a,b}=period({from:filters.from||'',to:filters.to||''});
+      const limit=Number(filters.limit??25),offset=Number(filters.offset??0);
+      if(!Number.isInteger(limit)||limit<1||limit>100||
+         !Number.isInteger(offset)||offset<0||offset>5000)
+        throw error(400,'Paginação inválida: limite 1–100 e offset 0–5000.');
+      const clauses=['tenant_id=?','branch_id=?','COALESCE(completed_at,created_at)>=?',
+        'COALESCE(completed_at,created_at)<=?'];
+      const args=[tenant,branch,a,b];
+      if(status){clauses.push('status=?');args.push(status);}
+      const operator=text(filters.operatorId||'',128);
+      if(operator){clauses.push('operator_id=?');args.push(operator);}
+      const query=text(filters.query||'',90);
+      if(query){clauses.push('instr(lower(sale_number),lower(?))>0');args.push(query);}
+      const where=clauses.join(' AND ');
+      const count=await first('SELECT COUNT(*) AS total FROM sales WHERE '+where,...args);
+      const rows=await all(`SELECT id FROM sales WHERE ${where}
+        ORDER BY COALESCE(completed_at,created_at) DESC,id DESC LIMIT ? OFFSET ?`,
+        ...args,limit,offset);
+      return {items:await Promise.all(rows.map(row=>snapshot(tenant,branch,row.id))),
+        total:count.total,limit,offset};
+    },
+    async inventoryMovements(tenant,branch,filters={}){
+      await branchExists(tenant,branch);
+      const productId=text(filters.productId||'',128),type=text(filters.type||'',30);
+      if(type&&!['opening','purchase','adjustment','sale','return'].includes(type))
+        throw error(400,'Tipo de movimentação inválido.');
+      if(productId){
+        const p=await first('SELECT id FROM products WHERE tenant_id=? AND id=?',tenant,productId);
+        if(!p)throw error(404,'Produto não encontrado nesta empresa.');
+      }
+      const limit=Number(filters.limit??100),offset=Number(filters.offset??0);
+      if(!Number.isInteger(limit)||limit<1||limit>100||
+        !Number.isInteger(offset)||offset<0||offset>5000)
+        throw error(400,'Paginação inválida.');
+      const {a,b}=period({from:filters.from||'',to:filters.to||''});
+      const clauses=['tenant_id=?','branch_id=?','occurred_at>=?','occurred_at<=?'];
+      const args=[tenant,branch,a,b];
+      if(productId){clauses.push('product_id=?');args.push(productId);}
+      if(type){clauses.push('type=?');args.push(type);}
+      const where=clauses.join(' AND ');
+      const total=await first('SELECT COUNT(*) AS total FROM inventory_movements WHERE '+where,...args);
+      const rows=await all(`SELECT id,product_id AS productId,branch_id AS branchId,
+        type,delta_milli/1000.0 AS quantityDelta,reason,mutation_id AS mutationId,
+        sale_id AS saleId,occurred_at AS occurredAt
+        FROM inventory_movements WHERE ${where}
+        ORDER BY occurred_at DESC,id DESC LIMIT ? OFFSET ?`,...args,limit,offset);
+      return {items:rows,total:total.total,limit,offset};
+    },
+    async adjustStock(tenant,branch,body,header){
+      await branchExists(tenant,branch);
+      const key=requiredMutation(body,header),scope='inventory.adjust:'+branch;
+      const previous=await applied(tenant,scope,key);if(previous)return previous;
+      const p=await product(tenant,body?.productId);
+      if(!p.track_stock)throw error(409,'Produto não controla estoque físico.');
+      const amount=body?.quantityDelta;
+      if(typeof amount!=='number'||!Number.isFinite(amount)||amount===0)
+        throw error(400,'Informe variação positiva ou negativa válida.');
+      const milli=quantityMilli(Math.abs(amount));
+      if(!milli)throw error(400,'Informe quantidade com até três casas decimais.');
+      const reason=text(body?.reason,240);
+      if(reason.length<3)throw error(400,'Ajuste exige justificativa.');
+      const delta=amount>0?milli:-milli;
+      const result={movementId:randomId(),productId:p.id,branchId:branch,
+        quantityDelta:delta/1000,reason,type:'adjustment'};
+      await batch([
+        q(`INSERT INTO inventory_movements
+          (id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at,reason)
+          VALUES(?,?,?,?,?,?,?,?,?,?)`,
+          result.movementId,tenant,branch,p.id,delta,'adjustment',null,key,stamp(),reason),
+        audit(tenant,scope,key,result)
+      ]);
+      return result;
+    },
     async products(tenant,branch,{includeInactive=false,limit=100}={}){
       await branchExists(tenant,branch);
       const cap=Math.min(100,Math.max(1,Math.trunc(Number(limit)||100)));
