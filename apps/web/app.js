@@ -443,7 +443,7 @@
     const weightLabel=weight?`${quantityLabel(Number(weight.grams||0))} g · ${escapeHtml(String(weight.source||'MANUAL')==='SCALE'?'balança':String(weight.source||'MANUAL')==='BARCODE'?'etiqueta':'manual')}`:null;
     const documentLabel=sourceDocument?`${escapeHtml(sourceDocument.orderNumber||sourceDocument.id||'Pedido')} · preço do pedido`:null;
     const priceDetails = changed ? `<small><s>${ui.formatCents(item.catalogUnitPriceCents)}</s> → ${ui.formatCents(item.unitPriceCents)}${item.priceOverrideReason ? ` · ${escapeHtml(item.priceOverrideReason)}` : ''}${documentLabel?` · ${documentLabel}`:''}</small>` : `<small>${ui.formatCents(item.unitPriceCents)}${weightLabel?` · ${weightLabel}`:''}${documentLabel?` · ${documentLabel}`:''}</small>`;
-    const priceButton = !api.webMode&&!sourceDocument&&window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount') ? `<button type="button" class="secondary-button cart-price-edit" data-price-item="${item.id}">Alterar preço</button>` : '';
+    const priceButton = !sourceDocument&&window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount') ? `<button type="button" class="secondary-button cart-price-edit" data-price-item="${item.id}">Alterar preço</button>` : '';
     const quantityControl=sourceDocument?`<div class="qty-control"><span>${quantityLabel(item.quantity)} · pedido</span></div>`:weight?`<div class="qty-control"><span>${weightLabel}</span></div>`:configured?`<div class="qty-control"><button type="button" data-configured-qty-minus="${item.id}">−</button><span>${quantityLabel(item.quantity)}</span><button type="button" data-configured-qty-plus="${item.id}">＋</button></div>`:`<div class="qty-control"><button type="button" data-qty-minus="${item.productId}">−</button><span>${quantityLabel(item.quantity)}</span><button type="button" data-qty-plus="${item.productId}">＋</button></div>`;
     const remove=sourceDocument?'':weight?`<button type="button" class="cart-remove-button" data-remove-weighted="${item.id}" aria-label="Remover pesagem">×</button>`:configured?`<button type="button" class="cart-remove-button" data-remove-configured="${item.id}" aria-label="Remover esta configuração">×</button>`:`<button type="button" class="cart-remove-button" data-remove="${item.productId}">×</button>`;
     return `<div class="cart-line ${state.selectedProductId === item.productId ? 'selected' : ''}" data-select-product="${item.productId}"><div><strong>${escapeHtml(item.productName)}</strong>${configurationSummary?`<small>${escapeHtml(configurationSummary)}</small>`:''}${priceDetails}${priceButton}</div>${quantityControl}<div class="line-total">${ui.formatCents(item.totalCents)} ${remove}</div></div>`;
@@ -960,7 +960,9 @@
           <div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku)}</small></div></div>
           <div><small>Preço</small><strong>${ui.formatCents(p.salePriceCents)}</strong></div>
           <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.balance):'Livre'}</strong></div>
-          ${canStock&&p.trackStock?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>`:''}
+          ${canStock&&p.trackStock?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
+          <button type="button" class="secondary-button" data-web-adjust="${escapeHtml(p.id)}">Ajustar saldo</button>`:''}
+          ${p.trackStock?`<button type="button" class="secondary-button" data-web-moves="${escapeHtml(p.id)}">Movimentações</button>`:''}
         </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
       </div></section>`;
     content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
@@ -973,6 +975,17 @@
     content.querySelectorAll('[data-web-stock]').forEach(b=>b.addEventListener('click',()=>{
       const product=state.products.find(p=>p.id===b.dataset.webStock);
       if(product)openWebStockForm(product);
+    }));
+    content.querySelectorAll('[data-web-adjust]').forEach(button=>button.addEventListener('click',()=>{
+      const product=state.products.find(p=>p.id===button.dataset.webAdjust);
+      if(product)openWebStockAdjustment(product);
+    }));
+    content.querySelectorAll('[data-web-moves]').forEach(button=>button.addEventListener('click',async()=>{
+      const product=state.products.find(p=>p.id===button.dataset.webMoves);
+      if(!product)return;
+      button.disabled=true;
+      try{await openWebInventoryHistory(product);}catch(error){showToast(error.message,'error');}
+      finally{button.disabled=false;}
     }));
     routeRegistry.updated('products',{surface:'products'});
   }
@@ -1028,6 +1041,59 @@
         finally{form.dataset.pending='false';button.disabled=false;button.textContent='Registrar entrada';}
       });
     }});
+  }
+
+  function openWebStockAdjustment(product){
+    openModal('Ajustar estoque',`<form id="web-adjust-form">
+      <p>Produto: <strong>${escapeHtml(product.name)}</strong> · Saldo atual: ${quantityLabel(product.balance)}</p>
+      <div class="field"><label for="web-adjust-qty">Variação no saldo (+ entrada / − saída)</label>
+      <input id="web-adjust-qty" name="quantityDelta" type="number" step="0.001" required placeholder="Ex.: -1 ou 2.5"></div>
+      <div class="field"><label for="web-adjust-reason">Justificativa obrigatória</label>
+      <textarea id="web-adjust-reason" name="reason" rows="3" minlength="3" maxlength="240" required placeholder="Ex.: perda identificada na contagem"></textarea></div>
+      <p class="web-form-feedback" role="status" aria-live="polite"></p>
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button>
+      <button class="primary-button" type="submit">Registrar ajuste</button></div></form>`,{onMount(root){
+      const form=root.querySelector('#web-adjust-form');
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();if(form.dataset.pending==='true')return;
+        if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+        const button=form.querySelector('[type=submit]'),feedback=form.querySelector('[role=status]');
+        button.disabled=true;form.dataset.pending='true';
+        try{
+          await api.request('/api/v1/inventory/adjustments',{method:'POST',
+            mutationId:form.dataset.operationKey,body:{
+              productId:product.id,quantityDelta:Number(form.elements.quantityDelta.value),
+              reason:form.elements.reason.value.trim()
+            }});
+          state.products=await api.products();
+          closeModal();renderWebProducts();showToast('Ajuste registrado no histórico de estoque.','success');
+        }catch(error){feedback.textContent=error.message;}
+        finally{button.disabled=false;form.dataset.pending='false';}
+      });
+    }});
+  }
+
+  async function openWebInventoryHistory(product){
+    const result=await api.request('/api/v1/inventory/movements'+api.params({
+      productId:product.id,limit:50
+    }));
+    const rows=result.items||[];
+    const named={opening:'Saldo inicial',purchase:'Entrada',adjustment:'Ajuste',
+      sale:'Venda',return:'Devolução'};
+    const formatDate=value=>value?new Date(value).toLocaleString('pt-BR'):'—';
+    openModal('Histórico de estoque — '+product.name,`<div class="web-stock-history">
+      <p>Movimentações imutáveis deste produto na filial atual.</p>
+      <div class="ops-table-wrap"><table class="ops-table"><thead>
+        <tr><th>Quando</th><th>Operação</th><th>Variação</th><th>Motivo</th></tr>
+      </thead><tbody>${rows.length?rows.map(row=>`<tr>
+        <td>${escapeHtml(formatDate(row.occurredAt))}</td>
+        <td>${escapeHtml(named[row.type]||row.type)}</td>
+        <td>${row.quantityDelta>0?'+':''}${quantityLabel(row.quantityDelta)}</td>
+        <td>${escapeHtml(row.reason||'—')}</td></tr>`).join(''):
+        '<tr><td colspan="4">Nenhuma movimentação registrada.</td></tr>'}
+      </tbody></table></div>${result.total>rows.length?`<p class="web-history-note">Exibindo as primeiras ${rows.length} de ${result.total} movimentações.</p>`:''}
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Fechar</button></div>
+    </div>`);
   }
 
   function renderProducts() {
