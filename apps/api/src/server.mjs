@@ -18,6 +18,7 @@ db.exec(readFileSync(resolve(here,'../migrations/0008_transaction_reversals.sql'
 db.exec(readFileSync(resolve(here,'../migrations/0009_catalog_inventory.sql'),'utf8'));
 db.exec(readFileSync(resolve(here,'../migrations/0010_purchase_orders.sql'),'utf8'));
 db.exec(readFileSync(resolve(here,'../migrations/0011_product_media.sql'),'utf8'));
+db.exec(readFileSync(resolve(here,'../migrations/0012_sale_item_notes.sql'),'utf8'));
 const host=process.env.PDV_HOST||'127.0.0.1',port=Number(process.env.PORT||4175);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('PORT inválida.');
 const api=createApi({DB:db,COOKIE_SECURE:'false',AUTH_ENABLED:process.env.AUTH_ENABLED||'false',LOCAL_MEDIA_ENABLED:'true'});
