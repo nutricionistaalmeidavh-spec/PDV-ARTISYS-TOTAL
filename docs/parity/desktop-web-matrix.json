@@ -306,11 +306,11 @@
           "acceptance": "Observações e configurações de itens. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
-            "contains": "async changeItemNote(",
+            "contains": "async addConfiguredItem(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 line note is atomic and idempotent"
+            "testContains": "P3 configured item derives variant/addition prices"
           },
-          "reviewNote": "Observação de até 240 caracteres por item registrada na venda canônica, exibida no balcão e imutável após fechamento. Várias configurações/combinações de um mesmo produto ainda precisam de projeto e homologação do desktop."
+          "reviewNote": "Variações e grupos de adicionais configuráveis com preços calculados no servidor, observação e snapshot no item da venda. API e interface web existentes integradas, relatórios CSV usam a escolha histórica. Faltam duas configurações diferentes do mesmo SKU numa venda, combos/pizzas específicos, baixa de insumos de adicionais e equivalência integral com o desktop."
         },
         {
           "id": "checkout-018",
@@ -1231,7 +1231,7 @@
             "testFile": "apps/api/test/commerce.test.mjs",
             "testContains": "P4 detailed report applies"
           },
-          "reviewNote": "Exportação CSV detalhada, compatível com planilhas, com filtros e proteção contra fórmula; XLSX/PDF tabulares e correspondência exata dos layouts desktop pendentes."
+          "reviewNote": "Exportação CSV detalhada, compatível com planilhas, com filtros e proteção contra fórmula; XLSX/PDF tabulares e correspondência exata dos layouts desktop pendentes. O CSV analítico agora incorpora variações, adicionais e observações capturados no momento da venda."
         }
       ]
     }
