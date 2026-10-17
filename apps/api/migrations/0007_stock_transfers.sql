@@ -26,3 +26,20 @@ CREATE TRIGGER IF NOT EXISTS inventory_transfer_no_update BEFORE UPDATE ON inven
 BEGIN SELECT RAISE(ABORT,'STOCK_TRANSFER_IMMUTABLE'); END;
 CREATE TRIGGER IF NOT EXISTS inventory_transfer_no_delete BEFORE DELETE ON inventory_transfers
 BEGIN SELECT RAISE(ABORT,'STOCK_TRANSFER_IMMUTABLE'); END;
+
+-- Race-safe catalog guards. Keep sale snapshots and stock units meaningful even
+-- if a concurrent checkout/stock operation changes the row during an edit.
+CREATE TRIGGER IF NOT EXISTS product_unit_history_guard BEFORE UPDATE OF unit ON products
+WHEN NEW.unit<>OLD.unit AND (
+  EXISTS(SELECT 1 FROM sale_items WHERE tenant_id=OLD.tenant_id AND product_id=OLD.id)
+  OR EXISTS(SELECT 1 FROM inventory_movements WHERE tenant_id=OLD.tenant_id AND product_id=OLD.id)
+)
+BEGIN SELECT RAISE(ABORT,'PRODUCT_UNIT_WITH_HISTORY'); END;
+
+CREATE TRIGGER IF NOT EXISTS product_deactivation_pending_sale_guard BEFORE UPDATE OF active ON products
+WHEN NEW.active=0 AND OLD.active=1 AND EXISTS(
+  SELECT 1 FROM sale_items i JOIN sales s ON s.id=i.sale_id
+  WHERE i.tenant_id=OLD.tenant_id AND i.product_id=OLD.id
+    AND s.status IN ('OPEN','SUSPENDED')
+)
+BEGIN SELECT RAISE(ABORT,'PRODUCT_HAS_PENDING_SALE'); END;
