@@ -133,7 +133,7 @@ try{
   const downloadEvent=page.waitForEvent('download');
   await page.locator('#web-report-export').click();
   const download=await downloadEvent;
-  assert.match(download.suggestedFilename(),/vendas-.*\\.csv$/);
+  assert.match(download.suggestedFilename(),/vendas-.*\.csv$/);
   const manifest=await page.evaluate(async()=>fetch('/manifest.webmanifest').then(r=>r.json()));
   assert.equal(manifest.display,'standalone');
   assert.equal(manifest.icons.length,2);
