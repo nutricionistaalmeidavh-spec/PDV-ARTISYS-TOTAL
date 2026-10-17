@@ -220,8 +220,15 @@
       if(form.elements.from.value&&form.elements.to.value&&form.elements.from.value>form.elements.to.value){
         showToast('A data inicial não pode ser posterior à final.','error');return;
       }
+      // Prevent clicks on stale sale rows while the filtered history is loading.
+      // Otherwise the in-flight render replaces the detail panel after a user
+      // opens a sale, silently discarding the correct server response.
+      const pendingButtons=[...content.querySelectorAll('[data-sale-details], [data-history-page]')];
+      pendingButtons.forEach(button=>{button.disabled=true;button.setAttribute('aria-busy','true');});
       void renderSalesHistory({from:form.elements.from.value,to:form.elements.to.value,
-        status:form.elements.status.value,query:form.elements.query.value,offset:0});
+        status:form.elements.status.value,query:form.elements.query.value,offset:0})
+        .catch(error=>{showToast(error.message,'error');})
+        .finally(()=>pendingButtons.forEach(button=>{button.disabled=false;button.removeAttribute('aria-busy');}));
     });
     content.querySelectorAll('[data-history-page]').forEach(button=>button.addEventListener('click',()=>{
       if(button.disabled)return;
