@@ -134,17 +134,38 @@
         {
           "id": "checkout-011",
           "name": "Vincular cliente à venda",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async assignSaleCustomer(",
+            "testFile": "apps/api/test/vertical-parity.test.mjs",
+            "testContains": "sales/${sale.id}/customer"
+          },
+          "reviewNote": "Vínculo canônico provado via API, mas a seleção completa no checkout web ainda requer validação."
         },
         {
           "id": "checkout-012",
           "name": "Vendedor/garçom individual e comissões",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/web/app.js",
+            "contains": "seller-select",
+            "testFile": "apps/api/test/vertical-parity.test.mjs",
+            "testContains": "commissionBps:1000"
+          },
+          "reviewNote": "Seleção e lançamento de comissões existem; repasse, estornos e perfis ainda não têm paridade."
         },
         {
           "id": "checkout-013",
           "name": "Crediário/crédito da loja com limite e contas",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "STORE_CREDIT",
+            "testFile": "apps/api/test/vertical-parity.test.mjs",
+            "testContains": "creditLimitCents:5000"
+          },
+          "reviewNote": "Crédito com limite, ledger e recebimentos testados; falta devolução e relatórios equivalentes."
         },
         {
           "id": "checkout-014",
@@ -163,7 +184,14 @@
         {
           "id": "checkout-016",
           "name": "Produtos por peso com balança/inserção manual",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async addWeightedItem(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P6 weighted product"
+          },
+          "reviewNote": "Venda por peso e protocolo web implementados; paridade com balanças físicas depende de homologação."
         },
         {
           "id": "checkout-017",
@@ -173,7 +201,14 @@
         {
           "id": "checkout-018",
           "name": "Comprovante de venda e reimpressão/PDF",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/web/peripherals-web.js",
+            "contains": "printSale(",
+            "testFile": "apps/api/test/peripherals-web.test.mjs",
+            "testContains": "diálogo de impressão não altera a venda"
+          },
+          "reviewNote": "Diálogo browser e ESC/POS existem; reimpressão histórica e impressão física dependem de QA."
         },
         {
           "id": "checkout-019",
@@ -476,7 +511,14 @@
         {
           "id": "finance-051",
           "name": "Contas bancárias/carteiras e lançamentos vinculados",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/advanced-finance.mjs",
+            "contains": "async createAccount(",
+            "testFile": "apps/api/test/advanced-finance.test.mjs",
+            "testContains": "repeated or overlapping imported statements"
+          },
+          "reviewNote": "Contas bancárias e lançamentos importados existem; carteiras e todos os vínculos do desktop não verificados."
         },
         {
           "id": "finance-052",
@@ -486,27 +528,62 @@
         {
           "id": "finance-053",
           "name": "Filtros completos por categoria, centro de custo, banco e vencimento",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/advanced-finance.mjs",
+            "contains": "async classify(",
+            "testFile": "apps/api/test/advanced-finance.test.mjs",
+            "testContains": "finance categories and cost centers"
+          },
+          "reviewNote": "Classificação por categoria e centro implementada; filtros completos por banco/vencimento ainda incompletos."
         },
         {
           "id": "finance-054",
           "name": "Plano de contas e grupos DRE",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/advanced-finance.mjs",
+            "contains": "async createGroup(",
+            "testFile": "apps/api/test/advanced-finance.test.mjs",
+            "testContains": "finance categories and cost centers"
+          },
+          "reviewNote": "Grupos DRE/categorias testados; plano de contas do desktop não integralmente reproduzido."
         },
         {
           "id": "finance-055",
           "name": "Fluxo de caixa e DRE por regime de caixa e competência",
-          "status": "gap"
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/advanced-finance.mjs",
+            "contains": "async dre(",
+            "testFile": "apps/api/test/advanced-finance.test.mjs",
+            "testContains": "DRE cash and accrual differ"
+          },
+          "reviewNote": "DRE caixa/competência e fluxo de caixa com saldos testados."
         },
         {
           "id": "finance-056",
           "name": "Extratos OFX/CSV, conciliação e transferências",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/advanced-finance.mjs",
+            "contains": "async importStatement(",
+            "testFile": "apps/api/test/advanced-finance.test.mjs",
+            "testContains": "internal bank transfers"
+          },
+          "reviewNote": "Importação e deduplicação, conciliação e transferências testadas; extratos reais demandam QA."
         },
         {
           "id": "finance-057",
           "name": "Regras de recorrência e alertas financeiros",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/advanced-finance.mjs",
+            "contains": "async createRecurrence(",
+            "testFile": "apps/api/test/advanced-finance.test.mjs",
+            "testContains": "generation is idempotent"
+          },
+          "reviewNote": "Regras de recorrência testadas; alertas proativos ainda não implementados."
         }
       ]
     },
@@ -574,7 +651,14 @@
         {
           "id": "reports-064",
           "name": "Metas, comissão e ranking de vendedores",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/vertical-service.mjs",
+            "contains": "commission",
+            "testFile": "apps/api/test/vertical-parity.test.mjs",
+            "testContains": "commissionBps:1000"
+          },
+          "reviewNote": "Ledger e relatório básico de comissões existentes; metas, ranking e repasses faltam."
         },
         {
           "id": "reports-065",
@@ -589,7 +673,14 @@
         {
           "id": "reports-067",
           "name": "DRE e relatórios financeiros com centros de custo",
-          "status": "gap"
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/advanced-finance.mjs",
+            "contains": "async dre(",
+            "testFile": "apps/api/test/advanced-finance.test.mjs",
+            "testContains": "finance categories and cost centers"
+          },
+          "reviewNote": "Relatório DRE com agrupamentos e centros de custo verificado em teste."
         },
         {
           "id": "reports-068",
@@ -598,5 +689,6 @@
         }
       ]
     }
-  ]
+  ],
+  "reviewedAt": "2026-10-17"
 }
