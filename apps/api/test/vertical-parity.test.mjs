@@ -159,3 +159,29 @@ test('P7 restaurant: kitchen must be ready before delivery and table closure',as
    assert.equal((await x.request('a',`restaurant/sessions/${session.id}/close`,'POST',{branchId:'filial-a'})).status,200);
  }finally{x.close();}
 });
+
+test('P7 quote confirmation converts at the quoted price into one canonical sale',async()=>{
+ const x=await setup();try{
+   const product=(await x.request('a','products','POST',{branchId:'filial-a',sku:'PRECO1',name:'Produto do Atacado',salePriceCents:4000,trackStock:false})).body.product;
+   const customer=(await x.request('a','customers','POST',{branchId:'filial-a',name:'Revendedor'})).body.customer;
+   assert.equal((await x.request('a','wholesale/tiers','POST',{branchId:'filial-a',productId:product.id,minQuantity:5,unitPriceCents:2500})).status,201);
+   const quote=(await x.request('a','wholesale/orders','POST',{branchId:'filial-a',customerId:customer.id,items:[{productId:product.id,quantity:5}]})).body.order;
+   assert.equal(quote.totalCents,12500);
+   assert.equal((await x.request('a',`wholesale/orders/${quote.id}/confirm`,'POST',{branchId:'filial-a'})).status,200);
+   const first=await x.request('a','sales','POST',{branchId:'filial-a',wholesaleOrderId:quote.id});
+   assert.equal(first.status,201,JSON.stringify(first.body));
+   const sid=first.body.sale.id;
+   const sale=await x.request('a',`sales/${sid}?branchId=filial-a`);
+   assert.equal(sale.body.sale.totalCents,12500);
+   assert.equal(sale.body.sale.items[0].unitPriceCents,2500);
+   assert.equal(sale.body.sale.customerId,customer.id);
+   assert.equal((await x.request('a','sales','POST',{branchId:'filial-a',wholesaleOrderId:quote.id})).status,409);
+   await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:1000});
+   const done=await x.request('a',`sales/${sid}/complete`,'POST',{branchId:'filial-a',payments:[{method:'PIX',amountCents:12500}]});
+   assert.equal(done.status,200,JSON.stringify(done.body));
+   const updated=await x.request('a',`wholesale/orders/${quote.id}?branchId=filial-a`);
+   assert.equal(updated.body.order.status,'FULFILLED');
+   assert.equal(updated.body.order.saleId,sid);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=? AND branch_id=?').bind('a','filial-a').first()).n,1);
+ }finally{x.close();}
+});
