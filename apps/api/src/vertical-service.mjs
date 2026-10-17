@@ -80,7 +80,7 @@ export function createVerticalService(db){
    const row=await first('SELECT * FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
    if(!row)throw err(404,'Pedido de atacado não encontrado.');
    const items=await all('SELECT product_id AS productId,quantity_milli / 1000.0 AS quantity,unit_price_cents AS unitPriceCents,tier_id AS tierId FROM wholesale_order_items WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY rowid',t,b,id);
-   return {id:row.id,customerId:row.customer_id,status:row.status,totalCents:row.total_cents,fulfillmentType:row.fulfillment,items,createdAt:row.created_at};
+   return {id:row.id,customerId:row.customer_id,status:row.status,totalCents:row.total_cents,saleId:row.sale_id||null,fulfillmentType:row.fulfillment,items,createdAt:row.created_at};
  }
  async function price(t,b,productId,quantity){
    const productRow=await product(t,productId),milli=qty(quantity);
@@ -207,7 +207,7 @@ export function createVerticalService(db){
      });
    },
    async wholesalePrice(t,b,productId,quantity){await branchExists(t,b);return price(t,b,productId,quantity);},
-   async wholesaleOrders(t,b){await branchExists(t,b);return all('SELECT id,customer_id AS customerId,status,total_cents AS totalCents,created_at AS createdAt FROM wholesale_orders WHERE tenant_id=? AND branch_id=? ORDER BY created_at DESC LIMIT 100',t,b);},
+   async wholesaleOrders(t,b){await branchExists(t,b);return all('SELECT id,customer_id AS customerId,status,total_cents AS totalCents,sale_id AS saleId,created_at AS createdAt FROM wholesale_orders WHERE tenant_id=? AND branch_id=? ORDER BY created_at DESC LIMIT 100',t,b);},
    wholesaleOrder:loadWholesale,
    async wholesaleQuote(t,b,user,body,key){
      await branchExists(t,b);const cust=await customer(t,body.customerId);
