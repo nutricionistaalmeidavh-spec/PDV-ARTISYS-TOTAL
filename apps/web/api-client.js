@@ -52,7 +52,8 @@
         if(!this.tenantId||!this.branchId)throw new Error('Escolha o estabelecimento e a filial antes de continuar.');
         if(original==='/api/v1/products')operation='products';
         else if(original==='/api/v1/inventory')operation='inventory';
-        else if(original==='/api/v1/inventory/movements')operation='inventory/receipts';
+        else if(original==='/api/v1/inventory/movements')operation=method==='GET'?'inventory/movements':'inventory/receipts';
+        else if(original==='/api/v1/inventory/adjustments')operation='inventory/adjustments';
         else if(original==='/api/v1/cash/open')operation='cash';
         else if(original==='/api/v1/cash/sessions')operation=method==='POST'?'cash/open':'cash/sessions';
         else if(original.startsWith('/api/v1/cash/sessions/'))operation=original.slice(apiRoot.length);
@@ -92,7 +93,8 @@
       if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
       if(operation==='inventory')return value.stock;
-      if(operation==='inventory/receipts')return value.movement;
+      if(operation==='inventory/receipts'||operation==='inventory/adjustments')return value.movement;
+      if(operation==='inventory/movements')return value.movements;
       if(operation==='cash')return value.session;
       if(operation==='cash/open')return {session:value.session};
       if(operation==='cash/sessions')return value.sessions;
@@ -103,6 +105,7 @@
       if(operation==='reports/summary')return value.report;
       if(operation==='reports/sales.csv')return value;
       if(operation==='sales'||operation.startsWith('sales?'))return method==='GET'?value.sales:value.sale;
+      if(operation==='sales/history')return value.history;
       if(operation.startsWith('sales/'))return operation.endsWith('/complete')?{sale:value.sale}:value.sale;
       return value;
     }
