@@ -399,7 +399,7 @@
       ?'Sem base comparativa no período anterior'
       :(comparison.delta.percentage>=0?'+':'')+comparison.delta.percentage.toLocaleString('pt-BR')+'% em relação ao período anterior';
     const overview=`<div class="ops-metrics">
-      ${metric('Receita líquida',value(total),comparison?comparisonHint:'')}
+      ${metric('Faturamento registrado (líquido)',value(total),comparison?comparisonHint:'')}
       ${metric('Vendas concluídas',String(count))}
       ${metric('Ticket médio',value(count?Math.round(total/count):0))}
       ${metric('Devoluções',value(sale.refundedCents||0))}
