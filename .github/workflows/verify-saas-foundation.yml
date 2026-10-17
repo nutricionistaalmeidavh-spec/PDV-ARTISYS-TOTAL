@@ -61,8 +61,13 @@ jobs:
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0001_identity.sql
       - name: Test commerce D1 schema and immutable stock ledger in Wrangler
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0002_commerce.sql
+      - name: Install browser for real responsive checkout smoke
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
       - name: Smoke real Cloudflare Workerd with local D1 and 100k PBKDF2
         env:
+          RUN_BROWSER_SMOKE: 'true'
           PDV_OWNER_EMAIL: owner@example.test
           PDV_OWNER_NAME: Local Owner
           PDV_TENANT_SLUG: workerd-test
