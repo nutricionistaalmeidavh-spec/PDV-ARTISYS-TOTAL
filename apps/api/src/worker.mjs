@@ -164,7 +164,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
         return response({tenantId:membership.tenantId,members:results});
       }
       // Commerce belongs to the only canonical PDV core and its D1 transaction adapter.
-      const commerceMatch=path.match(/^\\/api\\/v1\\/tenants\\/([^/]+)\\/(.+)$/);
+      const commerceMatch=path.match(/^\/api\/v1\/tenants\/([^/]+)\/(.+)$/);
       if(commerceMatch){
         const tenantId=decodeURIComponent(commerceMatch[1]);
         const membership=await requireMembership(db,session.userId,tenantId);
