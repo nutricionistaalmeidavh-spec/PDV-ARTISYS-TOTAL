@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {openLocalDatabase} from '../src/local-db.mjs';
 import {createApi} from '../src/worker.mjs';
-import {hashPassword} from '../src/password.mjs';
+import {hashPassword,verifyPassword,ITERATIONS} from '../src/password.mjs';
 
 const sql=readFileSync(new URL('../migrations/0001_identity.sql',import.meta.url),'utf8');
 const origin='https://pdv-total.example.test';
@@ -142,4 +142,27 @@ test('localhost HTTP session cookie uses its own non-Host prefix without weakeni
     }));
     assert.equal(current.status,200);
   }finally{x.close();}
+});
+
+test('Cloudflare WebCrypto password hashing stays within the 100,000 iteration runtime limit',async()=>{
+  assert.equal(ITERATIONS,100000);
+  const hashed=await hashPassword('Another-Strong-Password-2026!');
+  assert.match(hashed,/^pbkdf2:sha256:100000:[0-9a-f]{32}:[0-9a-f]{64}$/);
+  assert.equal(await verifyPassword('Another-Strong-Password-2026!',hashed),true);
+  assert.equal(await verifyPassword('wrong',hashed),false);
+  assert.equal(await verifyPassword('wrong',hashed.replace(':100000:',':210000:')),false);
+});
+
+test('health reports setup-required until the isolated D1 identity schema has been migrated',async()=>{
+  const db=openLocalDatabase();
+  const api=createApi({DB:db});
+  try{
+    const result=await api.fetch(new Request(origin+'/api/v1/health'));
+    assert.equal(result.status,503);
+    assert.equal((await result.json()).status,'setup-required');
+    db.exec(sql);
+    const ready=await api.fetch(new Request(origin+'/api/v1/health'));
+    assert.equal(ready.status,200);
+    assert.equal((await ready.json()).status,'identity-ready');
+  }finally{db.close();}
 });
