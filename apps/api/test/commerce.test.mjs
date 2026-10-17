@@ -841,7 +841,7 @@ test('P3 configured item derives variant/addition prices on server and preserves
     assert.equal(paid.status,200,JSON.stringify(paid.body));
     assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock.find(p=>p.productId===productId).quantity,3);
     const changed=await x.write('a',path,{...catalogue,
-      groups:[{...catalogue.groups[0],options:[{id:'cheese',name:'Queijo novo',priceDeltaCents:999}]}]},{method:'PUT'});
+      groups:[{...catalogue.groups[0],maxSelections:1,options:[{id:'cheese',name:'Queijo novo',priceDeltaCents:999}]}]},{method:'PUT'});
     assert.equal(changed.status,200,JSON.stringify(changed.body));
     const historic=await x.get('a','sales/'+saleId+'?branchId=branch-a');
     assert.equal(historic.body.sale.items[0].unitPriceCents,1450);
