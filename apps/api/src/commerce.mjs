@@ -296,6 +296,34 @@ export function createCommerceService(db,{now=nowISO}={}){
       ]);
       return result;
     },
+    async updateProduct(tenant,branch,id,body,header){
+      await branchExists(tenant,branch);
+      const key=requiredMutation(body,header),scope='product.update:'+id;
+      const previous=await applied(tenant,scope,key);if(previous)return previous;
+      const old=await first('SELECT * FROM products WHERE tenant_id=? AND id=?',tenant,id);
+      if(!old)throw error(404,'Produto não encontrado.');
+      const name=Object.hasOwn(body,'name')?text(body.name,120):old.name;
+      const sku=Object.hasOwn(body,'sku')?text(body.sku,64).toUpperCase():old.sku;
+      const unit=Object.hasOwn(body,'unit')?String(body.unit||'').trim().toUpperCase():old.unit;
+      const price=Object.hasOwn(body,'salePriceCents')?requiredNumber(body.salePriceCents,'Preço'):old.sale_price_cents;
+      if(name.length<2||!/^[A-Z0-9][A-Z0-9._-]{0,63}$/.test(sku))
+        throw error(400,'Informe nome e SKU válido.');
+      if(!new Set(['UN','KG','G','L','M','M2','M3','CX','PCT']).has(unit))
+        throw error(400,'Unidade de produto inválida.');
+      if(Object.hasOwn(body,'active')&&typeof body.active!=='boolean')
+        throw error(400,'A situação do produto deve ser ativa ou inativa.');
+      if(Object.hasOwn(body,'trackStock')&&body.trackStock!==Boolean(old.track_stock))
+        throw error(409,'O modo de controle de estoque não pode ser alterado após o cadastro.');
+      const active=Object.hasOwn(body,'active')?body.active:Boolean(old.active);
+      const result={id,name,sku,unit,salePriceCents:price,
+        trackStock:Boolean(old.track_stock),active,updatedAt:stamp()};
+      await batch([
+        q('UPDATE products SET name=?,sku=?,sale_price_cents=?,unit=?,active=?,updated_at=? WHERE id=? AND tenant_id=?',
+          name,sku,price,unit,active?1:0,result.updatedAt,id,tenant),
+        audit(tenant,scope,key,result)
+      ]);
+      return result;
+    },
     async receipt(tenant,branch,body,header){
       await branchExists(tenant,branch);
       const key=requiredMutation(body,header),scope='inventory.receipt:'+branch;
