@@ -102,6 +102,8 @@
       if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
       if(operation==='products/categories')return method==='GET'?value.categories:value.category;
+      if(operation==='products/import/preview')return value.preview;
+      if(operation==='products/import/commit')return value.result;
       if(/^products\/[^/]+\/bundle$/.test(operation))return method==='GET'?value.components:value.bundle;
       if(operation.startsWith('products/'))return value.product;
       if(operation==='customers')return method==='GET'?value.customers:value.customer;
@@ -178,6 +180,8 @@
 
     categories(includeInactive = false) { return this.request(this.webMode?'/api/v1/products/categories':`/api/v1/categories${includeInactive ? '?includeInactive=true' : ''}`); }
     saveCategory(body) { return this.request(this.webMode?'/api/v1/products/categories':'/api/v1/categories', { method: 'POST', body }); }
+    previewCatalogCsv(csv){return this.request('/api/v1/products/import/preview',{method:'POST',body:{csv}});}
+    commitCatalogCsv(csv,mutationId){return this.request('/api/v1/products/import/commit',{method:'POST',body:{csv},mutationId});}
     products(includeInactive = false) { return this.request(`/api/v1/products${includeInactive ? '?includeInactive=true' : ''}`); }
     saveProduct(body,mutationId) { return this.request('/api/v1/products', { method: 'POST', body,mutationId }); }
     updateProduct(id,body,mutationId) { return this.request(`/api/v1/products/${encodeURIComponent(id)}`, { method:'PATCH', body,mutationId }); }
