@@ -31,7 +31,11 @@ PDV_OWNER_PASSWORD='senha-forte-de-exemplo' node --experimental-sqlite src/provi
 
 Para o D1, execute o mesmo comando **sem `--local`** para gerar `.local/provision.seed.sql`. Crie D1 **novo** e aplique `migrations/0001_identity.sql` e depois o seed via Wrangler em operação explícita. Apague o seed depois. **Nunca** aplicar migrações ao D1 da licença do PDV desktop.
 
-Antes de deploy, substitua o `database_id` de zeros em `wrangler.jsonc` pelo ID do D1 novo. Este repositório **não executa deploy automaticamente** e não habilita cobrança. Core totalmente sem serviços pagos; Cloudflare Workers + D1 no Free sujeito aos limites, e alternativa local SQLite.
+O arquivo canônico de deploy é o **`/wrangler.jsonc` da raiz** (não há configuração divergente em `apps/api/`). Com Wrangler 4, os bindings `DB` e `FILES` sem IDs acionam o provisionamento automático de D1 e R2 na implantação conectada ao GitHub, desde que os recursos estejam habilitados na conta Cloudflare. Depois do primeiro deploy, **aplique explicitamente a migração `0001_identity.sql` no D1 novo**: deploy não cria tabelas automaticamente. `/api/v1/health` responde `503 setup-required` até a migração. O recurso R2 está somente reservado; nenhum dado do cliente é gravado nele nesta etapa.
+
+**Sem tokens obrigatórios para o Worker:** os bindings D1/R2 são injetados pela Cloudflare e o GitHub conectado já autentica o processo de build. Não inventar, publicar ou armazenar API tokens no Git. As senhas são derivadas com PBKDF2-SHA256 e **100.000 iterações**, teto do WebCrypto no Workers; não é um limite de secret nem do banco.
+
+Quando a Cloudflare estiver conectada a esta `main`, o push após merge deve disparar o deploy automático com `npm run build` e `npx wrangler deploy`; a execução real e a existência dos bindings precisam ser conferidas no painel. Sem assinatura/cobrança ativa.
 
 ## API disponível
 
