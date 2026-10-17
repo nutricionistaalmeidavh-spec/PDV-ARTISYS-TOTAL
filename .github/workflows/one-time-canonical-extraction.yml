@@ -61,6 +61,8 @@ jobs:
           # The one-off migration workflow is not part of the SaaS product.
           git rm .github/workflows/one-time-canonical-extraction.yml
           git add -A
+          # Git leaves empty directories after mv/rm; Git never stores those.
+          if [ -d legacy ]; then find legacy -depth -type d -empty -delete; fi
           test ! -d legacy
           test ! -d desktop
           test -f packages/core/js/domains/sales/sale-service.js
