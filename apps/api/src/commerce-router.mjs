@@ -163,7 +163,7 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
     if(feature==='cash'){
       if(parts.length===1&&method==='GET'){
         requireAccess(member,'cash.view',user);
-        return json({session:await service.cash(tenant,branch)});
+        return json({session:await service.cash(tenant,branch,url.searchParams.get('terminalId')||'DEFAULT')});
       }
       if(parts[1]==='open'&&parts.length===2&&method==='POST'){
         requireAccess(member,'cash.open',user);
@@ -175,14 +175,14 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       if(parts.length===3&&parts[2]==='search'&&method==='GET'){
         requireAccess(member,'cash.view',user);
         return json({history:await service.cashSessionsSearch(tenant,branch,{
-          operatorId:url.searchParams.get('operatorId')||'',status:url.searchParams.get('status')||'',
+          operatorId:url.searchParams.get('operatorId')||'',terminalId:url.searchParams.get('terminalId')||'',status:url.searchParams.get('status')||'',
           from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',
           limit:url.searchParams.get('limit')||25,offset:url.searchParams.get('offset')||0
         })});
       }
       if(parts.length===2&&method==='GET'){
         requireAccess(member,'cash.view',user);
-        return json({sessions:await service.cashSessions(tenant,branch)});
+        return json({sessions:await service.cashSessions(tenant,branch,{terminalId:url.searchParams.get('terminalId')||''})});
       }
       const id=parts[2];
       if(id&&id.length<=128){

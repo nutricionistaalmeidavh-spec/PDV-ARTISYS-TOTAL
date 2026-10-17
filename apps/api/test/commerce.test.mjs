@@ -17,13 +17,14 @@ const catalog=readFileSync(new URL('../migrations/0009_catalog_inventory.sql',im
 const purchasing=readFileSync(new URL('../migrations/0010_purchase_orders.sql',import.meta.url),'utf8');
 const media=readFileSync(new URL('../migrations/0011_product_media.sql',import.meta.url),'utf8');
 const notesMigration=readFileSync(new URL('../migrations/0012_sale_item_notes.sql',import.meta.url),'utf8');
+const cashTerminalMigration=readFileSync(new URL('../migrations/0013_cash_terminals.sql',import.meta.url),'utf8');
 const NOW=Date.parse('2026-10-17T14:00:00Z');
 const date='2026-10-17T14:00:00.000Z';
 const password='SafeTestPasswordForPdv2026!';
 let num=0;
 const next=()=>('mutation-'+(++num)+'-long');
 async function setup(){
-  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);
+  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);
   const pass=await hashPassword(password);
   for(const [id,email] of [['owner','owner@test.com'],['other','other@test.com'],['viewer','viewer@test.com']])
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
@@ -716,4 +717,81 @@ test('P3 home indicators are canonical live data, tenant-isolated and authorizat
   assert.equal((await x.get('a','reports/home?branchId=branch-b&asOf='+asOf)).status,404);
   assert.equal((await x.get('a','reports/home?branchId=branch-a&asOf=2026-02-30')).status,400);
  }finally{x.close();}
+});
+
+test('P3 independent terminal drawers link every sale to its originating open cash session',async()=>{
+ const x=await setup();try{
+  const product=await x.id('Item independente','TERMINAL-CASH',8);
+  const openedA=await x.write('a','cash/open',{branchId:'branch-a',terminalId:'T-A',openingCents:1000});
+  const openedB=await x.write('a','cash/open',{branchId:'branch-a',terminalId:'T-B',openingCents:500});
+  assert.equal(openedA.status,201,JSON.stringify(openedA.body));
+  assert.equal(openedB.status,201,JSON.stringify(openedB.body));
+  const cashA=openedA.body.session.id,cashB=openedB.body.session.id;
+  assert.notEqual(cashA,cashB);
+  assert.equal((await x.get('a','cash?branchId=branch-a&terminalId=T-A')).body.session.id,cashA);
+  assert.equal((await x.get('a','cash?branchId=branch-a&terminalId=T-B')).body.session.id,cashB);
+  async function sale(terminalId){
+   const opened=await x.write('a','sales',{branchId:'branch-a',terminalId});
+   assert.equal(opened.status,201,JSON.stringify(opened.body));
+   const id=opened.body.sale.id;
+   await x.write('a','sales/'+id+'/items',{branchId:'branch-a',productId:product,quantity:1});
+   const completed=await x.write('a','sales/'+id+'/complete',{branchId:'branch-a',payments:[{method:'CASH',amountCents:1000}]});
+   assert.equal(completed.status,200,JSON.stringify(completed.body));
+   return id;
+  }
+  const saleA=await sale('T-A'),saleB=await sale('T-B');
+  const mapped=await x.db.prepare('SELECT cash_session_id AS cashId,terminal_id AS terminal FROM sales WHERE id=?')
+   .bind(saleA).first();
+  assert.equal(mapped.cashId,cashA);
+  assert.equal(mapped.terminal,'T-A');
+  assert.equal((await x.db.prepare('SELECT cash_session_id AS cashId FROM sales WHERE id=?').bind(saleB).first()).cashId,cashB);
+  const balance=terminal=>x.get('a','cash?branchId=branch-a&terminalId='+terminal);
+  assert.equal((await balance('T-A')).body.session.expectedCashCents,2000);
+  assert.equal((await balance('T-B')).body.session.expectedCashCents,1500);
+  const closed=await x.write('a','cash/sessions/'+cashA+'/close',{branchId:'branch-a',countedCashCents:2000});
+  assert.equal(closed.status,200,JSON.stringify(closed.body));
+  assert.equal((await balance('T-A')).body.session,null);
+  assert.equal((await balance('T-B')).body.session.id,cashB);
+  const history=await x.get('a','cash/sessions/search?branchId=branch-a&terminalId=T-A');
+  assert.equal(history.body.history.total,1);
+  assert.equal(history.body.history.items[0].id,cashA);
+  const item=(await x.get('a','sales/'+saleA+'?branchId=branch-a')).body.sale.items[0];
+  const refunded=await x.write('a','sales/'+saleA+'/returns',{branchId:'branch-a',terminalId:'T-B',
+    reason:'Restituição noutro caixa',items:[{saleItemId:item.id,quantity:1}],refunds:[{method:'CASH',amountCents:1000}]});
+  assert.equal(refunded.status,201,JSON.stringify(refunded.body));
+  assert.equal((await balance('T-B')).body.session.expectedCashCents,500);
+  assert.equal((await x.get('b','cash/sessions/search?branchId=branch-b&terminalId=T-A',x.other)).body.history.total,0);
+  assert.equal((await x.get('a','cash?branchId=branch-a&terminalId=../../unsafe')).status,400);
+ }finally{x.close();}
+});
+
+test('P3 cash credit repayments select the requested terminal, not the first open drawer',async()=>{
+  const x=await setup();try{
+    const p=await x.id('Crediário terminal','CREDIT-T-A',4);
+    const customer=await x.write('a','customers',{branchId:'branch-a',name:'Consumidor caixa múltiplo',creditLimitCents:10000});
+    assert.equal(customer.status,201,JSON.stringify(customer.body));
+    const customerId=customer.body.customer.id;
+    const cA=await x.write('a','cash/open',{branchId:'branch-a',terminalId:'T-A',openingCents:1000});
+    const cB=await x.write('a','cash/open',{branchId:'branch-a',terminalId:'T-B',openingCents:500});
+    const open=await x.write('a','sales',{branchId:'branch-a',terminalId:'T-A'});
+    const saleId=open.body.sale.id;
+    assert.equal((await x.write('a','sales/'+saleId+'/customer',{branchId:'branch-a',customerId})).status,200);
+    assert.equal((await x.write('a','sales/'+saleId+'/items',{branchId:'branch-a',productId:p,quantity:1})).status,200);
+    const charge=await x.write('a','sales/'+saleId+'/complete',{branchId:'branch-a',payments:[{method:'STORE_CREDIT',amountCents:1000}]});
+    assert.equal(charge.status,200,JSON.stringify(charge.body));
+    const route='credit/'+customerId+'/payments';
+    const invalid=await x.write('a',route,{branchId:'branch-a',terminalId:'../T',method:'CASH',amountCents:200});
+    assert.equal(invalid.status,400);
+    const missing=await x.write('a',route,{branchId:'branch-a',terminalId:'T-Z',method:'CASH',amountCents:200});
+    assert.equal(missing.status,409);
+    const paid=await x.write('a',route,{branchId:'branch-a',terminalId:'T-B',method:'CASH',amountCents:400});
+    assert.equal(paid.status,201,JSON.stringify(paid.body));
+    const records=await x.db.prepare('SELECT cash_session_id AS cashId FROM customer_credit_receipts WHERE customer_id=?')
+      .bind(customerId).all();
+    assert.equal(records.results.length,1);
+    assert.equal(records.results[0].cashId,cB.body.session.id);
+    assert.equal((await x.get('a','cash?branchId=branch-a&terminalId=T-A')).body.session.expectedCashCents,1000);
+    assert.equal((await x.get('a','cash?branchId=branch-a&terminalId=T-B')).body.session.expectedCashCents,900);
+    assert.notEqual(cA.body.session.id,cB.body.session.id);
+  }finally{x.close();}
 });

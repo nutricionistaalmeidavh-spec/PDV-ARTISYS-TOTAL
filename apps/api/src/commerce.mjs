@@ -16,6 +16,11 @@ const {resolvePayment,normalizeMethod}=paymentRules;
 const {roundQuantity}=inventoryRules;
 const {calculateCashClosing}=cashRules;
 const MAX_LINES=80;
+const canonicalTerminalId=(raw)=>{
+  const id=String(raw??'DEFAULT').trim();
+  if(!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(id))throw error(400,'Identificador do terminal inválido.');
+  return id;
+};
 const nowISO=()=>new Date().toISOString();
 const randomId=()=>crypto.randomUUID();
 const error=(status,message)=>Object.assign(new Error(message),{status});
@@ -53,7 +58,7 @@ function sqlError(e){
 function formatSale(sale,items=[],payments=[]){
   return {
     id:sale.id,tenantId:sale.tenant_id,branchId:sale.branch_id,
-    saleNumber:sale.sale_number,operatorId:sale.operator_id,
+    saleNumber:sale.sale_number,operatorId:sale.operator_id,terminalId:sale.terminal_id||'DEFAULT',
     status:sale.status,customerId:sale.customer_id||null,sellerId:sale.seller_id||sale.operator_id,subtotalCents:sale.subtotal_cents,
     discountCents:sale.discount_cents,totalCents:sale.total_cents,
     changeCents:sale.change_cents,completedAt:sale.completed_at,
@@ -228,8 +233,8 @@ export function createCommerceService(db,{now=nowISO}={}){
   const saleReversals=createSaleReturnAdapter({
     q,first,all,batch,applied,audit,stamp,tenantSale,requiredMutation,quantityMilli,
     normalizeMethod,allocateSaleDiscount,error,text,randomId,
-    getCash:async(tenant,branch)=>{
-      const session=await first("SELECT * FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND status='OPEN' LIMIT 1",tenant,branch);
+    getCash:async(tenant,branch,terminalId='DEFAULT')=>{
+      const session=await first("SELECT * FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND terminal_id=? AND status='OPEN' LIMIT 1",tenant,branch,canonicalTerminalId(terminalId));
       if(!session)return null;
       const {closing}=await cashClosing(tenant,branch,session,0);
       return {id:session.id,expectedCashCents:closing.expectedCashCents};
@@ -536,38 +541,41 @@ export function createCommerceService(db,{now=nowISO}={}){
         FROM products p LEFT JOIN stock_positions s ON s.tenant_id=p.tenant_id AND s.product_id=p.id AND s.branch_id=?
         WHERE p.tenant_id=? AND p.track_stock=1 AND p.active=1 ORDER BY p.name LIMIT ?`,branch,tenant,Math.min(100,Math.max(1,Number(limit)||100)));
     },
-    async cash(tenant,branch){
+    async cash(tenant,branch,terminalId='DEFAULT'){
       await branchExists(tenant,branch);
+      const terminal=canonicalTerminalId(terminalId);
       const row=await first(`SELECT * FROM cash_sessions c WHERE c.tenant_id=? AND c.branch_id=?
-        AND c.status='OPEN' LIMIT 1`,tenant,branch);
+        AND c.terminal_id=? AND c.status='OPEN' LIMIT 1`,tenant,branch,terminal);
       if(!row)return null;
       const {closing}=await cashClosing(tenant,branch,row,0);
-      return {id:row.id,status:row.status,operatorId:row.operator_id,
+      return {id:row.id,status:row.status,operatorId:row.operator_id,terminalId:row.terminal_id,
         openingCents:row.opening_cents,initialCashCents:row.opening_cents,
         openedAt:row.opened_at,expectedCashCents:closing.expectedCashCents,
         branchId:branch};
     },
     async openCash(tenant,branch,user,body,header){
       await branchExists(tenant,branch);
-      const key=requiredMutation(body,header),scope='cash.open:'+branch;
+      const terminal=canonicalTerminalId(body?.terminalId);
+      const key=requiredMutation(body,header),scope='cash.open:'+branch+':'+terminal;
       const prior=await applied(tenant,scope,key);if(prior)return prior;
       const opening=requiredNumber(body?.openingCents??body?.initialCashCents,'Valor inicial');
-      const result={id:randomId(),status:'OPEN',openingCents:opening,branchId:branch,openedAt:stamp(),operatorId:user};
+      const result={id:randomId(),status:'OPEN',openingCents:opening,branchId:branch,terminalId:terminal,openedAt:stamp(),operatorId:user};
       await batch([
-        q('INSERT INTO cash_sessions(id,tenant_id,branch_id,operator_id,status,opening_cents,opened_at) VALUES(?,?,?,?,?,?,?)',
-          result.id,tenant,branch,user,'OPEN',opening,result.openedAt),
+        q('INSERT INTO cash_sessions(id,tenant_id,branch_id,operator_id,status,opening_cents,opened_at,terminal_id) VALUES(?,?,?,?,?,?,?,?)',
+          result.id,tenant,branch,user,'OPEN',opening,result.openedAt,terminal),
         audit(tenant,scope,key,result)
       ]);
       return result;
     },
 
-    async cashSessions(tenant,branch,{limit=40}={}){
+    async cashSessions(tenant,branch,{limit=40,terminalId=''}={}){
       await branchExists(tenant,branch);
+      const terminal=terminalId?canonicalTerminalId(terminalId):'';
       const rows=await all(`SELECT * FROM cash_sessions WHERE tenant_id=? AND branch_id=?
-        ORDER BY opened_at DESC,id DESC LIMIT ?`,tenant,branch,Math.min(50,Math.max(1,Number(limit)||40)));
+        AND (?='' OR terminal_id=?) ORDER BY opened_at DESC,id DESC LIMIT ?`,tenant,branch,terminal,terminal,Math.min(50,Math.max(1,Number(limit)||40)));
       return Promise.all(rows.map(async row=>{
         const {closing}=await cashClosing(tenant,branch,row,row.counted_cash_cents||0);
-        return {id:row.id,operatorId:row.operator_id,status:row.status,
+        return {id:row.id,operatorId:row.operator_id,terminalId:row.terminal_id,status:row.status,
           openedAt:row.opened_at,closedAt:row.closed_at,
           openingCents:row.opening_cents,initialCashCents:row.opening_cents,
           expectedCashCents:row.expected_cash_cents??closing.expectedCashCents,
@@ -580,6 +588,7 @@ export function createCommerceService(db,{now=nowISO}={}){
       const status=text(filters.status||'',20).toUpperCase();
       if(status&&!['OPEN','CLOSED'].includes(status))throw error(400,'Estado do caixa inválido.');
       const operatorId=text(filters.operatorId||'',128);
+      const terminal=filters.terminalId?canonicalTerminalId(filters.terminalId):'';
       const {a,b}=period({from:filters.from||'',to:filters.to||''});
       const limit=Number(filters.limit??25),offset=Number(filters.offset??0);
       if(!Number.isSafeInteger(limit)||limit<1||limit>100||
@@ -588,6 +597,7 @@ export function createCommerceService(db,{now=nowISO}={}){
       const where=['tenant_id=?','branch_id=?','opened_at>=?','opened_at<=?'];
       const args=[tenant,branch,a,b];
       if(operatorId){where.push('operator_id=?');args.push(operatorId);}
+      if(terminal){where.push('terminal_id=?');args.push(terminal);}
       if(status){where.push('status=?');args.push(status);}
       const clause=where.join(' AND ');
       const counted=await first('SELECT COUNT(*) AS total FROM cash_sessions WHERE '+clause,...args);
@@ -595,7 +605,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         ORDER BY opened_at DESC,id DESC LIMIT ? OFFSET ?`,...args,limit,offset);
       const items=await Promise.all(rows.map(async row=>{
         const {closing}=await cashClosing(tenant,branch,row,row.counted_cash_cents??0);
-        return {id:row.id,status:row.status,operatorId:row.operator_id,
+        return {id:row.id,status:row.status,operatorId:row.operator_id,terminalId:row.terminal_id,
           openedAt:row.opened_at,closedAt:row.closed_at||null,
           openingCents:row.opening_cents,
           expectedCashCents:row.expected_cash_cents??closing.expectedCashCents,
@@ -774,13 +784,13 @@ export function createCommerceService(db,{now=nowISO}={}){
       period({from:asOf,to:asOf});
       const [report,open,coverage]=await Promise.all([
         this.reports(tenant,branch,{from:asOf,to:asOf}),
-        this.cash(tenant,branch),
+        first("SELECT COUNT(*) AS n FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND status='OPEN'",tenant,branch),
         this.reportStockCoverage(tenant,branch,{asOf,days:30})
       ]);
       return {asOf,salesCount:report.sales.count,
         netSalesCents:report.sales.totalCents,
         refundedCents:report.sales.refundedCents,
-        cashOpen:Boolean(open),
+        cashOpen:Boolean(open?.n),activeCashTerminals:Number(open?.n||0),
         outOfStockCount:coverage.zeroOrReservedOut,
         trackedProducts:coverage.products.length,
         stockCoverageUnknown:coverage.coverageUnknown,
@@ -881,6 +891,7 @@ export function createCommerceService(db,{now=nowISO}={}){
       const key=requiredMutation(body,header),scope='sale.open:'+branch;
       const prior=await applied(tenant,scope,key);if(prior)return prior;
       const id=randomId(),created=stamp(),saleNumber='W-'+id.slice(0,8).toUpperCase();
+      const terminalId=canonicalTerminalId(body?.terminalId);
       const sellerId=body?.sellerId||user;
       const seller=await first('SELECT user_id FROM tenant_memberships WHERE tenant_id=? AND user_id=? AND active=1',tenant,sellerId);
       if(!seller)throw error(404,'Vendedor não encontrado neste estabelecimento.');
@@ -896,18 +907,18 @@ export function createCommerceService(db,{now=nowISO}={}){
         if(!quoted.length)throw error(409,'Cotação sem itens.');
       }
       const quotedTotals=calculateSaleTotals({items:quoted.map(x=>({unitPriceCents:x.unitPriceCents,quantity:x.milli/1000}))});
-      const result={id,tenantId:tenant,branchId:branch,saleNumber,operatorId:user,sellerId,customerId:order?.customer_id||null,status:'OPEN',
+      const result={id,tenantId:tenant,branchId:branch,terminalId,saleNumber,operatorId:user,sellerId,customerId:order?.customer_id||null,status:'OPEN',
         items:quoted.map(x=>({productId:x.productId,productName:x.name,sku:x.sku,quantity:x.milli/1000,unitPriceCents:x.unitPriceCents,totalCents:Math.round(x.unitPriceCents*x.milli/1000)})),
         payments:[],subtotalCents:quotedTotals.subtotalCents,discountCents:0,totalCents:quotedTotals.totalCents,changeCents:0,completedAt:null};
       // One sale authority: a quote is a price snapshot, not a second sale.
       // INSERT..SELECT prevents concurrent checkouts from claiming the same quote twice.
       const statements=[wholesaleId
-        ?q(`INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,customer_id,sale_number,status,created_at)
-          SELECT ?,tenant_id,branch_id,?,?,customer_id,?,'OPEN',?
+        ?q(`INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,customer_id,sale_number,status,created_at,terminal_id)
+          SELECT ?,tenant_id,branch_id,?,?,customer_id,?,'OPEN',?,?
           FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND id=? AND status='CONFIRMED' AND sale_id IS NULL`,
-          id,user,sellerId,saleNumber,created,tenant,branch,wholesaleId)
-        :q('INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,sale_number,status,created_at) VALUES(?,?,?,?,?,?,?,?)',
-          id,tenant,branch,user,sellerId,saleNumber,'OPEN',created)];
+          id,user,sellerId,saleNumber,created,terminalId,tenant,branch,wholesaleId)
+        :q('INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,sale_number,status,created_at,terminal_id) VALUES(?,?,?,?,?,?,?,?,?)',
+          id,tenant,branch,user,sellerId,saleNumber,'OPEN',created,terminalId)];
       for(const line of quoted)statements.push(q(`INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,id,line.productId,line.name,line.sku,line.milli,line.unitPriceCents,created));
       if(wholesaleId)statements.push(q('UPDATE wholesale_orders SET sale_id=?,updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND sale_id IS NULL',
@@ -1095,14 +1106,14 @@ export function createCommerceService(db,{now=nowISO}={}){
        try{payment=resolvePayment({totalCents:totals.totalCents,payments:groupedPayments,creditMethods:['STORE_CREDIT'],availableCreditCents:customer?Math.max(0,customer.creditLimitCents-usedCreditCents):0,customerName:customer?.name});}
        catch(e){throw error(409,e.message);}
       if(payment.status!=='paid')throw error(409,'Pagamento incompleto. Revise os valores antes de finalizar.');
-      const cash=await this.cash(tenant,branch);
-      if(!cash)throw error(409,'Abra o caixa antes de finalizar a venda.');
+      const cash=await this.cash(tenant,branch,sale.terminal_id||'DEFAULT');
+      if(!cash)throw error(409,'Abra o caixa deste terminal antes de finalizar a venda.');
       const completedAt=stamp();
       const result={
         id,saleNumber:sale.sale_number,status:'COMPLETED',
         subtotalCents:totals.subtotalCents,discountCents:totals.discountCents,
         totalCents:totals.totalCents,changeCents:payment.changeDueCents,
-        branchId:branch,completedAt,
+        branchId:branch,terminalId:sale.terminal_id||'DEFAULT',completedAt,
         items:rows.map(x=>({productId:x.product_id,quantity:x.quantity_milli/1000,unitPriceCents:x.unit_price_cents})),
         payments:groupedPayments
       };

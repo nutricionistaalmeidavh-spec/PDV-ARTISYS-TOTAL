@@ -94,7 +94,7 @@ export function createSaleReturnAdapter(helpers){
       const cashRefund=grouped.find(p=>p.method==='CASH');
       let refundSession=null;
       if(cashRefund){
-        refundSession=await getCash(tenant,branch);
+        refundSession=await getCash(tenant,branch,body?.terminalId||sale.terminal_id||'DEFAULT');
         if(!refundSession||cashRefund.amountCents>refundSession.expectedCashCents)
           throw error(409,'Abra um caixa com saldo suficiente para a devolução em dinheiro.');
       }
