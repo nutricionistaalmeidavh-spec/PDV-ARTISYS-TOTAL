@@ -309,7 +309,14 @@
         {
           "id": "products-029",
           "name": "Locais de estoque, transferências e reservas",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async transferStock(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "inventory transfer moves one immutable"
+          },
+          "reviewNote": "Transferência imutável entre filiais com saldo projetado, mutação idempotente, RBAC e interface web implementada; locais de estoque internos, reservas e CI final ainda pendentes."
         },
         {
           "id": "products-030",
