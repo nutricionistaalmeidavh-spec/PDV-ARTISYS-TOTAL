@@ -133,6 +133,8 @@
       if(operation==='reports/summary')return value.report;
       if(operation==='reports/compare')return value.comparison;
       if(operation==='reports/margins')return value.margin;
+      if(operation==='reports/details')return value.details;
+      if(operation==='reports/stock-coverage')return value.coverage;
       if(operation==='reports/sales.csv')return value;
       if(operation==='sales'||operation.startsWith('sales?'))return method==='GET'?value.sales:value.sale;
       if(operation==='sales/history')return value.history;
@@ -294,6 +296,9 @@
     salesHistory(filters = {}) { return this.request(`/api/v1/sales/history${this.params(filters)}`); }
     compareSalesPeriods(filters = {}) { return this.request(`/api/v1/reports/compare${this.params(filters)}`); }
     historicalMarginReport(filters = {}) { return this.request(`/api/v1/reports/margins${this.params(filters)}`); }
+    reportSalesDetailsCanonical(filters={}){return this.request('/api/v1/reports/details'+this.params(filters));}
+    exportSalesDetailCsvCanonical(filters={}){return this.request('/api/v1/reports/details.csv'+this.params(filters));}
+    reportStockCoverage(filters={}){return this.request('/api/v1/reports/stock-coverage'+this.params(filters));}
     sale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}`); }
     saleDetails(id) { return this.webMode?this.sale(id):this.request(`/api/v1/sales/${encodeURIComponent(id)}/details`); }
     openSale(body,mutationId) { return this.request('/api/v1/sales', { method: 'POST', body,mutationId }); }

@@ -1092,12 +1092,19 @@
         {
           "id": "reports-062",
           "name": "Detalhamento filtrado por cliente, vendedor, produto e meio de pagamento",
-          "status": "gap",
+          "status": "partial",
           "owner": "reports",
           "dependsOn": [
             "reports-058"
           ],
-          "acceptance": "Detalhamento filtrado por cliente, vendedor, produto e meio de pagamento. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Detalhamento filtrado por cliente, vendedor, produto e meio de pagamento. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/report-depth.mjs",
+            "contains": "details:(tenant,branch,filters",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 detailed report applies"
+          },
+          "reviewNote": "Filtros paginados por vendedor, cliente, produto e forma de pagamento, com acesso por filial e empresa; faltam comparação exaustiva com desktop, dados de nomes e exportações fiscais."
         },
         {
           "id": "reports-063",
@@ -1155,12 +1162,19 @@
         {
           "id": "reports-066",
           "name": "Relatórios de estoque mínimo, transferências e cobertura",
-          "status": "gap",
+          "status": "partial",
           "owner": "reports",
           "dependsOn": [
             "products-027"
           ],
-          "acceptance": "Relatórios de estoque mínimo, transferências e cobertura. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Relatórios de estoque mínimo, transferências e cobertura. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/report-depth.mjs",
+            "contains": "async stockCoverage(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 stock coverage derives"
+          },
+          "reviewNote": "Consumo real dos últimos N dias, saldo disponível após reservas e transferências canônicas, sem inventar mínimo não configurado; políticas de mínimos, previsão de demanda, grandes volumes e homologação do desktop pendentes."
         },
         {
           "id": "reports-067",
@@ -1184,12 +1198,19 @@
         {
           "id": "reports-068",
           "name": "Exportação detalhada e formatos equivalentes ao desktop",
-          "status": "gap",
+          "status": "partial",
           "owner": "reports",
           "dependsOn": [
             "reports-061"
           ],
-          "acceptance": "Exportação detalhada e formatos equivalentes ao desktop. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Exportação detalhada e formatos equivalentes ao desktop. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/report-depth.mjs",
+            "contains": "async detailedCsv(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 detailed report applies"
+          },
+          "reviewNote": "Exportação CSV detalhada, compatível com planilhas, com filtros e proteção contra fórmula; XLSX/PDF tabulares e correspondência exata dos layouts desktop pendentes."
         }
       ]
     }

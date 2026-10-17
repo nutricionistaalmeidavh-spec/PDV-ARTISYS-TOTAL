@@ -229,6 +229,27 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       }
     }
     if(feature==='reports'){
+      if(parts.length===2&&method==='GET'&&['details','details.csv'].includes(parts[1])){
+        requireAccess(member,'reports.view',user);
+        const filters={
+          from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',
+          status:url.searchParams.get('status')||'',operatorId:url.searchParams.get('operatorId')||'',
+          sellerId:url.searchParams.get('sellerId')||'',customerId:url.searchParams.get('customerId')||'',
+          productId:url.searchParams.get('productId')||'',paymentMethod:url.searchParams.get('paymentMethod')||'',
+          query:url.searchParams.get('query')||'',
+          limit:url.searchParams.get('limit')||25,offset:url.searchParams.get('offset')||0
+        };
+        return parts[1]==='details'
+          ?json({details:await service.reportDetails(tenant,branch,filters)})
+          :json({csv:await service.reportDetailsCsv(tenant,branch,filters)});
+      }
+      if(parts.length===2&&parts[1]==='stock-coverage'&&method==='GET'){
+        requireAccess(member,'reports.view',user);
+        return json({coverage:await service.reportStockCoverage(tenant,branch,{
+          asOf:url.searchParams.get('asOf')||'',
+          days:url.searchParams.get('days')||30
+        })});
+      }
       if(parts.length===2&&parts[1]==='margins'&&method==='GET'){
         requireAccess(member,'reports.view',user);
         return json({margin:await service.marginReport(tenant,branch,{

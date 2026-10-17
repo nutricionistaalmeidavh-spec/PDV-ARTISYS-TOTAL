@@ -610,3 +610,53 @@ test('P4 historical margin does not claim proven profit for products without rec
   assert.equal(result.body.margin.products.find(x=>x.productId===product).marginCents,null);
  }finally{x.close();}
 });
+
+test('P4 detailed report applies canonical seller/customer/product/payment filters and paginates before export',async()=>{
+ const x=await setup();try{
+  const p=await x.id('Relatório P4','RPT-DET-1',8);
+  await x.write('a','cash/open',{branchId:'branch-a',openingCents:100});
+  const first=(await x.write('a','sales',{branchId:'branch-a'})).body.sale;
+  await x.write('a','sales/'+first.id+'/seller',{branchId:'branch-a',sellerId:'viewer'});
+  await x.write('a','sales/'+first.id+'/items',{branchId:'branch-a',productId:p,quantity:2});
+  await x.write('a','sales/'+first.id+'/complete',{branchId:'branch-a',payments:[{method:'PIX',amountCents:2000}]});
+  const second=(await x.write('a','sales',{branchId:'branch-a'})).body.sale;
+  await x.write('a','sales/'+second.id+'/items',{branchId:'branch-a',productId:p,quantity:1});
+  await x.write('a','sales/'+second.id+'/complete',{branchId:'branch-a',payments:[{method:'CASH',amountCents:1000}]});
+  const query='branchId=branch-a&from=2026-10-17&to=2026-10-17&sellerId=viewer&productId='+p+'&paymentMethod=PIX';
+  const detailed=await x.get('a','reports/details?'+query);
+  assert.equal(detailed.status,200,JSON.stringify(detailed.body));
+  assert.equal(detailed.body.details.total,1);
+  assert.equal(detailed.body.details.items[0].id,first.id);
+  assert.equal(detailed.body.details.items[0].items[0].quantity,2);
+  const csv=await x.get('a','reports/details.csv?'+query);
+  assert.equal(csv.status,200,JSON.stringify(csv.body));
+  assert.match(csv.body.csv,/RPT-DET-1/);
+  assert.match(csv.body.csv,/PIX/);
+  assert.doesNotMatch(csv.body.csv,/CASH/);
+  assert.equal((await x.get('b','reports/details?branchId=branch-b',x.other)).body.details.total,0);
+  assert.equal((await x.get('a','reports/details?branchId=branch-b')).status,404);
+  assert.equal((await x.get('a','reports/details.csv?branchId=branch-a&paymentMethod=INVALID')).status,400);
+ }finally{x.close();}
+});
+test('P4 stock coverage derives reserved availability and demand from immutable movement history, not static defaults',async()=>{
+ const x=await setup();try{
+  const p=await x.id('Produto de cobertura','RPT-COVER',5);
+  await x.write('a','cash/open',{branchId:'branch-a',openingCents:100});
+  const s=(await x.write('a','sales',{branchId:'branch-a'})).body.sale;
+  await x.write('a','sales/'+s.id+'/items',{branchId:'branch-a',productId:p,quantity:2});
+  await x.write('a','sales/'+s.id+'/complete',{branchId:'branch-a',payments:[{method:'PIX',amountCents:2000}]});
+  const reserve=await x.write('a','inventory/reservations',{branchId:'branch-a',productId:p,quantity:1,reason:'Separado para retirada'});
+  assert.equal(reserve.status,201,JSON.stringify(reserve.body));
+  const report=await x.get('a','reports/stock-coverage?branchId=branch-a&asOf=2026-10-17&days=30');
+  assert.equal(report.status,200,JSON.stringify(report.body));
+  const line=report.body.coverage.products.find(row=>row.productId===p);
+  assert.equal(line.quantity,3);
+  assert.equal(line.reserved,1);
+  assert.equal(line.available,2);
+  assert.equal(line.consumed,2);
+  assert.equal(line.daysCoverage,30);
+  assert.equal(line.minimumQuantity,null,'no invented minimum quantity for products without policy');
+  assert.equal((await x.get('b','reports/stock-coverage?branchId=branch-b&asOf=2026-10-17',x.other)).body.coverage.products.length,0);
+  assert.equal((await x.get('a','reports/stock-coverage?branchId=branch-a&days=0')).status,400);
+ }finally{x.close();}
+});

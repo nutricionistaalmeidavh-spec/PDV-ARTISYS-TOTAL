@@ -350,17 +350,22 @@
     if(!state.toDate)state.toDate=date;
     const fromDate=state.fromDate,toDate=state.toDate;
     const query=new URLSearchParams({from:fromDate,to:toDate});
-    const available=['overview','products','payments','inventory','cash','finance','margins'];
+    const available=['overview','products','payments','inventory','cash','finance','margins','details','coverage'];
     if(!available.includes(state.view))state.view='overview';
-    let report,comparison=null,margin=null;
+    let report,comparison=null,margin=null,detail=null,coverage=null;
     try{
       const previous=root.PdvBusinessDate.equivalentPreviousPeriod(fromDate,toDate);
-      [report,comparison,margin]=await Promise.all([
+      [report,comparison,margin,detail,coverage]=await Promise.all([
         api.request('/api/v1/reports/summary?'+query.toString()),
         state.view==='overview'?api.compareSalesPeriods({
           from:fromDate,to:toDate,compareFrom:previous.previousFrom,compareTo:previous.previousTo
         }).catch(()=>null):Promise.resolve(null),
-        state.view==='margins'?api.historicalMarginReport({from:fromDate,to:toDate}):Promise.resolve(null)
+        state.view==='margins'?api.historicalMarginReport({from:fromDate,to:toDate}):Promise.resolve(null),
+        state.view==='details'?api.reportSalesDetailsCanonical({from:fromDate,to:toDate,
+          sellerId:state.sellerId||'',customerId:state.customerId||'',
+          productId:state.productId||'',paymentMethod:state.paymentMethod||'',
+          limit:50,offset:state.detailOffset||0}):Promise.resolve(null),
+        state.view==='coverage'?api.reportStockCoverage({asOf:toDate,days:30}):Promise.resolve(null)
       ]);
     }catch(error){
       if(routeActive())content.innerHTML=`<section class="ops-page report-v2-page">
@@ -374,7 +379,7 @@
     const total=Number(sale.totalCents)||0,count=Number(sale.count)||0;
     const value=(v)=>money(Number(v)||0);
     const viewLabels={overview:'Visão geral',products:'Produtos',payments:'Recebimentos',
-      inventory:'Estoque',cash:'Caixa',finance:'Financeiro',margins:'Margem histórica'};
+      inventory:'Estoque',cash:'Caixa',finance:'Financeiro',margins:'Margem histórica',details:'Vendas detalhadas',coverage:'Cobertura do estoque'};
     const table=(heads,rows,colspan=heads.length)=>`<div class="ops-table-wrap"><table class="ops-table">
       <thead><tr>${heads.map(x=>`<th>${escapeHtml(x)}</th>`).join('')}</tr></thead><tbody>
       ${rows.length?rows.join(''):`<tr><td colspan="${colspan}"><div class="ops-empty">Nenhum registro neste período.</div></td></tr>`}
@@ -415,6 +420,46 @@
         <td>${p.marginCents==null?'Não apurada':value(p.marginCents)}</td>
         <td>${p.missingCostLines?'Histórico incompleto':'Snapshot da venda'}</td></tr>`));
     };
+    const detailFilters=()=>`<form id="web-report-detail-filter" class="ops-form">
+      <div class="ops-grid two">
+        <label>Vendedor (ID)<input name="sellerId" class="ops-input" value="${escapeHtml(state.sellerId||'')}"></label>
+        <label>Cliente (ID)<input name="customerId" class="ops-input" value="${escapeHtml(state.customerId||'')}"></label>
+        <label>Produto (ID)<input name="productId" class="ops-input" value="${escapeHtml(state.productId||'')}"></label>
+        <label>Meio de pagamento<select name="paymentMethod" class="ops-input">
+          ${[['','Todos'],...Object.entries(PAYMENT_LABELS)].map(([v,label])=>`<option value="${v}" ${state.paymentMethod===v?'selected':''}>${escapeHtml(label)}</option>`).join('')}</select></label>
+      </div><button class="ops-secondary" type="submit">Filtrar detalhes</button></form>`;
+    const detailedTable=()=>{
+      if(!detail)return '<p>Selecione um período.</p>';
+      return detailFilters()+`<p class="ops-muted">${detail.total} vendas com os filtros aplicados. ${detail.limit} por página.</p>`+
+        table(['Venda','Data','Vendedor','Cliente','Itens','Pagamento','Total','Situação'],
+          (detail.items||[]).map(sale=>`<tr>
+          <td>${escapeHtml(sale.saleNumber)}</td><td>${when(sale.completedAt)}</td>
+          <td>${escapeHtml(sale.sellerId||'—')}</td>
+          <td>${escapeHtml(sale.customerId||'Consumidor')}</td>
+          <td>${escapeHtml((sale.items||[]).map(i=>i.sku+' × '+qty(i.quantity)).join(' · '))}</td>
+          <td>${escapeHtml((sale.payments||[]).map(x=>paymentLabel(x.method)).join(' + '))}</td>
+          <td>${value(sale.netTotalCents??sale.totalCents)}</td>
+          <td>${escapeHtml(sale.status)}</td></tr>`))+
+        `<div class="ops-actions">
+          <button class="ops-secondary" type="button" data-report-details-page="-1" ${detail.offset===0?'disabled':''}>Anterior</button>
+          <button class="ops-secondary" type="button" data-report-details-page="1" ${detail.offset+detail.items.length>=detail.total?'disabled':''}>Próxima</button></div>`;
+    };
+    const coverageTable=()=>{
+      if(!coverage)return '<p>Selecione um período.</p>';
+      return `<p class="ops-muted">Consumo efetivo: ${escapeHtml(coverage.period.from)} a ${escapeHtml(coverage.period.to)}.
+        Cobertura estimada em dias com base nas vendas e devoluções, após reservas.
+        Estoque mínimo não configurado: sem alerta de mínimo inventado.</p>`+
+        `<div class="ops-metrics">
+          ${metric('Sem disponibilidade',String(coverage.zeroOrReservedOut))}
+          ${metric('Sem consumo no período',String(coverage.coverageUnknown))}
+          ${metric('Mínimo não definido',String(coverage.unknownMinimum))}</div>`+
+        table(['Produto','Disponível','Reservado','Consumo período','Cobertura (dias)','Entradas por transferência','Saídas por transferência'],
+          (coverage.products||[]).map(p=>`<tr>
+          <td>${escapeHtml(p.name)} · ${escapeHtml(p.sku)}</td>
+          <td>${qty(p.available)}</td><td>${qty(p.reserved)}</td><td>${qty(p.consumed)}</td>
+          <td>${p.daysCoverage==null?'Sem base':qty(p.daysCoverage)}</td>
+          <td>${qty(p.transfersIn)}</td><td>${qty(p.transfersOut)}</td></tr>`));
+    };
     const overview=`<div class="ops-metrics">
       ${metric('Faturamento registrado (líquido)',value(total),comparison?comparisonHint:'')}
       ${metric('Vendas concluídas',String(count))}
@@ -425,7 +470,7 @@
       <section class="ops-card"><h2>Meios de pagamento</h2>${paymentsTable()}</section>
       <section class="ops-card"><h2>Mais vendidos</h2>${productsTable()}</section></div>`;
     const views={overview,products:productsTable(),payments:paymentsTable(),inventory:inventoryTable(),
-      cash:cashTable(),finance:financeTable(),margins:marginsTable()};
+      cash:cashTable(),finance:financeTable(),margins:marginsTable(),details:detailedTable(),coverage:coverageTable()};
     const tabs=available.map(key=>`<button type="button" data-report-web="${key}"
       class="report-v2-tab ${state.view===key?'active':''}"
       role="tab" aria-selected="${state.view===key?'true':'false'}"
@@ -452,13 +497,27 @@
       void renderWebReports({fromDate:form.elements.from.value,toDate:form.elements.to.value});
     });
     content.querySelectorAll('[data-report-web]').forEach(button=>button.addEventListener('click',()=>void renderWebReports({view:button.dataset.reportWeb})));
+    content.querySelector('#web-report-detail-filter')?.addEventListener('submit',event=>{
+      event.preventDefault();const form=event.currentTarget;
+      void renderWebReports({sellerId:form.elements.sellerId.value,customerId:form.elements.customerId.value,
+        productId:form.elements.productId.value,paymentMethod:form.elements.paymentMethod.value,detailOffset:0});
+    });
+    content.querySelectorAll('[data-report-details-page]').forEach(button=>button.addEventListener('click',()=>{
+      if(button.disabled)return;
+      void renderWebReports({detailOffset:Math.max(0,detail.offset+Number(button.dataset.reportDetailsPage)*detail.limit)});
+    }));
     content.querySelector('#web-report-print')?.addEventListener('click',()=>root.print());
     content.querySelector('#web-report-export')?.addEventListener('click',async()=>{
       const button=content.querySelector('#web-report-export');
       button.disabled=true;
       try{
-        const result=await api.exportSalesCsv({from:state.fromDate,to:state.toDate});
-        downloadCsvText('vendas-'+state.fromDate+'-'+state.toDate+'.csv',result.csv||'');
+        const result=state.view==='details'
+          ?await api.exportSalesDetailCsvCanonical({from:state.fromDate,to:state.toDate,
+            sellerId:state.sellerId||'',customerId:state.customerId||'',
+            productId:state.productId||'',paymentMethod:state.paymentMethod||''})
+          :await api.exportSalesCsv({from:state.fromDate,to:state.toDate});
+        downloadCsvText((state.view==='details'?'vendas-detalhadas-':'vendas-')+
+          state.fromDate+'-'+state.toDate+'.csv',result.csv||'');
         showToast('Relatório exportado.','success');
       }catch(e){showToast(e.message||'Falha ao exportar.','error');}
       finally{button.disabled=false;}
