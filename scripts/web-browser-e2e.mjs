@@ -140,7 +140,11 @@ try{
   await page.locator('#web-sales-filter button[type=submit]').click();
   const filterResult=await filteredHistoryResponse;
   assert.equal(filterResult.status(),200,'filtered history API must succeed');
-  await page.waitForFunction(reference=>document.querySelector('#web-sales-filter [name=query]')?.value===reference,
+  // Network completion does not imply the async view was committed. A matching
+  // sale can already be visible in the *old* unfiltered table and its click
+  // listener will be destroyed when the filter response later replaces the DOM.
+  await page.waitForFunction(reference=>
+    document.querySelector('#ops-sales-body')?.dataset.historyQuery===reference,
     completedSaleNumber,{timeout:12000});
   // Wait for the requested sale to replace any pre-filter row before clicking.
   // A prior smoke sale can also make the row COUNT equal to one while filtering
