@@ -148,6 +148,20 @@ try{
   const matchingSale=page.locator('#ops-sales-body tr[data-search]').filter({hasText:completedSaleNumber});
   await matchingSale.waitFor({state:'visible',timeout:12000});
   assert.equal(await matchingSale.count(),1,'filtered history shows the exact completed sale');
+  await page.evaluate(()=>{
+    const trace=[];window.__saleDetailTrace=trace;
+    const proto=window.PdvApiClient.ApiClient.prototype;
+    const original=proto.sale;
+    proto.sale=async function(id){
+      trace.push({event:'api-sale-start',id});
+      try{const result=await original.call(this,id);trace.push({event:'api-sale-ok',id,status:result?.status});return result;}
+      catch(error){trace.push({event:'api-sale-error',id,message:error.message});throw error;}
+    };
+    document.addEventListener('click',event=>{
+      const button=event.target.closest?.('[data-sale-details]');
+      if(button)trace.push({event:'sale-detail-click',id:button.dataset.saleDetails});
+    },true);
+  });
   await matchingSale.locator('[data-sale-details]').click();
   try {
     await page.getByText('Autorizado pelo gerente no teste de paridade').waitFor({timeout:12000});
@@ -158,6 +172,7 @@ try{
       details:await page.locator('#ops-sale-detail').innerText(),
       route:await page.locator('body').getAttribute('data-active-route'),
       notices:await page.locator('[role="alert"],.toast,[role="status"]').allTextContents(),
+      trace:await page.evaluate(()=>window.__saleDetailTrace||[]),
       apiSale:await page.evaluate(async()=>{
         const id=document.querySelector('[data-sale-details]')?.dataset.saleDetails;
         try{
