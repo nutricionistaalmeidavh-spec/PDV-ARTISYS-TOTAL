@@ -60,6 +60,14 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       return null;
     }
     if(feature==='products'){
+      if(parts[1]==='categories'&&parts.length===2){
+        if(method==='GET'){requireAccess(member,'products.view',user);return json({categories:await service.categories(tenant,branch)});}
+        if(method==='POST'){requireAccess(member,'products.manage',user);return json({category:await service.createCategory(tenant,branch,user,body,key)},201);}
+      }
+      if(parts.length===3&&parts[2]==='bundle'){
+        if(method==='GET'){requireAccess(member,'products.view',user);return json({components:await service.productBundle(tenant,branch,parts[1])});}
+        if(method==='POST'){requireAccess(member,'products.manage',user);return json({bundle:await service.setBundle(tenant,branch,parts[1],user,body,key)});}
+      }
       if(parts.length===2&&parts[1].length<=128&&method==='PATCH'){
         requireAccess(member,'products.manage',user);
         return json({product:await service.updateProduct(tenant,branch,parts[1],body,key)});
@@ -76,6 +84,18 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       }
     }
     if(feature==='inventory'){
+      if(parts[1]==='reservations'&&parts.length===2){
+        if(method==='GET'){requireAccess(member,'inventory.view',user);return json({reservations:await service.stockReservations(tenant,branch,{productId:url.searchParams.get('productId')||null})});}
+        if(method==='POST'){requireAccess(member,'inventory.adjust',user);return json({reservation:await service.reserveStock(tenant,branch,user,body,key)},201);}
+      }
+      if(parts[1]==='reservations'&&parts.length===4&&parts[3]==='release'&&method==='POST'){
+        requireAccess(member,'inventory.adjust',user);
+        return json({reservation:await service.releaseReservation(tenant,branch,parts[2],user,key)});
+      }
+      if(parts[1]==='purchase-costs'&&parts.length===2&&method==='GET'){
+        requireAccess(member,'inventory.view',user);
+        return json({costs:await service.purchaseCosts(tenant,branch,{productId:url.searchParams.get('productId')||null})});
+      }
       if(parts[1]==='transfers'&&parts.length===2&&method==='GET'){
         requireAccess(member,'inventory.view',user);
         return json({transfers:await service.stockTransfers(tenant,branch,{limit:url.searchParams.get('limit')||50})});
@@ -102,7 +122,7 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       }
       if(parts[1]==='receipts'&&parts.length===2&&method==='POST'){
         requireAccess(member,'inventory.adjust',user);
-        return json({movement:await service.receipt(tenant,branch,body,key)},201);
+        return json({movement:await service.receipt(tenant,branch,user,body,key)},201);
       }
     }
     if(feature==='cash'){
