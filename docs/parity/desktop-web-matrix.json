@@ -291,12 +291,19 @@
         {
           "id": "checkout-017",
           "name": "Observações e configurações de itens",
-          "status": "gap",
+          "status": "partial",
           "owner": "sales",
           "dependsOn": [
             "checkout-006"
           ],
-          "acceptance": "Observações e configurações de itens. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Observações e configurações de itens. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async changeItemNote(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 line note is atomic and idempotent"
+          },
+          "reviewNote": "Observação de até 240 caracteres por item registrada na venda canônica, exibida no balcão e imutável após fechamento. Várias configurações/combinações de um mesmo produto ainda precisam de projeto e homologação do desktop."
         },
         {
           "id": "checkout-018",
