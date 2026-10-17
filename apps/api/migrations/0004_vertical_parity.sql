@@ -209,3 +209,7 @@ WHEN NEW.status='CLOSED' AND OLD.status='OPEN' AND (
  )
 )
 BEGIN SELECT RAISE(ABORT,'CASH_CLOSING_STALE'); END;
+
+-- A wholesale document points at exactly one canonical sale. No wholesale stock ledger.
+ALTER TABLE wholesale_orders ADD COLUMN sale_id TEXT REFERENCES sales(id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wholesale_single_sale ON wholesale_orders(tenant_id,branch_id,sale_id) WHERE sale_id IS NOT NULL;
