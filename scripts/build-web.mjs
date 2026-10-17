@@ -26,6 +26,7 @@ html=html.replace('</head>',`  <meta name="theme-color" content="#081a35" />
   <link rel="apple-touch-icon" href="/icons/pdv-total-192.png" />
   <link rel="stylesheet" href="./web-cloud.css" />
 </head>`);
+html=html.replace('<body class="theme-home">','<body class="theme-home"><div id="web-offline-alert" role="status" aria-live="polite">Sem conexão com o servidor. Consultas e vendas exigem internet; nenhuma operação será enviada automaticamente.</div>');
 html=html.replace('</body>','  <script defer src="./pwa-register.js"></script>\n</body>');
 writeFileSync(filename,html,'utf8');
 copyFileSync(resolve(root,'packages/core/shared/order-composer.js'),resolve(output,'order-composer.js'));
