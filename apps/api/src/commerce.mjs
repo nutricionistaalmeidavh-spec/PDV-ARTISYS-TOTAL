@@ -4,6 +4,7 @@ import salePricing from '../../../packages/core/js/domains/sales/pricing.js';
 import paymentRules from '../../../packages/core/js/domains/payments/payment-rules.js';
 import inventoryRules from '../../../packages/core/js/domains/inventory/inventory-rules.js';
 import cashRules from '../../../packages/core/js/domains/cash/cash-rules.js';
+import {createSaleReturnAdapter} from './sale-reversals.mjs';
 
 const {calculateSaleTotals,allocateSaleDiscount}=salePricing;
 const {resolvePayment,normalizeMethod}=paymentRules;
@@ -35,6 +36,7 @@ function sqlError(e){
   if(/CASH_SESSION_NOT_OPEN/i.test(message))return error(409,'O caixa foi fechado. Abra outro antes de finalizar.');
   if(/CASH_INSUFFICIENT/i.test(message))return error(409,'Saldo físico insuficiente para a sangria.');
   if(/CASH_CLOSING_STALE/i.test(message))return error(409,'O saldo do caixa mudou. Atualize e confira novamente.');
+  if(/REFUND_TENDER_EXCEEDED|RETURN_QUANTITY_EXCEEDED|CREDIT_REVERSAL_OVERPAYMENT|FINANCE_REVERSAL_INVALID/i.test(message))return error(409,'Reversão já registrada ou saldo de restituição insuficiente.');
   if(/CREDIT_LIMIT_EXCEEDED/i.test(message))return error(409,'Limite de crédito insuficiente. Atualize a ficha do cliente.');
   if(/FINANCE_OVERPAY_OR_CANCELLED/i.test(message))return error(409,'A conta mudou de situação ou o pagamento excede o saldo.');
   if(/SALE_NOT_OPEN|FINAL_SALE_IMMUTABLE/i.test(message))return error(409,'Esta venda mudou de estado. Atualize antes de continuar.');
@@ -135,7 +137,8 @@ export function createCommerceService(db,{now=nowISO}={}){
       received_at AS createdAt,'SALE' AS type,NULL AS saleId,customer_id AS customerId
       FROM customer_credit_receipts WHERE tenant_id=? AND branch_id=? AND cash_session_id=?
       ORDER BY received_at,id`,tenant,branch,id);
-    return [...sales,...adjustments,...credits].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id)));
+    const refunds=await all("SELECT id,'CASH' AS paymentMethod,amount_cents AS amountCents,created_at AS createdAt,'REVERSAL' AS type,sale_id AS saleId FROM sale_refund_movements WHERE tenant_id=? AND branch_id=? AND cash_session_id=? AND method='CASH'",tenant,branch,id);
+    return [...sales,...adjustments,...credits,...refunds].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id)));
   };
   const cashClosing=async(tenant,branch,session,countedCashCents=0)=>{
     const lines=await cashLines(tenant,branch,session.id);
@@ -151,8 +154,9 @@ export function createCommerceService(db,{now=nowISO}={}){
     const row=await first(`SELECT e.id,e.tenant_id AS tenantId,e.branch_id AS branchId,
       e.description,e.kind,e.amount_cents AS amountCents,e.due_date AS dueDate,
       e.created_at AS createdAt,e.cancelled_at AS cancelledAt,
-      COALESCE(SUM(f.amount_cents),0) AS settledCents
+      COALESCE(SUM(f.amount_cents-COALESCE(r.amount_cents,0)),0) AS settledCents
       FROM finance_entries e LEFT JOIN finance_settlements f ON f.entry_id=e.id
+      LEFT JOIN finance_settlement_reversals r ON r.settlement_id=f.id
       WHERE e.id=? AND e.tenant_id=? AND e.branch_id=? GROUP BY e.id`,id,tenant,branch);
     if(!row)throw error(404,'Lançamento financeiro não encontrado.');
     const openCents=row.amountCents-row.settledCents;
@@ -191,6 +195,16 @@ export function createCommerceService(db,{now=nowISO}={}){
       :await all('SELECT id FROM sales WHERE tenant_id=? AND branch_id=? ORDER BY created_at DESC,id DESC LIMIT ?',tenant,branch,n);
     return Promise.all(rows.map(row=>snapshot(tenant,branch,row.id)));
   };
+  const saleReversals=createSaleReturnAdapter({
+    q,first,all,batch,applied,audit,stamp,tenantSale,requiredMutation,quantityMilli,
+    normalizeMethod,allocateSaleDiscount,error,text,randomId,
+    getCash:async(tenant,branch)=>{
+      const session=await first("SELECT * FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND status='OPEN' LIMIT 1",tenant,branch);
+      if(!session)return null;
+      const {closing}=await cashClosing(tenant,branch,session,0);
+      return {id:session.id,expectedCashCents:closing.expectedCashCents};
+    }
+  });
   return {
     async salesHistory(tenant,branch,filters={}){
       await branchExists(tenant,branch);
@@ -505,8 +519,9 @@ export function createCommerceService(db,{now=nowISO}={}){
         SELECT e.id,e.tenant_id AS tenantId,e.branch_id AS branchId,
           e.description,e.kind,e.amount_cents AS amountCents,e.due_date AS dueDate,
           e.created_at AS createdAt,e.cancelled_at AS cancelledAt,
-          COALESCE(SUM(f.amount_cents),0) AS settledCents
+          COALESCE(SUM(f.amount_cents-COALESCE(r.amount_cents,0)),0) AS settledCents
         FROM finance_entries e LEFT JOIN finance_settlements f ON f.entry_id=e.id
+        LEFT JOIN finance_settlement_reversals r ON r.settlement_id=f.id
         WHERE e.tenant_id=? AND e.branch_id=? AND (?='' OR e.kind=?)
           AND (?='' OR instr(lower(e.description),lower(?))>0)
         GROUP BY e.id
@@ -557,6 +572,28 @@ export function createCommerceService(db,{now=nowISO}={}){
       ]);
       return {...result,entry:await financeRow(tenant,branch,id)};
     },
+    async reverseFinanceSettlement(tenant,branch,id,settlementId,user,body,keyHeader){
+      const key=requiredMutation(body,keyHeader),scope='finance.reverse:'+branch+':'+id+':'+settlementId;
+      const prior=await applied(tenant,scope,key);if(prior)return {...prior,entry:await financeRow(tenant,branch,id)};
+      const reason=text(body?.reason,240);
+      if(reason.length<3)throw error(400,'Informe o motivo da reversão.');
+      const entry=await financeRow(tenant,branch,id);
+      if(entry.status==='CANCELLED')throw error(409,'Conta cancelada não pode receber reversão.');
+      const settlement=await first('SELECT id,amount_cents AS amountCents FROM finance_settlements WHERE tenant_id=? AND branch_id=? AND entry_id=? AND id=?',
+        tenant,branch,id,settlementId);
+      if(!settlement)throw error(404,'Liquidação não encontrada nesta filial.');
+      const exists=await first('SELECT id FROM finance_settlement_reversals WHERE tenant_id=? AND branch_id=? AND settlement_id=?',tenant,branch,settlementId);
+      if(exists)throw error(409,'Liquidação já revertida.');
+      const result={id:randomId(),entryId:id,settlementId,amountCents:settlement.amountCents,reason,occurredAt:stamp()};
+      await batch([
+        q('INSERT INTO finance_settlement_reversals(id,tenant_id,branch_id,entry_id,settlement_id,amount_cents,operator_id,reason,mutation_id,occurred_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
+          result.id,tenant,branch,id,settlementId,result.amountCents,user,reason,key,result.occurredAt),
+        q('INSERT INTO domain_events(id,tenant_id,branch_id,aggregate_type,aggregate_id,type,payload_json,mutation_id,occurred_at) VALUES(?,?,?,?,?,?,?,?,?)',
+          randomId(),tenant,branch,'finance',settlementId,'finance.settlement.reversed',JSON.stringify(result),key,result.occurredAt),
+        audit(tenant,scope,key,result)
+      ]);
+      return {...result,entry:await financeRow(tenant,branch,id)};
+    },
     async cancelFinanceEntry(tenant,branch,id,user,body,keyHeader){
       const key=requiredMutation(body,keyHeader),scope='finance.cancel:'+branch+':'+id;
       const prior=await applied(tenant,scope,key);if(prior)return prior;
@@ -578,7 +615,9 @@ export function createCommerceService(db,{now=nowISO}={}){
         COALESCE(SUM(COALESCE(fs.paid,0)),0) AS settledCents,
         COALESCE(SUM(CASE WHEN e.due_date<? THEN e.amount_cents-COALESCE(fs.paid,0) ELSE 0 END),0) AS overdueCents
         FROM finance_entries e
-        LEFT JOIN (SELECT entry_id,SUM(amount_cents) AS paid FROM finance_settlements GROUP BY entry_id) fs
+        LEFT JOIN (SELECT fs.entry_id,SUM(fs.amount_cents-COALESCE(r.amount_cents,0)) AS paid
+          FROM finance_settlements fs LEFT JOIN finance_settlement_reversals r ON r.settlement_id=fs.id
+          GROUP BY fs.entry_id) fs
           ON fs.entry_id=e.id
         WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL
         GROUP BY e.kind`,new Date().toISOString().slice(0,10),tenant,branch);
@@ -786,6 +825,14 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(result.meta?.changes!==1)throw error(409,'A venda mudou de estado; atualize antes de continuar.');
       return snapshot(tenant,branch,id);
     },
+    async allSaleReturns(tenant,branch){
+      await branchExists(tenant,branch);
+      return all("SELECT r.id,r.sale_id AS saleId,s.sale_number AS saleNumber,r.reason,r.kind,r.amount_cents AS totalCents,r.created_at AS createdAt,CASE WHEN r.kind='CANCEL' THEN 'CANCELLED' ELSE 'COMPLETED' END AS status FROM sale_returns r JOIN sales s ON s.tenant_id=r.tenant_id AND s.branch_id=r.branch_id AND s.id=r.sale_id WHERE r.tenant_id=? AND r.branch_id=? ORDER BY r.created_at DESC,r.id DESC LIMIT 200",tenant,branch);
+    },
+    async quoteSaleReturn(tenant,branch,id,body){return saleReversals.quote(tenant,branch,id,body,'RETURN');},
+    async saleReturns(tenant,branch,id){return saleReversals.list(tenant,branch,id);},
+    async returnSale(tenant,branch,id,user,body,key){return saleReversals.reverse(tenant,branch,id,user,body,key,'RETURN');},
+    async cancelCompletedSale(tenant,branch,id,user,body,key){return saleReversals.reverse(tenant,branch,id,user,body,key,'CANCEL');},
     async complete(tenant,branch,id,user,body,header){
       const key=requiredMutation(body,header),scope='sale.complete:'+id;
       const prior=await applied(tenant,scope,key);if(prior)return prior;

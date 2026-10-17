@@ -85,8 +85,8 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
   },
   async suggestions(t,b,transactionId){
    const x=await tx(t,b,transactionId);if(await reconcile(t,b,x.id))return [];
-   return many('SELECT e.id,e.description,e.kind,e.amount_cents AS amountCents,e.due_date AS dueDate,e.amount_cents-COALESCE(SUM(s.amount_cents),0) AS openCents '+
-    'FROM finance_entries e LEFT JOIN finance_settlements s ON s.entry_id=e.id '+
+   return many('SELECT e.id,e.description,e.kind,e.amount_cents AS amountCents,e.due_date AS dueDate,e.amount_cents-COALESCE(SUM(s.amount_cents-COALESCE(r.amount_cents,0)),0) AS openCents '+
+    'FROM finance_entries e LEFT JOIN finance_settlements s ON s.entry_id=e.id LEFT JOIN finance_settlement_reversals r ON r.settlement_id=s.id '+
     'WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL AND e.kind=? GROUP BY e.id '+
     'HAVING openCents>=? ORDER BY CASE WHEN openCents=? THEN 0 ELSE 1 END,ABS(julianday(e.due_date)-julianday(?)),e.id LIMIT 20',
     t,b,x.amount_cents<0?'PAYABLE':'RECEIVABLE',Math.abs(x.amount_cents),Math.abs(x.amount_cents),x.tx_date);
@@ -99,7 +99,7 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
    }
    const e=await row('finance_entries',t,b,entryId);
    if(e.cancelled_at||(x.amount_cents<0)!==(e.kind==='PAYABLE'))throw fail(409,'Conta cancelada ou natureza incompatível.');
-   const settled=await one('SELECT COALESCE(SUM(amount_cents),0) AS total FROM finance_settlements WHERE tenant_id=? AND branch_id=? AND entry_id=?',t,b,e.id);
+   const settled=await one('SELECT COALESCE(SUM(s.amount_cents-COALESCE(r.amount_cents,0)),0) AS total FROM finance_settlements s LEFT JOIN finance_settlement_reversals r ON r.settlement_id=s.id WHERE s.tenant_id=? AND s.branch_id=? AND s.entry_id=?',t,b,e.id);
    const amt=Math.abs(x.amount_cents);
    if(amt>e.amount_cents-settled.total)throw fail(409,'Conciliação excederia o saldo da conta.');
    const reconId=id(),settlementId=id();
@@ -112,7 +112,7 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
   async linkSettlement(t,b,user,{transactionId,settlementId}){
    const x=await tx(t,b,transactionId);
    if(await reconcile(t,b,x.id))throw fail(409,'Movimentação já conciliada.');
-   const s=await one('SELECT s.*,e.kind FROM finance_settlements s JOIN finance_entries e ON e.tenant_id=s.tenant_id AND e.branch_id=s.branch_id AND e.id=s.entry_id WHERE s.id=? AND s.tenant_id=? AND s.branch_id=?',settlementId,t,b);
+   const s=await one('SELECT s.*,e.kind FROM finance_settlements s JOIN finance_entries e ON e.tenant_id=s.tenant_id AND e.branch_id=s.branch_id AND e.id=s.entry_id LEFT JOIN finance_settlement_reversals r ON r.settlement_id=s.id WHERE s.id=? AND s.tenant_id=? AND s.branch_id=? AND r.id IS NULL',settlementId,t,b);
    if(!s)throw fail(404,'Pagamento não encontrado.');
    if(s.amount_cents!==Math.abs(x.amount_cents)||(x.amount_cents<0)!==(s.kind==='PAYABLE'))throw fail(409,'Valor ou natureza incompatíveis.');
    const rid=id();
@@ -223,9 +223,9 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
   },
   async cashflow(t,b,{from,to}={}){
    await branch(t,b);period({from,to});
-   const settlements=await one("SELECT COALESCE(SUM(CASE WHEN e.kind='RECEIVABLE' THEN s.amount_cents ELSE 0 END),0) AS received,COALESCE(SUM(CASE WHEN e.kind='PAYABLE' THEN s.amount_cents ELSE 0 END),0) AS paid FROM finance_settlements s JOIN finance_entries e ON e.id=s.entry_id AND e.tenant_id=s.tenant_id AND e.branch_id=s.branch_id WHERE e.tenant_id=? AND e.branch_id=? AND substr(s.occurred_at,1,10) BETWEEN ? AND ?",t,b,from,to);
+   const settlements=await one("SELECT COALESCE(SUM(CASE WHEN e.kind='RECEIVABLE' THEN s.amount_cents-COALESCE(r.amount_cents,0) ELSE 0 END),0) AS received,COALESCE(SUM(CASE WHEN e.kind='PAYABLE' THEN s.amount_cents-COALESCE(r.amount_cents,0) ELSE 0 END),0) AS paid FROM finance_settlements s LEFT JOIN finance_settlement_reversals r ON r.settlement_id=s.id JOIN finance_entries e ON e.id=s.entry_id AND e.tenant_id=s.tenant_id AND e.branch_id=s.branch_id WHERE e.tenant_id=? AND e.branch_id=? AND substr(s.occurred_at,1,10) BETWEEN ? AND ?",t,b,from,to);
    const sales=await one("SELECT COALESCE(SUM(p.amount_cents-CASE WHEN p.method='CASH' THEN s.change_cents ELSE 0 END),0) AS amount FROM sale_payments p JOIN sales s ON s.id=p.sale_id AND s.tenant_id=p.tenant_id AND s.branch_id=p.branch_id WHERE s.tenant_id=? AND s.branch_id=? AND s.status='COMPLETED' AND substr(p.created_at,1,10) BETWEEN ? AND ?",t,b,from,to);
-   const future=await one("SELECT COALESCE(SUM(CASE WHEN e.kind='RECEIVABLE' THEN e.amount_cents-COALESCE(x.paid,0) ELSE 0 END),0) AS incoming,COALESCE(SUM(CASE WHEN e.kind='PAYABLE' THEN e.amount_cents-COALESCE(x.paid,0) ELSE 0 END),0) AS outgoing FROM finance_entries e LEFT JOIN (SELECT entry_id,SUM(amount_cents) AS paid FROM finance_settlements GROUP BY entry_id) x ON x.entry_id=e.id WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL AND e.due_date BETWEEN ? AND ?",t,b,from,to);
+   const future=await one("SELECT COALESCE(SUM(CASE WHEN e.kind='RECEIVABLE' THEN e.amount_cents-COALESCE(x.paid,0) ELSE 0 END),0) AS incoming,COALESCE(SUM(CASE WHEN e.kind='PAYABLE' THEN e.amount_cents-COALESCE(x.paid,0) ELSE 0 END),0) AS outgoing FROM finance_entries e LEFT JOIN (SELECT f.entry_id,SUM(f.amount_cents-COALESCE(r.amount_cents,0)) AS paid FROM finance_settlements f LEFT JOIN finance_settlement_reversals r ON r.settlement_id=f.id GROUP BY f.entry_id) x ON x.entry_id=e.id WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL AND e.due_date BETWEEN ? AND ?",t,b,from,to);
    return {from,to,realizedInflowCents:settlements.received+sales.amount,realizedOutflowCents:settlements.paid,projectedReceivableCents:future.incoming,projectedPayableCents:future.outgoing,projectedClosingDeltaCents:settlements.received+sales.amount-settlements.paid+future.incoming-future.outgoing};
   },
   async dre(t,b,filters){
@@ -233,9 +233,9 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
    const sales=basis==='accrual'
     ?await one("SELECT COALESCE(SUM(total_cents),0) AS n FROM sales WHERE tenant_id=? AND branch_id=? AND status='COMPLETED' AND substr(completed_at,1,10) BETWEEN ? AND ?",t,b,from,to)
     :await one("SELECT COALESCE(SUM(p.amount_cents-CASE WHEN p.method='CASH' THEN s.change_cents ELSE 0 END),0) AS n FROM sale_payments p JOIN sales s ON s.id=p.sale_id AND s.tenant_id=p.tenant_id AND s.branch_id=p.branch_id WHERE s.tenant_id=? AND s.branch_id=? AND s.status='COMPLETED' AND substr(p.created_at,1,10) BETWEEN ? AND ?",t,b,from,to);
-   const col=basis==='cash'?'f.amount_cents':'e.amount_cents';
+   const col=basis==='cash'?'(f.amount_cents-COALESCE(r.amount_cents,0))':'e.amount_cents';
    const dateCol=basis==='cash'?'substr(f.occurred_at,1,10)':'COALESCE(e.competence_date,e.due_date)';
-   const join=basis==='cash'?' JOIN finance_settlements f ON f.entry_id=e.id AND f.tenant_id=e.tenant_id AND f.branch_id=e.branch_id ':' ';
+   const join=basis==='cash'?' JOIN finance_settlements f ON f.entry_id=e.id AND f.tenant_id=e.tenant_id AND f.branch_id=e.branch_id LEFT JOIN finance_settlement_reversals r ON r.settlement_id=f.id ':' ';
    const groups=await many('SELECT COALESCE(g.id,CASE WHEN e.kind=\'RECEIVABLE\' THEN \'other-income\' ELSE \'other-expense\' END) AS id, '+
     'COALESCE(g.name,CASE WHEN e.kind=\'RECEIVABLE\' THEN \'Outras receitas\' ELSE \'Despesas sem classificação\' END) AS name, '+
     'COALESCE(g.nature,CASE WHEN e.kind=\'RECEIVABLE\' THEN \'REVENUE\' ELSE \'EXPENSE\' END) AS nature, '+
@@ -254,8 +254,8 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
    period({from,to,basis});await branch(t,b);
    if(groupId==='pdv-sales')return many("SELECT id,completed_at AS date,sale_number AS description,total_cents AS amountCents FROM sales WHERE tenant_id=? AND branch_id=? AND status='COMPLETED' AND substr(completed_at,1,10) BETWEEN ? AND ? ORDER BY completed_at DESC LIMIT 200",t,b,from,to);
    const dt=basis==='cash'?'substr(f.occurred_at,1,10)':'COALESCE(e.competence_date,e.due_date)';
-   const join=basis==='cash'?' JOIN finance_settlements f ON f.entry_id=e.id AND f.tenant_id=e.tenant_id AND f.branch_id=e.branch_id ':' ';
-   const amt=basis==='cash'?'f.amount_cents':'e.amount_cents';
+   const join=basis==='cash'?' JOIN finance_settlements f ON f.entry_id=e.id AND f.tenant_id=e.tenant_id AND f.branch_id=e.branch_id LEFT JOIN finance_settlement_reversals r ON r.settlement_id=f.id ':' ';
+   const amt=basis==='cash'?'(f.amount_cents-COALESCE(r.amount_cents,0))':'e.amount_cents';
    return many('SELECT e.id,e.description,'+dt+' AS date,'+amt+' AS amountCents,e.kind FROM finance_entries e '+join+
     'LEFT JOIN finance_entry_dimensions d ON d.tenant_id=e.tenant_id AND d.branch_id=e.branch_id AND d.entry_id=e.id '+
     'WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL AND '+dt+' BETWEEN ? AND ? AND '+

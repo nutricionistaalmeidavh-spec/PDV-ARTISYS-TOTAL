@@ -258,7 +258,113 @@
     });
   }
 
+
+  async function renderWebReturns(){
+    await ready();
+    const returns=await api.returns();
+    if(!routeActive('returns'))return;
+    const body=`<div class="ops-grid two"><section class="ops-card">
+      <h2>Devolução de venda concluída</h2>
+      <form id="web-return-form" class="ops-form">
+        <label>ID da venda<input name="saleId" class="ops-input" required autocomplete="off" placeholder="Cole o ID da venda"></label>
+        <button type="button" class="ops-secondary" id="web-return-load">Carregar venda</button>
+        <div id="web-return-items">${empty('Carregue a venda para selecionar os itens disponíveis.')}</div>
+        <div id="web-return-methods"></div>
+        <label>Motivo<input name="reason" class="ops-input" required minlength="3" maxlength="240" placeholder="Por que houve a devolução?"></label>
+        <div id="web-return-quote" role="status"></div>
+        <button type="submit" class="ops-primary" id="web-return-submit">Calcular valor líquido</button>
+      </form></section>
+      <section class="ops-card"><h2>Histórico de devoluções</h2>
+      <div class="ops-table-wrap"><table class="ops-table">
+        <thead><tr><th>Data</th><th>Venda</th><th>Valor</th><th>Tipo</th></tr></thead>
+        <tbody>${returns.map(row=>`<tr><td>${when(row.createdAt)}</td><td>${escapeHtml(row.saleNumber||row.saleId)}</td>
+          <td>${money(row.totalCents)}</td><td>${escapeHtml(row.kind==='CANCEL'?'Cancelamento':'Devolução')}</td></tr>`).join('')||`<tr><td colspan="4">${empty('Nenhuma devolução registrada.')}</td></tr>`}</tbody>
+      </table></div></section></div>`;
+    content.innerHTML=page('Devoluções','Ajustes imutáveis de estoque, caixa, comissões e crédito sem duplicar vendas.',body);
+    const form=content.querySelector('#web-return-form');
+    const get=selector=>content.querySelector(selector);
+    let loaded=null,quoted=null,mutationId=null,busy=false;
+    function resetQuote(){
+      quoted=null;
+      mutationId=null;
+      get('#web-return-quote').textContent='';
+      get('#web-return-submit').textContent='Calcular valor líquido';
+    }
+    form.addEventListener('input',()=>{if(!busy)resetQuote();});
+    get('#web-return-load').addEventListener('click',async()=>{
+      if(busy)return;
+      const id=String(form.elements.saleId.value||'').trim();
+      if(!id)return;
+      busy=true;get('#web-return-load').disabled=true;
+      try{
+        const [sale,history]=await Promise.all([api.sale(id),api.saleReturns(id)]);
+        if(sale.status!=='COMPLETED')throw new Error('Somente vendas concluídas podem ser devolvidas.');
+        loaded=sale;resetQuote();
+        const remaining=new Map((sale.items||[]).map(i=>[i.id,Math.round(i.quantity*1000)]));
+        for(const record of history)for(const item of record.items||[])
+          remaining.set(item.saleItemId,(remaining.get(item.saleItemId)||0)-Math.round(item.quantity*1000));
+        get('#web-return-items').innerHTML=(sale.items||[]).map(item=>{
+          const left=Math.max(0,remaining.get(item.id)||0)/1000;
+          return `<label class="ops-return-item"><input type="checkbox" data-return-check="${escapeHtml(item.id)}"
+            ${left<=0?'disabled':''}><span>${escapeHtml(item.productName)}</span>
+            <small>Disponível: ${qty(left)} / ${qty(item.quantity)}</small>
+            <input class="ops-input compact" data-return-qty type="number" min="0.001" max="${left}"
+              step="0.001" value="${Math.min(1,left)}" ${left<=0?'disabled':''}></label>`;
+        }).join('')||empty('Nenhum item elegível à devolução.');
+        const previouslyRefunded=new Map();
+        for(const record of history)for(const p of record.refunds||[])
+          previouslyRefunded.set(p.method,(previouslyRefunded.get(p.method)||0)+p.amountCents);
+        get('#web-return-methods').innerHTML=`<h3>Reembolso por método de pagamento original</h3>${(sale.payments||[]).map(p=>{
+          const net=p.method==='CASH'?p.amountCents-(sale.changeCents||0):p.amountCents;
+          const left=Math.max(0,net-(previouslyRefunded.get(p.method)||0));
+          return `<label>${escapeHtml(cashPaymentLabel(p.method))} — disponível ${money(left)}
+            <input type="number" class="ops-input" data-refund-method="${escapeHtml(p.method)}"
+              min="0" max="${(left/100).toFixed(2)}" step="0.01" value="0"></label>`;
+        }).join('')}`;
+      }catch(error){loaded=null;showToast(error.message,'error');}
+      finally{busy=false;get('#web-return-load').disabled=false;}
+    });
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      if(busy)return;
+      if(!loaded||String(form.elements.saleId.value||'').trim()!==loaded.id){
+        showToast('Carregue a venda antes de selecionar os itens.','error');return;
+      }
+      const items=[];
+      for(const label of content.querySelectorAll('#web-return-items .ops-return-item')){
+        const choice=label.querySelector('[data-return-check]');
+        if(!choice?.checked)continue;
+        const quantity=Number(label.querySelector('[data-return-qty]').value);
+        if(!Number.isFinite(quantity)||quantity<=0){showToast('Quantidade inválida.','error');return;}
+        items.push({saleItemId:choice.dataset.returnCheck,quantity});
+      }
+      if(!items.length){showToast('Selecione ao menos um item.','error');return;}
+      const reason=String(form.elements.reason.value||'').trim();
+      if(reason.length<3){showToast('Informe o motivo da devolução.','error');return;}
+      busy=true;get('#web-return-submit').disabled=true;
+      try{
+        if(!quoted){
+          quoted=await api.quoteSaleReturn(loaded.id,{items,reason});
+          get('#web-return-quote').textContent=`Valor líquido calculado no servidor: ${money(quoted.amountCents)}. Informe a distribuição do reembolso e confirme.`;
+          get('#web-return-submit').textContent='Confirmar devolução';
+        }else{
+          const refunds=[...content.querySelectorAll('[data-refund-method]')].map(input=>({
+            method:input.dataset.refundMethod,amountCents:centsInput(input.value)
+          })).filter(p=>p.amountCents>0);
+          const sum=refunds.reduce((n,p)=>n+p.amountCents,0);
+          if(sum!==quoted.amountCents)throw new Error('A soma dos reembolsos deve corresponder a '+money(quoted.amountCents)+'.');
+          mutationId=mutationId||api.mutationId();
+          await api.createReturn({saleId:loaded.id,items,reason,refunds},mutationId);
+          showToast('Devolução registrada com sucesso.','success');
+          await renderWebReturns();
+        }
+      }catch(error){showToast(error.message,'error');}
+      finally{busy=false;const button=get('#web-return-submit');if(button)button.disabled=false;}
+    });
+  }
+
   async function renderReturns(){
+    if(api.webMode)return renderWebReturns();
     await ready();const rows=await api.returns();
     const body=`<div class="ops-grid two"><section class="ops-card"><h2>Nova devolução</h2><form id="ops-return-form" class="ops-form"><label>Venda<input id="ops-return-sale" name="saleId" class="ops-input" required placeholder="ID da venda"></label><button id="ops-load-return-sale" class="ops-secondary" type="button">Carregar itens</button><div id="ops-return-items">${empty('Informe a venda para selecionar os itens.')}</div><label>Forma de reembolso<select name="method" class="ops-input"><option value="CASH">Dinheiro</option><option value="PIX">PIX</option><option value="DEBIT_CARD">Cartão débito</option><option value="CREDIT_CARD">Cartão crédito</option><option value="STORE_CREDIT">Crédito loja</option></select></label><label>Motivo<input name="reason" class="ops-input" required></label><button class="ops-primary" type="submit">Concluir devolução</button></form></section><section class="ops-card"><h2>Devoluções realizadas</h2><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Data</th><th>Venda</th><th>Total</th><th>Status</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${when(row.createdAt)}</td><td>${escapeHtml(row.saleId)}</td><td>${money(row.totalCents)}</td><td>${badge(row.status)}</td></tr>`).join('')||`<tr><td colspan="4">${empty('Nenhuma devolução registrada.')}</td></tr>`}</tbody></table></div></section></div>`;
     if(!routeActive('returns'))return;

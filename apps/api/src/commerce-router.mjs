@@ -38,13 +38,27 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
   const feature=parts[0];
   const key=request.headers.get('x-mutation-id');
   try {
-    if(!['products','inventory','cash','sales','finance','reports'].includes(feature))return null;
+    if(!['products','inventory','cash','sales','finance','reports','returns'].includes(feature))return null;
     const body=writeMethods.has(method) ? (method==='DELETE'&&!request.headers.has('content-type')?{}:await payload(request)) : {};
     if(!['GET','HEAD','POST','PUT','PATCH','DELETE'].includes(method))return null;
     const branch=body.branchId||url.searchParams.get('branchId');
     const service=createCommerceService(db);
     if(!branch)throw Object.assign(new Error('Selecione a filial antes de continuar.'),{status:400});
     const tenant=tenantId,user=session.userId;
+    if(feature==='returns'){
+      if(parts.length!==1)return null;
+      if(method==='GET'){
+        requireAccess(member,'sales.view',user);
+        return json({returns:await service.allSaleReturns(tenant,branch)});
+      }
+      if(method==='POST'){
+        requireAccess(member,'sales.cancel',user);
+        if(typeof body.saleId!=='string'||!body.saleId||body.saleId.length>128)
+          throw Object.assign(new Error('Venda inválida.'),{status:400});
+        return json({return:await service.returnSale(tenant,branch,body.saleId,user,body,key)},201);
+      }
+      return null;
+    }
     if(feature==='products'){
       if(parts.length===2&&parts[1].length<=128&&method==='PATCH'){
         requireAccess(member,'products.manage',user);
@@ -139,6 +153,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
         requireAccess(member,'finance.manage',user);
         return json({entry:await service.createFinanceEntry(tenant,branch,user,body,key)},201);
       }
+      if(parts.length===6&&parts[1]==='entries'&&parts[3]==='settlements'&&parts[5]==='reverse'&&method==='POST'){
+        requireAccess(member,'finance.manage',user);
+        return json({result:await service.reverseFinanceSettlement(tenant,branch,parts[2],parts[4],user,body,key)});
+      }
       if(parts.length===4&&parts[1]==='entries'&&parts[2].length<=128&&method==='POST'){
         requireAccess(member,'finance.manage',user);
         if(parts[3]==='settle')
@@ -185,6 +203,18 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
         requireAccess(member,'sales.view',user);
         return json({sale:await service.sale(tenant,branch,id)});
       }
+      if(parts.length===4&&parts[2]==='returns'&&parts[3]==='quote'&&method==='POST'){
+        requireAccess(member,'sales.view',user);
+        return json({quote:await service.quoteSaleReturn(tenant,branch,id,body)});
+      }
+      if(parts.length===3&&parts[2]==='returns'&&method==='GET'){
+        requireAccess(member,'sales.view',user);
+        return json({returns:await service.saleReturns(tenant,branch,id)});
+      }
+      if(parts.length===3&&parts[2]==='returns'&&method==='POST'){
+        requireAccess(member,'sales.cancel',user);
+        return json({result:await service.returnSale(tenant,branch,id,user,body,key)},201);
+      }
       requireAccess(member,'sales.create',user);
       if(parts.length===3&&parts[2]==='customer'&&method==='POST')
         return json({sale:await service.assignSaleCustomer(tenant,branch,id,body.customerId)});
@@ -216,6 +246,11 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
         return json({sale:await service.transition(tenant,branch,id,'OPEN')});
       if(parts.length===3&&parts[2]==='cancel'&&method==='POST'){
         requireAccess(member,'sales.cancel',user);
+        const sale=await service.sale(tenant,branch,id);
+        if(sale.status==='COMPLETED'||sale.status==='CANCELLED'){
+          const result=await service.cancelCompletedSale(tenant,branch,id,user,body,key);
+          return json({sale:{...sale,status:'CANCELLED'},result});
+        }
         return json({sale:await service.transition(tenant,branch,id,'CANCELLED')});
       }
       if(parts.length===3&&parts[2]==='complete'&&method==='POST')
