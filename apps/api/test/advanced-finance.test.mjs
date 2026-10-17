@@ -11,7 +11,7 @@ const setup=async()=>{
  for(const name of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql'])db.exec(sql(name));
  await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)').bind('u','u@a.com','User','unused',now).run();
  for(const [tenant,branch] of [['a','x'],['b','y']]){
-  await db.prepare('INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)').bind(tenant,tenant,tenant,now).run();
+  await db.prepare('INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)').bind(tenant,'shop-'+tenant,tenant,now).run();
   await db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)').bind(branch,tenant,'MAIN','Matriz',now).run();
  }
  return {db,service:createAdvancedFinanceService(db,{now:()=>now}),close:()=>db.close()};
