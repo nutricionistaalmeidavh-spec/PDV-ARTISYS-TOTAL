@@ -515,7 +515,7 @@
       "label": "Relatórios",
       "desktopEvidence": [
         "server/router.js",
-        "js/domains/reporting/report-service.js",
+        "js/domains/reports/reporting-service.js",
         "test/e17-reporting.test.js"
       ],
       "contracts": [
