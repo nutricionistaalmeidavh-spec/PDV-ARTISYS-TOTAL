@@ -1,0 +1,1 @@
+{"id":"common/login","steps":[{"action":"capability","name":"auth.login"}]}

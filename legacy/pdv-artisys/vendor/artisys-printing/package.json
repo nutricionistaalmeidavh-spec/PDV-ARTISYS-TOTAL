@@ -1,0 +1,14 @@
+{
+  "name": "@artisys/printing",
+  "version": "0.1.0",
+  "description": "Camada ArtiSys local e reutilizavel para recibos e impressao termica.",
+  "type": "commonjs",
+  "main": "./src/index.js",
+  "exports": { ".": "./src/index.js" },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "node-thermal-printer": "4.6.1",
+    "receiptline": "4.0.4"
+  },
+  "license": "MIT"
+}

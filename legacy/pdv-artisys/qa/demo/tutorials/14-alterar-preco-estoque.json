@@ -1,0 +1,94 @@
+{
+  "name": "14-alterar-preco-estoque",
+  "title": "Alterar preço ou estoque",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "base"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='catalog']",
+      "name": "abrir-cadastros",
+      "holdMs": 400
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='products']",
+      "name": "abrir-cardapio",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-products-canonical='true']",
+      "name": "cardapio-pronto",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "fill",
+      "selector": "#product-page-search",
+      "name": "buscar-produto",
+      "value": "Produto Tutorial",
+      "holdMs": 350
+    },
+    {
+      "action": "click",
+      "selector": "[data-edit-product='tutorial-product']",
+      "name": "abrir-origem-produto",
+      "holdMs": 450
+    },
+    {
+      "action": "click",
+      "selector": "#edit-menu-source",
+      "name": "editar-no-estoque",
+      "holdMs": 450
+    },
+    {
+      "action": "fill",
+      "selector": "#product-price",
+      "name": "alterar-preco",
+      "value": "13,90",
+      "holdMs": 400
+    },
+    {
+      "action": "selectOption",
+      "selector": "#product-form select[name='productionDestination']",
+      "name": "destino-direto",
+      "value": "DIRECT",
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#product-form button[type='submit']",
+      "name": "salvar-alteracao",
+      "holdMs": 750
+    },
+    {
+      "action": "expectText",
+      "selector": "#toast-root",
+      "name": "alteracao-salva",
+      "expected": "Produto salvo no Estoque",
+      "timeoutMs": 10000,
+      "holdMs": 900
+    }
+  ]
+}

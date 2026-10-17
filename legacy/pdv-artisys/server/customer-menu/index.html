@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#081a35">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Cardápio — ArtiSys</title>
+  <link rel="icon" href="/menu/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/menu/styles.css">
+</head>
+<body>
+  <header class="menu-topbar">
+    <a class="brand" href="#cardapio" aria-label="Ir para o início do cardápio"><span class="brand-mark">A</span><span><strong>ARTISYS</strong><small>Cardápio da mesa</small></span></a>
+    <span id="table-badge" class="table-badge" aria-live="polite">Carregando…</span>
+  </header>
+  <main id="cardapio" class="menu-shell">
+    <section class="menu-hero" aria-labelledby="menu-title">
+      <div class="hero-media" aria-hidden="true">
+        <img id="menu-hero-photo" class="hero-photo hidden" alt="">
+        <div class="hero-media-fallback"><span>A</span></div>
+      </div>
+      <div class="hero-copy"><p class="eyebrow">PEDIDO DIRETO NA COMANDA</p><h1 id="menu-title">Escolha seus favoritos.</h1><p id="menu-subtitle">Monte seu pedido, envie e acompanhe a comanda da mesa.</p></div>
+      <div class="hero-total"><span>Conta da mesa</span><strong id="table-total">R$ 0,00</strong></div>
+    </section>
+    <div id="connection-banner" class="banner hidden" role="status"></div>
+    <section class="menu-tools" aria-label="Buscar e filtrar cardápio">
+      <label class="search-field" for="menu-search"><span aria-hidden="true">⌕</span><span class="sr-only">Buscar no cardápio</span><input id="menu-search" type="search" inputmode="search" autocomplete="off" placeholder="Buscar lanche, bebida, sobremesa…"><button id="clear-search" class="clear-search hidden" type="button" aria-label="Limpar busca">×</button></label>
+      <nav id="category-nav" class="category-nav" aria-label="Categorias"></nav>
+    </section>
+    <section id="featured-section" class="featured-section" aria-labelledby="featured-title">
+      <div class="section-heading"><div><h2 id="featured-title">Destaques</h2><p id="featured-subtitle">Uma seleção rápida para começar.</p></div><button id="show-all-products" class="section-link" type="button">Ver todos</button></div>
+      <div id="featured-products" class="featured-products"></div>
+    </section>
+    <div class="catalog-heading"><div><h2 id="products-title">Cardápio completo</h2><p id="products-subtitle">Todos os itens disponíveis para esta mesa.</p></div></div>
+    <section id="products" class="product-grid" aria-labelledby="products-title" aria-live="polite"></section>
+    <section id="table-orders" class="table-orders" aria-labelledby="orders-title"></section>
+    <section class="service-strip" aria-label="Atendimento da mesa">
+      <div><strong>Precisa de ajuda?</strong><span>O chamado aparece para a equipe do salão.</span></div>
+      <div><button id="call-waiter" class="button secondary" type="button">Chamar garçom</button><button id="request-bill" class="button secondary" type="button">Pedir a conta</button></div>
+    </section>
+  </main>
+  <aside id="cart-rail" class="cart-rail hidden" aria-label="Resumo do pedido">
+    <div><span id="cart-count">0 itens</span><strong id="cart-total">R$ 0,00</strong></div>
+    <button id="review-cart" type="button">Ver pedido <span aria-hidden="true">→</span></button>
+  </aside>
+  <nav id="mobile-menu-nav" class="mobile-menu-nav" aria-label="Navegação do cardápio">
+    <button type="button" data-menu-nav='catalog' aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 5v14M4 10h16"/></svg><span>Cardápio</span></button>
+    <button type="button" data-menu-nav='order'><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14l-1 13H6L5 7Zm3 0a4 4 0 0 1 8 0"/></svg><span>Meu pedido</span></button>
+    <button type="button" data-menu-nav='waiter'><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h16M6 18a6 6 0 0 1 12 0M12 6v3"/></svg><span>Chamar garçom</span></button>
+  </nav>
+  <dialog id="product-dialog" class="sheet-dialog" aria-labelledby="product-dialog-title"><form id="product-form" method="dialog" novalidate></form></dialog>
+  <dialog id="cart-dialog" class="sheet-dialog" aria-labelledby="cart-dialog-title"><div id="cart-dialog-body"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/menu/order-composer.js"></script>
+  <script src="/menu/app.js"></script>
+</body>
+</html>

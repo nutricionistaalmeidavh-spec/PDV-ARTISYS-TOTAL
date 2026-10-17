@@ -1,0 +1,11 @@
+{
+  "name": "@artisys/serialport",
+  "version": "0.1.0",
+  "description": "Camada ArtiSys local e reutilizavel para comunicacao serial com perifericos.",
+  "type": "commonjs",
+  "main": "./src/index.js",
+  "exports": { ".": "./src/index.js" },
+  "engines": { "node": ">=22" },
+  "dependencies": { "serialport": "13.0.0" },
+  "license": "MIT"
+}

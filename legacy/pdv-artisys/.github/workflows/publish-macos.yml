@@ -1,0 +1,79 @@
+name: publish-macos
+
+# Explicit/manual promotion ONLY. Never publishes when a PR or main is pushed.
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing GitHub Release tag (e.g. v2.0.5), whose commit must match the build'
+        required: true
+        type: string
+      build_run_id:
+        description: 'Successful build-macos GitHub Actions run ID'
+        required: true
+        type: string
+      qa_approved:
+        description: 'I validated the DMGs on real Macs and approved commercial publication'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  promote-macos:
+    if: ${{ inputs.qa_approved == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify successful macOS build and exact tag commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.release_tag }}
+          RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || { echo 'Run ID inválido'; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Tag SemVer inválida'; exit 1; }
+          git rev-parse "refs/tags/$TAG^{commit}" >/dev/null
+          tag_sha="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          build_sha="$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.head_sha')"
+          build_status="$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.conclusion')"
+          build_workflow="$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.name')"
+          [[ "$build_status" == "success" ]] || { echo 'Build sem sucesso'; exit 1; }
+          [[ "$build_workflow" == "build-macos" ]] || { echo 'ID não pertence ao build-macos'; exit 1; }
+          [[ "$tag_sha" == "$build_sha" ]] || { echo 'O build e a tag usam commits diferentes'; exit 1; }
+          gh release view "$TAG" --repo "$REPO" >/dev/null
+      - name: Download and verify both architectures
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ inputs.build_run_id }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          gh run download "$RUN_ID" --repo "$REPO" --pattern 'artisys-macos-*' --dir macos-release-artifacts
+          find macos-release-artifacts -type f -name '*.dmg' -print
+          release_version="${TAG#v}"
+          test "$(find macos-release-artifacts -type f -name "ArtiSys-PDV-${release_version}-x64.dmg" | wc -l | tr -d ' ')" = 1
+          test "$(find macos-release-artifacts -type f -name "ArtiSys-PDV-${release_version}-arm64.dmg" | wc -l | tr -d ' ')" = 1
+          find macos-release-artifacts -type f -name '*.dmg' -exec sha256sum '{}' \;
+      - name: Add only DMGs to existing release (never overwrite Windows updater metadata)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' dmgs < <(find macos-release-artifacts -type f -name '*.dmg' -print0)
+          test "${#dmgs[@]}" -eq 2
+          gh release upload "$TAG" "${dmgs[@]}" --repo "$REPO" --clobber

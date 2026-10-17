@@ -1,0 +1,14 @@
+{
+  "name": "ArtiSys Restaurante",
+  "short_name": "ArtiSys",
+  "description": "Operação local de salão e cozinha do ArtiSys PDV.",
+  "lang": "pt-BR",
+  "start_url": "/mobile/",
+  "scope": "/mobile/",
+  "display": "standalone",
+  "background_color": "#f6f8fc",
+  "theme_color": "#081a35",
+  "icons": [
+    {"src":"/mobile/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}

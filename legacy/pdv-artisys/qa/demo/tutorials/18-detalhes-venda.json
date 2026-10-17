@@ -1,0 +1,68 @@
+{
+  "name": "18-detalhes-venda",
+  "title": "Abrir detalhes da venda",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "sale-history"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='post-sale']",
+      "name": "abrir-pos-venda",
+      "holdMs": 450
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='sales']",
+      "name": "abrir-vendas",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#ops-sales-search",
+      "name": "historico-pronto",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "fill",
+      "selector": "#ops-sales-search",
+      "name": "buscar-venda",
+      "value": "Cliente Tutorial",
+      "holdMs": 350
+    },
+    {
+      "action": "click",
+      "selector": "#ops-sales-body [data-sale-details]",
+      "name": "abrir-detalhes",
+      "holdMs": 600
+    },
+    {
+      "action": "expectText",
+      "selector": "#ops-sale-detail",
+      "name": "detalhes-visiveis",
+      "expected": "Produto Tutorial",
+      "timeoutMs": 10000,
+      "holdMs": 900
+    }
+  ]
+}

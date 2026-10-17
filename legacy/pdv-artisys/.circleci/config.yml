@@ -1,0 +1,43 @@
+version: 2.1
+
+parameters:
+  run_ci:
+    type: boolean
+    default: false
+
+executors:
+  node_linux:
+    docker:
+      - image: cimg/node:22.16.0
+    resource_class: small
+    working_directory: ~/project
+
+jobs:
+  verify:
+    executor: node_linux
+    steps:
+      - checkout
+
+      - run:
+          name: Verify CI checkout and SQLite transaction support
+          command: |
+            echo "CIRCLE_SHA1=${CIRCLE_SHA1}"
+            echo "CHECKED_OUT_SHA=$(git rev-parse HEAD)"
+            node --version
+            node -e "const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync(':memory:'); console.log('DatabaseSync.isTransaction type:', typeof db.isTransaction); console.log('DatabaseSync.isTransaction initial:', db.isTransaction); db.close();"
+            echo "sqlite-database.js transaction helper:"
+            nl -ba js/core/database/sqlite-database.js | sed -n '20,48p'
+
+      - run:
+          name: Install PDV dependencies
+          command: npm install --no-audit --no-fund
+
+      - run:
+          name: Verify unit integration architecture release and security gates
+          command: npm run verify:release
+
+workflows:
+  pdv_ci:
+    when: << pipeline.parameters.run_ci >>
+    jobs:
+      - verify

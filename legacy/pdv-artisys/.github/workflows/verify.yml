@@ -1,0 +1,218 @@
+name: verify
+
+on:
+  push:
+    branches:
+      - main
+      - feature/**
+      - feat/**
+      - fix/**
+      - qa/**
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-pdv-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ARTISYS_QA_FORM_FIXTURE: qa-managed-user-fixture
+
+jobs:
+  npm-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium for browser-backed tests
+        run: npx playwright install --with-deps chromium
+      - name: Run repository verification
+        run: npm run verify
+
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium for browser-backed tests
+        run: npx playwright install --with-deps chromium
+      - name: Check release capability parity
+        run: npm run capability:check:release
+      - name: Check phase 3 capability parity
+        run: npm run capability:check:phase3
+      - name: Check documentation consistency
+        run: npm run docs:check
+      - name: Run unit and integration tests with coverage
+        shell: bash
+        run: |
+          mkdir -p coverage
+          set -o pipefail
+          NODE_V8_COVERAGE=coverage/v8 node scripts/run-v1-tests.js --experimental-test-coverage | tee coverage/test-coverage.txt
+      - name: Upload code coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage-${{ github.run_number }}
+          path: coverage
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Test Cloudflare telemetry
+        run: npm run test:telemetry:cloudflare
+      - name: Lint EventBus
+        run: npm run lint:eventbus
+      - name: Lint core
+        run: npm run lint:core
+      - name: Lint desktop
+        run: npm run lint:desktop
+      - name: Lint commercial media
+        run: npm run lint:commercial-media
+
+
+  ui-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install application dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned QA runtime dependencies
+        run: npm ci --prefix qa/runtime --no-audit --no-fund
+      - name: Install Chromium for web-surface QA
+        run: npx playwright install --with-deps chromium
+      - name: Ensure Electron capture tools are available
+        shell: bash
+        run: |
+          missing=()
+          command -v ffmpeg >/dev/null 2>&1 || missing+=(ffmpeg)
+          command -v xvfb-run >/dev/null 2>&1 || missing+=(xvfb)
+          if [ ${#missing[@]} -gt 0 ]; then
+            sudo apt-get update -y
+            sudo apt-get install -y "${missing[@]}"
+          fi
+      - name: Run mobile and public menu surface smoke
+        run: npm run qa:web-surfaces
+      - name: Run current UI E2E at 1366x768
+        shell: bash
+        run: |
+          rm -rf qa-artifacts
+          xvfb-run -a npm run qa:e2e:p0
+      - name: Capture Compact public menu V2
+        shell: bash
+        run: |
+          rm -rf qa-artifacts-public-menu-compact
+          xvfb-run -a node qa/runtime/artisys-qa.mjs run --config qa/artisys-qa.config.json --flow public-menu-compact-v2 --environment ci --viewport compactDesktop --output qa-artifacts-public-menu-compact
+      - name: Run Delivery and pickup operational E2E
+        shell: bash
+        run: |
+          rm -rf qa-artifacts-delivery-pickup
+          xvfb-run -a npm run qa:e2e:delivery-pickup
+      - name: Run Access Center partial-permissions E2E
+        shell: bash
+        run: |
+          rm -rf qa-artifacts-access
+          xvfb-run -a node qa/runtime/artisys-qa.mjs run --config qa/artisys-qa.config.json --flow access-center-partial-permissions --environment ci --viewport compactDesktop --output qa-artifacts-access
+      - name: Run ergonomic Access Center E2E
+        shell: bash
+        run: |
+          rm -rf qa-artifacts-access-ergonomic
+          xvfb-run -a node qa/runtime/artisys-qa.mjs run --config qa/artisys-qa.config.json --flow access-center-ergonomic --environment ci --viewport compactDesktop --output qa-artifacts-access-ergonomic
+      - name: Run responsive UI E2E at 1024x768
+        shell: bash
+        run: xvfb-run -a npm run qa:e2e:tablet
+      - name: Upload UI screenshots trace and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-e2e-${{ github.run_number }}
+          path: |
+            qa-artifacts
+            qa-artifacts-delivery-pickup
+            qa-artifacts-access
+            qa-artifacts-access-ergonomic
+            qa-artifacts-public-menu-compact
+          if-no-files-found: warn
+          retention-days: 14
+
+
+  multi-device-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install application dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Xvfb for Electron LAN QA
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y xvfb
+      - name: Run full multi-device LAN, outage and persistence QA
+        shell: bash
+        run: |
+          rm -rf qa-artifacts/multi-device
+          xvfb-run -a npm run qa:multi-device -- --profile full
+      - name: Upload multi-device evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-device-qa-${{ github.run_number }}
+          path: qa-artifacts/multi-device
+          if-no-files-found: warn
+          retention-days: 14
+
+  semantic-resilience:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install application dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned QA runtime dependencies
+        run: npm ci --prefix qa/runtime --no-audit --no-fund
+      - name: Install open-source semantic QA tools
+        shell: bash
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y xvfb ffmpeg poppler-utils librsvg2-bin zbar-tools
+      - name: Run barcode scanner and PDF semantic E2E
+        shell: bash
+        run: |
+          rm -rf qa-artifacts-semantic qa-artifacts/pdf
+          xvfb-run -a npm run qa:e2e:semantic
+      - name: Decode generated QR artifacts
+        run: npm run qa:artifact-semantic
+      - name: Run deterministic fault and restart recovery gate
+        run: npm run qa:fault-recovery
+      - name: Upload semantic and resilience evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-resilience-${{ github.run_number }}
+          path: |
+            qa-artifacts-semantic
+            qa-artifacts/pdf
+          if-no-files-found: warn
+          retention-days: 14
+

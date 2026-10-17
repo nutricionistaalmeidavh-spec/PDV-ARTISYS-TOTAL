@@ -1,0 +1,20 @@
+'use strict';
+const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const os=require('node:os');const path=require('node:path');
+async function load(){return import('../scripts/setup-cloudflare-telemetry.mjs');}
+function tempConfig(){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'artisys-cf-'));const cloud=path.join(dir,'cloudflare','telemetry');fs.mkdirSync(cloud,{recursive:true});const config=path.join(cloud,'wrangler.jsonc');fs.writeFileSync(config,JSON.stringify({name:'artisys-telemetry',main:'src/index.js',d1_databases:[{binding:'DB',database_name:'artisys-telemetry',database_id:'REPLACE_WITH_D1_ID'}],analytics_engine_datasets:[{binding:'ANALYTICS',dataset:'artisys_telemetry'}]},null,2));return{dir,config};}
+function fakeRunner(sequence,calls){return async(_cmd,args)=>{calls.push(args.join(' '));const item=sequence.shift();if(!item)throw new Error(`Unexpected command ${args.join(' ')}`);if(item.match&&!args.join(' ').includes(item.match))throw new Error(`Expected ${item.match}, got ${args.join(' ')}`);if(item.status&&item.status!==0)throw Object.assign(new Error(item.stderr||'command failed'),{status:item.status});return{stdout:item.stdout||'',stderr:item.stderr||'',status:0};};}
+
+test('first setup creates D1, patches binding, migrates, deploys and health-checks',async()=>{const {provisionTelemetry}=await load();const {dir,config}=tempConfig();const calls=[];const runner=fakeRunner([
+ {match:'wrangler whoami',stdout:'ok'},
+ {match:'d1 list',stdout:'[]'},
+ {match:'d1 create artisys-telemetry',stdout:'created'},
+ {match:'d1 list',stdout:JSON.stringify([{name:'artisys-telemetry',uuid:'db-123'}])},
+ {match:'d1 migrations apply DB',stdout:'applied'},
+ {match:'wrangler deploy',stdout:'Deployed https://artisys-telemetry.example.workers.dev'}
+],calls);const result=await provisionTelemetry({cwd:dir,configPath:config,runner,fetchImpl:async()=>({ok:true,status:200,json:async()=>({ok:true})}),log:()=>{}});assert.equal(result.databaseId,'db-123');assert.equal(result.workerUrl,'https://artisys-telemetry.example.workers.dev');assert.match(fs.readFileSync(config,'utf8'),/"database_id": "db-123"/);assert.ok(calls.some(x=>x.includes('d1 create artisys-telemetry')));assert.ok(calls.some(x=>x.includes('d1 migrations apply DB --remote')));fs.rmSync(dir,{recursive:true,force:true});});
+
+test('rerun reuses existing D1 and does not create another',async()=>{const {provisionTelemetry}=await load();const {dir,config}=tempConfig();const calls=[];const runner=fakeRunner([{match:'wrangler whoami'},{match:'d1 list',stdout:JSON.stringify([{name:'artisys-telemetry',uuid:'db-existing'}])},{match:'d1 migrations apply DB'},{match:'wrangler deploy',stdout:'https://artisys-telemetry.example.workers.dev'}],calls);await provisionTelemetry({cwd:dir,configPath:config,runner,fetchImpl:async()=>({ok:true,status:200,json:async()=>({ok:true})}),log:()=>{}});assert.equal(calls.some(x=>x.includes('d1 create')),false);fs.rmSync(dir,{recursive:true,force:true});});
+
+test('ambiguous D1 discovery fails explicitly',async()=>{const {provisionTelemetry}=await load();const {dir,config}=tempConfig();const calls=[];const runner=fakeRunner([{match:'wrangler whoami'},{match:'d1 list',stdout:JSON.stringify([{name:'artisys-telemetry',uuid:'a'},{name:'artisys-telemetry',uuid:'b'}])}],calls);await assert.rejects(()=>provisionTelemetry({cwd:dir,configPath:config,runner,fetchImpl:async()=>({ok:true}),log:()=>{}}),/mais de um|ambigu/i);fs.rmSync(dir,{recursive:true,force:true});});
+
+test('failed Worker health check makes setup fail',async()=>{const {provisionTelemetry}=await load();const {dir,config}=tempConfig();const calls=[];const runner=fakeRunner([{match:'wrangler whoami'},{match:'d1 list',stdout:JSON.stringify([{name:'artisys-telemetry',uuid:'db-existing'}])},{match:'d1 migrations apply DB'},{match:'wrangler deploy',stdout:'https://artisys-telemetry.example.workers.dev'}],calls);await assert.rejects(()=>provisionTelemetry({cwd:dir,configPath:config,runner,fetchImpl:async()=>({ok:false,status:503}),log:()=>{}}),/health/i);fs.rmSync(dir,{recursive:true,force:true});});

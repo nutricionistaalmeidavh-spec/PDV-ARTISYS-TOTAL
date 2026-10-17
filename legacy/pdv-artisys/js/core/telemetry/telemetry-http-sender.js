@@ -1,0 +1,11 @@
+'use strict';
+function normalizeEndpoint(endpoint){return String(endpoint||'').trim().replace(/\/+$/,'');}
+function createTelemetryHttpSender({endpoint,credentialStore,fetchImpl=globalThis.fetch,allowRegistration=true,timeoutMs=3500}={}){
+ const base=normalizeEndpoint(endpoint);if(!credentialStore)throw new TypeError('credentialStore obrigatorio.');if(typeof fetchImpl!=='function')throw new TypeError('fetch obrigatorio.');
+ async function request(path,options={}){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);timer.unref?.();try{return await fetchImpl(`${base}${path}`,{...options,signal:controller.signal});}finally{clearTimeout(timer);}}
+ async function register(batch){if(!allowRegistration||!base)return null;const first=batch?.events?.[0];if(!first)return null;const body={protocol_version:1,telemetry_schema_version:Number(batch.schema_version||1),installation_id:String(first.installation_id),app_version:String(first.app_version),release_id:String(first.release_id),database_schema_version:Number(first.database_schema_version||0)};const response=await request('/v1/installations/register',{method:'POST',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify(body)});if(!response.ok)return null;const payload=await response.json();const credential=String(payload?.credential||'').trim();if(!credential)return null;credentialStore.save(credential);return credential;}
+ async function credential(batch){try{return credentialStore.load()||await register(batch);}catch{return null;}}
+ async function sendBatch(batch){if(!base)return{status:0,offline:true};const secret=await credential(batch);if(!secret)return{status:401,credentialMissing:true};let response;try{response=await request('/v1/events',{method:'POST',headers:{'content-type':'application/json','accept':'application/json','authorization':`Bearer ${secret}`},body:JSON.stringify(batch)});}catch(error){if(error?.name==='AbortError')return{status:0,timeout:true};throw error;}if([401,403].includes(response.status)&&allowRegistration){try{credentialStore.remove();}catch{}}return{status:response.status};}
+ return{sendBatch};
+}
+module.exports={normalizeEndpoint,createTelemetryHttpSender};

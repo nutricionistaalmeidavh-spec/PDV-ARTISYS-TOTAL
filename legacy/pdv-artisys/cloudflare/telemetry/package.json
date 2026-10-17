@@ -1,0 +1,11 @@
+{
+  "name": "@artisys/telemetry-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "deploy": "npx wrangler deploy",
+    "dev": "npx wrangler dev"
+  }
+}

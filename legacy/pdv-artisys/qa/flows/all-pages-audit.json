@@ -1,0 +1,2329 @@
+{
+  "name": "all-pages-audit",
+  "title": "ArtiSys PDV — auditoria de páginas",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "waitFor",
+      "selector": "#auth-overlay",
+      "name": "bootstrap",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#auth-overlay",
+      "name": "autenticado",
+      "state": "hidden",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='home']:not(.brand-mark):not(.sidebar-back)",
+      "name": "abrir-home",
+      "holdMs": 500
+    },
+    {
+      "action": "screenshot",
+      "name": "home",
+      "fullPage": true
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#classic-home-grid",
+      "name": "home-classica-lifecycle",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#sidebar-nav [data-route='checkout'] .nav-label",
+      "expected": "Balcão",
+      "name": "nav-balcao-rotulo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#sidebar-nav [data-route='financial-management'] .nav-label",
+      "expected": "Gestão",
+      "name": "nav-gestao-rotulo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "home-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#app-topbar",
+      "name": "topbar-sem-overflow",
+      "tolerancePx": 2,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='checkout']",
+      "name": "balcao",
+      "holdMs": 1000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".checkout-layout[data-ux-checkout-preserved='true']",
+      "name": "balcao-layout-lifecycle",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-sale-observation='true']",
+      "name": "balcao-observacao-lifecycle",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#seller-select",
+      "name": "balcao-vendedor-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#finalize-sale",
+      "name": "balcao-finalizar-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectInViewport",
+      "selector": "#finalize-sale",
+      "name": "balcao-finalizar-no-viewport-1",
+      "tolerancePx": 2,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "balcao",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "balcao-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#finalize-sale",
+      "name": "balcao-finalizar-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectInViewport",
+      "selector": "#finalize-sale",
+      "name": "balcao-finalizar-no-viewport-2",
+      "tolerancePx": 2,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='cash']",
+      "name": "caixa",
+      "holdMs": 1000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".ops-page",
+      "name": "caixa-superficie-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "caixa",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "caixa-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".ops-page",
+      "name": "caixa-superficie-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='catalog']",
+      "name": "produtos-estoque",
+      "holdMs": 1000
+    },
+    {
+      "action": "screenshot",
+      "name": "produtos-estoque",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "produtos-estoque-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='products']",
+      "name": "abrir-produtos-p2",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-products-canonical='true'][data-products-view='dense']",
+      "name": "produtos-p2-canonico",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-products-canonical='true'] h1",
+      "expected": "Cardápio",
+      "name": "produtos-titulo-generico",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-products-secondary-actions] > summary",
+      "name": "abrir-acoes-secundarias-produtos-p5",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#new-category",
+      "name": "produtos-categorias-p5",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-kit-combo-admin]",
+      "name": "produtos-kits-combos-p5",
+      "state": "attached",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#product-page-search",
+      "name": "produtos-busca-canonica",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "produtos-p2-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "produtos",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='catalog']",
+      "name": "voltar-cadastros-clientes",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='customers']",
+      "name": "abrir-clientes-p2",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-customers-canonical='true'][data-customers-view='master-detail']",
+      "name": "clientes-p2-canonico",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#customer-page-search",
+      "name": "clientes-busca-canonica",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#new-customer",
+      "name": "abrir-novo-cliente-p5",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#customer-form [data-customer-address]",
+      "name": "cliente-endereco-p5",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#customer-form input[name='name']",
+      "value": "QA P5 Cliente Busca Incremental",
+      "name": "cliente-regressao-nome-p5"
+    },
+    {
+      "action": "click",
+      "selector": "#customer-form button[type='submit']",
+      "name": "salvar-cliente-regressao-p5",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root",
+      "name": "modal-cliente-regressao-fechado-p5",
+      "state": "hidden",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": ".data-row:has-text('QA P5 Cliente Busca Incremental') [data-edit-customer]",
+      "name": "cliente-regressao-criado-p5",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#customer-page-search",
+      "value": "QA P5 Cliente Busca Incremental",
+      "name": "cliente-regressao-buscar-p5"
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".data-row:has-text('QA P5 Cliente Busca Incremental') [data-remove-customer]",
+      "name": "cliente-regressao-excluir-preservado-p5",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#customer-page-search",
+      "value": "",
+      "name": "cliente-regressao-limpar-busca-p5"
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "clientes-p2-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "clientes",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='catalog']",
+      "name": "abrir-hub-catalogo-p5",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='inventory']",
+      "name": "entrar-estoque-p5",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#enterprise-depth-entry",
+      "name": "estoque-operacao-avancada-p5",
+      "state": "attached",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "#enterprise-depth-entry [data-open='purchases']",
+      "name": "abrir-compras-p5",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#catalog-supplier-management",
+      "name": "compras-fornecedores-p5",
+      "state": "attached",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "[data-enterprise-back]",
+      "name": "voltar-estoque-p5",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "estoque",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "estoque-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='post-sale']",
+      "name": "vendas-devolucoes",
+      "holdMs": 1000
+    },
+    {
+      "action": "screenshot",
+      "name": "vendas-devolucoes",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "vendas-devolucoes-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='returns']",
+      "name": "devolucao",
+      "holdMs": 700
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-returns-ui]",
+      "name": "devolucao-ui",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "devolucao",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "devolucao-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='financial-management']",
+      "name": "gestao-financeira",
+      "holdMs": 1000
+    },
+    {
+      "action": "screenshot",
+      "name": "gestao-financeira",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "gestao-financeira-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='management']",
+      "name": "gestao-abrir-dre",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#route-content",
+      "expected": "Gestão",
+      "name": "gestao-dre-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='financial-management']",
+      "name": "gestao-voltar-hub-dre",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "capability",
+      "name": "finance.setup",
+      "scenario": "ui-reverse-settlement"
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='finance']",
+      "name": "gestao-abrir-financeiro",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#ops-finance-form",
+      "name": "financeiro-lancamentos-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "capability",
+      "name": "finance.openReverseDialog"
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".ux-dialog",
+      "name": "financeiro-estorno-dialogo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": ".ux-dialog textarea[name='reason']",
+      "value": "QA estorno confirmado pela interface",
+      "name": "financeiro-estorno-motivo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": ".ux-dialog .ux-dialog__confirm",
+      "name": "financeiro-estorno-confirmar",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#toast-root",
+      "expected": "Baixa estornada.",
+      "name": "financeiro-estorno-feedback",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "capability",
+      "name": "finance.assert"
+    },
+    {
+      "action": "click",
+      "selector": "[data-finance-route='finance-banks']",
+      "name": "financeiro-bancos",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-finance-surface='finance-banks']",
+      "name": "financeiro-bancos-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-finance-route='finance-recurrences']",
+      "name": "financeiro-recorrencias",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-finance-surface='finance-recurrences']",
+      "name": "financeiro-recorrencias-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-finance-route='finance-alerts']",
+      "name": "financeiro-alertas",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-finance-surface='finance-alerts']",
+      "name": "financeiro-alertas-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='financial-management']",
+      "name": "gestao-voltar-hub-financeiro",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='reports']",
+      "name": "gestao-abrir-relatorios",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#route-content h1",
+      "expected": "Relatórios",
+      "name": "relatorios-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "gestao-relatorios-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='access']",
+      "name": "abrir-acessos-equipe",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": ".access-center-page",
+      "name": "acessos-centro-nativo",
+      "state": "attached",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "button[data-access-tab='people']",
+      "name": "acessos-pessoas-tab",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "button[data-access-tab='profiles']",
+      "name": "acessos-perfis-tab",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "button[data-access-tab='devices']",
+      "name": "acessos-dispositivos-tab",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "button[data-access-tab='security']",
+      "name": "acessos-seguranca-tab",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "acessos-equipe",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "button[data-access-tab='devices']",
+      "name": "acessos-abrir-dispositivos",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-access-panel] .access-surface",
+      "name": "acessos-dispositivos-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "acessos-dispositivos",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-new-device]",
+      "name": "acessos-novo-dispositivo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-device-form]",
+      "name": "acessos-novo-dispositivo-modal",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "acessos-novo-dispositivo-modal",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-device-cancel]",
+      "name": "acessos-fechar-novo-dispositivo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "acessos-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#app-sidebar > button[data-route='settings']",
+      "name": "configuracoes",
+      "holdMs": 1000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#settings-hub",
+      "name": "configuracoes-hub-lifecycle",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#printing-settings-card",
+      "name": "configuracoes-impressao-injetada",
+      "state": "attached",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#telemetry-settings-card",
+      "name": "configuracoes-telemetria-injetada",
+      "state": "attached",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#ops-admin-control-center",
+      "name": "configuracoes-admin-lifecycle",
+      "state": "attached",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "#settings-hub button[data-settings-category='company']",
+      "name": "voltar-configuracoes-empresa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#settings-company-store",
+      "name": "configuracoes-loja-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".ops-page",
+      "name": "configuracoes-superficie-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "configuracoes",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "configuracoes-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#settings-hub button[data-settings-category='modules']",
+      "name": "abrir-configuracoes-areas",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-core-area='true']",
+      "name": "nucleo-artisys-visivel",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-module-toggle='FOOD']",
+      "name": "toggle-alimentacao-visivel",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-module-toggle='WHOLESALE']",
+      "name": "toggle-atacado-visivel",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "configuracoes-areas",
+      "fullPage": true
+    },
+    {
+      "action": "check",
+      "selector": "[data-module-toggle='WHOLESALE']",
+      "name": "ativar-atacado-qa",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-route='FOOD']",
+      "name": "nav-alimentacao-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-route='WHOLESALE']",
+      "name": "nav-atacado-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "configuracoes-areas-ativas",
+      "fullPage": true
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/customers",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-cliente-atacado-qa",
+      "body": {
+        "id": "qa-wholesale-customer",
+        "name": "Mercado QA",
+        "creditLimitCents": 50000
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/products",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-produto-atacado-qa",
+      "body": {
+        "id": "qa-wholesale-product",
+        "name": "Produto QA Atacado",
+        "sku": "QA-ATAC-01",
+        "salePriceCents": 1250,
+        "costCents": 700,
+        "trackStock": false,
+        "menuEnabled": true,
+        "active": true
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/products",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-produto-direto-qa",
+      "body": {
+        "id": "qa-direct-product",
+        "name": "Coca QA",
+        "sku": "QA-COCA-01",
+        "salePriceCents": 700,
+        "costCents": 300,
+        "trackStock": false,
+        "menuEnabled": true,
+        "active": true
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/products",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-produto-sem-destino-qa",
+      "body": {
+        "id": "qa-pending-route-product",
+        "name": "Água QA sem destino",
+        "sku": "QA-PEND-01",
+        "salePriceCents": 500,
+        "costCents": 200,
+        "trackStock": false,
+        "menuEnabled": true,
+        "active": true
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/restaurant/kitchen/stations",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-setor-producao-qa",
+      "body": {
+        "id": "qa-station-bar",
+        "name": "Bar QA",
+        "printEnabled": false
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/restaurant/kitchen/routing",
+      "method": "POST",
+      "expectedStatus": 200,
+      "name": "seed-rota-producao-qa",
+      "body": {
+        "productId": "qa-wholesale-product",
+        "mode": "PRODUCTION",
+        "stationId": "qa-station-bar"
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/restaurant/kitchen/routing",
+      "method": "POST",
+      "expectedStatus": 200,
+      "name": "seed-rota-direta-qa",
+      "body": {
+        "productId": "qa-direct-product",
+        "mode": "DIRECT"
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/wholesale/tiers",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-faixa-atacado-qa",
+      "body": {
+        "productId": "qa-wholesale-product",
+        "minQuantity": 12,
+        "unitPriceCents": 1000
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/wholesale/orders",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-pedido-atacado-qa",
+      "body": {
+        "id": "qa-order-1",
+        "customerId": "qa-wholesale-customer",
+        "locationId": "MAIN",
+        "fulfillmentType": "PICKUP",
+        "items": [
+          {
+            "productId": "qa-wholesale-product",
+            "quantity": 12
+          }
+        ],
+        "expectedAt": "2026-10-08T17:00:00.000Z"
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/wholesale/orders/qa-order-1/confirm",
+      "method": "POST",
+      "expectedStatus": 200,
+      "name": "confirmar-pedido-atacado-qa",
+      "body": {}
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/restaurant/tables",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-mesa-qa",
+      "body": {
+        "id": "qa-table-1",
+        "label": "Mesa QA 1",
+        "capacity": 4,
+        "active": true
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/restaurant/tables/qa-table-1/open",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "abrir-comanda-qa",
+      "body": {}
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".ops-page",
+      "name": "configuracoes-superficie-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='home']:not(.brand-mark):not(.sidebar-back)",
+      "name": "voltar-home",
+      "holdMs": 600
+    },
+    {
+      "action": "screenshot",
+      "name": "home-final",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "home-final-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-route='FOOD']",
+      "name": "abrir-alimentacao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-module-workspace='FOOD']",
+      "name": "alimentacao-workspace",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "alimentacao",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-food-capability='RESTAURANT']",
+      "name": "abrir-mesas-comandas",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".restaurant-page",
+      "name": "mesas-comandas-workspace",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-restaurant-view='operation']",
+      "name": "mesas-comandas-operacao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "alimentacao-mesas-comandas",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-restaurant-view-target='management']",
+      "name": "mesas-comandas-abrir-gestao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-restaurant-view='management'] [data-restaurant-management]",
+      "name": "mesas-comandas-gestao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-restaurant-management]",
+      "expected": "Configuração e indicadores",
+      "name": "mesas-comandas-gestao-titulo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-restaurant-management]",
+      "expected": "Setores de produção",
+      "name": "gestao-setores-producao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-restaurant-management]",
+      "expected": "Dispositivos LAN",
+      "name": "gestao-dispositivos-lan",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-routing-alert]",
+      "name": "gestao-alerta-destinos-pendentes",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-routing-alert]",
+      "expected": "sem destino configurado",
+      "name": "gestao-alerta-destinos-contagem",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-routing-alert]",
+      "expected": "Água QA sem destino",
+      "name": "gestao-alerta-produto-pendente",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "alimentacao-mesas-comandas-gestao",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-routing-review]",
+      "name": "gestao-revisar-primeiro-destino-pendente",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#product-form",
+      "name": "estoque-edicao-destino-pendente",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectValue",
+      "selector": "#product-form input[name='name']",
+      "expected": "Água QA sem destino",
+      "name": "estoque-produto-pendente-correto",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "estoque-destino-pendente",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#product-form [data-close-modal]",
+      "name": "estoque-fechar-produto-pendente",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-route='FOOD']",
+      "name": "voltar-alimentacao-pos-correcao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-module-workspace='FOOD']",
+      "name": "alimentacao-workspace-pos-correcao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-food-capability='RESTAURANT']",
+      "name": "reabrir-mesas-comandas-pos-correcao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-restaurant-view='operation']",
+      "name": "mesas-comandas-voltar-operacao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-route='WHOLESALE']",
+      "name": "abrir-atacado",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-module-workspace='WHOLESALE']",
+      "name": "atacado-workspace",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#wholesale-item-form input[name='expectedAt']",
+      "value": "08/10/2026 17:00",
+      "name": "atacado-previsao-preencher-ptbr",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectValue",
+      "selector": "#wholesale-item-form input[name='expectedAt']",
+      "expected": "08/10/2026 17:00",
+      "name": "atacado-previsao-ptbr",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "atacado",
+      "fullPage": true
+    },
+    {
+      "action": "selectOption",
+      "selector": "#wholesale-item-form select[name='customerId']",
+      "value": "qa-wholesale-customer",
+      "name": "atacado-selecionar-cliente-faixa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "selectOption",
+      "selector": "#wholesale-item-form select[name='locationId']",
+      "value": "MAIN",
+      "name": "atacado-selecionar-local-faixa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "selectOption",
+      "selector": "#wholesale-item-form select[name='productId']",
+      "value": "qa-wholesale-product",
+      "name": "atacado-selecionar-produto-faixa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#wholesale-item-form input[name='quantity']",
+      "value": "12",
+      "name": "atacado-quantidade-faixa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#wholesale-item-form button[type='submit']",
+      "name": "atacado-adicionar-item-faixa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-wholesale-cart]",
+      "expected": "faixa 12+",
+      "name": "atacado-preco-faixa-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-wholesale-cart]",
+      "expected": "10,00",
+      "name": "atacado-preco-faixa-valor",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "atacado-preco-por-quantidade",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='checkout']",
+      "name": "voltar-balcao-documentos",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#checkout-documents",
+      "name": "abrir-comandas-pedidos",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#checkout-document-query",
+      "name": "localizador-documentos-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-open-checkout-document='ORDER:qa-order-1']",
+      "name": "pedido-atacado-localizado",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-open-checkout-document^='COMMAND:']",
+      "name": "comanda-localizada",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "balcao-comandas-pedidos",
+      "fullPage": true
+    },
+    {
+      "action": "fill",
+      "selector": "#checkout-document-query",
+      "value": "qa-order-1",
+      "name": "buscar-pedido-atacado"
+    },
+    {
+      "action": "click",
+      "selector": "[data-open-checkout-document='ORDER:qa-order-1']",
+      "name": "carregar-pedido-no-caixa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": ".checkout-layout",
+      "expected": "Produto QA Atacado",
+      "name": "pedido-carregado-sem-redigitacao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".sale-cart-region .cart-line",
+      "name": "balcao-carrinho-item-visivel-antes-finalizar",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": ".sale-cart-region .cart-line",
+      "expected": "Produto QA Atacado",
+      "name": "balcao-carrinho-item-legivel-antes-finalizar",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-checkout-document-context]",
+      "name": "pedido-contexto-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-checkout-document-context]",
+      "expected": "P-000001",
+      "name": "pedido-contexto-numero",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-checkout-document-context]",
+      "expected": "Mercado QA",
+      "name": "pedido-contexto-cliente",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-checkout-document-context]",
+      "expected": "Retirada",
+      "name": "pedido-contexto-atendimento",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "balcao-pedido-atacado-carregado",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "balcao-pedido-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#finalize-sale",
+      "name": "pedido-finalizar-venda",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#confirm-open-cash",
+      "name": "pedido-abrir-caixa-se-necessario",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#confirm-open-cash",
+      "name": "pedido-confirmar-abertura-caixa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#confirm-payment",
+      "name": "pedido-pagamento-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#confirm-payment",
+      "name": "pedido-confirmar-pagamento",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#toast-root",
+      "expected": "finalizada",
+      "name": "pedido-venda-finalizada",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "waitForTimeout",
+      "name": "pedido-aguardar-efeitos",
+      "timeoutMs": 500
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/wholesale/orders/qa-order-1",
+      "method": "GET",
+      "expectedStatus": 200,
+      "expectedPayloadIncludes": "FULFILLED",
+      "name": "pedido-status-fulfill-persistido"
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='post-sale']",
+      "name": "devolucao-pos-venda-hub",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='returns']",
+      "name": "devolucao-pos-venda-abrir",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-return-sales-list] [data-return-sale]:first-child",
+      "name": "devolucao-venda-disponivel",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "[data-return-sales-list] [data-return-sale]:first-child",
+      "name": "devolucao-venda-concluida-selecionada",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-return-sale-detail] [data-return-item]",
+      "name": "devolucao-item-detalhe",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "check",
+      "selector": "[data-return-sale-detail] [data-return-check]",
+      "name": "devolucao-item-selecionado",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#return-reason",
+      "value": "Devolução QA",
+      "name": "devolucao-motivo-preenchido",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#confirm-return",
+      "name": "devolucao-confirmada",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#returns-status",
+      "expected": "concluída",
+      "name": "devolucao-status-concluido",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/returns",
+      "method": "GET",
+      "expectedStatus": 200,
+      "expectedPayloadIncludes": "Devolução QA",
+      "name": "devolucao-persistida"
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='checkout']",
+      "name": "cancelamento-voltar-balcao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#new-sale",
+      "name": "cancelamento-venda-iniciada",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-add-product='qa-wholesale-product']",
+      "name": "cancelamento-item-adicionado",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#cancel-sale",
+      "name": "cancelamento-acao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#confirm-cancel",
+      "name": "cancelamento-confirmacao-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#cancel-reason",
+      "value": "Cancelamento QA",
+      "name": "cancelamento-motivo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#confirm-cancel",
+      "name": "cancelamento-confirmado",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#toast-root",
+      "expected": "Venda cancelada.",
+      "name": "cancelamento-feedback",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/sales?status=CANCELLED",
+      "method": "GET",
+      "expectedStatus": 200,
+      "expectedPayloadIncludes": "CANCELLED",
+      "name": "cancelamento-persistido"
+    },
+    {
+      "action": "click",
+      "selector": "#sidebar-nav button[data-route='financial-management']",
+      "name": "abrir-gestao-para-relatorios",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='reports']",
+      "name": "abrir-relatorios-qa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".report-v2-page",
+      "name": "relatorios-ui",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectValue",
+      "selector": "#report-v2-filter input[name='fromDate']",
+      "expected": "01/10/2026",
+      "name": "relatorios-data-inicial-ptbr",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#report-v2-filter input[name='toDate']",
+      "name": "relatorios-data-final-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": ".report-v2-page",
+      "expected": "Relatórios comerciais",
+      "name": "relatorios-conteudo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "relatorios",
+      "fullPage": true
+    },
+    {
+      "action": "expectText",
+      "selector": ".report-v2-manager-summary",
+      "expected": "Comparação com período anterior",
+      "name": "relatorios-overview-gerencial",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#report-v2-body",
+      "expected": "Tendência de vendas líquidas",
+      "name": "relatorios-tendencia-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#report-v2-body",
+      "expected": "Atenção",
+      "name": "relatorios-atencao-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#report-v2-body",
+      "expected": "Categorias",
+      "name": "relatorios-categorias-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#report-tab-customers",
+      "name": "relatorios-clientes-abrir",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#report-v2-body",
+      "expected": "Relatório de venda por cliente",
+      "name": "relatorios-clientes-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "relatorios-clientes",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#report-tab-products",
+      "name": "relatorios-produtos-abrir",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#report-v2-body",
+      "expected": "Relatório de venda por produto",
+      "name": "relatorios-produtos-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "relatorios-produtos",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#report-tab-payments",
+      "name": "relatorios-pagamentos-abrir",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#report-v2-body",
+      "expected": "Relatório por meio de pagamento",
+      "name": "relatorios-pagamentos-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "relatorios-pagamentos",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#report-tab-inventory",
+      "name": "relatorios-estoque-abrir",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#report-v2-body",
+      "expected": "Produtos no estoque mínimo para compra",
+      "name": "relatorios-estoque-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "relatorios-estoque",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#report-tab-cash",
+      "name": "relatorios-caixa-abrir",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#report-v2-body",
+      "expected": "Dinheiro que entrou e saiu do caixa",
+      "name": "relatorios-caixa-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "relatorios-caixa",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#report-tab-commissions",
+      "name": "relatorios-comissoes-abrir",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#report-v2-body",
+      "expected": "Comissões por vendedor / garçom",
+      "name": "relatorios-comissoes-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "relatorios-comissoes",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#report-tab-overview",
+      "name": "relatorios-overview-voltar",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": ".report-v2-manager-summary",
+      "expected": "Resultado do período",
+      "name": "relatorios-overview-retorno",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "relatorios-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectAccessibleName",
+      "selector": "#report-open-management",
+      "expected": "Abrir Gestão",
+      "name": "a11y-relatorios-gestao-nome-acessivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectAccessibleName",
+      "selector": ".report-v2-tabs",
+      "expected": "Tipos de relatório",
+      "name": "a11y-relatorios-tablist-nome",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "focus",
+      "selector": "#report-open-management",
+      "name": "a11y-relatorios-gestao-foco",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectFocused",
+      "selector": "#report-open-management",
+      "name": "a11y-relatorios-gestao-foco-confirmado",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "press",
+      "selector": "#report-open-management",
+      "key": "Enter",
+      "name": "a11y-relatorios-gestao-teclado",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "waitFor",
+      "selector": ".erp-management-page",
+      "state": "visible",
+      "name": "a11y-relatorios-gestao-teclado-confirmado",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "focus",
+      "selector": "#sidebar-nav button[data-route='financial-management']",
+      "name": "a11y-gestao-sidebar-foco",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "press",
+      "selector": "#sidebar-nav button[data-route='financial-management']",
+      "key": "Enter",
+      "name": "a11y-gestao-sidebar-teclado",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "button[data-flow-route='reports']",
+      "name": "a11y-gestao-relatorios-disponivel",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "focus",
+      "selector": "button[data-flow-route='reports']",
+      "name": "a11y-relatorios-voltar-foco",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "press",
+      "selector": "button[data-flow-route='reports']",
+      "key": "Enter",
+      "name": "a11y-relatorios-voltar-teclado",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".report-v2-page",
+      "name": "a11y-relatorios-voltar-confirmado",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "focus",
+      "selector": "button[data-report-drilldown='period']",
+      "name": "a11y-relatorios-modal-origem-foco",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "press",
+      "selector": "button[data-report-drilldown='period']",
+      "key": "Enter",
+      "name": "a11y-relatorios-modal-teclado",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#modal-root [role='dialog']",
+      "name": "a11y-relatorios-modal-dialog",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectAccessibleName",
+      "selector": "#modal-root .modal-close",
+      "expected": "Fechar",
+      "name": "a11y-relatorios-modal-fechar-nome",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "press",
+      "selector": "#modal-root .modal-close",
+      "key": "Escape",
+      "name": "a11y-relatorios-modal-escape",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectFocused",
+      "selector": "button[data-report-drilldown='period']",
+      "name": "a11y-relatorios-modal-foco-restaurado",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectMinimumContrast",
+      "selector": ".report-v2-page h1",
+      "minRatio": 4.5,
+      "name": "a11y-relatorios-contraste",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "setZoomFactor",
+      "factor": 2,
+      "name": "a11y-relatorios-zoom-200"
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "selector": "#route-content",
+      "name": "a11y-relatorios-zoom-200-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "a11y-relatorios-zoom-200",
+      "fullPage": true
+    },
+    {
+      "action": "setZoomFactor",
+      "factor": 1,
+      "name": "a11y-relatorios-zoom-reset"
+    },
+    {
+      "action": "desktopConfig",
+      "name": "capturar-servidor-local-qa",
+      "saveAs": {
+        "qaApiBase": "apiBase"
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/restaurant/devices",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-garcom-mobile-qa",
+      "body": {
+        "id": "qa-waiter-mobile",
+        "name": "Garçom QA",
+        "deviceType": "WAITER"
+      },
+      "saveAs": {
+        "qaWaiterId": "id",
+        "qaWaiterKey": "credential"
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/restaurant/devices",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-kds-mobile-qa",
+      "body": {
+        "id": "qa-kitchen-mobile",
+        "name": "Cozinha QA",
+        "deviceType": "KITCHEN"
+      },
+      "saveAs": {
+        "qaKitchenId": "id",
+        "qaKitchenKey": "credential"
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/restaurant/public-ordering/tables/qa-table-1/qr",
+      "method": "GET",
+      "expectedStatus": 200,
+      "name": "seed-cardapio-qr-qa",
+      "saveAs": {
+        "qaPublicMenuUrl": "url"
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/restaurant/public-ordering/config",
+      "method": "PUT",
+      "expectedStatus": 200,
+      "name": "publicar-cardapio-premium-qa",
+      "body": {
+        "menuLayout": "PREMIUM"
+      }
+    },
+    {
+      "action": "setViewportSize",
+      "width": 390,
+      "height": 844,
+      "name": "viewport-equipe-mobile"
+    },
+    {
+      "action": "goto",
+      "name": "abrir-equipe-mobile",
+      "urlFrom": "qaApiBase",
+      "path": "/mobile"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#login",
+      "name": "equipe-mobile-login",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "fill",
+      "selector": "#login input[name='id']",
+      "valueFrom": "qaWaiterId",
+      "name": "equipe-mobile-id"
+    },
+    {
+      "action": "fill",
+      "selector": "#login input[name='key']",
+      "valueFrom": "qaWaiterKey",
+      "name": "equipe-mobile-chave"
+    },
+    {
+      "action": "click",
+      "selector": "#login button[type='submit']",
+      "name": "equipe-mobile-conectar",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".waiter-layout",
+      "name": "equipe-mobile-conectada",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectText",
+      "selector": ".staff-head .eyebrow",
+      "expected": "Garçom",
+      "name": "equipe-mobile-tipo-traduzido",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": ".staff-head",
+      "expected": "Garçom QA",
+      "name": "equipe-mobile-identidade",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-waiter-direction='a']",
+      "name": "garcom-direcao-a",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-waiter-floor='tables']",
+      "name": "garcom-salao-visual",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "equipe-mobile-salao",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-waiter-table]:not(.free)",
+      "name": "garcom-abrir-mesa-ocupada",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "[data-waiter-tab='menu'].active",
+      "name": "garcom-pedido-no-contexto-da-mesa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-add='qa-direct-product']",
+      "name": "garcom-adicionar-item-direto",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-add='qa-wholesale-product']",
+      "name": "garcom-adicionar-item-producao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#waiter-cart-toggle",
+      "name": "garcom-pedido-resumo-fixo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#waiter-cart-toggle",
+      "name": "garcom-abrir-pedido-em-andamento",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#send-order",
+      "name": "garcom-enviar-pedido-disponivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#send-order",
+      "name": "garcom-registrar-pedido-misto",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-waiter-tab='orders']",
+      "name": "garcom-abrir-comanda-apos-envio",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectText",
+      "selector": ".selected-orders",
+      "expected": "Coca QA",
+      "name": "garcom-comanda-item-direto",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectText",
+      "selector": ".selected-orders",
+      "expected": "direto",
+      "name": "garcom-comanda-direto-rotulo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": ".selected-orders",
+      "expected": "Produto QA Atacado",
+      "name": "garcom-comanda-item-producao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "equipe-mobile-pedido-misto",
+      "fullPage": true
+    },
+    {
+      "action": "screenshot",
+      "name": "equipe-mobile",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "name": "equipe-mobile-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#logout",
+      "name": "equipe-mobile-sair",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#login",
+      "name": "kds-mobile-login",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#login input[name='id']",
+      "valueFrom": "qaKitchenId",
+      "name": "kds-mobile-id"
+    },
+    {
+      "action": "fill",
+      "selector": "#login input[name='key']",
+      "valueFrom": "qaKitchenKey",
+      "name": "kds-mobile-chave"
+    },
+    {
+      "action": "click",
+      "selector": "#login button[type='submit']",
+      "name": "kds-mobile-conectar",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".kitchen-board",
+      "name": "kds-mobile-lanes",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectText",
+      "selector": ".staff-head .eyebrow",
+      "expected": "Cozinha",
+      "name": "kds-mobile-tipo-traduzido",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": ".kitchen-board",
+      "expected": "Produto QA Atacado",
+      "name": "kds-recebe-item-producao",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".ticket-card.NEW",
+      "name": "kds-ticket-novo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "kds-mobile-novo",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-ticket][data-status='PREPARING']",
+      "name": "kds-iniciar-preparo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".ticket-card.PREPARING",
+      "name": "kds-ticket-em-preparo",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "kds-mobile-em-preparo",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-ticket][data-status='READY']",
+      "name": "kds-marcar-pronto",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".ticket-card.READY",
+      "name": "kds-ticket-pronto",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "kds-mobile-pronto",
+      "fullPage": true
+    },
+    {
+      "action": "expectText",
+      "selector": ".staff-head",
+      "expected": "KDS local",
+      "name": "kds-mobile-contexto",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "kds-mobile",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "name": "kds-mobile-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#logout",
+      "name": "kds-mobile-sair-apos-pronto",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#login",
+      "name": "garcom-retorno-login",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#login input[name='id']",
+      "valueFrom": "qaWaiterId",
+      "name": "garcom-retorno-id"
+    },
+    {
+      "action": "fill",
+      "selector": "#login input[name='key']",
+      "valueFrom": "qaWaiterKey",
+      "name": "garcom-retorno-chave"
+    },
+    {
+      "action": "click",
+      "selector": "#login button[type='submit']",
+      "name": "garcom-retorno-conectar",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".waiter-layout",
+      "name": "garcom-retorno-conectado",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-waiter-table].ready",
+      "state": "visible",
+      "name": "garcom-mesa-pronta-no-salao",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "[data-waiter-table].ready",
+      "name": "garcom-abrir-mesa-pronta",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-waiter-tab='orders']",
+      "name": "garcom-abrir-comanda-pronta",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": ".selected-orders",
+      "expected": "Pedido pronto",
+      "name": "garcom-ve-pedido-pronto",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectText",
+      "selector": ".selected-orders",
+      "expected": "Coca QA",
+      "name": "garcom-mantem-item-direto",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "equipe-mobile-pedido-pronto",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#logout",
+      "name": "garcom-retorno-sair",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "setViewportSize",
+      "width": 412,
+      "height": 915,
+      "name": "viewport-cardapio-qr"
+    },
+    {
+      "action": "goto",
+      "urlFrom": "qaPublicMenuUrl",
+      "name": "abrir-cardapio-qr"
+    },
+    {
+      "action": "expectText",
+      "selector": "#table-badge",
+      "expected": "Mesa QA 1",
+      "name": "cardapio-qr-mesa",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".product-card:has-text('Produto QA Atacado')",
+      "name": "cardapio-qr-produtos",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectText",
+      "selector": ".product-card",
+      "expected": "Produto QA Atacado",
+      "name": "cardapio-qr-produto-qa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": ".product-card:has-text('Coca QA')",
+      "expected": "Coca QA",
+      "name": "cardapio-qr-item-direto",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "cardapio-qr",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "name": "cardapio-qr-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "html[data-menu-layout=\"premium\"]",
+      "name": "cardapio-qr-premium-aplicado",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectText",
+      "selector": ".product-card",
+      "expected": "Produto QA Atacado",
+      "name": "cardapio-qr-premium-produto",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "focus",
+      "selector": ".add-button",
+      "name": "a11y-cardapio-premium-foco-cta",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectFocused",
+      "selector": ".add-button",
+      "name": "a11y-cardapio-premium-foco-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectMinimumContrast",
+      "selector": ".product-price",
+      "minRatio": 4.5,
+      "name": "a11y-cardapio-premium-contraste-preco",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "cardapio-qr-premium",
+      "fullPage": true
+    },
+    {
+      "action": "expectNoHorizontalOverflow",
+      "name": "cardapio-qr-premium-sem-overflow",
+      "tolerancePx": 4,
+      "timeoutMs": 10000
+    }
+  ]
+}

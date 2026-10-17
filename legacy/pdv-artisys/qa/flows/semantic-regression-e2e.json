@@ -1,0 +1,230 @@
+{
+  "name": "semantic-regression-e2e",
+  "title": "ArtiSys PDV — regressões semânticas críticas",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "waitFor",
+      "selector": "#auth-overlay",
+      "name": "semantic-bootstrap",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "authenticateLocalQa",
+      "name": "semantic-entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#auth-overlay",
+      "name": "semantic-autenticado",
+      "state": "hidden",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/cash/sessions",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-caixa-semantic",
+      "body": {
+        "initialCashCents": 0
+      }
+    },
+    {
+      "action": "desktopApiRequest",
+      "path": "/api/v1/products",
+      "method": "POST",
+      "expectedStatus": 201,
+      "name": "seed-produto-barcode",
+      "body": {
+        "id": "qa-barcode-product",
+        "name": "Produto Barcode QA",
+        "sku": "QA-BAR-01",
+        "barcode": "0007891234567",
+        "salePriceCents": 1234,
+        "costCents": 500,
+        "trackStock": false,
+        "menuEnabled": true,
+        "active": true
+      }
+    },
+    {
+      "action": "reload",
+      "name": "recarregar-produto-barcode"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#auth-overlay",
+      "name": "semantic-sessao-restaurada",
+      "state": "hidden",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='checkout']",
+      "name": "abrir-balcao-semantic",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "barcodeScan",
+      "selector": "#product-search",
+      "value": "0007891234567",
+      "pressEnter": true,
+      "settleMs": 150,
+      "name": "scanner-barcode-exato"
+    },
+    {
+      "action": "expectCount",
+      "selector": "button.product-card[data-add-product='qa-barcode-product']",
+      "expected": 1,
+      "name": "barcode-exato-localizado"
+    },
+    {
+      "action": "expectText",
+      "selector": "button.product-card[data-add-product='qa-barcode-product']",
+      "expected": "Produto Barcode QA",
+      "name": "barcode-produto-correto"
+    },
+    {
+      "action": "barcodeScan",
+      "selector": "#product-search",
+      "value": "7654321987000",
+      "pressEnter": true,
+      "settleMs": 150,
+      "name": "scanner-barcode-invertido"
+    },
+    {
+      "action": "expectCount",
+      "selector": "button.product-card[data-add-product='qa-barcode-product']",
+      "expected": 0,
+      "name": "barcode-invertido-nao-localiza"
+    },
+    {
+      "action": "barcodeScan",
+      "selector": "#product-search",
+      "value": "0007891234567",
+      "pressEnter": true,
+      "settleMs": 150,
+      "name": "scanner-barcode-restaurado"
+    },
+    {
+      "action": "click",
+      "selector": "button.product-card[data-add-product='qa-barcode-product']",
+      "name": "adicionar-produto-scaneado",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": ".sale-cart-region .cart-line[data-select-product='qa-barcode-product']",
+      "name": "produto-scaneado-no-carrinho",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "doubleClick",
+      "selector": "#finalize-sale",
+      "name": "duplo-clique-finalizar",
+      "timeoutMs": 10000,
+      "delayMs": 20
+    },
+    {
+      "action": "clickIfVisible",
+      "selector": "#confirm-open-cash",
+      "alternativeSelector": "#confirm-payment",
+      "name": "abrir-caixa-se-necessario",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectCount",
+      "selector": "#confirm-payment",
+      "expected": 1,
+      "name": "um-unico-modal-pagamento"
+    },
+    {
+      "action": "doubleClick",
+      "selector": "#confirm-payment",
+      "name": "duplo-clique-concluir-venda",
+      "timeoutMs": 10000,
+      "delayMs": 20
+    },
+    {
+      "action": "expectText",
+      "selector": "#post-sale-receipt-root",
+      "expected": "Venda concluída",
+      "name": "venda-concluida-modal-unico",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#post-sale-save-pdf",
+      "name": "pos-venda-pdf-visivel",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#post-sale-save-pdf",
+      "name": "salvar-pdf-real",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#post-sale-receipt-status",
+      "expected": "PDF salvo",
+      "name": "pdf-salvo",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectFile",
+      "directory": "../qa-artifacts/pdf",
+      "suffix": ".pdf",
+      "createdAfterRunStart": true,
+      "minBytes": 1000,
+      "startsWith": "%PDF-",
+      "name": "pdf-real-gerado"
+    },
+    {
+      "action": "expectPdfText",
+      "directory": "../qa-artifacts/pdf",
+      "suffix": ".pdf",
+      "expected": [
+        "Produto Barcode QA",
+        "12,34",
+        "NAO FISCAL"
+      ],
+      "name": "pdf-conteudo-semanticamente-valido"
+    },
+    {
+      "action": "reload",
+      "name": "reload-pos-venda"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#auth-overlay",
+      "name": "sessao-persistida-pos-reload",
+      "state": "hidden",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='checkout']",
+      "name": "reabrir-balcao-pos-reload",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "barcodeScan",
+      "selector": "#product-search",
+      "value": "0007891234567",
+      "pressEnter": true,
+      "settleMs": 150,
+      "name": "scanner-apos-reload"
+    },
+    {
+      "action": "expectCount",
+      "selector": "button.product-card[data-add-product='qa-barcode-product']",
+      "expected": 1,
+      "name": "produto-persistiu-apos-reload"
+    }
+  ]
+}

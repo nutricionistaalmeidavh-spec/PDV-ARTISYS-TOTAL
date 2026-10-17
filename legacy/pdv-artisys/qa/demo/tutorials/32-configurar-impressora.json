@@ -1,0 +1,83 @@
+{
+  "name": "32-configurar-impressora",
+  "title": "Configurar impressora",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "printer-config"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='settings']",
+      "name": "abrir-configuracoes",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#settings-hub",
+      "name": "configuracoes-prontas",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#settings-hub [data-settings-category='printing']",
+      "name": "abrir-impressao",
+      "holdMs": 450
+    },
+    {
+      "action": "waitFor",
+      "selector": "#printing-settings-form",
+      "name": "impressao-pronta",
+      "state": "visible",
+      "timeoutMs": 12000,
+      "holdMs": 250
+    },
+    {
+      "action": "selectOption",
+      "selector": "#printing-paper-mm",
+      "name": "largura-papel",
+      "value": "58",
+      "holdMs": 300
+    },
+    {
+      "action": "check",
+      "selector": "#printing-auto-print",
+      "name": "impressao-automatica",
+      "timeoutMs": 10000,
+      "holdMs": 260
+    },
+    {
+      "action": "click",
+      "selector": "#printing-save",
+      "name": "salvar-impressora",
+      "holdMs": 650
+    },
+    {
+      "action": "expectText",
+      "selector": "#printing-settings-status",
+      "name": "impressora-configurada",
+      "expected": "Salvo",
+      "timeoutMs": 10000,
+      "holdMs": 900
+    }
+  ]
+}

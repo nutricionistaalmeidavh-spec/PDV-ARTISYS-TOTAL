@@ -1,0 +1,80 @@
+{
+  "name": "29-criar-usuario-operador",
+  "title": "Criar usuário ou operador",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "user-create"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='access']",
+      "name": "abrir-acessos",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": ".access-center-page",
+      "name": "acessos-prontos",
+      "state": "visible",
+      "timeoutMs": 12000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "[data-new-person]",
+      "name": "nova-pessoa",
+      "holdMs": 450
+    },
+    {
+      "action": "fill",
+      "selector": "[data-person-form] input[name='name']",
+      "name": "nome-pessoa",
+      "value": "Operador Tutorial",
+      "holdMs": 220
+    },
+    {
+      "action": "fill",
+      "selector": "[data-person-form] input[name='username']",
+      "name": "usuario-pessoa",
+      "value": "operador-tutorial",
+      "holdMs": 220
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.fillEphemeralPassword",
+      "holdMs": 220
+    },
+    {
+      "action": "click",
+      "selector": "[data-person-form] button[type='submit']",
+      "name": "criar-pessoa",
+      "holdMs": 800
+    },
+    {
+      "action": "expectText",
+      "selector": ".access-center-page",
+      "name": "pessoa-criada",
+      "expected": "Operador Tutorial",
+      "timeoutMs": 10000,
+      "holdMs": 900
+    }
+  ]
+}

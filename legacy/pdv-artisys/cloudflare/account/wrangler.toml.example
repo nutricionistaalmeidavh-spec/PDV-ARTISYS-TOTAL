@@ -1,0 +1,12 @@
+name = "pdv-artisys"
+main = "src/worker.mjs"
+compatibility_date = "2026-10-03"
+keep_vars = true
+
+# Referência equivalente ao wrangler.jsonc da raiz.
+# Os recursos já estão associados ao Worker pdv-artisys no painel.
+[[d1_databases]]
+binding = "artisys"
+
+[[r2_buckets]]
+binding = "artisysr2"

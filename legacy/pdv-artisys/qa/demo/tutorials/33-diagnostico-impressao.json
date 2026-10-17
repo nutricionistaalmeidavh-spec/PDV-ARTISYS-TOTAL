@@ -1,0 +1,63 @@
+{
+  "name": "33-diagnostico-impressao",
+  "title": "Ver diagnóstico de impressão",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "printer-diagnostics"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='settings']",
+      "name": "abrir-configuracoes",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#settings-hub",
+      "name": "configuracoes-prontas",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#settings-hub [data-settings-category='printing']",
+      "name": "abrir-impressao",
+      "holdMs": 450
+    },
+    {
+      "action": "expectText",
+      "selector": "#route-content",
+      "name": "hardware-impressao",
+      "expected": "Impressora",
+      "timeoutMs": 10000,
+      "holdMs": 350
+    },
+    {
+      "action": "expectText",
+      "selector": "#route-content",
+      "name": "fila-impressao",
+      "expected": "Fila de impressão",
+      "timeoutMs": 10000,
+      "holdMs": 900
+    }
+  ]
+}

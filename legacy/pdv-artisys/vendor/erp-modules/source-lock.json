@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "policy": "copied-source-no-runtime-link",
+  "sources": {
+    "artisys-multitenancy": {
+      "sourceRepository": "nutricionistaalmeidavh-spec/utilidades",
+      "sourceCommit": "9bca8b29f3a5875433b42d01ceb84e743dabba82",
+      "sourcePath": "modules/artisys-multitenancy",
+      "copiedInto": "vendor/erp-modules/artisys-multitenancy",
+      "mode": "physical-copy"
+    },
+    "artisys-contacts": {
+      "sourceRepository": "nutricionistaalmeidavh-spec/utilidades",
+      "sourceCommit": "9bca8b29f3a5875433b42d01ceb84e743dabba82",
+      "sourcePath": "modules/artisys-contacts",
+      "copiedInto": "vendor/erp-modules/artisys-contacts",
+      "mode": "physical-copy"
+    },
+    "artisys-inventory": {
+      "sourceRepository": "nutricionistaalmeidavh-spec/utilidades",
+      "sourceCommit": "9bca8b29f3a5875433b42d01ceb84e743dabba82",
+      "sourcePath": "modules/artisys-inventory",
+      "copiedInto": "vendor/erp-modules/artisys-inventory",
+      "mode": "physical-copy"
+    },
+    "artisys-catalog": {
+      "sourceRepository": "nutricionistaalmeidavh-spec/utilidades",
+      "sourceCommit": "9bca8b29f3a5875433b42d01ceb84e743dabba82",
+      "sourcePath": "modules/artisys-catalog",
+      "copiedInto": "vendor/erp-modules/artisys-catalog",
+      "mode": "physical-copy"
+    },
+    "artisys-pricing": {
+      "sourceRepository": "nutricionistaalmeidavh-spec/utilidades",
+      "sourceCommit": "9bca8b29f3a5875433b42d01ceb84e743dabba82",
+      "sourcePath": "modules/artisys-pricing",
+      "copiedInto": "vendor/erp-modules/artisys-pricing",
+      "mode": "physical-copy"
+    },
+    "artisys-approvals": {
+      "sourceRepository": "nutricionistaalmeidavh-spec/utilidades",
+      "sourceCommit": "9bca8b29f3a5875433b42d01ceb84e743dabba82",
+      "sourcePath": "modules/artisys-approvals",
+      "copiedInto": "vendor/erp-modules/artisys-approvals",
+      "mode": "physical-copy"
+    }
+  }
+}

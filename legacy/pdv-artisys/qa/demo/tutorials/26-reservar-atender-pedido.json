@@ -1,0 +1,83 @@
+{
+  "name": "26-reservar-atender-pedido",
+  "title": "Reservar e atender pedido",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "order-fulfill"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='catalog']",
+      "name": "abrir-cadastros",
+      "holdMs": 450
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='inventory']",
+      "name": "abrir-estoque",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#inventory-master-actions",
+      "name": "estoque-pronto",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#enterprise-depth-entry [data-open='orders']",
+      "name": "abrir-pedidos",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#enterprise-order-form",
+      "name": "pedidos-prontos",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-list]",
+      "name": "pedido-confirmado",
+      "expected": "Cliente Tutorial",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "[data-list] [data-action='fulfill']",
+      "name": "atender-pendente",
+      "holdMs": 800
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-list]",
+      "name": "pedido-atendido",
+      "expected": "Atendido",
+      "timeoutMs": 12000,
+      "holdMs": 1000
+    }
+  ]
+}

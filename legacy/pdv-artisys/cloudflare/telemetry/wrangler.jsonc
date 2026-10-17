@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "artisys-telemetry",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-25",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "artisys-telemetry",
+      "database_id": "REPLACE_WITH_D1_ID"
+    }
+  ],
+  "analytics_engine_datasets": [
+    {
+      "binding": "ANALYTICS",
+      "dataset": "artisys_telemetry"
+    }
+  ]
+}

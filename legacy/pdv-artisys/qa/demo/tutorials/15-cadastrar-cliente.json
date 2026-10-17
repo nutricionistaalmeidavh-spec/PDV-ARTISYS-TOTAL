@@ -1,0 +1,73 @@
+{
+  "name": "15-cadastrar-cliente",
+  "title": "Cadastrar cliente",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "base"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='catalog']",
+      "name": "abrir-cadastros",
+      "holdMs": 350
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='customers']",
+      "name": "abrir-clientes",
+      "holdMs": 550
+    },
+    {
+      "action": "click",
+      "selector": "#new-customer",
+      "name": "novo-cliente",
+      "holdMs": 450
+    },
+    {
+      "action": "fill",
+      "selector": "#customer-form input[name='name']",
+      "name": "nome-cliente",
+      "value": "Cliente Novo Tutorial",
+      "holdMs": 260
+    },
+    {
+      "action": "fill",
+      "selector": "#customer-form input[name='phone']",
+      "name": "telefone-cliente",
+      "value": "11999990000",
+      "holdMs": 220
+    },
+    {
+      "action": "click",
+      "selector": "#customer-form button[type='submit']",
+      "name": "salvar-cliente",
+      "holdMs": 750
+    },
+    {
+      "action": "expectText",
+      "selector": "#customers-list",
+      "name": "cliente-criado",
+      "expected": "Cliente Novo Tutorial",
+      "timeoutMs": 10000,
+      "holdMs": 900
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+const money=v=>{const n=Number(v);if(!Number.isFinite(n))throw new TypeError('price must be finite');return Math.round(n*100)/100};
+export function resolveUnitPrice(basePrice,quantity=1,tiers=[]){const q=Number(quantity);if(!Number.isFinite(q)||q<=0)throw new RangeError('quantity must be > 0');let price=money(basePrice);for(const t of [...tiers].sort((a,b)=>Number(a.minQuantity)-Number(b.minQuantity)))if(q>=Number(t.minQuantity))price=money(t.unitPrice);return price}
+export function applyPercentDiscount(amount,percent=0){const p=Number(percent);if(!Number.isFinite(p)||p<0||p>100)throw new RangeError('percent must be between 0 and 100');return money(money(amount)*(1-p/100))}
+export function quoteLine({basePrice,quantity=1,tiers=[],discountPercent=0}){const unitPrice=resolveUnitPrice(basePrice,quantity,tiers);const subtotal=money(unitPrice*quantity);return{quantity,unitPrice,subtotal,total:applyPercentDiscount(subtotal,discountPercent)}}

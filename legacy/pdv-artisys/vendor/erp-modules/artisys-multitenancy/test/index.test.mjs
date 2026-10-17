@@ -1,0 +1,2 @@
+import test from'node:test';import assert from'node:assert/strict';import{createTenantContext,scopeRecord,filterTenantRecords,assertTenantAccess}from'../src/index.mjs';
+test('scopes and filters tenant records',()=>{const c=createTenantContext({tenantId:'a'});const r=scopeRecord(c,{id:1});assert.equal(r.tenantId,'a');assert.equal(filterTenantRecords(c,[r,{tenantId:'b'}]).length,1);assert.equal(assertTenantAccess(c,'a'),true)});

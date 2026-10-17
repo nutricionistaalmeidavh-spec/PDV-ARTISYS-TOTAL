@@ -1,0 +1,61 @@
+{
+  "name": "28-comissao-vendedor",
+  "title": "Consultar comissão por vendedor",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "commissions"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='financial-management']",
+      "name": "abrir-gestao",
+      "holdMs": 450
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='reports']",
+      "name": "abrir-relatorios",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": ".report-v2-page",
+      "name": "relatorios-prontos",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "[data-report-view='commissions']",
+      "name": "abrir-comissoes",
+      "holdMs": 650
+    },
+    {
+      "action": "expectText",
+      "selector": ".report-v2-page",
+      "name": "comissoes-visiveis",
+      "expected": "Comissões por vendedor",
+      "timeoutMs": 10000,
+      "holdMs": 900
+    }
+  ]
+}

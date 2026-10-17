@@ -1,0 +1,228 @@
+{
+  "schemaVersion": 1,
+  "systemId": "pdv-artisys",
+  "mode": "electron",
+  "defaultEnvironment": "ci",
+  "defaultDemo": "quick-30s",
+  "defaultDemoProfile": "erp-finance-ci",
+  "defaultViewport": "desktop",
+  "demoCaptureViewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "capture": {
+    "video": true,
+    "screenshotEachStep": false,
+    "fps": 8
+  },
+  "electron": {
+    "entry": "desktop/main.cjs",
+    "executablePath": "../node_modules/electron/dist/electron",
+    "args": [
+      "--no-sandbox"
+    ]
+  },
+  "environments": {
+    "ci": {
+      "env": {
+        "NODE_ENV": "test",
+        "ARTISYS_QA": "1",
+        "ARTISYS_QA_AUTO_ADMIN": "1",
+        "ARTISYS_QA_AUTO_LOCAL": "1",
+        "ARTISYS_QA_PDF_DIR": "../qa-artifacts/pdf",
+        "ARTISYS_QA_SIMULATE_PRINTER": "1",
+        "ARTISYS_QA_NO_PRINTERS": "1",
+        "PDV_ENABLE_LAN": "false",
+        "PDV_AUTO_PRINT": "false",
+        "PDV_REQUIRE_COMMERCIAL_ACTIVATION": "false"
+      }
+    }
+  },
+  "demoProfiles": {
+    "erp-finance-ci": {
+      "adapter": "runtime/adapters/erp-finance-ci.mjs"
+    },
+    "tutorials-p1-p3": {
+      "adapter": "runtime/adapters/tutorials-p1-p3.mjs"
+    }
+  },
+  "defaultFlow": "all-pages-audit",
+  "flows": {
+    "all-pages-audit": "flows/all-pages-audit.json",
+    "access-center-partial-permissions": "flows/access-center-partial-permissions.json",
+    "access-center-ergonomic": "flows/access-center-ergonomic.json",
+    "delivery-pickup-operational": "flows/delivery-pickup-operational-e2e.json",
+    "public-menu-compact-v2": "flows/public-menu-compact-v2.json",
+    "semantic-regression": "flows/semantic-regression-e2e.json"
+  },
+  "qaProfiles": {
+    "quick": {
+      "flows": [],
+      "criticalFlows": []
+    },
+    "full": {
+      "flows": [],
+      "criticalFlows": []
+    },
+    "release": {
+      "flows": [],
+      "criticalFlows": []
+    }
+  },
+  "demos": {
+    "quick-30s": {
+      "file": "demo/quick-30s.json",
+      "preset": "reels-9x16",
+      "durationTargetSec": 30
+    },
+    "overview-60s": {
+      "file": "demo/overview-60s.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 60
+    },
+    "13-cadastrar-produto": {
+      "file": "demo/tutorials/13-cadastrar-produto.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 28,
+      "profile": "tutorials-p1-p3"
+    },
+    "14-alterar-preco-estoque": {
+      "file": "demo/tutorials/14-alterar-preco-estoque.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 22,
+      "profile": "tutorials-p1-p3"
+    },
+    "15-cadastrar-cliente": {
+      "file": "demo/tutorials/15-cadastrar-cliente.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 22,
+      "profile": "tutorials-p1-p3"
+    },
+    "16-consultar-estoque": {
+      "file": "demo/tutorials/16-consultar-estoque.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 18,
+      "profile": "tutorials-p1-p3"
+    },
+    "17-encontrar-venda": {
+      "file": "demo/tutorials/17-encontrar-venda.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 20,
+      "profile": "tutorials-p1-p3"
+    },
+    "18-detalhes-venda": {
+      "file": "demo/tutorials/18-detalhes-venda.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 18,
+      "profile": "tutorials-p1-p3"
+    },
+    "19-cancelar-venda": {
+      "file": "demo/tutorials/19-cancelar-venda.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 28,
+      "profile": "tutorials-p1-p3"
+    },
+    "20-fazer-devolucao": {
+      "file": "demo/tutorials/20-fazer-devolucao.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 28,
+      "profile": "tutorials-p1-p3"
+    },
+    "21-relatorio-vendas": {
+      "file": "demo/tutorials/21-relatorio-vendas.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 22,
+      "profile": "tutorials-p1-p3"
+    },
+    "22-criar-pedido-compra": {
+      "file": "demo/tutorials/22-criar-pedido-compra.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 28,
+      "profile": "tutorials-p1-p3"
+    },
+    "23-receber-mercadoria": {
+      "file": "demo/tutorials/23-receber-mercadoria.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 28,
+      "profile": "tutorials-p1-p3"
+    },
+    "24-recebimento-parcial": {
+      "file": "demo/tutorials/24-recebimento-parcial.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 28,
+      "profile": "tutorials-p1-p3"
+    },
+    "25-criar-orcamento-pedido": {
+      "file": "demo/tutorials/25-criar-orcamento-pedido.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 28,
+      "profile": "tutorials-p1-p3"
+    },
+    "26-reservar-atender-pedido": {
+      "file": "demo/tutorials/26-reservar-atender-pedido.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 28,
+      "profile": "tutorials-p1-p3"
+    },
+    "27-contas-pagar-receber": {
+      "file": "demo/tutorials/27-contas-pagar-receber.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 22,
+      "profile": "tutorials-p1-p3"
+    },
+    "28-comissao-vendedor": {
+      "file": "demo/tutorials/28-comissao-vendedor.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 22,
+      "profile": "tutorials-p1-p3"
+    },
+    "29-criar-usuario-operador": {
+      "file": "demo/tutorials/29-criar-usuario-operador.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 24,
+      "profile": "tutorials-p1-p3"
+    },
+    "30-alterar-permissoes": {
+      "file": "demo/tutorials/30-alterar-permissoes.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 24,
+      "profile": "tutorials-p1-p3"
+    },
+    "31-parear-terminal": {
+      "file": "demo/tutorials/31-parear-terminal.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 28,
+      "profile": "tutorials-p1-p3"
+    },
+    "32-configurar-impressora": {
+      "file": "demo/tutorials/32-configurar-impressora.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 28,
+      "profile": "tutorials-p1-p3"
+    },
+    "33-diagnostico-impressao": {
+      "file": "demo/tutorials/33-diagnostico-impressao.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 22,
+      "profile": "tutorials-p1-p3"
+    },
+    "34-fazer-backup": {
+      "file": "demo/tutorials/34-fazer-backup.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 22,
+      "profile": "tutorials-p1-p3"
+    },
+    "35-restaurar-importar-dados": {
+      "file": "demo/tutorials/35-restaurar-importar-dados.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 28,
+      "profile": "tutorials-p1-p3"
+    },
+    "36-ativar-desativar-modulos": {
+      "file": "demo/tutorials/36-ativar-desativar-modulos.json",
+      "preset": "landscape-16x9",
+      "durationTargetSec": 24,
+      "profile": "tutorials-p1-p3"
+    }
+  }
+}

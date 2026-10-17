@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "pdv-artisys",
+  "main": "cloudflare/account/src/worker.mjs",
+  "compatibility_date": "2026-10-03",
+  "keep_vars": true,
+  "d1_databases": [
+    {
+      "binding": "artisys"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "artisysr2"
+    }
+  ]
+}
