@@ -286,7 +286,7 @@
   async function restoreCheckoutState() {
     if(api.webMode){
       const [open,suspended]=await Promise.all([api.sales('OPEN',25),api.sales('SUSPENDED',25)]);
-      state.suspendedSales=suspended;
+      state.suspendedSales=suspended.filter(sale=>sale.terminalId===state.config.terminalId);
       if(!state.sale||state.sale.status!=='OPEN'||state.sale.terminalId!==state.config.terminalId)state.sale=open.find(sale=>sale.operatorId===state.user?.id&&sale.terminalId===state.config.terminalId)||null;
       state.discountPercent=state.sale?.subtotalCents?Number((state.sale.discountCents/state.sale.subtotalCents*100).toFixed(2)):0;
       return;
@@ -752,12 +752,13 @@
 
   async function suspendCurrentSale() {
     if (!state.sale?.items?.length) return showToast('Adicione itens antes de suspender.', 'error');
-    try { await api.suspendSale(state.sale.id); state.sale = null; clearCheckoutDocumentContext(); state.selectedProductId = null; state.suspendedSales = await api.sales('SUSPENDED', 30); renderCheckout(); if (isRouteActive('checkout')) showSuspendedModal(); } catch (error) { showToast(error.message, 'error'); }
+    try { await api.suspendSale(state.sale.id); state.sale = null; clearCheckoutDocumentContext(); state.selectedProductId = null; state.suspendedSales = (await api.sales('SUSPENDED', 30)).filter(sale=>!api.webMode||sale.terminalId===state.config.terminalId); renderCheckout(); if (isRouteActive('checkout')) showSuspendedModal(); } catch (error) { showToast(error.message, 'error'); }
   }
 
   function showSuspendedModal() {
     if (!isRouteActive('checkout')) return;
-    openModal('Vendas suspensas', `<div class="suspended-list">${state.suspendedSales.map((sale) => `<div class="suspended-item"><div><strong>${escapeHtml(sale.saleNumber)}</strong><small>${sale.items.length} itens · ${ui.formatCents(sale.totalCents)}</small></div><button class="primary-button" data-resume="${sale.id}">Retomar</button></div>`).join('') || '<div class="empty-state">Nenhuma venda suspensa.</div>'}</div>`, { onMount(root) { root.querySelectorAll('[data-resume]').forEach((button) => button.addEventListener('click', async () => { try { clearCheckoutDocumentContext(); state.sale = await api.resumeSale(button.dataset.resume); state.discountPercent = state.sale.subtotalCents ? Number(((state.sale.discountCents / state.sale.subtotalCents) * 100).toFixed(2)) : 0; closeModal(); renderCheckout(); } catch (error) { showToast(error.message, 'error'); } })); } });
+    const suspendedSales=api.webMode?state.suspendedSales.filter(sale=>sale.terminalId===state.config.terminalId):state.suspendedSales;
+    openModal('Vendas suspensas', `<div class="suspended-list">${suspendedSales.map((sale) => `<div class="suspended-item"><div><strong>${escapeHtml(sale.saleNumber)}</strong><small>${sale.items.length} itens · ${ui.formatCents(sale.totalCents)}</small></div><button class="primary-button" data-resume="${sale.id}">Retomar</button></div>`).join('') || '<div class="empty-state">Nenhuma venda suspensa.</div>'}</div>`, { onMount(root) { root.querySelectorAll('[data-resume]').forEach((button) => button.addEventListener('click', async () => { try { if(api.webMode&&!suspendedSales.some(sale=>sale.id===button.dataset.resume))throw new Error('Venda suspensa pertence a outro terminal.'); clearCheckoutDocumentContext(); state.sale = await api.resumeSale(button.dataset.resume); state.discountPercent = state.sale.subtotalCents ? Number(((state.sale.discountCents / state.sale.subtotalCents) * 100).toFixed(2)) : 0; closeModal(); renderCheckout(); } catch (error) { showToast(error.message, 'error'); } })); } });
   }
 
   async function ensureCashOpen() {
