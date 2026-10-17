@@ -253,7 +253,7 @@
   async function loadCommonData() {
     if(api.webMode){
       state.products=await api.products();
-      state.categories=[];state.users=[];
+      state.categories=await api.categories();state.users=[];
       state.customers=window.PdvAccessPolicy?.hasCapability(state.user,'customers.view')?await api.customers():[];
       state.sellers=window.PdvAccessPolicy?.hasCapability(state.user,'sellers.view')?await api.sellers():[{id:state.user.id,name:state.user.name}];
       state.selectedSellerId=state.user.id;
@@ -958,28 +958,30 @@
     const canManage=window.PdvAccessPolicy?.hasCapability(state.user,'products.manage');
     const canStock=window.PdvAccessPolicy?.hasCapability(state.user,'inventory.adjust');
     const catalogItems=showInactiveWebProducts?[...state.products,...inactiveWebProducts]:state.products;
-    const listed=catalogItems.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku).includes(ui.normalizeSearch(state.productQuery)));
+    const listed=catalogItems.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku+' '+(p.barcode||'')+' '+(p.brand||'')+' '+(p.variantLabel||'')).includes(ui.normalizeSearch(state.productQuery)));
     content.innerHTML=`<section class="page web-products-page"><header class="page-head">
       <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
       <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
-      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button>':''}
+      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button><button id="web-new-category" class="secondary-button" type="button">+ Categoria</button>':''}
       ${canManage?`<button id="web-toggle-inactive" class="secondary-button" type="button">${showInactiveWebProducts?'Ocultar inativos':'Mostrar inativos'}</button>`:''}</header>
       <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
-        placeholder="Buscar produto ou SKU" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
+        placeholder="Buscar produto, SKU ou código de barras" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
       <div class="data-card web-product-table" id="web-products-list">
         ${listed.length?listed.map(p=>`<div class="data-row web-product-row">
           <div class="web-product-identity"><span class="web-product-monogram">${escapeHtml(initials(p.name))}</span>
-          <div><strong>${escapeHtml(p.name)}</strong><small>${p.active===false?'Inativo · ':''}${escapeHtml(p.sku)}</small></div></div>
+          <div><strong>${escapeHtml(p.name)}</strong><small>${p.active===false?'Inativo · ':''}${escapeHtml(p.sku)}</small><small>${escapeHtml([p.brand,p.barcode,p.variantLabel].filter(Boolean).join(' · '))}</small></div></div>
           <div><small>Preço</small><strong>${ui.formatCents(p.salePriceCents)}</strong></div>
-          <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.balance):'Livre'}</strong></div>
+          <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.available??p.balance):'Por componentes'}</strong></div>
           ${canManage?`<button type="button" class="secondary-button" data-web-edit="${escapeHtml(p.id)}">Editar</button>`:''}
-          ${canStock&&p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
+          ${canManage&&!p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-kit="${escapeHtml(p.id)}">Componentes do kit</button>`:''}
+          ${canStock&&p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-reserve="${escapeHtml(p.id)}">Reservar</button><button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
           <button type="button" class="secondary-button" data-web-adjust="${escapeHtml(p.id)}">Ajustar saldo</button>
           <button type="button" class="secondary-button" data-web-transfer="${escapeHtml(p.id)}">Transferir</button>`:''}
           ${p.trackStock?`<button type="button" class="secondary-button" data-web-moves="${escapeHtml(p.id)}">Movimentações</button>`:''}
         </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
       </div></section>`;
     content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
+    content.querySelector('#web-new-category')?.addEventListener('click',openWebCategoryForm);
     content.querySelector('#web-toggle-inactive')?.addEventListener('click',async event=>{
       const button=event.currentTarget;button.disabled=true;
       try{
@@ -997,6 +999,8 @@
       renderWebProducts();
       if(focused){const el=content.querySelector('#web-product-search');el.focus({preventScroll:true});el.setSelectionRange(caret,caret);}
     });
+    content.querySelectorAll('[data-web-kit]').forEach(b=>b.addEventListener('click',()=>{const p=state.products.find(p=>p.id===b.dataset.webKit);if(p)void openWebKitForm(p);}));
+    content.querySelectorAll('[data-web-reserve]').forEach(b=>b.addEventListener('click',()=>{const p=state.products.find(p=>p.id===b.dataset.webReserve);if(p)void openWebReserveForm(p);}));
     content.querySelectorAll('[data-web-stock]').forEach(b=>b.addEventListener('click',()=>{
       const product=state.products.find(p=>p.id===b.dataset.webStock);
       if(product)openWebStockForm(product);
@@ -1022,11 +1026,122 @@
     routeRegistry.updated('products',{surface:'products'});
   }
 
+  function openWebCategoryForm(){
+    openModal('Nova categoria',`<form id="web-category-form"><div class="field">
+      <label>Nome<input name="name" minlength="2" maxlength="100" required placeholder="Ex.: Bebidas"></label></div>
+      <p role="status" class="web-form-feedback"></p>
+      <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Cancelar</button>
+      <button type="submit" class="primary-button">Salvar categoria</button></div></form>`,{onMount(root){
+      const form=root.querySelector('form');
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();if(form.dataset.pending)return;
+        form.dataset.pending='1';form.querySelector('[type=submit]').disabled=true;
+        try{
+          await api.saveCategory({name:form.elements.name.value.trim()});
+          state.categories=await api.categories();closeModal();renderWebProducts();
+          showToast('Categoria salva.','success');
+        }catch(e){form.querySelector('[role=status]').textContent=e.message;}
+        finally{form.dataset.pending='';}
+      });
+    }});
+  }
+
+  async function openWebKitForm(kit){
+    try{
+      const [all,current]=await Promise.all([api.products(),api.productBundle(kit.id)]);
+      const selected=new Map(current.map(c=>[c.productId,c.quantity]));
+      const ingredients=all.filter(p=>p.id!==kit.id&&p.trackStock&&p.active!==false);
+      if(!ingredients.length){showToast('Cadastre ao menos um produto com estoque para formar um kit.','error');return;}
+      const fields=ingredients.map(p=>`<label class="ops-return-item">
+        <span>${escapeHtml(p.name)} · ${escapeHtml(p.sku)}</span>
+        <small>Quantidade por kit (0 = não utilizar)</small>
+        <input class="ops-input compact" type="number" min="0" max="100000" step="0.001"
+          data-kit-component="${escapeHtml(p.id)}" value="${selected.get(p.id)||0}"></label>`).join('');
+      openModal('Componentes do kit — '+kit.name,`<form id="web-kit-form">
+        <p>O kit não mantém saldo duplicado: vender uma unidade consumirá os componentes definidos aqui.
+          Após a primeira venda, a composição fica protegida para preservar o histórico.</p>
+        <div class="ops-form">${fields}</div><p role="status" class="web-form-feedback"></p>
+        <div class="modal-actions"><button type="button" data-close-modal class="secondary-button">Cancelar</button>
+          <button type="submit" class="primary-button">Salvar composição</button></div>
+      </form>`,{onMount(root){
+        const form=root.querySelector('#web-kit-form');
+        form.addEventListener('submit',async event=>{
+          event.preventDefault();if(form.dataset.pending)return;
+          const components=[...form.querySelectorAll('[data-kit-component]')].map(x=>({
+            productId:x.dataset.kitComponent,quantity:Number(x.value)
+          })).filter(x=>x.quantity>0);
+          if(!components.length){form.querySelector('[role=status]').textContent='Selecione ao menos um componente.';return;}
+          form.dataset.pending='1';form.querySelector('[type=submit]').disabled=true;
+          try{
+            if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+            await api.saveProductBundle(kit.id,components,form.dataset.operationKey);
+            state.products=await api.products();closeModal();renderWebProducts();
+            showToast('Composição registrada no catálogo canônico.','success');
+          }catch(e){form.querySelector('[role=status]').textContent=e.message;}
+          finally{form.dataset.pending='';form.querySelector('[type=submit]').disabled=false;}
+        });
+      }});
+    }catch(e){showToast(e.message,'error');}
+  }
+
+  async function openWebReserveForm(product){
+    try{
+      const reservations=await api.stockReservations({productId:product.id});
+      const active=reservations.filter(r=>r.status==='ACTIVE');
+      const items=active.map(r=>`<div class="data-row">
+        <span><strong>${quantityLabel(r.quantity)}</strong> · ${escapeHtml(r.reason)}</span>
+        <button type="button" class="secondary-button" data-release-reservation="${escapeHtml(r.id)}">Liberar</button>
+      </div>`).join('')||'<p>Nenhuma reserva ativa para este produto.</p>';
+      openModal('Reservar estoque — '+product.name,`<form id="web-reservation-form">
+        <p>Saldo físico: ${quantityLabel(product.balance)} · disponível: ${quantityLabel(product.available??product.balance)}.
+          Reservas impedem vendas ou transferências que consumiriam unidades comprometidas.</p>
+        <div class="field"><label>Quantidade<input type="number" name="quantity" min="0.001"
+          max="${Number(product.available??product.balance)}" step="0.001" required></label></div>
+        <div class="field"><label>Motivo<input name="reason" required minlength="3" maxlength="240"
+          placeholder="Ex.: Pedido aguardando retirada"></label></div>
+        <p role="status" class="web-form-feedback"></p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Fechar</button>
+          <button type="submit" class="primary-button">Reservar unidades</button></div>
+        <h3>Reservas existentes</h3>${items}
+      </form>`,{onMount(root){
+        const form=root.querySelector('#web-reservation-form');
+        root.querySelectorAll('[data-release-reservation]').forEach(button=>button.addEventListener('click',async()=>{
+          button.disabled=true;
+          try{
+            await api.releaseStockReservation(button.dataset.releaseReservation);
+            state.products=await api.products();closeModal();renderWebProducts();
+            showToast('Reserva liberada.','success');
+          }catch(e){form.querySelector('[role=status]').textContent=e.message;button.disabled=false;}
+        }));
+        form.addEventListener('submit',async event=>{
+          event.preventDefault();if(form.dataset.pending)return;
+          form.dataset.pending='1';form.querySelector('[type=submit]').disabled=true;
+          try{
+            if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+            await api.reserveStock({
+              productId:product.id,quantity:Number(form.elements.quantity.value),
+              reason:form.elements.reason.value.trim()
+            },form.dataset.operationKey);
+            state.products=await api.products();closeModal();renderWebProducts();
+            showToast('Reserva registrada.','success');
+          }catch(e){form.querySelector('[role=status]').textContent=e.message;}
+          finally{form.dataset.pending='';form.querySelector('[type=submit]').disabled=false;}
+        });
+      }});
+    }catch(e){showToast(e.message,'error');}
+  }
+
   function openWebProductForm(){
     openModal('Novo produto',`<form id="web-product-form">
       <div class="field"><label for="web-product-name">Nome do produto</label><input id="web-product-name" name="name" required minlength="2" maxlength="120" autocomplete="off" placeholder="Ex.: Café tradicional"></div>
       <div class="field-grid"><div class="field"><label for="web-product-sku">SKU / código</label><input id="web-product-sku" name="sku" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]*" placeholder="Ex.: CAFE-001"></div>
       <div class="field"><label for="web-product-price">Preço de venda (R$)</label><input id="web-product-price" name="price" inputmode="decimal" required placeholder="0,00"></div></div>
+      <div class="field"><label>Marca<input name="brand" maxlength="100" placeholder="Ex.: Marca própria"></label></div>
+      <div class="field"><label>Código de barras<input name="barcode" maxlength="80" placeholder="Opcional, independente do SKU"></label></div>
+      <div class="field"><label>Categoria<select name="categoryId"><option value="">Sem categoria</option>${state.categories.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('')}</select></label></div>
+      <div class="field"><label>Produto pai<select name="parentProductId"><option value="">Produto independente</option>${state.products.filter(p=>!p.parentProductId).map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('')}</select></label></div>
+      <div class="field"><label>Nome da variação<input name="variantLabel" maxlength="80" placeholder="Ex.: Azul / G"></label></div>
+      <div class="field"><label>Unidade<select name="unit">${['UN','KG','G','L','M','M2','M3','CX','PCT'].map(unit=>`<option value="${unit}">${unit}</option>`).join('')}</select></label></div>
       <label class="web-checkbox"><input name="track" type="checkbox" checked> Controlar saldo no estoque</label>
       <p class="web-form-feedback" role="status" aria-live="polite"></p>
       <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button>
@@ -1040,7 +1155,10 @@
         try{
           if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
           const product=await api.saveProduct({name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
-            salePriceCents:centsFromInput(form.elements.price.value),trackStock:form.elements.track.checked},form.dataset.operationKey);
+            salePriceCents:centsFromInput(form.elements.price.value),trackStock:form.elements.track.checked,
+            brand:form.elements.brand.value.trim(),barcode:form.elements.barcode.value.trim(),
+            categoryId:form.elements.categoryId.value||null,parentProductId:form.elements.parentProductId.value||null,
+            variantLabel:form.elements.variantLabel.value.trim()||null,unit:form.elements.unit.value},form.dataset.operationKey);
           state.products=await api.products();
           closeModal();renderWebProducts();showToast('Produto '+product.name+' cadastrado.','success');
         }catch(error){status.textContent=error.message;}
@@ -1058,6 +1176,11 @@
       <div class="field-grid"><div class="field"><label for="web-edit-product-sku">SKU</label><input id="web-edit-product-sku" name="sku" required maxlength="64" value="${escapeHtml(product.sku)}"></div>
       <div class="field"><label for="web-edit-product-price">Preço de venda (R$)</label><input id="web-edit-product-price" name="price" required inputmode="decimal" value="${escapeHtml(price)}"></div></div>
       <div class="field"><label for="web-edit-product-unit">Unidade</label><select id="web-edit-product-unit" name="unit">${unitOptions.map(unit=>`<option value="${unit}" ${unit===product.unit?'selected':''}>${unit}</option>`).join('')}</select></div>
+      <div class="field"><label>Marca<input name="brand" maxlength="100" value="${escapeHtml(product.brand||'')}"></label></div>
+      <div class="field"><label>Código de barras<input name="barcode" maxlength="80" value="${escapeHtml(product.barcode&&product.barcode!==product.sku?product.barcode:'')}"></label></div>
+      <div class="field"><label>Categoria<select name="categoryId"><option value="">Sem categoria</option>${state.categories.map(c=>`<option value="${escapeHtml(c.id)}" ${c.id===product.categoryId?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}</select></label></div>
+      <div class="field"><label>Produto pai<select name="parentProductId"><option value="">Produto independente</option>${state.products.filter(p=>p.id!==product.id&&!p.parentProductId).map(p=>`<option value="${escapeHtml(p.id)}" ${p.id===product.parentProductId?'selected':''}>${escapeHtml(p.name)}</option>`).join('')}</select></label></div>
+      <div class="field"><label>Variação<input name="variantLabel" maxlength="80" value="${escapeHtml(product.variantLabel||'')}"></label></div>
       <label class="web-checkbox"><input type="checkbox" name="active" ${product.active!==false?'checked':''}> Produto ativo (desativar preserva vendas e estoque histórico)</label>
       <p class="web-form-feedback" role="status" aria-live="polite"></p>
       <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" type="submit">Salvar alterações</button></div>
@@ -1072,7 +1195,10 @@
           const result=await api.updateProduct(product.id,{
             name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
             salePriceCents:centsFromInput(form.elements.price.value),unit:form.elements.unit.value,
-            active:form.elements.active.checked
+            active:form.elements.active.checked,brand:form.elements.brand.value.trim(),
+            barcode:form.elements.barcode.value.trim(),categoryId:form.elements.categoryId.value||null,
+            parentProductId:form.elements.parentProductId.value||null,
+            variantLabel:form.elements.variantLabel.value.trim()||null
           },form.dataset.operationKey);
           state.products=await api.products();
           if(showInactiveWebProducts){const all=await api.products(true);inactiveWebProducts=all.filter(item=>item.active===false);}
@@ -1089,6 +1215,7 @@
       <p>Produto: <strong>${escapeHtml(product.name)}</strong> · Saldo atual: ${quantityLabel(product.balance)}</p>
       <div class="field"><label for="web-stock-qty">Quantidade recebida</label>
       <input id="web-stock-qty" name="quantity" type="number" min="0.001" step="0.001" required placeholder="0"></div>
+      <div class="field"><label>Custo unitário de compra (R$)<input name="unitCost" inputmode="decimal" placeholder="Opcional"></label></div>
       <p class="web-form-feedback" role="status" aria-live="polite"></p>
       <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button>
       <button class="primary-button" type="submit">Registrar entrada</button></div></form>`,{onMount(root){
@@ -1099,9 +1226,11 @@
         form.dataset.pending='true';button.disabled=true;button.textContent='Registrando…';
         try{
           if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
-          await api.request('/api/v1/inventory/movements',{method:'POST',mutationId:form.dataset.operationKey,body:{
-            productId:product.id,quantity:Number(form.elements.quantity.value),type:'purchase'
-          }});
+          const cost=String(form.elements.unitCost.value||'').trim();
+          await api.purchaseReceipt({
+            productId:product.id,quantity:Number(form.elements.quantity.value),type:'purchase',
+            ...(cost?{unitCostCents:centsFromInput(cost)}:{})
+          },form.dataset.operationKey);
           state.products=await api.products();
           closeModal();renderWebProducts();showToast('Entrada de estoque registrada para '+product.name+'.','success');
         }catch(error){status.textContent=error.message;}
@@ -1146,10 +1275,10 @@
     const targets=(data.branches||[]).filter(branch=>branch.id!==api.branchId&&branch.active!==false);
     if(!targets.length){showToast('Cadastre uma segunda filial ativa antes de transferir estoque.','error');return;}
     openModal('Transferir estoque entre filiais',`<form id="web-stock-transfer-form">
-      <p>Origem: <strong>${escapeHtml(product.name)}</strong> · Disponível: ${quantityLabel(product.balance)}</p>
+      <p>Origem: <strong>${escapeHtml(product.name)}</strong> · Disponível: ${quantityLabel(product.available??product.balance)}</p>
       <div class="field"><label for="web-transfer-to">Filial de destino</label>
       <select id="web-transfer-to" name="toBranchId" required>${targets.map(branch=>`<option value="${escapeHtml(branch.id)}">${escapeHtml(branch.name||branch.code||branch.id)}</option>`).join('')}</select></div>
-      <div class="field"><label for="web-transfer-qty">Quantidade</label><input id="web-transfer-qty" name="quantity" type="number" min="0.001" max="${Number(product.balance)}" step="0.001" required></div>
+      <div class="field"><label for="web-transfer-qty">Quantidade</label><input id="web-transfer-qty" name="quantity" type="number" min="0.001" max="${Number(product.available??product.balance)}" step="0.001" required></div>
       <div class="field"><label for="web-transfer-reason">Justificativa</label><textarea id="web-transfer-reason" name="reason" rows="3" minlength="3" maxlength="240" required></textarea></div>
       <p class="web-form-feedback" role="status" aria-live="polite"></p>
       <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" type="submit">Confirmar transferência</button></div>
