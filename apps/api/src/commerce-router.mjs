@@ -38,7 +38,7 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
   const feature=parts[0];
   const key=request.headers.get('x-mutation-id');
   try {
-    if(!['products','inventory','cash','sales','finance','reports','returns'].includes(feature))return null;
+    if(!['products','inventory','purchasing','cash','sales','finance','reports','returns'].includes(feature))return null;
     const body=writeMethods.has(method) ? (method==='DELETE'&&!request.headers.has('content-type')?{}:await payload(request)) : {};
     if(!['GET','HEAD','POST','PUT','PATCH','DELETE'].includes(method))return null;
     const branch=body.branchId||url.searchParams.get('branchId');
@@ -82,6 +82,34 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
         requireAccess(member,'products.manage',user);
         return json({product:await service.createProduct(tenant,user,body,key)},201);
       }
+    }
+    if(feature==='purchasing'){
+      if(parts.length===2&&parts[1]==='orders'){
+        if(method==='GET'){
+          requireAccess(member,'inventory.view',user);
+          return json({orders:await service.purchaseOrders(tenant,branch)});
+        }
+        if(method==='POST'){
+          requireAccess(member,'inventory.adjust',user);
+          return json({order:await service.createPurchaseOrder(tenant,branch,user,body,key)},201);
+        }
+      }
+      if(parts.length===3&&parts[1]==='orders'&&parts[2].length<=128&&method==='GET'){
+        requireAccess(member,'inventory.view',user);
+        return json({order:await service.purchaseOrder(tenant,branch,parts[2])});
+      }
+      if(parts.length===4&&parts[1]==='orders'&&parts[2].length<=128&&method==='POST'){
+        requireAccess(member,'inventory.adjust',user);
+        if(parts[3]==='receive')
+          return json({receipt:await service.receivePurchaseOrder(tenant,branch,parts[2],user,body,key)},201);
+        if(parts[3]==='cancel')
+          return json({order:await service.cancelPurchaseOrder(tenant,branch,parts[2],user,body,key)});
+      }
+      if(parts.length===2&&parts[1]==='cost-averages'&&method==='GET'){
+        requireAccess(member,'inventory.view',user);
+        return json({averages:await service.purchaseCostSummary(tenant,branch,{productId:url.searchParams.get('productId')||null})});
+      }
+      return null;
     }
     if(feature==='inventory'){
       if(parts[1]==='reservations'&&parts.length===2){
