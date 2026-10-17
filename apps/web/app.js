@@ -974,7 +974,8 @@
           <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.balance):'Livre'}</strong></div>
           ${canManage?`<button type="button" class="secondary-button" data-web-edit="${escapeHtml(p.id)}">Editar</button>`:''}
           ${canStock&&p.trackStock?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
-          <button type="button" class="secondary-button" data-web-adjust="${escapeHtml(p.id)}">Ajustar saldo</button>`:''}
+          <button type="button" class="secondary-button" data-web-adjust="${escapeHtml(p.id)}">Ajustar saldo</button>
+          <button type="button" class="secondary-button" data-web-transfer="${escapeHtml(p.id)}">Transferir</button>`:''}
           ${p.trackStock?`<button type="button" class="secondary-button" data-web-moves="${escapeHtml(p.id)}">Movimentações</button>`:''}
         </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
       </div></section>`;
@@ -1003,6 +1004,13 @@
     content.querySelectorAll('[data-web-adjust]').forEach(button=>button.addEventListener('click',()=>{
       const product=state.products.find(p=>p.id===button.dataset.webAdjust);
       if(product)openWebStockAdjustment(product);
+    }));
+    content.querySelectorAll('[data-web-transfer]').forEach(button=>button.addEventListener('click',async()=>{
+      const item=state.products.find(product=>product.id===button.dataset.webTransfer);
+      if(!item)return;
+      button.disabled=true;
+      try{await openWebStockTransfer(item);}catch(error){showToast(error.message,'error');}
+      finally{button.disabled=false;}
     }));
     content.querySelectorAll('[data-web-moves]').forEach(button=>button.addEventListener('click',async()=>{
       const product=state.products.find(p=>p.id===button.dataset.webMoves);
