@@ -1120,8 +1120,16 @@ export function createCommerceService(db,{now=nowISO}={}){
     async discount(tenant,branch,id,discountCents){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const value=requiredNumber(discountCents,'Desconto');
-      await run('UPDATE sales SET discount_cents=? WHERE id=? AND tenant_id=? AND branch_id=? AND status=?',
-        value,id,tenant,branch,'OPEN');
+      const current=await snapshot(tenant,branch,id);
+      if(value>current.subtotalCents)throw error(400,'O desconto não pode superar o subtotal da venda.');
+      // Guard the update against concurrent line changes and checkout completion.
+      // Sum rounded cents per item, matching the canonical pricing engine.
+      const result=await run(`UPDATE sales SET discount_cents=?
+        WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'
+          AND ?<=COALESCE((SELECT SUM(ROUND(unit_price_cents*quantity_milli/1000.0))
+            FROM sale_items WHERE sale_id=sales.id AND tenant_id=sales.tenant_id AND branch_id=sales.branch_id),0)`,
+        value,id,tenant,branch,value);
+      if(result.meta?.changes!==1)throw error(409,'A venda mudou de estado ou de valor. Atualize antes de aplicar o desconto.');
       return snapshot(tenant,branch,id);
     },
     async transition(tenant,branch,id,to){
