@@ -31,6 +31,9 @@ function sqlError(e){
   const message=String(e?.message||e);
   if(/CHECK constraint failed: stock_positions|CHECK constraint failed:.*balance_milli|INSUFFICIENT_STOCK/i.test(message))return error(409,'Estoque insuficiente. Atualize a disponibilidade e tente novamente.');
   if(/CASH_SESSION_NOT_OPEN/i.test(message))return error(409,'O caixa foi fechado. Abra outro antes de finalizar.');
+  if(/CASH_INSUFFICIENT/i.test(message))return error(409,'Saldo físico insuficiente para a sangria.');
+  if(/CASH_CLOSING_STALE/i.test(message))return error(409,'O saldo do caixa mudou. Atualize e confira novamente.');
+  if(/FINANCE_OVERPAY_OR_CANCELLED/i.test(message))return error(409,'A conta mudou de situação ou o pagamento excede o saldo.');
   if(/SALE_NOT_OPEN|FINAL_SALE_IMMUTABLE/i.test(message))return error(409,'Esta venda mudou de estado. Atualize antes de continuar.');
   if(/UNIQUE constraint failed|constraint failed/i.test(message))return error(409,'Registro já alterado. Atualize os dados e tente novamente.');
   return e;
@@ -310,13 +313,28 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(kind&&!['PAYABLE','RECEIVABLE'].includes(kind))throw error(400,'Tipo financeiro inválido.');
       if(status&&!['OPEN','PARTIAL','SETTLED','CANCELLED','OVERDUE'].includes(status))
         throw error(400,'Situação financeira inválida.');
-      const rows=await all(`SELECT e.id FROM finance_entries e WHERE e.tenant_id=? AND e.branch_id=?
-        ORDER BY e.due_date,e.created_at DESC LIMIT ?`,tenant,branch,Math.min(200,Math.max(1,Number(limit)||100)));
-      const result=await Promise.all(rows.map(r=>financeRow(tenant,branch,r.id)));
       const today=new Date().toISOString().slice(0,10);
-      return result.map(row=>({...row,isOverdue:row.status!=='SETTLED'&&row.status!=='CANCELLED'&&row.dueDate<today}))
-        .filter(row=>(!kind||row.kind===kind)&&(!query||row.description.toLowerCase().includes(String(query).slice(0,120).toLowerCase()))&&
-        (!status||(status==='OVERDUE'?row.isOverdue:row.status===status)));
+      const rows=await all(`WITH balances AS (
+        SELECT e.id,e.tenant_id AS tenantId,e.branch_id AS branchId,
+          e.description,e.kind,e.amount_cents AS amountCents,e.due_date AS dueDate,
+          e.created_at AS createdAt,e.cancelled_at AS cancelledAt,
+          COALESCE(SUM(f.amount_cents),0) AS settledCents
+        FROM finance_entries e LEFT JOIN finance_settlements f ON f.entry_id=e.id
+        WHERE e.tenant_id=? AND e.branch_id=? AND (?='' OR e.kind=?)
+          AND (?='' OR instr(lower(e.description),lower(?))>0)
+        GROUP BY e.id
+      )
+      SELECT *,amountCents-settledCents AS openCents,
+        CASE WHEN cancelledAt IS NOT NULL THEN 'CANCELLED'
+          WHEN amountCents=settledCents THEN 'SETTLED'
+          WHEN settledCents>0 THEN 'PARTIAL' ELSE 'OPEN' END AS status
+      FROM balances
+      WHERE (?='' OR status=? OR (?='OVERDUE' AND cancelledAt IS NULL
+        AND amountCents>settledCents AND dueDate<?))
+      ORDER BY dueDate,createdAt DESC LIMIT ?`,
+        tenant,branch,kind,kind,String(query||'').slice(0,120),String(query||'').slice(0,120),
+        status,status,status,today,Math.min(200,Math.max(1,Number(limit)||100)));
+      return rows.map(row=>({...row,isOverdue:row.status!=='SETTLED'&&row.status!=='CANCELLED'&&row.dueDate<today}));
     },
     async createFinanceEntry(tenant,branch,user,body,keyHeader){
       await branchExists(tenant,branch);
@@ -366,17 +384,26 @@ export function createCommerceService(db,{now=nowISO}={}){
       return result;
     },
     async financeSummary(tenant,branch){
-      const rows=await this.financeEntries(tenant,branch,{limit:200});
-      const summary={payableOpenCents:0,receivableOpenCents:0,payableSettledCents:0,
+      await branchExists(tenant,branch);
+      // Aggregated in one query, including records beyond any UI page limit.
+      const rows=await all(`SELECT e.kind,
+        COALESCE(SUM(e.amount_cents-COALESCE(fs.paid,0)),0) AS openCents,
+        COALESCE(SUM(COALESCE(fs.paid,0)),0) AS settledCents,
+        COALESCE(SUM(CASE WHEN e.due_date<? THEN e.amount_cents-COALESCE(fs.paid,0) ELSE 0 END),0) AS overdueCents
+        FROM finance_entries e
+        LEFT JOIN (SELECT entry_id,SUM(amount_cents) AS paid FROM finance_settlements GROUP BY entry_id) fs
+          ON fs.entry_id=e.id
+        WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL
+        GROUP BY e.kind`,new Date().toISOString().slice(0,10),tenant,branch);
+      const result={payableOpenCents:0,receivableOpenCents:0,payableSettledCents:0,
         receivableSettledCents:0,overduePayableCents:0,overdueReceivableCents:0};
       for(const row of rows){
-        if(row.status==='CANCELLED')continue;
-        const k=row.kind==='PAYABLE'?'payable':'receivable';
-        summary[k+'OpenCents']+=row.openCents;
-        summary[k+'SettledCents']+=row.settledCents;
-        if(row.isOverdue)summary[row.kind==='PAYABLE'?'overduePayableCents':'overdueReceivableCents']+=row.openCents;
+        const prefix=row.kind==='PAYABLE'?'payable':'receivable';
+        result[prefix+'OpenCents']=row.openCents;
+        result[prefix+'SettledCents']=row.settledCents;
+        result[row.kind==='PAYABLE'?'overduePayableCents':'overdueReceivableCents']=row.overdueCents;
       }
-      return summary;
+      return result;
     },
     async reports(tenant,branch,{from,to}={}){
       await branchExists(tenant,branch);
