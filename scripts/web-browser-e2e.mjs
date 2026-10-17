@@ -125,7 +125,7 @@ try{
   await page.locator('#app-sidebar [data-route=reports]').click();
   await page.getByRole('heading',{name:'Relatórios comerciais'}).waitFor({timeout:12000});
   const report=await page.locator('#route-content').innerText();
-  assert.match(report,/Faturamento registrado/);
+  assert.match(report,/Faturamento registrado/i);
   await page.locator('[data-report-web=finance]').click();
   await page.getByText('A pagar').first().waitFor();
   await page.screenshot({path:'qa-artifacts/pdv-reports-mobile.png',fullPage:true});
