@@ -97,7 +97,7 @@
       <section class="ops-card"><h2>${open?'Caixa em operação':'Iniciar caixa'}</h2>
         ${open?`<dl class="ops-details"><div><dt>Abertura</dt><dd>${when(open.openedAt)}</dd></div>
           <div><dt>Fundo inicial</dt><dd>${money(open.openingCents)}</dd></div>
-          <div><dt>Operador</dt><dd>${escapeHtml(open.operatorId)}</dd></div></dl>`:''}${cashControls}
+          <div><dt>Operador</dt><dd>${escapeHtml(open.operatorId)}</dd></div><div><dt>Terminal</dt><dd>${escapeHtml(open.terminalId||cfg.terminalId)}</dd></div></dl>`:''}${cashControls}
       </section>
       <section class="ops-card"><h2>Movimentações</h2>
       <div class="ops-table-wrap"><table class="ops-table"><thead><tr>
@@ -109,17 +109,18 @@
       </table></div></section></div>
       <section class="ops-card"><h2>Histórico de fechamento</h2><div class="ops-table-wrap">
         <table class="ops-table"><thead><tr><th>Abertura</th><th>Fechamento</th>
-          <th>Esperado</th><th>Contado</th><th>Divergência</th></tr></thead><tbody>
+          <th>Esperado</th><th>Contado</th><th>Divergência</th><th>Terminal</th></tr></thead><tbody>
         ${sessions.filter(row=>row.status==='CLOSED').map(row=>`<tr>
           <td>${when(row.openedAt)}</td><td>${when(row.closedAt)}</td>
           <td>${money(row.expectedCashCents)}</td><td>${money(row.countedCashCents)}</td>
-          <td>${money(row.divergenceCents)}</td></tr>`).join('')||
-            `<tr><td colspan="5">${empty('Nenhum fechamento anterior.')}</td></tr>`}
+          <td>${money(row.divergenceCents)}</td><td>${escapeHtml(row.terminalId||'DEFAULT')}</td></tr>`).join('')||
+            `<tr><td colspan="6">${empty('Nenhum fechamento anterior.')}</td></tr>`}
         </tbody></table></div></section>
       <section class="ops-card"><details id="web-cash-history-search"><summary>Consultar histórico completo do caixa</summary>
         <form id="web-cash-search-form" class="ops-form">
           <div class="ops-grid two">
             <label>Operador (ID)<input name="operatorId" class="ops-input"></label>
+            <label>Terminal (ID)<input name="terminalId" class="ops-input" placeholder="Todos os terminais"></label>
             <label>Situação<select name="status" class="ops-input">
               <option value="">Todos</option><option value="OPEN">Aberto</option><option value="CLOSED">Fechado</option>
             </select></label>
@@ -141,12 +142,12 @@
           const history=await api.cashSessionsSearch({...values,limit:20,offset});
           result.innerHTML=`<p class="ops-muted">${history.total} sessões encontradas</p>
           <div class="ops-table-wrap"><table class="ops-table"><thead>
-          <tr><th>Operador</th><th>Abertura</th><th>Fechamento</th><th>Estado</th><th>Esperado</th></tr>
+          <tr><th>Terminal</th><th>Operador</th><th>Abertura</th><th>Fechamento</th><th>Estado</th><th>Esperado</th></tr>
           </thead><tbody>${history.items.map(row=>`<tr>
-          <td>${escapeHtml(row.operatorId)}</td><td>${when(row.openedAt)}</td>
+          <td>${escapeHtml(row.terminalId||'DEFAULT')}</td><td>${escapeHtml(row.operatorId)}</td><td>${when(row.openedAt)}</td>
           <td>${when(row.closedAt)}</td><td>${badge(row.status)}</td>
           <td>${money(row.expectedCashCents)}</td></tr>`).join('')||
-          '<tr><td colspan="5">Nenhuma sessão corresponde aos filtros.</td></tr>'}</tbody>
+          '<tr><td colspan="6">Nenhuma sessão corresponde aos filtros.</td></tr>'}</tbody>
           </table></div><div class="ops-actions">
           <button class="ops-secondary" data-cash-page="-1" ${history.offset<=0?'disabled':''}>Anterior</button>
           <button class="ops-secondary" data-cash-page="1"
