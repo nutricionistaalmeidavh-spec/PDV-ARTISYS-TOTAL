@@ -132,6 +132,7 @@
       if(operation.startsWith('finance/entries/'))return value.settlement||value.result||value.entry;
       if(operation==='reports/summary')return value.report;
       if(operation==='reports/compare')return value.comparison;
+      if(operation==='reports/margins')return value.margin;
       if(operation==='reports/sales.csv')return value;
       if(operation==='sales'||operation.startsWith('sales?'))return method==='GET'?value.sales:value.sale;
       if(operation==='sales/history')return value.history;
@@ -292,6 +293,7 @@
     sales(status = '', limit = 50) { return this.request(`/api/v1/sales${this.params({status,limit})}`); }
     salesHistory(filters = {}) { return this.request(`/api/v1/sales/history${this.params(filters)}`); }
     compareSalesPeriods(filters = {}) { return this.request(`/api/v1/reports/compare${this.params(filters)}`); }
+    historicalMarginReport(filters = {}) { return this.request(`/api/v1/reports/margins${this.params(filters)}`); }
     sale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}`); }
     saleDetails(id) { return this.webMode?this.sale(id):this.request(`/api/v1/sales/${encodeURIComponent(id)}/details`); }
     openSale(body,mutationId) { return this.request('/api/v1/sales', { method: 'POST', body,mutationId }); }

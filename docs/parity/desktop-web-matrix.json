@@ -1102,13 +1102,20 @@
         {
           "id": "reports-063",
           "name": "Margem/custo histórico do produto e lucro real",
-          "status": "gap",
+          "status": "partial",
           "owner": "reports",
           "dependsOn": [
             "reports-058",
             "products-026"
           ],
-          "acceptance": "Margem/custo histórico do produto e lucro real. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Margem/custo histórico do produto e lucro real. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/historical-margin.mjs",
+            "contains": "async margin(tenant,branch,",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 historical margin snapshots"
+          },
+          "reviewNote": "Margem líquida reconhecida por data da venda/devolução e custo congelado em sale_stock_allocations. Exibe margem nula se custo desconhecido. Custo é último custo lançado no checkout, não CMV FIFO/médio móvel auditado; relatórios legados e fiscalidade ainda pendentes."
         },
         {
           "id": "reports-064",

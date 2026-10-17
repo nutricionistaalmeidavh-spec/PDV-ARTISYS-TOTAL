@@ -350,16 +350,17 @@
     if(!state.toDate)state.toDate=date;
     const fromDate=state.fromDate,toDate=state.toDate;
     const query=new URLSearchParams({from:fromDate,to:toDate});
-    const available=['overview','products','payments','inventory','cash','finance'];
+    const available=['overview','products','payments','inventory','cash','finance','margins'];
     if(!available.includes(state.view))state.view='overview';
-    let report,comparison=null;
+    let report,comparison=null,margin=null;
     try{
       const previous=root.PdvBusinessDate.equivalentPreviousPeriod(fromDate,toDate);
-      [report,comparison]=await Promise.all([
+      [report,comparison,margin]=await Promise.all([
         api.request('/api/v1/reports/summary?'+query.toString()),
         state.view==='overview'?api.compareSalesPeriods({
           from:fromDate,to:toDate,compareFrom:previous.previousFrom,compareTo:previous.previousTo
-        }).catch(()=>null):Promise.resolve(null)
+        }).catch(()=>null):Promise.resolve(null),
+        state.view==='margins'?api.historicalMarginReport({from:fromDate,to:toDate}):Promise.resolve(null)
       ]);
     }catch(error){
       if(routeActive())content.innerHTML=`<section class="ops-page report-v2-page">
@@ -373,7 +374,7 @@
     const total=Number(sale.totalCents)||0,count=Number(sale.count)||0;
     const value=(v)=>money(Number(v)||0);
     const viewLabels={overview:'Visão geral',products:'Produtos',payments:'Recebimentos',
-      inventory:'Estoque',cash:'Caixa',finance:'Financeiro'};
+      inventory:'Estoque',cash:'Caixa',finance:'Financeiro',margins:'Margem histórica'};
     const table=(heads,rows,colspan=heads.length)=>`<div class="ops-table-wrap"><table class="ops-table">
       <thead><tr>${heads.map(x=>`<th>${escapeHtml(x)}</th>`).join('')}</tr></thead><tbody>
       ${rows.length?rows.join(''):`<tr><td colspan="${colspan}"><div class="ops-empty">Nenhum registro neste período.</div></td></tr>`}
@@ -398,6 +399,22 @@
     const comparisonHint=comparison?.delta?.percentage==null
       ?'Sem base comparativa no período anterior'
       :(comparison.delta.percentage>=0?'+':'')+comparison.delta.percentage.toLocaleString('pt-BR')+'% em relação ao período anterior';
+    const marginsTable=()=>{
+      if(!margin)return '<p class="ops-muted">Selecione um período para consultar os custos históricos.</p>';
+      const summary=`<div class="ops-metrics">
+        ${metric('Receita líquida',value(margin.revenueCents))}
+        ${metric('Custo histórico identificado',value(margin.costCents))}
+        ${metric('Margem sobre custos conhecidos',margin.marginCents==null?'Indeterminada':value(margin.marginCents),
+          margin.missingCostLines?'Há '+margin.missingCostLines+' linha(s) sem custo histórico confiável.':'Custo congelado na conclusão das vendas')}
+        ${metric('Devoluções',value(margin.returnedCents))}
+      </div>`;
+      return summary+table(['Produto','Qtd. líquida','Receita líquida','Custo registrado','Margem','Base do custo'],
+        (margin.products||[]).map(p=>`<tr>
+        <td>${escapeHtml(p.name)}</td><td>${qty(p.quantity)}</td><td>${value(p.revenueCents)}</td>
+        <td>${value(p.costCents)}</td>
+        <td>${p.marginCents==null?'Não apurada':value(p.marginCents)}</td>
+        <td>${p.missingCostLines?'Histórico incompleto':'Snapshot da venda'}</td></tr>`));
+    };
     const overview=`<div class="ops-metrics">
       ${metric('Faturamento registrado (líquido)',value(total),comparison?comparisonHint:'')}
       ${metric('Vendas concluídas',String(count))}
@@ -408,7 +425,7 @@
       <section class="ops-card"><h2>Meios de pagamento</h2>${paymentsTable()}</section>
       <section class="ops-card"><h2>Mais vendidos</h2>${productsTable()}</section></div>`;
     const views={overview,products:productsTable(),payments:paymentsTable(),inventory:inventoryTable(),
-      cash:cashTable(),finance:financeTable()};
+      cash:cashTable(),finance:financeTable(),margins:marginsTable()};
     const tabs=available.map(key=>`<button type="button" data-report-web="${key}"
       class="report-v2-tab ${state.view===key?'active':''}"
       role="tab" aria-selected="${state.view===key?'true':'false'}"
@@ -426,7 +443,7 @@
       </form><nav class="report-v2-tabs" role="tablist" aria-label="Categorias de relatório">${tabs}</nav>
       <div id="report-v2-body" role="tabpanel"><section class="ops-card">
         ${views[state.view]||overview}</section></div>
-      <p class="ops-muted">Relatório não fiscal. Formas PIX e cartão representam pagamentos registrados manualmente no caixa.</p>
+      <p class="ops-muted">Relatório não fiscal. Margens são calculadas sobre custos registrados no fechamento da venda; não representam lucro contábil auditado quando o custo histórico é incompleto. PIX e cartão são pagamentos registrados manualmente.</p>
     </section>`;
     content.querySelector('#web-report-filter')?.addEventListener('submit',event=>{
       event.preventDefault();
