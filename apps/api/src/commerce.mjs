@@ -30,6 +30,8 @@ const has=(object,key)=>hasOwnProperty.call(object,key);
 function sqlError(e){
   const message=String(e?.message||e);
   if(/CHECK constraint failed: stock_positions|CHECK constraint failed:.*balance_milli|INSUFFICIENT_STOCK/i.test(message))return error(409,'Estoque insuficiente. Atualize a disponibilidade e tente novamente.');
+  if(/PRODUCT_UNIT_WITH_HISTORY/i.test(message))return error(409,'A unidade de produto com venda ou estoque histórico não pode mudar.');
+  if(/PRODUCT_HAS_PENDING_SALE/i.test(message))return error(409,'Finalize ou cancele as vendas abertas antes de desativar o produto.');
   if(/CASH_SESSION_NOT_OPEN/i.test(message))return error(409,'O caixa foi fechado. Abra outro antes de finalizar.');
   if(/CASH_INSUFFICIENT/i.test(message))return error(409,'Saldo físico insuficiente para a sangria.');
   if(/CASH_CLOSING_STALE/i.test(message))return error(409,'O saldo do caixa mudou. Atualize e confira novamente.');
