@@ -101,7 +101,13 @@ try{
   // Use the full remaining sale total; the prior browser smoke leaves a legitimate open draft.
   // The canonical payment modal pre-fills the exact server-calculated remainder.
   await page.locator('#add-payment').click();
+  const completionResponse=page.waitForResponse(response=>
+    response.request().method()==='POST'&&new URL(response.url()).pathname.endsWith('/complete')&&
+    new URL(response.url()).pathname.includes('/sales/'),{timeout:12000});
   await page.locator('#confirm-payment').click();
+  const completedPayload=await (await completionResponse).json();
+  const completedSaleNumber=completedPayload.sale?.saleNumber;
+  assert.ok(completedSaleNumber,'completion response must identify the exact sale for parity follow-up');
   await page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
   await page.waitForFunction(()=>document.querySelectorAll('.cart-line').length===0,null,{timeout:12000});
   // Post-sale receipt dialog is part of the original renderer. Dismiss it
@@ -115,8 +121,9 @@ try{
   // Parity: the original sales-history route now offers server-side search and paging.
   await page.locator('#app-sidebar [data-route=sales]').click();
   await page.locator('#web-sales-filter').waitFor({timeout:12000});
-  const saleNumber=await page.locator('#ops-sales-body tr').first().locator('td').first().innerText();
-  await page.locator('#web-sales-filter [name=query]').fill(saleNumber.trim());
+  // Filter by the sale actually completed above; prior Workerd smoke leaves
+  // legitimate independent sales in the same test D1.
+  await page.locator('#web-sales-filter [name=query]').fill(completedSaleNumber);
   await page.locator('#web-sales-filter button[type=submit]').click();
   await page.waitForFunction(()=>document.querySelectorAll('#ops-sales-body tr[data-search]').length===1,
     null,{timeout:12000});
