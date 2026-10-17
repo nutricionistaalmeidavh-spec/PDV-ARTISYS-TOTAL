@@ -131,26 +131,34 @@ test('P3 lifecycle: open cash, open sale, add item exactly once, calculate origi
   }finally{x.close();}
 });
 
-test('P3 checkout discounts reject over-subtotal amounts without changing authorized sale',async()=>{
+test('P3 discount matches desktop clamping, persists the applied cents and enforces RBAC',async()=>{
   const x=await setup();try{
     const pid=await x.id('Discountable item','DISC-BOUND',2);
     const opened=await x.write('a','sales',{branchId:'branch-a'});
     assert.equal(opened.status,201,opened.body.error);
     const sid=opened.body.sale.id,path=`sales/${sid}/discount`;
-    const item=await x.write('a',`sales/${sid}/items`,{branchId:'branch-a',productId:pid,quantity:1});
-    assert.equal(item.body.sale.subtotalCents,1000);
+    const first=await x.write('a',`sales/${sid}/items`,{branchId:'branch-a',productId:pid,quantity:1});
+    assert.equal(first.body.sale.subtotalCents,1000);
     const valid=await x.write('a',path,{branchId:'branch-a',discountCents:350});
     assert.equal(valid.status,200,valid.body.error);
     assert.equal(valid.body.sale.totalCents,650);
-    const tooLarge=await x.write('a',path,{branchId:'branch-a',discountCents:1001});
-    assert.equal(tooLarge.status,400,'Must reject excess discounts rather than silently clamp them');
-    assert.equal((await x.get('a',`sales/${sid}?branchId=branch-a`)).body.sale.discountCents,350,
-      'Rejected mutation must preserve prior authorized discount');
+    const capped=await x.write('a',path,{branchId:'branch-a',discountCents:1001});
+    assert.equal(capped.status,200,capped.body.error);
+    assert.equal(capped.body.sale.discountCents,1000,'Desktop clamps excess to the subtotal');
+    const stored=await x.db.prepare('SELECT discount_cents AS discountCents FROM sales WHERE id=?').bind(sid).first();
+    assert.equal(stored.discountCents,1000,'Never retain unapplied discount that could leak into subsequent items');
+    const extra=await x.write('a',`sales/${sid}/items`,{branchId:'branch-a',productId:pid,quantity:1});
+    assert.equal(extra.status,200,extra.body.error);
+    assert.equal(extra.body.sale.subtotalCents,2000);
+    assert.equal(extra.body.sale.discountCents,1000,'New items cannot retroactively inflate an earlier discount');
+    assert.equal(extra.body.sale.totalCents,1000);
     assert.equal((await x.write('a',path,{branchId:'branch-a',discountCents:25},{who:x.viewer})).status,403);
     assert.equal((await x.write('b',path,{branchId:'branch-b',discountCents:25},{who:x.other})).status,404);
-    const full=await x.write('a',path,{branchId:'branch-a',discountCents:1000});
+    assert.equal((await x.write('a',path,{branchId:'branch-a',discountCents:-1})).status,400);
+    assert.equal((await x.write('a',path,{branchId:'branch-a',discountCents:1.5})).status,400);
+    const full=await x.write('a',path,{branchId:'branch-a',discountCents:2000});
     assert.equal(full.status,200,full.body.error);
-    assert.equal(full.body.sale.totalCents,0,'A 100% discount must remain valid when authorized');
+    assert.equal(full.body.sale.totalCents,0,'A 100% discount remains valid when authorized');
   }finally{x.close();}
 });
 
