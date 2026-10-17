@@ -100,7 +100,15 @@ export function createCommerceService(db,{now=nowISO}={}){
     if(!validKey(key))throw error(400,'Identificador único da operação obrigatório.');
     return key;
   };
-  const snapshot=async(tenant,branch,id)=>saleSnapshot(await tenantSale(tenant,branch,id));
+  const snapshot=async(tenant,branch,id)=>{
+    const s=await tenantSale(tenant,branch,id);
+    const view=await saleSnapshot(s);
+    if(s.status==='OPEN'||s.status==='SUSPENDED'){
+      const totals=calculateSaleTotals({items:view.items,discountCents:s.discount_cents});
+      return {...view,...totals};
+    }
+    return view;
+  };
   const listing=async(tenant,branch,limit=25)=>{
     await branchExists(tenant,branch);
     const n=Number.isInteger(limit)?Math.min(50,Math.max(1,limit)):25;
@@ -195,7 +203,7 @@ export function createCommerceService(db,{now=nowISO}={}){
     listSales:listing,
     async addItem(tenant,branch,id,body,header){
       const key=requiredMutation(body,header),scope='sale.add-item:'+id;
-      const previous=await applied(tenant,scope,key);if(previous)return previous;
+      const previous=await applied(tenant,scope,key);if(previous)return snapshot(tenant,branch,id);
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const row=await product(tenant,body?.productId);
       const milli=quantityMilli(body?.quantity??1);
