@@ -241,7 +241,25 @@ try{
   // P3: Close the very same cash session used by checkout.
   await page.locator('#app-sidebar [data-route=cash]').click();
   await page.getByRole('heading',{name:'Caixa',exact:true}).waitFor({timeout:12000});
-  await page.locator('[data-cash-web=close]').waitFor({timeout:12000});
+  try{
+    await page.locator('[data-cash-web=close]').waitFor({timeout:12000});
+  }catch(error){
+    const diagnostic=await page.evaluate(async()=>{
+      const terminalId=localStorage.getItem('artisys.pdv.webTerminalId.v1');
+      const client=new window.PdvApiClient.ApiClient();
+      const values=await Promise.allSettled([
+        client.openCash(terminalId),
+        client.cashSessions({terminalId}),
+        client.cashSessions()
+      ]);
+      return {terminalId,screen:document.querySelector('#route-content')?.innerText.slice(0,1200),
+        values:values.map(result=>result.status==='fulfilled'
+          ?{success:true,value:result.value}
+          :{success:false,error:result.reason?.message})};
+    });
+    console.error('CASH_TERMINAL_E2E_DIAGNOSTIC',JSON.stringify(diagnostic).slice(0,3600));
+    throw error;
+  }
   await page.locator('[data-cash-web=close]').click();
   await page.locator('.ux-dialog [name=amount]').waitFor();
   await page.locator('.ux-dialog__confirm').click();
