@@ -952,28 +952,44 @@
   }
 
 
+  let inactiveWebProducts=[];
+  let showInactiveWebProducts=false;
   function renderWebProducts(){
     const canManage=window.PdvAccessPolicy?.hasCapability(state.user,'products.manage');
     const canStock=window.PdvAccessPolicy?.hasCapability(state.user,'inventory.adjust');
-    const listed=state.products.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku).includes(ui.normalizeSearch(state.productQuery)));
+    const catalogItems=showInactiveWebProducts?[...state.products,...inactiveWebProducts]:state.products;
+    const listed=catalogItems.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku).includes(ui.normalizeSearch(state.productQuery)));
     content.innerHTML=`<section class="page web-products-page"><header class="page-head">
       <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
       <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
-      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button>':''}</header>
+      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button>':''}
+      ${canManage?`<button id="web-toggle-inactive" class="secondary-button" type="button">${showInactiveWebProducts?'Ocultar inativos':'Mostrar inativos'}</button>`:''}</header>
       <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
         placeholder="Buscar produto ou SKU" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
       <div class="data-card web-product-table" id="web-products-list">
         ${listed.length?listed.map(p=>`<div class="data-row web-product-row">
           <div class="web-product-identity"><span class="web-product-monogram">${escapeHtml(initials(p.name))}</span>
-          <div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku)}</small></div></div>
+          <div><strong>${escapeHtml(p.name)}</strong><small>${p.active===false?'Inativo · ':''}${escapeHtml(p.sku)}</small></div></div>
           <div><small>Preço</small><strong>${ui.formatCents(p.salePriceCents)}</strong></div>
           <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.balance):'Livre'}</strong></div>
+          ${canManage?`<button type="button" class="secondary-button" data-web-edit="${escapeHtml(p.id)}">Editar</button>`:''}
           ${canStock&&p.trackStock?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
           <button type="button" class="secondary-button" data-web-adjust="${escapeHtml(p.id)}">Ajustar saldo</button>`:''}
           ${p.trackStock?`<button type="button" class="secondary-button" data-web-moves="${escapeHtml(p.id)}">Movimentações</button>`:''}
         </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
       </div></section>`;
     content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
+    content.querySelector('#web-toggle-inactive')?.addEventListener('click',async event=>{
+      const button=event.currentTarget;button.disabled=true;
+      try{
+        if(!showInactiveWebProducts){const all=await api.products(true);inactiveWebProducts=all.filter(product=>product.active===false);}
+        showInactiveWebProducts=!showInactiveWebProducts;renderWebProducts();
+      }catch(error){showToast(error.message,'error');button.disabled=false;}
+    });
+    content.querySelectorAll('[data-web-edit]').forEach(button=>button.addEventListener('click',()=>{
+      const item=catalogItems.find(product=>product.id===button.dataset.webEdit);
+      if(item)openWebEditProductForm(item);
+    }));
     content.querySelector('#web-product-search')?.addEventListener('input',e=>{
       state.productQuery=e.target.value;
       const focused=document.activeElement===e.target,caret=e.target.selectionStart;
