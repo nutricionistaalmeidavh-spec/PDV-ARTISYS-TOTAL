@@ -52,8 +52,9 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       }
       if(parts.length!==1)return null;
       if(method==='GET'){
-        requireAccess(member,'products.view',user);
-        return json({products:await service.products(tenant,branch,{limit:100})});
+        const includeInactive=url.searchParams.get('includeInactive')==='true';
+        requireAccess(member,includeInactive?'products.manage':'products.view',user);
+        return json({products:await service.products(tenant,branch,{limit:100,includeInactive})});
       }
       if(method==='POST'){
         requireAccess(member,'products.manage',user);
