@@ -61,9 +61,9 @@ try{
   await page.locator('#confirm-open-cash').waitFor();
   await page.locator('#confirm-open-cash').click();
   await page.locator('#confirm-payment').waitFor();
-  await page.locator('#new-payment-method').selectOption('PIX');
   // Payment has already been seeded with initial method. Replace that line.
   await page.locator('[data-remove-payment]').first().click();
+  await page.locator('#new-payment-method').selectOption('PIX');
   await page.locator('#new-payment-value').fill('12,90');
   await page.locator('#add-payment').click();
   await page.locator('#confirm-payment').click();
