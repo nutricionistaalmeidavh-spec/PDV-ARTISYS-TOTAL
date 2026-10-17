@@ -113,7 +113,7 @@ export function createCommerceService(db,{now=nowISO}={}){
     await branchExists(tenant,branch);
     const n=Number.isInteger(limit)?Math.min(50,Math.max(1,limit)):25;
     const rows=await all('SELECT * FROM sales WHERE tenant_id=? AND branch_id=? ORDER BY created_at DESC,id DESC LIMIT ?',tenant,branch,n);
-    return Promise.all(rows.map(saleSnapshot));
+    return Promise.all(rows.map(row=>snapshot(tenant,branch,row.id)));
   };
   return {
     async products(tenant,branch,{includeInactive=false,limit=100}={}){
@@ -125,7 +125,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         AND s.product_id=p.id AND s.branch_id=?
         WHERE p.tenant_id=? AND (?=1 OR p.active=1)
         ORDER BY p.name,p.id LIMIT ?`,branch,tenant,includeInactive?1:0,cap);
-      return rows.map(x=>({...x,trackStock:Boolean(x.trackStock),active:Boolean(x.active),balance:x.balanceMilli/1000}));
+      return rows.map(x=>({...x,trackStock:Boolean(x.trackStock),active:Boolean(x.active),balance:x.balanceMilli/1000,menuEnabled:true,categoryId:null,barcode:x.sku}));
     },
     async createProduct(tenant,user,body,header){
       const key=requiredMutation(body,header),scope='product.create';
