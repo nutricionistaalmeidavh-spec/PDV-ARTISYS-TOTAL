@@ -543,12 +543,19 @@
         {
           "id": "products-032",
           "name": "Importação de catálogo com prévia e validação",
-          "status": "gap",
+          "status": "partial",
           "owner": "inventory",
           "dependsOn": [
             "products-020"
           ],
-          "acceptance": "Importação de catálogo com prévia e validação. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Importação de catálogo com prévia e validação. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/catalog-import.mjs",
+            "contains": "async commit(tenant,branch,user,body,header)",
+            "testFile": "apps/api/test/p2-csv-import.test.mjs",
+            "testContains": "P2 CSV commit is all-or-nothing"
+          },
+          "reviewNote": "CSV UTF-8 com prévia e escrita atômica para SKUs novos e até 100 linhas; XLSX, importação de grandes lotes, edição assistida e confronto exaustivo desktop ainda pendentes."
         }
       ]
     },

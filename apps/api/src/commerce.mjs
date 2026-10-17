@@ -7,6 +7,7 @@ import cashRules from '../../../packages/core/js/domains/cash/cash-rules.js';
 import {createSaleReturnAdapter} from './sale-reversals.mjs';
 import {createCatalogDepthService} from './catalog-depth.mjs';
 import {createPurchasingService} from './purchasing.mjs';
+import {createCatalogImportService} from './catalog-import.mjs';
 
 const {calculateSaleTotals,allocateSaleDiscount}=salePricing;
 const {resolvePayment,normalizeMethod}=paymentRules;
@@ -216,6 +217,7 @@ export function createCommerceService(db,{now=nowISO}={}){
   };
   const purchasing=createPurchasingService({q,first,all,batch,applied,audit,stamp,branchExists,
     requiredMutation,quantityMilli,error,text,randomId,ledgerReceipt});
+  const catalogImporter=createCatalogImportService({q,first,batch,applied,audit,stamp,branchExists,requiredMutation,error,text,randomId});
   const catalogDepth=createCatalogDepthService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,
     quantityMilli,error,text,randomId});
   const saleReversals=createSaleReturnAdapter({
@@ -229,6 +231,8 @@ export function createCommerceService(db,{now=nowISO}={}){
     }
   });
   return {
+    previewCatalogImport:(t,b,body)=>catalogImporter.preview(t,b,body),
+    commitCatalogImport:(t,b,u,body,key)=>catalogImporter.commit(t,b,u,body,key),
     createPurchaseOrder:(t,b,u,body,key)=>purchasing.createPurchaseOrder(t,b,u,body,key),
     purchaseOrders:(t,b)=>purchasing.purchaseOrders(t,b),
     purchaseOrder:(t,b,id)=>purchasing.purchaseOrder(t,b,id),

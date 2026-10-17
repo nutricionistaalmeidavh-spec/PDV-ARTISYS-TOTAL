@@ -60,6 +60,13 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       return null;
     }
     if(feature==='products'){
+      if(parts.length===3&&parts[1]==='import'&&method==='POST'){
+        requireAccess(member,'products.manage',user);
+        if(parts[2]==='preview')
+          return json({preview:await service.previewCatalogImport(tenant,branch,body)});
+        if(parts[2]==='commit')
+          return json({result:await service.commitCatalogImport(tenant,branch,user,body,key)},201);
+      }
       if(parts[1]==='categories'&&parts.length===2){
         if(method==='GET'){requireAccess(member,'products.view',user);return json({categories:await service.categories(tenant,branch)});}
         if(method==='POST'){requireAccess(member,'products.manage',user);return json({category:await service.createCategory(tenant,branch,user,body,key)},201);}
