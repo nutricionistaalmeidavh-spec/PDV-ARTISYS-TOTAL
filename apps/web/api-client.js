@@ -90,7 +90,8 @@
       if(operation==='products')return method==='GET'?value.products:value.product;
       if(operation==='inventory')return value.stock;
       if(operation==='inventory/receipts')return value.movement;
-      if(operation==='cash'||operation==='cash/open')return value.session;
+      if(operation==='cash')return value.session;
+      if(operation==='cash/open')return {session:value.session};
       if(operation==='sales'||operation.startsWith('sales?'))return method==='GET'?value.sales:value.sale;
       if(operation.startsWith('sales/'))return operation.endsWith('/complete')?{sale:value.sale}:value.sale;
       return value;
