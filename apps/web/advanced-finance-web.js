@@ -175,24 +175,27 @@
  async function renderDre(filters={}){
   const from=filters.from||date().slice(0,7)+'-01',to=filters.to||date(),basis=filters.basis||'accrual';
   try{
-   const [result,config,centers]=await Promise.all([
+   const [result,config,centers,categoriesResponse,cashflowResponse]=await Promise.all([
     request('dre?'+new URLSearchParams({from,to,basis})),
-    request('dre/groups'),request('dre/cost-centers')
+    request('dre/groups'),request('dre/cost-centers'),request('dre/categories'),request('dre/cashflow?'+new URLSearchParams({from,to}))
    ]);
    if(document.body.dataset.activeRoute!=='management')return;
-   const dre=result.dre,groups=config.groups||[],costCenters=centers.costCenters||[];
+   const dre=result.dre,groups=config.groups||[],costCenters=centers.costCenters||[],categories=categoriesResponse.categories||[],cashflow=cashflowResponse.cashflow;
    currentDre.filters={from,to,basis,groups,costCenters};
    content.innerHTML=wrap('Gestão e DRE','Resultado canônico: vendas do PDV + lançamentos financeiros, sem movimentações de transferências internas.',
     '<form id="cloud-dre-filter" class="ops-card ops-form erp-inline-config-form"><label>De<input class="ops-input" name="from" type="date" value="'+esc(from)+'"></label><label>Até<input class="ops-input" name="to" type="date" value="'+esc(to)+'"></label><label>Base<select name="basis" class="ops-input"><option value="accrual" '+(basis==='accrual'?'selected':'')+'>Competência</option><option value="cash" '+(basis==='cash'?'selected':'')+'>Caixa realizado</option></select></label><button class="ops-primary" type="submit">Aplicar</button><button id="cloud-export-dre" type="button" class="ops-secondary">Exportar CSV</button></form>'+
     '<div class="ops-metrics">'+[['Receitas',dre.revenueCents],['Custos',dre.costCents],['Despesas',dre.expenseCents],['Resultado',dre.resultCents]].map(x=>'<article class="ops-metric"><span>'+esc(x[0])+'</span><strong>'+money(x[1])+'</strong></article>').join('')+'</div>'+
+    '<section class="ops-card"><h2>Fluxo de caixa · realizado e previsto</h2><div class="ops-metrics">'+[['Entradas realizadas',cashflow.realizedInflowCents],['Saídas realizadas',cashflow.realizedOutflowCents],['A receber',cashflow.projectedReceivableCents],['A pagar',cashflow.projectedPayableCents],['Saldo projetado (variação)',cashflow.projectedClosingDeltaCents]].map(x=>'<article class="ops-metric"><span>'+esc(x[0])+'</span><strong>'+money(x[1])+'</strong></article>').join('')+'</div></section>'+
     '<section class="ops-card"><h2>Demonstração do resultado · margem '+esc(dre.marginPercent)+'%</h2><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Grupo</th><th>Natureza</th><th>Centro de custo</th><th>Valor</th><th></th></tr></thead><tbody>'+
     (dre.groups||[]).map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.nature)+'</td><td>'+esc(costCenters.find(y=>y.id===x.costCenterId)?.name||'—')+'</td><td>'+money(x.amountCents)+'</td><td><button type="button" class="ops-link" data-cloud-drill="'+esc(x.id)+'">Detalhes</button></td></tr>').join('')+'</tbody></table></div></section>'+
     '<section class="ops-card" id="cloud-dre-details"><h2>Detalhamento</h2><p>Selecione um grupo para conferir a origem dos valores e classificá-los.</p></section>'+
     '<section class="ops-card"><h2>Comparação entre períodos</h2><div id="cloud-dre-compare"><button type="button" id="cloud-compare-load" class="ops-secondary">Comparar com período anterior</button></div></section>'+
     '<section class="ops-card"><h2>Configuração de grupos DRE</h2><form id="cloud-dre-group" class="ops-form erp-inline-config-form"><label>Nome<input name="name" class="ops-input" required></label><label>Natureza<select name="nature" class="ops-input"><option value="REVENUE">Receita</option><option value="COST">Custo</option><option value="EXPENSE">Despesa</option><option value="OTHER">Outros</option></select></label><button type="submit" class="ops-secondary">Criar grupo</button></form><p>'+groups.map(g=>esc(g.name)).join(' · ')+'</p></section>'+
+    '<section class="ops-card"><h2>Categorias financeiras</h2><form id="cloud-dre-category" class="ops-form erp-inline-config-form"><label>Nome<input name="name" class="ops-input" required></label><label>Tipo<select name="kind" class="ops-input"><option value="EXPENSE">Despesa</option><option value="INCOME">Receita</option><option value="BOTH">Ambos</option></select></label><label>Grupo DRE<select name="dreGroupId" class="ops-input"><option value="">Sem grupo</option>'+groups.map(g=>'<option value="'+esc(g.id)+'">'+esc(g.name)+'</option>').join('')+'</select></label><button type="submit" class="ops-secondary">Criar categoria</button></form><p>'+categories.map(c=>esc(c.name)).join(' · ')+'</p></section>'+
     '<section class="ops-card"><h2>Centros de custo</h2><form id="cloud-dre-center" class="ops-form erp-inline-config-form"><label>Nome<input name="name" class="ops-input" required></label><button type="submit" class="ops-secondary">Criar centro</button></form><p>'+costCenters.map(x=>esc(x.name)).join(' · ')+'</p></section>');
    content.querySelector('#cloud-dre-filter').addEventListener('submit',ev=>{ev.preventDefault();void renderDre(Object.fromEntries(new FormData(ev.currentTarget)));});
    content.querySelector('#cloud-dre-group').addEventListener('submit',async ev=>{ev.preventDefault();try{await request('dre/groups',{method:'POST',body:Object.fromEntries(new FormData(ev.currentTarget))});await renderDre({from,to,basis});}catch(e){toast(e.message,'error');}});
+   content.querySelector('#cloud-dre-category').addEventListener('submit',async ev=>{ev.preventDefault();try{const values=Object.fromEntries(new FormData(ev.currentTarget));await request('dre/categories',{method:'POST',body:{...values,dreGroupId:values.dreGroupId||null}});await renderDre({from,to,basis});}catch(e){toast(e.message,'error');}});
    content.querySelector('#cloud-dre-center').addEventListener('submit',async ev=>{ev.preventDefault();try{await request('dre/cost-centers',{method:'POST',body:Object.fromEntries(new FormData(ev.currentTarget))});await renderDre({from,to,basis});}catch(e){toast(e.message,'error');}});
    content.querySelectorAll('[data-cloud-drill]').forEach(btn=>btn.addEventListener('click',async()=>{
     const panel=content.querySelector('#cloud-dre-details');
@@ -200,10 +203,14 @@
      const x=await request('dre/details?'+new URLSearchParams({from,to,basis,groupId:btn.dataset.cloudDrill}));
      panel.innerHTML='<h2>Composição do grupo</h2><div class="ops-table-wrap"><table class="ops-table"><tbody>'+
       (x.details||[]).map(d=>'<tr><td>'+esc(d.date)+'</td><td>'+esc(d.description)+'</td><td>'+money(d.amountCents)+'</td><td>'+
-       (d.kind?'<select class="ops-input" data-cloud-classify="'+esc(d.id)+'"><option value="">Classificar por grupo</option>'+groups.filter(g=>d.kind==='PAYABLE'?['COST','EXPENSE','OTHER'].includes(g.nature):['REVENUE','OTHER'].includes(g.nature)).map(g=>'<option value="'+esc(g.id)+'">'+esc(g.name)+'</option>').join('')+'</select>':'Venda PDV')+'</td></tr>').join('')+'</tbody></table></div>';
-     panel.querySelectorAll('[data-cloud-classify]').forEach(sel=>sel.addEventListener('change',async()=>{
-      if(!sel.value)return;try{await request('dre/classify/'+encodeURIComponent(sel.dataset.cloudClassify),{method:'POST',body:{dreGroupId:sel.value}});
-       toast('Classificação atualizada.','success');await renderDre({from,to,basis});}catch(e){toast(e.message,'error');}
+       (d.kind?'<form class="ops-form" data-cloud-classify="'+esc(d.id)+'"><label>Grupo<select name="dreGroupId" class="ops-input"><option value="">Sem grupo</option>'+groups.filter(g=>d.kind==='PAYABLE'?['COST','EXPENSE','OTHER'].includes(g.nature):['REVENUE','OTHER'].includes(g.nature)).map(g=>'<option value="'+esc(g.id)+'">'+esc(g.name)+'</option>').join('')+'</select></label><label>Categoria<select name="categoryId" class="ops-input"><option value="">Sem categoria</option>'+categories.filter(c=>c.kind==='BOTH'||(d.kind==='PAYABLE'?c.kind==='EXPENSE':c.kind==='INCOME')).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('')+'</select></label><label>Centro<select name="costCenterId" class="ops-input"><option value="">Sem centro</option>'+costCenters.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('')+'</select></label><button class="ops-secondary" type="submit">Salvar</button></form>':'Venda PDV')+'</td></tr>').join('')+'</tbody></table></div>';
+     panel.querySelectorAll('form[data-cloud-classify]').forEach(form=>form.addEventListener('submit',async ev=>{
+      ev.preventDefault();const values=Object.fromEntries(new FormData(form));
+      try{await request('dre/classify/'+encodeURIComponent(form.dataset.cloudClassify),{method:'POST',body:{
+        dreGroupId:values.dreGroupId||null,costCenterId:values.costCenterId||null,categoryId:values.categoryId||null
+      }});
+       toast('Classificação atualizada.','success');await renderDre({from,to,basis});
+      }catch(e){toast(e.message,'error');}
      }));
     }catch(e){panel.textContent=e.message;}
    }));
