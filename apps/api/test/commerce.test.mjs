@@ -298,3 +298,17 @@ test('P6 invalid weights, non-KG items and other-tenant users are rejected',asyn
     assert.equal((await x.get('a','sales/'+sid+'?branchId=branch-a')).body.sale.items.length,0);
   }finally{x.close();}
 });
+
+
+test('P6 gram-denominated weighted product prices in grams without kilogram conversion',async()=>{
+  const x=await setup();try{
+    const p=await x.write('a','products',{branchId:'branch-a',name:'Tempero por grama',sku:'TEMPERO-G',unit:'G',salePriceCents:10});
+    assert.equal(p.status,201,p.body.error);
+    await x.write('a','inventory/receipts',{branchId:'branch-a',productId:p.body.product.id,quantity:1000,type:'opening'});
+    const sale=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
+    const added=await x.write('a','sales/'+sale+'/items/weighted',{branchId:'branch-a',productId:p.body.product.id,grams:125,source:'MANUAL'});
+    assert.equal(added.status,200,added.body.error);
+    assert.equal(added.body.sale.items[0].quantity,125);
+    assert.equal(added.body.sale.totalCents,1250);
+  }finally{x.close();}
+});
