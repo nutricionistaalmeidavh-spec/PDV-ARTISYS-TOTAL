@@ -28,6 +28,8 @@ try{
   const context=await browser.newContext({viewport:{width:1366,height:860},deviceScaleFactor:1});
   const page=await context.newPage();
   const unexpectedHttp=[];
+  const navigationTrace=[];
+  page.on('framenavigated',frame=>{if(frame===page.mainFrame())navigationTrace.push({url:frame.url(),at:Date.now()});});
   page.on('pageerror',error=>errors.push(error.message));
   page.on('response',response=>{
     if(response.status()<400)return;
@@ -154,6 +156,7 @@ try{
   assert.equal(await matchingSale.count(),1,'filtered history shows the exact completed sale');
   await page.evaluate(()=>{
     const trace=[];window.__saleDetailTrace=trace;
+    trace.push({event:'installed',href:location.href,origin:performance.timeOrigin,buttonType:document.querySelector('[data-sale-details]')?.type,formId:document.querySelector('[data-sale-details]')?.form?.id||null});
     const proto=window.PdvApiClient.ApiClient.prototype;
     const original=proto.sale;
     proto.sale=async function(id){
@@ -167,6 +170,8 @@ try{
     },true);
   });
   await matchingSale.locator('[data-sale-details]').click();
+  const postClick=await page.evaluate(()=>({trace:window.__saleDetailTrace||null,origin:performance.timeOrigin,href:location.href,route:document.body.dataset.activeRoute}));
+  console.log('SALE_DETAIL_CLICK_RESULT',JSON.stringify(postClick));
   try {
     await page.getByText('Autorizado pelo gerente no teste de paridade').waitFor({timeout:12000});
   } catch (error) {
@@ -177,6 +182,8 @@ try{
       route:await page.locator('body').getAttribute('data-active-route'),
       notices:await page.locator('[role="alert"],.toast,[role="status"]').allTextContents(),
       trace:await page.evaluate(()=>window.__saleDetailTrace||[]),
+      traceDefined:await page.evaluate(()=>Object.hasOwn(window,'__saleDetailTrace')),
+      navigations:navigationTrace,
       apiSale:await page.evaluate(async()=>{
         const id=document.querySelector('[data-sale-details]')?.dataset.saleDetails;
         try{
