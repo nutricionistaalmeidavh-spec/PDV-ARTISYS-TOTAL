@@ -58,9 +58,10 @@ try{
   await cart.waitFor({timeout:12000});
   assert.equal(await page.locator('#product-search').inputValue(),'Web QA','search query survives cart mutation');
   await page.locator('#finalize-sale').click();
-  await page.locator('#confirm-open-cash').waitFor();
-  await page.locator('#confirm-open-cash').click();
-  await page.locator('#confirm-payment').waitFor();
+  const cashButton=page.locator('#confirm-open-cash'),paymentButton=page.locator('#confirm-payment');
+  await cashButton.or(paymentButton).first().waitFor({timeout:12000});
+  if(await cashButton.isVisible())await cashButton.click();
+  await paymentButton.waitFor({timeout:12000});
   // Payment has already been seeded with initial method. Replace that line.
   await page.locator('[data-remove-payment]').first().click();
   await page.locator('#new-payment-method').selectOption('PIX');
