@@ -75,3 +75,35 @@ WHEN (SELECT e.cancelled_at IS NOT NULL
     OR (COALESCE((SELECT SUM(fs.amount_cents) FROM finance_settlements fs WHERE fs.entry_id=e.id),0)+NEW.amount_cents)>e.amount_cents
       FROM finance_entries e WHERE e.tenant_id=NEW.tenant_id AND e.branch_id=NEW.branch_id AND e.id=NEW.entry_id)
 BEGIN SELECT RAISE(ABORT,'FINANCE_OVERPAY_OR_CANCELLED'); END;
+
+-- These checks execute inside D1's serialized write transaction.
+-- They stop a concurrent cash sale or withdrawal from invalidating a close.
+CREATE TRIGGER cash_withdraw_cannot_overdraw BEFORE INSERT ON cash_adjustments
+WHEN NEW.type='WITHDRAWAL' AND NEW.amount_cents > (
+  SELECT s.opening_cents +
+    COALESCE((SELECT SUM(cm.amount_cents) FROM cash_movements cm
+      WHERE cm.tenant_id=s.tenant_id AND cm.branch_id=s.branch_id
+        AND cm.cash_session_id=s.id AND cm.method='CASH'),0) +
+    COALESCE((SELECT SUM(CASE WHEN a.type='SUPPLY' THEN a.amount_cents ELSE -a.amount_cents END)
+      FROM cash_adjustments a WHERE a.tenant_id=s.tenant_id AND a.branch_id=s.branch_id
+        AND a.cash_session_id=s.id),0)
+  FROM cash_sessions s WHERE s.tenant_id=NEW.tenant_id
+    AND s.branch_id=NEW.branch_id AND s.id=NEW.cash_session_id
+)
+BEGIN SELECT RAISE(ABORT,'CASH_INSUFFICIENT'); END;
+
+CREATE TRIGGER cash_close_reconciliation_guard BEFORE UPDATE OF status ON cash_sessions
+WHEN NEW.status='CLOSED' AND OLD.status='OPEN' AND (
+  NEW.counted_cash_cents IS NULL OR NEW.counted_cash_cents<0 OR
+  NEW.expected_cash_cents IS NULL OR
+  NEW.expected_cash_cents <> (
+    OLD.opening_cents +
+    COALESCE((SELECT SUM(cm.amount_cents) FROM cash_movements cm
+      WHERE cm.tenant_id=OLD.tenant_id AND cm.branch_id=OLD.branch_id
+        AND cm.cash_session_id=OLD.id AND cm.method='CASH'),0) +
+    COALESCE((SELECT SUM(CASE WHEN a.type='SUPPLY' THEN a.amount_cents ELSE -a.amount_cents END)
+      FROM cash_adjustments a WHERE a.tenant_id=OLD.tenant_id AND a.branch_id=OLD.branch_id
+        AND a.cash_session_id=OLD.id),0)
+  )
+)
+BEGIN SELECT RAISE(ABORT,'CASH_CLOSING_STALE'); END;
