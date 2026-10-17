@@ -254,7 +254,7 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
    period({from,to,basis});await branch(t,b);
    if(groupId==='pdv-sales')return many("SELECT id,completed_at AS date,sale_number AS description,total_cents AS amountCents FROM sales WHERE tenant_id=? AND branch_id=? AND status='COMPLETED' AND substr(completed_at,1,10) BETWEEN ? AND ? ORDER BY completed_at DESC LIMIT 200",t,b,from,to);
    const dt=basis==='cash'?'substr(f.occurred_at,1,10)':'COALESCE(e.competence_date,e.due_date)';
-   const join=basis==='cash'?' JOIN finance_settlements f ON f.entry_id=e.id AND f.tenant_id=e.tenant_id AND f.branch_id=e.branch_id ':' ';
+   const join=basis==='cash'?' JOIN finance_settlements f ON f.entry_id=e.id AND f.tenant_id=e.tenant_id AND f.branch_id=e.branch_id LEFT JOIN finance_settlement_reversals r ON r.settlement_id=f.id ':' ';
    const amt=basis==='cash'?'(f.amount_cents-COALESCE(r.amount_cents,0))':'e.amount_cents';
    return many('SELECT e.id,e.description,'+dt+' AS date,'+amt+' AS amountCents,e.kind FROM finance_entries e '+join+
     'LEFT JOIN finance_entry_dimensions d ON d.tenant_id=e.tenant_id AND d.branch_id=e.branch_id AND d.entry_id=e.id '+
