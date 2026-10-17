@@ -9,6 +9,7 @@ import {createCatalogDepthService} from './catalog-depth.mjs';
 import {createPurchasingService} from './purchasing.mjs';
 import {createCatalogImportService} from './catalog-import.mjs';
 import {createHistoricalMarginService} from './historical-margin.mjs';
+import {createReportDepthService} from './report-depth.mjs';
 
 const {calculateSaleTotals,allocateSaleDiscount}=salePricing;
 const {resolvePayment,normalizeMethod}=paymentRules;
@@ -220,6 +221,7 @@ export function createCommerceService(db,{now=nowISO}={}){
     requiredMutation,quantityMilli,error,text,randomId,ledgerReceipt});
   const catalogImporter=createCatalogImportService({q,first,batch,applied,audit,stamp,branchExists,requiredMutation,error,text,randomId});
   const historicalMargin=createHistoricalMarginService({all,branchExists,period,allocateSaleDiscount,error});
+  const reportDepth=(salesHistory)=>createReportDepthService({all,branchExists,period,stamp,error,salesHistory});
   const catalogDepth=createCatalogDepthService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,
     quantityMilli,error,text,randomId});
   const saleReversals=createSaleReturnAdapter({
@@ -234,6 +236,9 @@ export function createCommerceService(db,{now=nowISO}={}){
   });
   return {
     marginReport:(t,b,filters)=>historicalMargin.margin(t,b,filters),
+    reportDetails(tenant,branch,filters){return reportDepth((...args)=>this.salesHistory(...args)).details(tenant,branch,filters);},
+    reportDetailsCsv(tenant,branch,filters){return reportDepth((...args)=>this.salesHistory(...args)).detailedCsv(tenant,branch,filters);},
+    reportStockCoverage(tenant,branch,filters){return reportDepth((...args)=>this.salesHistory(...args)).stockCoverage(tenant,branch,filters);},
     previewCatalogImport:(t,b,body)=>catalogImporter.preview(t,b,body),
     commitCatalogImport:(t,b,u,body,key)=>catalogImporter.commit(t,b,u,body,key),
     createPurchaseOrder:(t,b,u,body,key)=>purchasing.createPurchaseOrder(t,b,u,body,key),
