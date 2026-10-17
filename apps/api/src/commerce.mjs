@@ -202,11 +202,13 @@ export function createCommerceService(db,{now=nowISO}={}){
       const name=text(body?.name,120),sku=text(body?.sku,64).toUpperCase();
       if(!name||name.length<2||!/^[A-Z0-9][A-Z0-9._-]{0,63}$/.test(sku))throw error(400,'Informe nome e SKU válido.');
       const price=requiredNumber(body?.salePriceCents,'Preço');
+      const unit=String(body?.unit||'UN').trim().toUpperCase();
+      if(!new Set(['UN','KG','G','L','M','M2','M3','CX','PCT']).has(unit))throw error(400,'Unidade de produto inválida.');
       const id=randomId(),created=stamp();
-      const result={id,name,sku,salePriceCents:price,unit:'UN',trackStock:body?.trackStock!==false,active:true};
+      const result={id,name,sku,salePriceCents:price,unit,trackStock:body?.trackStock!==false,active:true};
       await batch([
         q('INSERT INTO products(id,tenant_id,sku,name,sale_price_cents,unit,track_stock,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',
-          id,tenant,sku,name,price,'UN',result.trackStock?1:0,created,created),
+          id,tenant,sku,name,price,unit,result.trackStock?1:0,created,created),
         audit(tenant,scope,key,result)
       ]);
       return result;
@@ -521,7 +523,8 @@ export function createCommerceService(db,{now=nowISO}={}){
       const itemId=existing?.id||randomId();
       // A single transaction contains the addition and its deduplication record.
       // Data is re-read after commit for the canonical checkout shape.
-      const safe={saleId:id,productId:row.id,quantity:milli/1000};
+      const safe={saleId:id,productId:row.id,quantity:milli/1000,
+        ...(body.weightSource?{weightSource:body.weightSource,grams:body.grams}: {})};
       await batch([
         q(`INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at)
           VALUES(?,?,?,?,?,?,?,?,?,?)
