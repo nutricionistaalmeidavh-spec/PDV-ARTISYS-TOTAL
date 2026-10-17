@@ -243,12 +243,19 @@
         {
           "id": "checkout-014",
           "name": "Estorno de venda concluída e reversão estoque/caixa",
-          "status": "gap",
+          "status": "partial",
           "owner": "sales",
           "dependsOn": [
             "checkout-008"
           ],
-          "acceptance": "Estorno de venda concluída e reversão estoque/caixa. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Estorno de venda concluída e reversão estoque/caixa. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/sale-reversals.mjs",
+            "contains": "async reverse(",
+            "testFile": "apps/api/test/p1-reversals.test.mjs",
+            "testContains": "P1: completed sale cancellation"
+          },
+          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
         },
         {
           "id": "checkout-015",
@@ -584,22 +591,36 @@
         {
           "id": "history-037",
           "name": "Cancelamento de venda concluída com reversões",
-          "status": "gap",
+          "status": "partial",
           "owner": "sales-history",
           "dependsOn": [
             "checkout-014"
           ],
-          "acceptance": "Cancelamento de venda concluída com reversões. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Cancelamento de venda concluída com reversões. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/sale-reversals.mjs",
+            "contains": "async reverse(",
+            "testFile": "apps/api/test/p1-reversals.test.mjs",
+            "testContains": "P1: completed sale cancellation"
+          },
+          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
         },
         {
           "id": "history-038",
           "name": "Devoluções parciais, autorizações e estornos",
-          "status": "gap",
+          "status": "partial",
           "owner": "sales-history",
           "dependsOn": [
             "checkout-014"
           ],
-          "acceptance": "Devoluções parciais, autorizações e estornos. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Devoluções parciais, autorizações e estornos. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/sale-reversals.mjs",
+            "contains": "async reverse(",
+            "testFile": "apps/api/test/p1-reversals.test.mjs",
+            "testContains": "P1: partial returns honor"
+          },
+          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
         },
         {
           "id": "history-039",
@@ -708,12 +729,19 @@
         {
           "id": "cash-045",
           "name": "Estorno/retorno de vendas em sessões encerradas",
-          "status": "gap",
+          "status": "partial",
           "owner": "cash",
           "dependsOn": [
             "history-038"
           ],
-          "acceptance": "Estorno/retorno de vendas em sessões encerradas. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Estorno/retorno de vendas em sessões encerradas. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/sale-reversals.mjs",
+            "contains": "getCash(tenant,branch)",
+            "testFile": "apps/api/test/p1-reversals.test.mjs",
+            "testContains": "P1: completed sale cancellation"
+          },
+          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
         },
         {
           "id": "cash-046",
@@ -826,12 +854,19 @@
         {
           "id": "finance-052",
           "name": "Reversão de liquidações com trilha de auditoria",
-          "status": "gap",
+          "status": "partial",
           "owner": "finance",
           "dependsOn": [
             "finance-048"
           ],
-          "acceptance": "Reversão de liquidações com trilha de auditoria. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Reversão de liquidações com trilha de auditoria. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async reverseFinanceSettlement(",
+            "testFile": "apps/api/test/p1-reversals.test.mjs",
+            "testContains": "P1: financial settlement reversal"
+          },
+          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
         },
         {
           "id": "finance-053",
