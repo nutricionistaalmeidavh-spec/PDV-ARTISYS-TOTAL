@@ -253,7 +253,7 @@
   async function loadCommonData() {
     if(api.webMode){
       state.products=await api.products();
-      state.categories=[];state.users=[];
+      state.categories=await api.categories();state.users=[];
       state.customers=window.PdvAccessPolicy?.hasCapability(state.user,'customers.view')?await api.customers():[];
       state.sellers=window.PdvAccessPolicy?.hasCapability(state.user,'sellers.view')?await api.sellers():[{id:state.user.id,name:state.user.name}];
       state.selectedSellerId=state.user.id;
@@ -958,28 +958,30 @@
     const canManage=window.PdvAccessPolicy?.hasCapability(state.user,'products.manage');
     const canStock=window.PdvAccessPolicy?.hasCapability(state.user,'inventory.adjust');
     const catalogItems=showInactiveWebProducts?[...state.products,...inactiveWebProducts]:state.products;
-    const listed=catalogItems.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku).includes(ui.normalizeSearch(state.productQuery)));
+    const listed=catalogItems.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku+' '+(p.barcode||'')+' '+(p.brand||'')+' '+(p.variantLabel||'')).includes(ui.normalizeSearch(state.productQuery)));
     content.innerHTML=`<section class="page web-products-page"><header class="page-head">
       <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
       <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
-      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button>':''}
+      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button><button id="web-new-category" class="secondary-button" type="button">+ Categoria</button>':''}
       ${canManage?`<button id="web-toggle-inactive" class="secondary-button" type="button">${showInactiveWebProducts?'Ocultar inativos':'Mostrar inativos'}</button>`:''}</header>
       <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
-        placeholder="Buscar produto ou SKU" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
+        placeholder="Buscar produto, SKU ou código de barras" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
       <div class="data-card web-product-table" id="web-products-list">
         ${listed.length?listed.map(p=>`<div class="data-row web-product-row">
           <div class="web-product-identity"><span class="web-product-monogram">${escapeHtml(initials(p.name))}</span>
-          <div><strong>${escapeHtml(p.name)}</strong><small>${p.active===false?'Inativo · ':''}${escapeHtml(p.sku)}</small></div></div>
+          <div><strong>${escapeHtml(p.name)}</strong><small>${p.active===false?'Inativo · ':''}${escapeHtml(p.sku)}</small><small>${escapeHtml([p.brand,p.barcode,p.variantLabel].filter(Boolean).join(' · '))}</small></div></div>
           <div><small>Preço</small><strong>${ui.formatCents(p.salePriceCents)}</strong></div>
-          <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.balance):'Livre'}</strong></div>
+          <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.available??p.balance):'Por componentes'}</strong></div>
           ${canManage?`<button type="button" class="secondary-button" data-web-edit="${escapeHtml(p.id)}">Editar</button>`:''}
-          ${canStock&&p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
+          ${canManage&&!p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-kit="${escapeHtml(p.id)}">Componentes do kit</button>`:''}
+          ${canStock&&p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-reserve="${escapeHtml(p.id)}">Reservar</button><button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
           <button type="button" class="secondary-button" data-web-adjust="${escapeHtml(p.id)}">Ajustar saldo</button>
           <button type="button" class="secondary-button" data-web-transfer="${escapeHtml(p.id)}">Transferir</button>`:''}
           ${p.trackStock?`<button type="button" class="secondary-button" data-web-moves="${escapeHtml(p.id)}">Movimentações</button>`:''}
         </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
       </div></section>`;
     content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
+    content.querySelector('#web-new-category')?.addEventListener('click',openWebCategoryForm);
     content.querySelector('#web-toggle-inactive')?.addEventListener('click',async event=>{
       const button=event.currentTarget;button.disabled=true;
       try{
@@ -997,6 +999,8 @@
       renderWebProducts();
       if(focused){const el=content.querySelector('#web-product-search');el.focus({preventScroll:true});el.setSelectionRange(caret,caret);}
     });
+    content.querySelectorAll('[data-web-kit]').forEach(b=>b.addEventListener('click',()=>{const p=state.products.find(p=>p.id===b.dataset.webKit);if(p)void openWebKitForm(p);}));
+    content.querySelectorAll('[data-web-reserve]').forEach(b=>b.addEventListener('click',()=>{const p=state.products.find(p=>p.id===b.dataset.webReserve);if(p)void openWebReserveForm(p);}));
     content.querySelectorAll('[data-web-stock]').forEach(b=>b.addEventListener('click',()=>{
       const product=state.products.find(p=>p.id===b.dataset.webStock);
       if(product)openWebStockForm(product);
