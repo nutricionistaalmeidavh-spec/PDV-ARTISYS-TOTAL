@@ -36,7 +36,7 @@ export function createVerticalService(db){
    const batch=[...statements,q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) VALUES(?,?,?,?,?)',
      t,scope,key,JSON.stringify(result),now())];
    try{await db.batch(batch);}catch(e){
-     if(/constraint|UNIQUE|FOREIGN KEY|CASH|IMMUTABLE/i.test(String(e?.message)))throw err(409,'Conflito com dados atuais. Atualize e tente novamente.');
+     if(/constraint|UNIQUE|FOREIGN KEY|CASH|CREDIT|IMMUTABLE/i.test(String(e?.message)))throw err(409,'Conflito com dados atuais. Atualize e tente novamente.');
      throw e;
    }
    return result;
