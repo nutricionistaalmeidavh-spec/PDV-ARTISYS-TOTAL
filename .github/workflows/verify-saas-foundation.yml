@@ -61,9 +61,9 @@ jobs:
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0001_identity.sql
       - name: Test commerce D1 schema and immutable stock ledger in Wrangler
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0002_commerce.sql
-      - name: Install browser for real responsive checkout smoke
+      - name: Install one Chromium for all browser regression gates
         run: |
-          npm install --no-save --no-package-lock playwright@1.56.1
+          npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0
           npx playwright install --with-deps chromium
       - name: Smoke real Cloudflare Workerd with local D1 and 100k PBKDF2
         env:
@@ -77,10 +77,6 @@ jobs:
           node --experimental-sqlite apps/api/src/provision.mjs
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/.local/provision.seed.sql
           node scripts/smoke-workerd.mjs
-      - name: Install isolated browser QA runtime
-        run: |
-          npm install --no-save --ignore-scripts playwright@1.63.0
-          npx playwright install chromium --with-deps
       - name: E2E original PDV renderer in Chromium (desktop + mobile)
         run: node scripts/web-browser-e2e.mjs
       - name: Save browser visual QA evidence
