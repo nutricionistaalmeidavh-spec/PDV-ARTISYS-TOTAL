@@ -99,7 +99,7 @@ try {
       await page.locator('[data-add-product="'+pid+'"]').click();
       await page.locator('.cart-line').first().waitFor({timeout:12000});
       assert.match(await page.locator('.cart-list').innerText(),/Workerd Coffee/);
-      assert.match(await page.locator('.totals').innerText(),/R\\$\\s*10,00/);
+      assert.match(await page.locator('.totals').innerText(),/R\$\s*10,00/);
       await page.locator('#sidebar-nav [data-route="products"]').click();
       await page.getByRole('heading',{name:'Produtos e estoque'}).waitFor();
       await page.getByRole('button',{name:'Novo produto'}).click();
