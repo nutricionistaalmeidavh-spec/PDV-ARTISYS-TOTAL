@@ -11,6 +11,7 @@ import {createCatalogImportService} from './catalog-import.mjs';
 import {createHistoricalMarginService} from './historical-margin.mjs';
 import {createReportDepthService} from './report-depth.mjs';
 import {createCheckoutConfigurationService} from './checkout-configuration.mjs';
+import {createSellerTargetService} from './seller-targets.mjs';
 
 const {calculateSaleTotals,allocateSaleDiscount}=salePricing;
 const {resolvePayment,normalizeMethod}=paymentRules;
@@ -231,6 +232,7 @@ export function createCommerceService(db,{now=nowISO}={}){
   const historicalMargin=createHistoricalMarginService({all,branchExists,period,allocateSaleDiscount,error});
   const reportDepth=(salesHistory)=>createReportDepthService({all,branchExists,period,stamp,error,salesHistory});
   const checkoutConfig=createCheckoutConfigurationService({q,first,batch,applied,audit,stamp,branchExists,product,requiredMutation,error});
+  const sellerTargets=createSellerTargetService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,error});
   const catalogDepth=createCatalogDepthService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,
     quantityMilli,error,text,randomId});
   const saleReversals=createSaleReturnAdapter({
@@ -244,6 +246,8 @@ export function createCommerceService(db,{now=nowISO}={}){
     }
   });
   return {
+    saveSellerSalesTarget:(t,b,u,body,key)=>sellerTargets.save(t,b,u,body,key),
+    sellerSalesRanking:(t,b,filters)=>sellerTargets.ranking(t,b,filters),
     checkoutProductConfiguration:(t,b,id)=>checkoutConfig.configuration(t,b,id),
     saveCheckoutProductConfiguration:(t,b,id,body,key)=>checkoutConfig.save(t,b,id,body,key),
     priceCheckoutProductConfiguration:(t,b,id,body)=>checkoutConfig.quote(t,b,id,body),

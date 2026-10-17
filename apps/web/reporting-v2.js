@@ -350,12 +350,12 @@
     if(!state.toDate)state.toDate=date;
     const fromDate=state.fromDate,toDate=state.toDate;
     const query=new URLSearchParams({from:fromDate,to:toDate});
-    const available=['overview','products','payments','inventory','cash','finance','margins','details','coverage'];
+    const available=['overview','products','payments','inventory','cash','finance','margins','details','coverage','targets'];
     if(!available.includes(state.view))state.view='overview';
-    let report,comparison=null,margin=null,detail=null,coverage=null;
+    let report,comparison=null,margin=null,detail=null,coverage=null,ranking=null,sellersForGoals=[];
     try{
       const previous=root.PdvBusinessDate.equivalentPreviousPeriod(fromDate,toDate);
-      [report,comparison,margin,detail,coverage]=await Promise.all([
+      [report,comparison,margin,detail,coverage,ranking,sellersForGoals]=await Promise.all([
         api.request('/api/v1/reports/summary?'+query.toString()),
         state.view==='overview'?api.compareSalesPeriods({
           from:fromDate,to:toDate,compareFrom:previous.previousFrom,compareTo:previous.previousTo
@@ -365,7 +365,9 @@
           sellerId:state.sellerId||'',customerId:state.customerId||'',
           productId:state.productId||'',paymentMethod:state.paymentMethod||'',
           limit:50,offset:state.detailOffset||0}):Promise.resolve(null),
-        state.view==='coverage'?api.reportStockCoverage({asOf:toDate,days:30}):Promise.resolve(null)
+        state.view==='coverage'?api.reportStockCoverage({asOf:toDate,days:30}):Promise.resolve(null),
+        state.view==='targets'?api.sellerSalesRanking({month:state.goalMonth||toDate.slice(0,7)}):Promise.resolve(null),
+        state.view==='targets'?api.sellers():Promise.resolve([])
       ]);
     }catch(error){
       if(routeActive())content.innerHTML=`<section class="ops-page report-v2-page">
@@ -379,7 +381,7 @@
     const total=Number(sale.totalCents)||0,count=Number(sale.count)||0;
     const value=(v)=>money(Number(v)||0);
     const viewLabels={overview:'Visão geral',products:'Produtos',payments:'Recebimentos',
-      inventory:'Estoque',cash:'Caixa',finance:'Financeiro',margins:'Margem histórica',details:'Vendas detalhadas',coverage:'Cobertura do estoque'};
+      inventory:'Estoque',cash:'Caixa',finance:'Financeiro',margins:'Margem histórica',details:'Vendas detalhadas',coverage:'Cobertura do estoque',targets:'Metas e ranking'};
     const table=(heads,rows,colspan=heads.length)=>`<div class="ops-table-wrap"><table class="ops-table">
       <thead><tr>${heads.map(x=>`<th>${escapeHtml(x)}</th>`).join('')}</tr></thead><tbody>
       ${rows.length?rows.join(''):`<tr><td colspan="${colspan}"><div class="ops-empty">Nenhum registro neste período.</div></td></tr>`}
@@ -460,6 +462,39 @@
           <td>${p.daysCoverage==null?'Sem base':qty(p.daysCoverage)}</td>
           <td>${qty(p.transfersIn)}</td><td>${qty(p.transfersOut)}</td></tr>`));
     };
+    const sellerTargetsView=()=>{
+      if(!ranking)return '<p>Selecione o mês.</p>';
+      const allSellers=Array.isArray(sellersForGoals)?sellersForGoals:[];
+      return `<p class="ops-muted">Metas e vendas líquidas do mês ${escapeHtml(ranking.month)}.
+        As devoluções são descontadas na data em que foram registradas; comissões são derivadas do livro imutável.</p>
+        <form id="web-target-month" class="ops-form">
+          <label>Mês de referência<input type="month" name="month" value="${escapeHtml(ranking.month)}" required class="ops-input"></label>
+          <button type="submit" class="ops-secondary">Consultar</button>
+        </form>
+        ${table(['Vendedor','Vendas líquidas','Devoluções','Meta','Atingimento','Comissões geradas','Estornadas','Pagas','Saldo de comissões'],
+          (ranking.sellers||[]).map(row=>`<tr>
+            <td>${escapeHtml(row.sellerName||row.sellerId)}</td>
+            <td>${value(row.netSalesCents)}</td><td>${value(row.refundedCents)}</td>
+            <td>${row.targetCents==null?'Não definida':value(row.targetCents)}</td>
+            <td>${row.progressPercent==null?'—':qty(row.progressPercent)+'%'}</td>
+            <td>${value(row.commissionEarnedCents)}</td>
+            <td>${value(row.commissionReversedCents)}</td>
+            <td>${value(row.commissionPaidCents)}</td>
+            <td>${value(row.commissionBalanceCents)}</td>
+          </tr>`))}
+        <form id="web-seller-target-form" class="ops-form">
+          <h3>Definir meta mensal</h3>
+          <div class="ops-grid two">
+            <label>Vendedor<select class="ops-input" name="sellerId" required>
+              ${allSellers.map(seller=>`<option value="${escapeHtml(seller.id)}">${escapeHtml(seller.name||seller.displayName||seller.id)}</option>`).join('')}
+            </select></label>
+            <label>Meta mensal (R$)<input class="ops-input" name="target" inputmode="decimal" required placeholder="5000,00"></label>
+          </div>
+          <p class="ops-muted">Somente gerentes com permissão de gestão de vendedores podem salvar metas.</p>
+          <p role="status" class="web-form-feedback"></p>
+          <button class="ops-primary" type="submit" ${allSellers.length?'':'disabled'}>Salvar meta</button>
+        </form>`;
+    };
     const overview=`<div class="ops-metrics">
       ${metric('Faturamento registrado (líquido)',value(total),comparison?comparisonHint:'')}
       ${metric('Vendas concluídas',String(count))}
@@ -470,7 +505,7 @@
       <section class="ops-card"><h2>Meios de pagamento</h2>${paymentsTable()}</section>
       <section class="ops-card"><h2>Mais vendidos</h2>${productsTable()}</section></div>`;
     const views={overview,products:productsTable(),payments:paymentsTable(),inventory:inventoryTable(),
-      cash:cashTable(),finance:financeTable(),margins:marginsTable(),details:detailedTable(),coverage:coverageTable()};
+      cash:cashTable(),finance:financeTable(),margins:marginsTable(),details:detailedTable(),coverage:coverageTable(),targets:sellerTargetsView()};
     const tabs=available.map(key=>`<button type="button" data-report-web="${key}"
       class="report-v2-tab ${state.view===key?'active':''}"
       role="tab" aria-selected="${state.view===key?'true':'false'}"
@@ -497,6 +532,22 @@
       void renderWebReports({fromDate:form.elements.from.value,toDate:form.elements.to.value});
     });
     content.querySelectorAll('[data-report-web]').forEach(button=>button.addEventListener('click',()=>void renderWebReports({view:button.dataset.reportWeb})));
+    content.querySelector('#web-target-month')?.addEventListener('submit',event=>{
+      event.preventDefault();void renderWebReports({goalMonth:event.currentTarget.elements.month.value});
+    });
+    content.querySelector('#web-seller-target-form')?.addEventListener('submit',async event=>{
+      event.preventDefault();const form=event.currentTarget,feedback=form.querySelector('[role=status]');
+      const targetCents=centsInput(form.elements.target.value);
+      if(targetCents<=0){feedback.textContent='Informe uma meta mensal positiva.';return;}
+      const button=form.querySelector('[type=submit]');button.disabled=true;
+      try{
+        if(!form.dataset.key)form.dataset.key=api.mutationId();
+        await api.saveSellerSalesTarget({sellerId:form.elements.sellerId.value,
+          month:ranking.month,targetCents},form.dataset.key);
+        showToast('Meta registrada.','success');
+        void renderWebReports({goalMonth:ranking.month});
+      }catch(error){feedback.textContent=error.message;button.disabled=false;}
+    });
     content.querySelector('#web-report-detail-filter')?.addEventListener('submit',event=>{
       event.preventDefault();const form=event.currentTarget;
       void renderWebReports({sellerId:form.elements.sellerId.value,customerId:form.elements.customerId.value,

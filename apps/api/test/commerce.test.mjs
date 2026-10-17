@@ -19,13 +19,14 @@ const media=readFileSync(new URL('../migrations/0011_product_media.sql',import.m
 const notesMigration=readFileSync(new URL('../migrations/0012_sale_item_notes.sql',import.meta.url),'utf8');
 const cashTerminalMigration=readFileSync(new URL('../migrations/0013_cash_terminals.sql',import.meta.url),'utf8');
 const checkoutConfigurationMigration=readFileSync(new URL('../migrations/0014_checkout_configurations.sql',import.meta.url),'utf8');
+const salesTargetsMigration=readFileSync(new URL('../migrations/0015_seller_sales_targets.sql',import.meta.url),'utf8');
 const NOW=Date.parse('2026-10-17T14:00:00Z');
 const date='2026-10-17T14:00:00.000Z';
 const password='SafeTestPasswordForPdv2026!';
 let num=0;
 const next=()=>('mutation-'+(++num)+'-long');
 async function setup(){
-  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);db.exec(checkoutConfigurationMigration);
+  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);db.exec(checkoutConfigurationMigration);db.exec(salesTargetsMigration);
   const pass=await hashPassword(password);
   for(const [id,email] of [['owner','owner@test.com'],['other','other@test.com'],['viewer','viewer@test.com']])
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
@@ -884,4 +885,51 @@ test('P3 configured item rejects invalid groups, strangers, cross-tenant selecti
     assert.equal(detail.body.sale.items[0].unitPriceCents,1200);
     assert.equal((await x.get('b','products/'+productId+'/configuration?branchId=branch-b',x.other)).status,404);
   }finally{x.close();}
+});
+
+test('P4 seller monthly goals rank actual net sales after dated returns and never use another tenant ledger',async()=>{
+ const x=await setup();try{
+  const product=await x.id('Meta produto','GOAL-PRODUCT-1',5);
+  const targetBody={branchId:'branch-a',sellerId:'viewer',month:'2026-10',targetCents:6000};
+  const mutation=next();
+  const saved=await x.write('a','reports/commission-targets',targetBody,{method:'PUT',key:mutation});
+  assert.equal(saved.status,200,JSON.stringify(saved.body));
+  assert.equal(saved.body.target.targetCents,6000);
+  assert.deepEqual((await x.write('a','reports/commission-targets',targetBody,{method:'PUT',key:mutation})).body,saved.body);
+  assert.equal((await x.write('a','reports/commission-targets',targetBody,{method:'PUT',who:x.viewer})).status,403);
+  assert.equal((await x.write('a','reports/commission-targets',{...targetBody,month:'2026-13'},{method:'PUT'})).status,400);
+  assert.equal((await x.write('a','reports/commission-targets',{...targetBody,sellerId:'other'},{method:'PUT'})).status,404);
+  const rule=await x.write('a','commissions/rules',{branchId:'branch-a',sellerId:'viewer',commissionBps:500});
+  assert.equal(rule.status,201,JSON.stringify(rule.body));
+  await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+  const sale=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
+  await x.write('a','sales/'+sale+'/seller',{branchId:'branch-a',sellerId:'viewer'});
+  await x.write('a','sales/'+sale+'/items',{branchId:'branch-a',productId:product,quantity:2});
+  assert.equal((await x.write('a','sales/'+sale+'/complete',{branchId:'branch-a',payments:[{method:'PIX',amountCents:2000}]})).status,200);
+  const path='reports/commission-ranking?branchId=branch-a&month=2026-10';
+  const before=await x.get('a',path);
+  assert.equal(before.status,200,JSON.stringify(before.body));
+  const viewerBefore=before.body.ranking.sellers.find(s=>s.sellerId==='viewer');
+  assert.equal(viewerBefore.netSalesCents,2000);
+  assert.equal(viewerBefore.targetCents,6000);
+  assert.equal(viewerBefore.progressPercent,33.33);
+  assert.equal(viewerBefore.commissionEarnedCents,100);
+  const detail=(await x.get('a','sales/'+sale+'?branchId=branch-a')).body.sale;
+  const reversed=await x.write('a','sales/'+sale+'/returns',{
+    branchId:'branch-a',reason:'Uma unidade devolvida',
+    items:[{saleItemId:detail.items[0].id,quantity:1}],refunds:[{method:'PIX',amountCents:1000}]
+  });
+  assert.equal(reversed.status,201,JSON.stringify(reversed.body));
+  const after=(await x.get('a',path)).body.ranking;
+  const viewer=after.sellers.find(s=>s.sellerId==='viewer');
+  assert.equal(viewer.netSalesCents,1000);
+  assert.equal(viewer.progressPercent,16.67);
+  assert.equal(viewer.commissionReversedCents,50);
+  assert.equal(viewer.commissionBalanceCents,50);
+  assert.equal(after.sellers[0].sellerId,'viewer');
+  const other=await x.get('b','reports/commission-ranking?branchId=branch-b&month=2026-10',x.other);
+  assert.equal(other.status,200);
+  assert.equal(other.body.ranking.sellers.length,0);
+  assert.equal((await x.get('a','reports/commission-ranking?branchId=branch-b&month=2026-10')).status,404);
+ }finally{x.close();}
 });
