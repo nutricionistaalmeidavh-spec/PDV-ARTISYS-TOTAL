@@ -115,8 +115,49 @@
           <td>${money(row.expectedCashCents)}</td><td>${money(row.countedCashCents)}</td>
           <td>${money(row.divergenceCents)}</td></tr>`).join('')||
             `<tr><td colspan="5">${empty('Nenhum fechamento anterior.')}</td></tr>`}
-        </tbody></table></div></section>`;
+        </tbody></table></div></section>
+      <section class="ops-card"><details id="web-cash-history-search"><summary>Consultar histórico completo do caixa</summary>
+        <form id="web-cash-search-form" class="ops-form">
+          <div class="ops-grid two">
+            <label>Operador (ID)<input name="operatorId" class="ops-input"></label>
+            <label>Situação<select name="status" class="ops-input">
+              <option value="">Todos</option><option value="OPEN">Aberto</option><option value="CLOSED">Fechado</option>
+            </select></label>
+            <label>A partir de<input name="from" type="date" class="ops-input"></label>
+            <label>Até<input name="to" type="date" class="ops-input"></label>
+          </div><button type="submit" class="ops-secondary">Pesquisar sessões</button>
+        </form><div id="web-cash-history-result" role="status"></div></details></section>`;
     content.innerHTML=page('Caixa','Abertura, suprimento, sangria e conferência real por filial.',overview);
+    content.querySelector('#web-cash-search-form')?.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const form=event.currentTarget,result=content.querySelector('#web-cash-history-result');
+      const values=Object.fromEntries(new FormData(form).entries());
+      if(values.from&&values.to&&values.from>values.to){
+        showToast('A data inicial deve ser anterior à final.','error');return;
+      }
+      const button=form.querySelector('[type=submit]');button.disabled=true;
+      async function pageAt(offset){
+        try{
+          const history=await api.cashSessionsSearch({...values,limit:20,offset});
+          result.innerHTML=`<p class="ops-muted">${history.total} sessões encontradas</p>
+          <div class="ops-table-wrap"><table class="ops-table"><thead>
+          <tr><th>Operador</th><th>Abertura</th><th>Fechamento</th><th>Estado</th><th>Esperado</th></tr>
+          </thead><tbody>${history.items.map(row=>`<tr>
+          <td>${escapeHtml(row.operatorId)}</td><td>${when(row.openedAt)}</td>
+          <td>${when(row.closedAt)}</td><td>${badge(row.status)}</td>
+          <td>${money(row.expectedCashCents)}</td></tr>`).join('')||
+          '<tr><td colspan="5">Nenhuma sessão corresponde aos filtros.</td></tr>'}</tbody>
+          </table></div><div class="ops-actions">
+          <button class="ops-secondary" data-cash-page="-1" ${history.offset<=0?'disabled':''}>Anterior</button>
+          <button class="ops-secondary" data-cash-page="1"
+            ${history.offset+history.items.length>=history.total?'disabled':''}>Próxima</button></div>`;
+          result.querySelectorAll('[data-cash-page]').forEach(b=>b.addEventListener('click',()=>{
+            if(!b.disabled)void pageAt(Math.max(0,history.offset+Number(b.dataset.cashPage)*history.limit));
+          }));
+        }catch(error){showToast(error.message,'error');}
+      }
+      await pageAt(0);button.disabled=false;
+    });
     content.querySelector('#web-cash-open')?.addEventListener('submit',async event=>{
       event.preventDefault();
       const form=event.currentTarget;if(form.dataset.pending==='true')return;
@@ -197,6 +238,8 @@
     await ready();
     const historyFilter={status:filters.status??'COMPLETED',
       from:filters.from||'',to:filters.to||'',query:filters.query||'',
+      customerId:filters.customerId||'',sellerId:filters.sellerId||'',operatorId:filters.operatorId||'',
+      productId:filters.productId||'',paymentMethod:filters.paymentMethod||'',
       limit:25,offset:Number(filters.offset)||0};
     const history=api.webMode?await api.salesHistory(historyFilter):null;
     const sales=api.webMode?history.items:await api.salesHistory({limit:200});
@@ -207,6 +250,17 @@
       <label>Situação<select class="ops-input" name="status">
         ${[['COMPLETED','Concluídas'],['OPEN','Abertas'],['SUSPENDED','Suspensas'],['CANCELLED','Canceladas'],['','Todas']].map(([key,label])=>`<option value="${key}" ${historyFilter.status===key?'selected':''}>${label}</option>`).join('')}
         </select></label>
+      <details class="ops-advanced-filters"><summary>Filtros avançados</summary>
+        <div class="ops-grid two">
+          <label>Vendedor (ID)<input class="ops-input" name="sellerId" value="${escapeHtml(historyFilter.sellerId)}"></label>
+          <label>Operador (ID)<input class="ops-input" name="operatorId" value="${escapeHtml(historyFilter.operatorId)}"></label>
+          <label>Cliente (ID)<input class="ops-input" name="customerId" value="${escapeHtml(historyFilter.customerId)}"></label>
+          <label>Produto (ID)<input class="ops-input" name="productId" value="${escapeHtml(historyFilter.productId)}"></label>
+          <label>Pagamento<select class="ops-input" name="paymentMethod">
+            ${[['','Todos'],['CASH','Dinheiro'],['PIX','PIX'],['DEBIT_CARD','Débito'],['CREDIT_CARD','Crédito'],['STORE_CREDIT','Crediário'],['OTHER','Outros']].map(([value,label])=>`<option value="${value}" ${historyFilter.paymentMethod===value?'selected':''}>${label}</option>`).join('')}
+          </select></label>
+        </div>
+      </details>
       <button class="ops-primary" type="submit">Filtrar vendas</button></form>
       <p class="ops-muted">Encontradas ${history.total} vendas · página ${Math.floor(history.offset/history.limit)+1}</p>
       </section>`:'';
@@ -228,7 +282,10 @@
       const pendingButtons=[...content.querySelectorAll('[data-sale-details], [data-history-page]')];
       pendingButtons.forEach(button=>{button.disabled=true;button.setAttribute('aria-busy','true');});
       void renderSalesHistory({from:form.elements.from.value,to:form.elements.to.value,
-        status:form.elements.status.value,query:form.elements.query.value,offset:0})
+        status:form.elements.status.value,query:form.elements.query.value,
+        sellerId:form.elements.sellerId.value,operatorId:form.elements.operatorId.value,
+        customerId:form.elements.customerId.value,productId:form.elements.productId.value,
+        paymentMethod:form.elements.paymentMethod.value,offset:0})
         .catch(error=>{showToast(error.message,'error');})
         .finally(()=>pendingButtons.forEach(button=>{button.disabled=false;button.removeAttribute('aria-busy');}));
     });

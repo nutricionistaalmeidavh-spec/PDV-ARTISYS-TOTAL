@@ -172,6 +172,14 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
     }
 
     if(feature==='cash'&&parts[1]==='sessions'){
+      if(parts.length===3&&parts[2]==='search'&&method==='GET'){
+        requireAccess(member,'cash.view',user);
+        return json({history:await service.cashSessionsSearch(tenant,branch,{
+          operatorId:url.searchParams.get('operatorId')||'',status:url.searchParams.get('status')||'',
+          from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',
+          limit:url.searchParams.get('limit')||25,offset:url.searchParams.get('offset')||0
+        })});
+      }
       if(parts.length===2&&method==='GET'){
         requireAccess(member,'cash.view',user);
         return json({sessions:await service.cashSessions(tenant,branch)});
@@ -221,6 +229,13 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       }
     }
     if(feature==='reports'){
+      if(parts.length===2&&parts[1]==='compare'&&method==='GET'){
+        requireAccess(member,'reports.view',user);
+        return json({comparison:await service.compareReports(tenant,branch,{
+          from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',
+          compareFrom:url.searchParams.get('compareFrom')||'',compareTo:url.searchParams.get('compareTo')||''
+        })});
+      }
       if(parts.length===2&&parts[1]==='summary'&&method==='GET'){
         requireAccess(member,'reports.view',user);
         return json({report:await service.reports(tenant,branch,{
@@ -241,6 +256,8 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
           from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',
           status:url.searchParams.get('status')||'',query:url.searchParams.get('query')||'',
           operatorId:url.searchParams.get('operatorId')||'',
+          sellerId:url.searchParams.get('sellerId')||'',customerId:url.searchParams.get('customerId')||'',
+          productId:url.searchParams.get('productId')||'',paymentMethod:url.searchParams.get('paymentMethod')||'',
           limit:url.searchParams.get('limit')||25,offset:url.searchParams.get('offset')||0
         })});
       }

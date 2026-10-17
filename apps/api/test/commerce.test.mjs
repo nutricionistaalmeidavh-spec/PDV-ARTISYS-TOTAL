@@ -493,3 +493,74 @@ test('inventory transfer moves one immutable stock quantity across two tenant br
     await assert.rejects(x.db.prepare('DELETE FROM inventory_transfers').bind().run(),/IMMUTABLE/);
   }finally{x.close();}
 });
+
+test('P3 history supports seller, customer, product and payment filter with tenant-scoped page totals',async()=>{
+ const x=await setup();try{
+  const p1=await x.id('Cafe A','HISTORY-A',5);
+  const p2=await x.id('Cafe B','HISTORY-B',5);
+  await x.write('a','cash/open',{branchId:'branch-a',openingCents:100});
+  const customer=await x.write('a','customers',{branchId:'branch-a',name:'Cliente Filtro'});
+  assert.equal(customer.status,201,JSON.stringify(customer.body));
+  async function sale(pid,sellerId,customerId,method){
+   const opened=await x.write('a','sales',{branchId:'branch-a'});const id=opened.body.sale.id;
+   if(sellerId)assert.equal((await x.write('a','sales/'+id+'/seller',{branchId:'branch-a',sellerId})).status,200);
+   if(customerId)assert.equal((await x.write('a','sales/'+id+'/customer',{branchId:'branch-a',customerId})).status,200);
+   await x.write('a','sales/'+id+'/items',{branchId:'branch-a',productId:pid,quantity:1});
+   assert.equal((await x.write('a','sales/'+id+'/complete',{branchId:'branch-a',payments:[{method,amountCents:1000}]})).status,200);
+   return id;
+  }
+  const a=await sale(p1,'viewer',customer.body.customer.id,'PIX');
+  await sale(p2,'owner',null,'CASH');
+  const query=(param)=>x.get('a','sales/history?branchId=branch-a&'+param);
+  for(const param of ['sellerId=viewer','customerId='+customer.body.customer.id,
+   'productId='+p1,'paymentMethod=PIX']){
+   const r=await query(param);assert.equal(r.status,200,JSON.stringify(r.body));
+   assert.equal(r.body.history.total,1,param);
+   assert.equal(r.body.history.items[0].id,a,param);
+  }
+  const combined=await query('sellerId=viewer&customerId='+customer.body.customer.id+'&paymentMethod=PIX&limit=1&offset=0');
+  assert.equal(combined.body.history.total,1);
+  assert.equal((await query('sellerId=viewer&paymentMethod=CASH')).body.history.total,0);
+  assert.equal((await query('paymentMethod=RANDOM')).status,400);
+  assert.equal((await x.get('b','sales/history?branchId=branch-b&productId='+p1,x.other)).body.history.total,0);
+ }finally{x.close();}
+});
+
+test('P3 full cash register search filters status/operator/time and paginates without changing legacy session list',async()=>{
+ const x=await setup();try{
+  const one=await x.write('a','cash/open',{branchId:'branch-a',openingCents:100});
+  assert.equal(one.status,201,JSON.stringify(one.body));
+  await x.write('a','cash/sessions/'+one.body.session.id+'/close',{branchId:'branch-a',countedCashCents:100});
+  const two=await x.write('a','cash/open',{branchId:'branch-a',openingCents:200});
+  assert.equal(two.status,201,JSON.stringify(two.body));
+  const search=(args='')=>x.get('a','cash/sessions/search?branchId=branch-a&'+args);
+  const closed=await search('status=CLOSED&operatorId=owner&from=2026-10-17&to=2026-10-17');
+  assert.equal(closed.status,200,JSON.stringify(closed.body));
+  assert.equal(closed.body.history.total,1);
+  assert.equal(closed.body.history.items[0].id,one.body.session.id);
+  const all=await search('limit=1&offset=1');
+  assert.equal(all.body.history.total,2);
+  assert.equal(all.body.history.items.length,1);
+  assert.equal((await search('status=INVALID')).status,400);
+  assert.equal((await x.get('a','cash/sessions?branchId=branch-a')).body.sessions.length,2);
+  assert.equal((await x.get('b','cash/sessions/search?branchId=branch-b',x.other)).body.history.total,0);
+ }finally{x.close();}
+});
+
+test('P4 comparative report compares periods with no division by zero or cross-tenant leak',async()=>{
+ const x=await setup();try{
+  const pid=await x.id('Comparativo','REPORT-P',3);
+  await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+  const s=await x.write('a','sales',{branchId:'branch-a'});
+  await x.write('a','sales/'+s.body.sale.id+'/items',{branchId:'branch-a',productId:pid,quantity:1});
+  await x.write('a','sales/'+s.body.sale.id+'/complete',{branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]});
+  const r=await x.get('a','reports/compare?branchId=branch-a&from=2026-10-17&to=2026-10-17&compareFrom=2026-10-16&compareTo=2026-10-16');
+  assert.equal(r.status,200,JSON.stringify(r.body));
+  assert.equal(r.body.comparison.current.sales.totalCents,1000);
+  assert.equal(r.body.comparison.previous.sales.totalCents,0);
+  assert.equal(r.body.comparison.delta.totalCents,1000);
+  assert.equal(r.body.comparison.delta.percentage,null,'no divide-by-zero percentage');
+  assert.equal((await x.get('b','reports/compare?branchId=branch-b&from=2026-10-17&to=2026-10-17',x.other)).status,400);
+  assert.equal((await x.get('a','reports/compare?branchId=branch-b&from=2026-10-17&to=2026-10-17&compareFrom=2026-10-16&compareTo=2026-10-16')).status,404);
+ }finally{x.close();}
+});

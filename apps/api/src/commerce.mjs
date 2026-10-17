@@ -263,6 +263,23 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(status){clauses.push('status=?');args.push(status);}
       const operator=text(filters.operatorId||'',128);
       if(operator){clauses.push('operator_id=?');args.push(operator);}
+      const seller=text(filters.sellerId||'',128);
+      if(seller){clauses.push('seller_id=?');args.push(seller);}
+      const customer=text(filters.customerId||'',128);
+      if(customer){clauses.push('customer_id=?');args.push(customer);}
+      const productId=text(filters.productId||'',128);
+      if(productId){
+        clauses.push('EXISTS (SELECT 1 FROM sale_items si WHERE si.sale_id=sales.id AND si.tenant_id=sales.tenant_id AND si.branch_id=sales.branch_id AND si.product_id=?)');
+        args.push(productId);
+      }
+      const method=text(filters.paymentMethod||'',32).toUpperCase();
+      if(method&&!allowedPayments.has(method))throw error(400,'Forma de pagamento inválida.');
+      if(method==='STORE_CREDIT'){
+        clauses.push("EXISTS (SELECT 1 FROM customer_credit_ledger cl WHERE cl.sale_id=sales.id AND cl.tenant_id=sales.tenant_id AND cl.branch_id=sales.branch_id AND cl.type='CHARGE')");
+      }else if(method){
+        clauses.push('EXISTS (SELECT 1 FROM sale_payments sp WHERE sp.sale_id=sales.id AND sp.tenant_id=sales.tenant_id AND sp.branch_id=sales.branch_id AND sp.method=?)');
+        args.push(method);
+      }
       const query=text(filters.query||'',90);
       if(query){clauses.push('instr(lower(sale_number),lower(?))>0');args.push(query);}
       const where=clauses.join(' AND ');
@@ -549,6 +566,35 @@ export function createCommerceService(db,{now=nowISO}={}){
           branchId:branch};
       }));
     },
+    async cashSessionsSearch(tenant,branch,filters={}){
+      await branchExists(tenant,branch);
+      const status=text(filters.status||'',20).toUpperCase();
+      if(status&&!['OPEN','CLOSED'].includes(status))throw error(400,'Estado do caixa inválido.');
+      const operatorId=text(filters.operatorId||'',128);
+      const {a,b}=period({from:filters.from||'',to:filters.to||''});
+      const limit=Number(filters.limit??25),offset=Number(filters.offset??0);
+      if(!Number.isSafeInteger(limit)||limit<1||limit>100||
+         !Number.isSafeInteger(offset)||offset<0||offset>50000)
+        throw error(400,'Paginação do histórico de caixa inválida.');
+      const where=['tenant_id=?','branch_id=?','opened_at>=?','opened_at<=?'];
+      const args=[tenant,branch,a,b];
+      if(operatorId){where.push('operator_id=?');args.push(operatorId);}
+      if(status){where.push('status=?');args.push(status);}
+      const clause=where.join(' AND ');
+      const counted=await first('SELECT COUNT(*) AS total FROM cash_sessions WHERE '+clause,...args);
+      const rows=await all(`SELECT * FROM cash_sessions WHERE ${clause}
+        ORDER BY opened_at DESC,id DESC LIMIT ? OFFSET ?`,...args,limit,offset);
+      const items=await Promise.all(rows.map(async row=>{
+        const {closing}=await cashClosing(tenant,branch,row,row.counted_cash_cents??0);
+        return {id:row.id,status:row.status,operatorId:row.operator_id,
+          openedAt:row.opened_at,closedAt:row.closed_at||null,
+          openingCents:row.opening_cents,
+          expectedCashCents:row.expected_cash_cents??closing.expectedCashCents,
+          countedCashCents:row.counted_cash_cents,divergenceCents:row.divergence_cents,
+          branchId:branch};
+      }));
+      return {items,total:counted.total,limit,offset};
+    },
     async cashMovements(tenant,branch,id){
       await cashSession(tenant,branch,id);
       return cashLines(tenant,branch,id);
@@ -772,6 +818,20 @@ export function createCommerceService(db,{now=nowISO}={}){
       return {period:{from:from||null,to:to||null},sales,methodTotals:payments,
         products:[...products.values()].sort((x,y)=>y.grossCents-x.grossCents).slice(0,50),
         inventory,cash,finance};
+    },
+    async compareReports(tenant,branch,{from,to,compareFrom,compareTo}={}){
+      if(!from||!to||!compareFrom||!compareTo)
+        throw error(400,'Informe as duas datas inicial e final de cada período.');
+      const current=await this.reports(tenant,branch,{from,to});
+      const previous=await this.reports(tenant,branch,{from:compareFrom,to:compareTo});
+      const difference=current.sales.totalCents-previous.sales.totalCents;
+      return {current:{period:current.period,sales:current.sales},
+        previous:{period:previous.period,sales:previous.sales},
+        delta:{totalCents:difference,
+          percentage:previous.sales.totalCents===0?null:
+            Math.round(difference/Math.abs(previous.sales.totalCents)*10000)/100,
+          count:current.sales.count-previous.sales.count,
+          refundedCents:current.sales.refundedCents-previous.sales.refundedCents}};
     },
     async salesCsv(tenant,branch,{from,to}={}){
       const {a,b}=period({from,to});

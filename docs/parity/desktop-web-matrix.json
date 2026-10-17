@@ -617,7 +617,8 @@
           "dependsOn": [
             "history-033"
           ],
-          "acceptance": "Filtro por período, operador, cliente, vendedor, status e pesquisa. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Filtro por período, operador, cliente, vendedor, status e pesquisa. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "reviewNote": "Filtros de período, operador, vendedor, cliente, produto e pagamento na API com interface web, paginação e escopo por tenant/filial. Ainda parcial até comparação completa com desktop."
         },
         {
           "id": "history-036",
@@ -768,12 +769,19 @@
         {
           "id": "cash-044",
           "name": "Histórico completo filtrado por operador, data e terminal",
-          "status": "gap",
+          "status": "partial",
           "owner": "cash",
           "dependsOn": [
             "cash-043"
           ],
-          "acceptance": "Histórico completo filtrado por operador, data e terminal. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Histórico completo filtrado por operador, data e terminal. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async cashSessionsSearch(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 full cash register search"
+          },
+          "reviewNote": "Consulta web server-side implementada com filtros e teste de isolamento/validação. Ainda pendem terminalId próprio no caixa, histórico amplo e homologação completa do desktop."
         },
         {
           "id": "cash-045",
@@ -1123,12 +1131,19 @@
         {
           "id": "reports-065",
           "name": "Comparativos entre períodos e análise de tendências",
-          "status": "gap",
+          "status": "partial",
           "owner": "reports",
           "dependsOn": [
             "reports-058"
           ],
-          "acceptance": "Comparativos entre períodos e análise de tendências. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Comparativos entre períodos e análise de tendências. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async compareReports(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 comparative report"
+          },
+          "reviewNote": "Consulta web server-side implementada com filtros e teste de isolamento/validação. Ainda pendem terminalId próprio no caixa, histórico amplo e homologação completa do desktop."
         },
         {
           "id": "reports-066",
