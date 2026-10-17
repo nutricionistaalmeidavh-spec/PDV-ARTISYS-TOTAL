@@ -124,12 +124,14 @@
       if(operation==='cash')return value.session;
       if(operation==='cash/open')return {session:value.session};
       if(operation==='cash/sessions')return value.sessions;
+      if(operation==='cash/sessions/search')return value.history;
       if(operation.startsWith('cash/sessions/'))return operation.endsWith('/movements')?value.movements:value.result;
       if(/^sales\/[^/]+\/(customer|seller)$/.test(operation))return value.sale;
       if(operation==='finance/summary')return value.summary;
       if(operation==='finance/entries')return method==='GET'?value.entries:value.entry;
       if(operation.startsWith('finance/entries/'))return value.settlement||value.result||value.entry;
       if(operation==='reports/summary')return value.report;
+      if(operation==='reports/compare')return value.comparison;
       if(operation==='reports/sales.csv')return value;
       if(operation==='sales'||operation.startsWith('sales?'))return method==='GET'?value.sales:value.sale;
       if(operation==='sales/history')return value.history;
@@ -282,12 +284,14 @@
       }catch(error){if(error.status&&error.status!==503)this.completionKeys.delete(scope);throw error;}
     }
     cashSessions(filters = {}) { return this.request(`/api/v1/cash/sessions${this.params(filters)}`); }
+    cashSessionsSearch(filters = {}) { return this.request(`/api/v1/cash/sessions/search${this.params(filters)}`); }
     cashMovements(sessionId) { return this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/movements`); }
 
     checkoutDocuments(query = '') { return this.request(`/api/v1/checkout/documents${this.params({query:query||undefined})}`); }
     openCheckoutDocument(type, id) { return this.request(`/api/v1/checkout/documents/${String(type||'').toLowerCase()}/${encodeURIComponent(id)}/open`, { method:'POST', body:{} }); }
     sales(status = '', limit = 50) { return this.request(`/api/v1/sales${this.params({status,limit})}`); }
     salesHistory(filters = {}) { return this.request(`/api/v1/sales/history${this.params(filters)}`); }
+    compareSalesPeriods(filters = {}) { return this.request(`/api/v1/reports/compare${this.params(filters)}`); }
     sale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}`); }
     saleDetails(id) { return this.webMode?this.sale(id):this.request(`/api/v1/sales/${encodeURIComponent(id)}/details`); }
     openSale(body,mutationId) { return this.request('/api/v1/sales', { method: 'POST', body,mutationId }); }
