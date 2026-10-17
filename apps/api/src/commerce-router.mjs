@@ -62,6 +62,14 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       }
     }
     if(feature==='inventory'){
+      if(parts[1]==='transfers'&&parts.length===2&&method==='GET'){
+        requireAccess(member,'inventory.view',user);
+        return json({transfers:await service.stockTransfers(tenant,branch,{limit:url.searchParams.get('limit')||50})});
+      }
+      if(parts[1]==='transfers'&&parts.length===2&&method==='POST'){
+        requireAccess(member,'inventory.adjust',user);
+        return json({transfer:await service.transferStock(tenant,branch,user,body,key)},201);
+      }
       if(parts[1]==='movements'&&parts.length===2&&method==='GET'){
         requireAccess(member,'inventory.view',user);
         return json({movements:await service.inventoryMovements(tenant,branch,{
