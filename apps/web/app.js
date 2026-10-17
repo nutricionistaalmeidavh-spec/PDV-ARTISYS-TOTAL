@@ -326,7 +326,8 @@
   }
 
   function renderHome() {
-    const view=homeRoleModel?.homeForUser?.(state.user,ui.HOME_TILES)||{label:'Operação',title:'Início',subtitle:'Acesso rápido.',sections:[{key:'main',label:'',tiles:ui.HOME_TILES}]};
+    const original=homeRoleModel?.homeForUser?.(state.user,ui.HOME_TILES)||{label:'Operação',title:'Início',subtitle:'Acesso rápido.',sections:[{key:'main',label:'',tiles:ui.HOME_TILES}]};
+    const view=api.webMode?{...original,sections:original.sections.map(section=>({...section,tiles:section.tiles.filter(tile=>canAccessRoute(tile.route))})).filter(section=>section.tiles.length)}:original;
     const operatorName=state.user?.name||'';
     content.innerHTML=`<section id="classic-home-grid" class="classic-home-grid" aria-label="Início de ${escapeHtml(view.label)}"><header class="classic-home-head"><div><span class="classic-home-eyebrow">Início · ${escapeHtml(view.label)}</span><h1>${escapeHtml(view.title)}</h1><p>${escapeHtml(view.subtitle)}</p></div>${operatorName?`<span class="classic-home-operator">${escapeHtml(operatorName)}</span>`:''}</header>${view.sections.map(section=>`<section class="classic-home-section" data-home-section="${escapeHtml(section.key)}">${section.label?`<h2>${escapeHtml(section.label)}</h2>`:''}<div class="classic-home-tiles">${section.tiles.map(tile=>`<button type="button" class="home-tile tone-${escapeHtml(tile.tone||'blue')}" data-home-route="${escapeHtml(tile.route)}" aria-label="Abrir ${escapeHtml(tile.label)}"><span class="tile-icon">${icon(tile.icon,46)}</span><h3>${escapeHtml(tile.label)}</h3><p>${escapeHtml(tile.description)}</p>${tile.shortcut?`<span class="shortcut-badge">${escapeHtml(tile.shortcut)}</span>`:''}</button>`).join('')}</div></section>`).join('')}</section>`;
     document.body.classList.add('home-view-classic');
@@ -940,8 +941,94 @@
     if(label) label.textContent=productPhotoSyncLabel();
   }
 
+
+  function renderWebProducts(){
+    const canManage=window.PdvAccessPolicy?.hasCapability(state.user,'products.manage');
+    const canStock=window.PdvAccessPolicy?.hasCapability(state.user,'inventory.adjust');
+    const listed=state.products.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku).includes(ui.normalizeSearch(state.productQuery)));
+    content.innerHTML=`<section class="page web-products-page"><header class="page-head">
+      <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
+      <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
+      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button>':''}</header>
+      <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
+        placeholder="Buscar produto ou SKU" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
+      <div class="data-card web-product-table" id="web-products-list">
+        ${listed.length?listed.map(p=>`<div class="data-row web-product-row">
+          <div class="web-product-identity"><span class="web-product-monogram">${escapeHtml(initials(p.name))}</span>
+          <div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku)}</small></div></div>
+          <div><small>Preço</small><strong>${ui.formatCents(p.salePriceCents)}</strong></div>
+          <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.balance):'Livre'}</strong></div>
+          ${canStock&&p.trackStock?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>`:''}
+        </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
+      </div></section>`;
+    content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
+    content.querySelector('#web-product-search')?.addEventListener('input',e=>{
+      state.productQuery=e.target.value;
+      const focused=document.activeElement===e.target,caret=e.target.selectionStart;
+      renderWebProducts();
+      if(focused){const el=content.querySelector('#web-product-search');el.focus({preventScroll:true});el.setSelectionRange(caret,caret);}
+    });
+    content.querySelectorAll('[data-web-stock]').forEach(b=>b.addEventListener('click',()=>{
+      const product=state.products.find(p=>p.id===b.dataset.webStock);
+      if(product)openWebStockForm(product);
+    }));
+    routeRegistry.updated('products',{surface:'products'});
+  }
+
+  function openWebProductForm(){
+    openModal('Novo produto',`<form id="web-product-form">
+      <div class="field"><label for="web-product-name">Nome do produto</label><input id="web-product-name" name="name" required minlength="2" maxlength="120" autocomplete="off" placeholder="Ex.: Café tradicional"></div>
+      <div class="field-grid"><div class="field"><label for="web-product-sku">SKU / código</label><input id="web-product-sku" name="sku" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._-]*" placeholder="Ex.: CAFE-001"></div>
+      <div class="field"><label for="web-product-price">Preço de venda (R$)</label><input id="web-product-price" name="price" inputmode="decimal" required placeholder="0,00"></div></div>
+      <label class="web-checkbox"><input name="track" type="checkbox" checked> Controlar saldo no estoque</label>
+      <p class="web-form-feedback" role="status" aria-live="polite"></p>
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button>
+      <button class="primary-button" type="submit">Salvar produto</button></div>
+    </form>`,{onMount(root){
+      const form=root.querySelector('#web-product-form');
+      form.addEventListener('submit',async e=>{
+        e.preventDefault();if(form.dataset.pending==='true')return;
+        const button=form.querySelector('[type=submit]'),status=form.querySelector('.web-form-feedback');
+        form.dataset.pending='true';button.disabled=true;button.textContent='Salvando…';
+        try{
+          const product=await api.saveProduct({name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
+            salePriceCents:centsFromInput(form.elements.price.value),trackStock:form.elements.track.checked});
+          state.products=await api.products();
+          closeModal();renderWebProducts();showToast('Produto '+product.name+' cadastrado.','success');
+        }catch(error){status.textContent=error.message;}
+        finally{form.dataset.pending='false';button.disabled=false;button.textContent='Salvar produto';}
+      });
+    }});
+  }
+
+  function openWebStockForm(product){
+    openModal('Registrar entrada no estoque',`<form id="web-stock-form">
+      <p>Produto: <strong>${escapeHtml(product.name)}</strong> · Saldo atual: ${quantityLabel(product.balance)}</p>
+      <div class="field"><label for="web-stock-qty">Quantidade recebida</label>
+      <input id="web-stock-qty" name="quantity" type="number" min="0.001" step="0.001" required placeholder="0"></div>
+      <p class="web-form-feedback" role="status" aria-live="polite"></p>
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button>
+      <button class="primary-button" type="submit">Registrar entrada</button></div></form>`,{onMount(root){
+      const form=root.querySelector('#web-stock-form');
+      form.addEventListener('submit',async e=>{
+        e.preventDefault();if(form.dataset.pending==='true')return;
+        const button=form.querySelector('[type=submit]'),status=form.querySelector('.web-form-feedback');
+        form.dataset.pending='true';button.disabled=true;button.textContent='Registrando…';
+        try{
+          await api.request('/api/v1/inventory/movements',{method:'POST',body:{
+            productId:product.id,quantity:Number(form.elements.quantity.value),type:'purchase'
+          }});
+          state.products=await api.products();
+          closeModal();renderWebProducts();showToast('Entrada de estoque registrada para '+product.name+'.','success');
+        }catch(error){status.textContent=error.message;}
+        finally{form.dataset.pending='false';button.disabled=false;button.textContent='Registrar entrada';}
+      });
+    }});
+  }
+
   function renderProducts() {
     if (!isRouteActive('products')) return;
+    if(api.webMode)return renderWebProducts();
     const syncLabel=productPhotoSyncLabel();
     void refreshProductionRoutes().then(()=>{if(isRouteActive('products'))renderProductsList();});
     content.innerHTML = `<section class="page" data-products-canonical="true"><header class="page-head"><div><h1>Cardápio</h1><p>Itens disponíveis para venda, preços e categorias. Produtos e fichas são cadastrados no Estoque.</p></div><div class="menu-head-actions"><details class="products-secondary-actions" data-products-secondary-actions><summary class="secondary-button">Mais ações</summary><div class="products-secondary-actions-menu" data-products-secondary-actions-menu><button class="products-secondary-action" id="sync-product-photos" type="button">↻ Sincronizar fotos</button><button class="products-secondary-action" id="new-category" type="button">+ Categoria</button></div></details><button class="primary-button" id="new-product">+ Adicionar ao Cardápio</button></div></header><div class="toolbar"><label class="search-field">⌕<input id="product-page-search" placeholder="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label><select id="product-category-filter" class="secondary-button"><option value="">Todas categorias</option>${state.categories.map((category) => `<option value="${category.id}" ${state.categoryId === category.id ? 'selected' : ''}>${escapeHtml(category.name)}</option>`).join('')}</select><small>${escapeHtml(syncLabel)}</small></div><div class="data-card" id="products-list">${productsListHtml()}</div></section>`;
@@ -1280,7 +1367,7 @@ function openCategoryForm() {
     }
   }
 
-  function logout() { void api.logout(); state.user = null; window.PdvCurrentAccess=null; state.sale = null; clearCheckoutDocumentContext(); updateTopbar(); showLogin(); }
+  function logout() { void api.logout(); state.user = null; window.PdvCurrentAccess=null; state.sale = null; clearCheckoutDocumentContext(); updateTopbar(); if(api.webMode)showWebLogin();else showLogin(); }
 
   async function executeShortcut(action) {
     if (!action || !state.user) return;
