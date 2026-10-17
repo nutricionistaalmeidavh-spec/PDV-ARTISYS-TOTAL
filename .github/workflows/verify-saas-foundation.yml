@@ -35,6 +35,8 @@ jobs:
         run: npm run build
       - name: Test canonical sales, inventory, cash and authorization contracts
         run: npm run test:core
+      - name: Validate original renderer web syntax (no second app)
+        run: npm run check:web
       - name: Validate entrypoints
         working-directory: apps/api
         run: npm run check
@@ -57,6 +59,8 @@ jobs:
         run: npx --yes wrangler@4.137.0 deploy --dry-run --outdir dist-check
       - name: Test isolated D1 schema in Wrangler local emulator
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0001_identity.sql
+      - name: Test commerce D1 schema and immutable stock ledger in Wrangler
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0002_commerce.sql
       - name: Smoke real Cloudflare Workerd with local D1 and 100k PBKDF2
         env:
           PDV_OWNER_EMAIL: owner@example.test
