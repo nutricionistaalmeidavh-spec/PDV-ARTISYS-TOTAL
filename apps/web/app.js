@@ -709,7 +709,7 @@
   function allowedPaymentMethodsForCurrentSale() {
     const policy=(state.sale?.items||[]).map(item=>item.configuration?.commercialPolicySnapshot).find(Boolean);
     const values=Array.isArray(policy?.allowedPaymentMethods)?policy.allowedPaymentMethods:null;
-    if(api.webMode)return ['CASH','PIX','DEBIT_CARD','CREDIT_CARD'];
+    if(api.webMode)return state.sale?.customerId?['CASH','PIX','DEBIT_CARD','CREDIT_CARD','STORE_CREDIT']:['CASH','PIX','DEBIT_CARD','CREDIT_CARD'];
     return values&&values.length?values:['CASH','PIX','DEBIT_CARD','CREDIT_CARD','STORE_CREDIT'];
   }
 
