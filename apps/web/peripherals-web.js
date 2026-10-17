@@ -41,6 +41,33 @@
     if (!Number.isFinite(weight) || weight <= 0 || weight > 1000) throw new Error('Peso fora do intervalo permitido.');
     return {weight:Math.round(weight*1000)/1000,unit:'kg'};
   }
+  // Browser-safe port of the canonical Urano POP-S frame recognition (USE-P2 / USE-CB2).
+  // Unlike a numeric fallback, unknown data is rejected rather than guessed.
+  function parseUranoWeight(input) {
+    const data=Uint8Array.from(input||[]);
+    if(!data.length)throw new Error('Frame Urano POP-S vazio.');
+    const latin=bytes=>Array.from(bytes,b=>String.fromCharCode(b)).join('').replace(/\0/g,' ');
+    const text=latin(data);
+    const normalize=raw=>{
+      const value=String(raw??'').trim().replace(',','.');
+      if(!/^[+-]?\d+(?:\.\d+)?$/.test(value))throw new Error('Frame Urano POP-S sem peso válido.');
+      const weight=Number(value);
+      if(!Number.isFinite(weight)||weight<0)throw new Error('Peso Urano POP-S inválido.');
+      return Math.round(weight*1000)/1000;
+    };
+    const cb=text.match(/PESO\s*L\s*:\s*([+-]?\d+(?:[.,]\d+)?)\s*kg/i);
+    if(cb)return normalize(cb[1]);
+    for(let start=0;start<data.length-3;start++){
+      if(data[start]!==27||data[start+1]!==84||![49,50,51].includes(data[start+2]))continue;
+      for(let end=start+3;end<data.length-1;end++){
+        if(data[end]!==27||data[end+1]!==69)continue;
+        const matches=[...latin(data.slice(start,end+2)).matchAll(/([+-]?\d+(?:[.,]\d+)?)\s*kg/gi)];
+        if(matches.length)return normalize(matches[matches.length-1][1]);
+        break;
+      }
+    }
+    throw new Error('Frame Urano POP-S inválido ou sem peso líquido reconhecível.');
+  }
   function serialApi() {
     if (!root.isSecureContext || !root.navigator?.serial) throw new Error('Porta serial requer Chrome ou Edge em HTTPS (não disponível neste navegador). Informe o peso manualmente.');
     return root.navigator.serial;
@@ -103,7 +130,7 @@
       }
       if(!chunks.length)throw new Error('A balança não respondeu. Confira conexão e porta.');
       const raw=new TextDecoder().decode(Uint8Array.from(chunks)).trim();
-      if(urano)throw new Error('Quadro Urano recebido, mas a interpretação do protocolo exige conector homologado. Não foi utilizado peso estimado.');
+      if(urano)return {weight:parseUranoWeight(chunks),unit:'kg'};
       return parseWeight(raw);
     }finally{
       clearTimeout(timer);
@@ -191,7 +218,7 @@
     return printSale({id:'TESTE',status:'COMPLETED',saleNumber:'TESTE',completedAt:new Date().toISOString(),items:[],payments:[],totalCents:0,changeCents:0});
   }
   root.PdvWebHardware=Object.freeze({settings,saveSettings,readWeight,connect,openDrawer,printSale,printTest,showSettings});
-  root.PdvWebHardwareUtils=Object.freeze({parseWeight,normalizeSettings,receiptHtml,receiptText,escpos,escapeHtml});
+  root.PdvWebHardwareUtils=Object.freeze({parseWeight,parseUranoWeight,normalizeSettings,receiptHtml,receiptText,escpos,escapeHtml});
   root.document?.addEventListener('click',e=>{
     if(e.target?.closest?.('#peripherals-settings'))showSettings();
   });
