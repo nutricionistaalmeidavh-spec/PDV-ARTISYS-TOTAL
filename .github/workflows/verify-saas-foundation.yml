@@ -10,7 +10,8 @@ on:
       - 'wrangler.jsonc'
       - 'package.json'
       - 'scripts/verify-cloudflare-build.mjs'
-      - 'legacy/pdv-artisys/js/core/auth/**'
+      - 'packages/core/**'
+      - 'apps/web/**'
       - '.github/workflows/verify-saas-foundation.yml'
   workflow_dispatch:
 
@@ -32,6 +33,8 @@ jobs:
           node-version: '22'
       - name: Validate Cloudflare repository-root deployment contract
         run: npm run build
+      - name: Test canonical sales, inventory, cash and authorization contracts
+        run: npm run test:core
       - name: Validate entrypoints
         working-directory: apps/api
         run: npm run check
@@ -65,12 +68,16 @@ jobs:
           node --experimental-sqlite apps/api/src/provision.mjs
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/.local/provision.seed.sql
           node scripts/smoke-workerd.mjs
-      - name: Verify snapshot remains unchanged
+      - name: Verify a single maintained product, with no legacy desktop copy
         shell: bash
         run: |
           set -euo pipefail
-          test -f legacy/pdv-artisys/js/core/auth/default-profiles.js
-          test -f legacy/pdv-artisys/js/core/auth/authorization-service.js
-          test -f legacy/pdv-artisys/js/core/auth/principal-resolver.js
-          test -f legacy/pdv-artisys/js/domains/sales/sale-service.js
+          test ! -d legacy
+          test ! -d desktop
+          test -f packages/core/js/core/auth/default-profiles.js
+          test -f packages/core/js/domains/sales/sale-service.js
+          test -f packages/core/js/domains/cash/cash-service.js
+          test -f packages/core/js/domains/inventory/inventory-service.js
+          test -f apps/web/index.html
           test ! -f apps/api/src/renderer.js
+          ! grep -R "legacy/pdv-artisys" apps/api/src scripts/verify-cloudflare-build.mjs
