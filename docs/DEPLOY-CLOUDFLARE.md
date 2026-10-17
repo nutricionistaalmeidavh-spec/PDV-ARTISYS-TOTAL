@@ -23,7 +23,7 @@ Na Cloudflare, em **Workers & Pages → pdv-artisys-total → Configurações �
 
 O Worker declara o D1 **`DB`** com nome **`pdv-artisys-total`** e um binding R2 **`FILES`** reservado. São recursos novos e separados dos serviços de licença do PDV Artisys desktop. Wrangler 4 aceita auto-provisionamento sem IDs fictícios; o ID real pode permanecer somente no ambiente Cloudflare. Confira os bindings reais em **Settings → Bindings** antes de ativar clientes.
 
-- O deploy **não executa automaticamente** migrações no D1 remoto. Em banco **novo e isolado**, aplique em ordem `apps/api/migrations/0001_identity.sql`, `apps/api/migrations/0002_commerce.sql` e `apps/api/migrations/0003_cash_finance.sql` (Cloudflare D1 Console ou `wrangler d1 execute pdv-artisys-total --remote --file <arquivo>`). Nunca execute no D1 do PDV original. Validar backup e o estado do banco antes de migrar dados reais.
+- O deploy **não executa automaticamente** migrações no D1 remoto. Em banco **novo e isolado**, aplique em ordem `apps/api/migrations/0001_identity.sql`, `apps/api/migrations/0002_commerce.sql` e `apps/api/migrations/0003_cash_finance.sql` e `apps/api/migrations/0004_advanced_finance.sql` (Cloudflare D1 Console ou `wrangler d1 execute pdv-artisys-total --remote --file <arquivo>`). Nunca execute no D1 do PDV original. Validar backup e o estado do banco antes de migrar dados reais.
 - Antes da migração, `/api/v1/health` devolve **503 setup-required**; depois dela, **200 identity-ready**.
 - `FILES` ainda não lê nem grava anexos. Não contratar plano pago automaticamente para habilitar R2.
 - **Não existe `CLOUDFLARE_API_TOKEN` necessário no código**. O build Git autenticado e os bindings da plataforma são suficientes. Nunca versionar tokens de conta no GitHub.
@@ -37,6 +37,7 @@ O `wrangler.jsonc` define **`AUTH_ENABLED=false`**, portanto login responde 503 
 ## Verificação de entrega
 
 - Código: `npm run build`, `cd apps/api && npm test`.
+- A paridade avançada de bancos/recorrências/DRE depende de `0004_advanced_finance.sql` aplicado no banco D1 de cada ambiente antes de liberar o módulo. Importação OFX/CSV é manual, com prévia local; não há integração Open Banking automatizada nem custo obrigatório de terceiros.
 - Worker: `npx wrangler deploy --dry-run`.
 - Testes de integração: GitHub Actions `Verify SaaS canonical foundation` roda Wrangler/Workerd, D1 local, PBKDF2, isolamento de empresa, ciclo completo de venda e duas jornadas reais no Chromium (incluindo 390 px). Os testes atuais registram 57 testes do núcleo e 14 da API.
 - Publicação real: abra **Implantações/Builds** do projeto Cloudflare e confirme que o commit da `main` passou. **Um GitHub Actions verde não comprova uma publicação verde.**
