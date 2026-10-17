@@ -128,6 +128,65 @@ try{
   if(await closePostSale.isVisible())await closePostSale.click();
 
   assert.equal(await page.locator('.cart-line').count(),0,'completed sale clears the cart once');
+
+  // P3 terminal parity: TWO actual browser profiles, not just server-side fixtures.
+  // A suspended sale on one device must not be resumable from another device.
+  await product.click();
+  await page.locator('.cart-line').filter({hasText:'Produto Web QA'}).waitFor({timeout:12000});
+  await page.locator('#suspend-sale').click();
+  await page.locator('#modal-root .suspended-item').first().waitFor({timeout:12000});
+  const originalSuspendedNumber=(await page.locator('#modal-root .suspended-item strong').first().innerText()).trim();
+  assert.ok(originalSuspendedNumber,'terminal A has a suspended draft');
+  await page.locator('#modal-root [data-close-modal]').first().click();
+  const secondContext=await browser.newContext({viewport:{width:1366,height:860}});
+  const secondPage=await secondContext.newPage();
+  secondPage.on('pageerror',error=>errors.push('second-terminal: '+error.message));
+  await secondPage.goto(origin,{waitUntil:'domcontentloaded'});
+  await secondPage.locator('#web-login-form').waitFor({timeout:12000});
+  await secondPage.locator('#web-email').fill('owner@example.test');
+  await secondPage.locator('#web-password').fill('DummyStrongPassOnlyForCI2026');
+  await secondPage.locator('#web-login-form button[type=submit]').click();
+  await secondPage.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
+  const secondTerminal=await secondPage.evaluate(()=>localStorage.getItem('artisys.pdv.webTerminalId.v1'));
+  assert.ok(secondTerminal?.startsWith('WEB-'));
+  assert.notEqual(secondTerminal,expectedTerminalId,'two independent browser profiles must have different terminals');
+  await secondPage.locator('#app-sidebar [data-route=cash]').click();
+  await secondPage.locator('#web-cash-open').waitFor({timeout:12000});
+  await secondPage.locator('#web-cash-open button[type=submit]').click();
+  await secondPage.locator('[data-cash-web=close]').waitFor({timeout:12000});
+  const [firstCash,secondCash]=await Promise.all([
+    page.evaluate(async()=>{
+      const api=new window.PdvApiClient.ApiClient();
+      return (await api.openCash(localStorage.getItem('artisys.pdv.webTerminalId.v1')))?.id;
+    }),
+    secondPage.evaluate(async()=>{
+      const api=new window.PdvApiClient.ApiClient();
+      return (await api.openCash(localStorage.getItem('artisys.pdv.webTerminalId.v1')))?.id;
+    })
+  ]);
+  assert.ok(firstCash&&secondCash&&firstCash!==secondCash,'two browsers must have independent open cash sessions');
+  await secondPage.locator('#app-sidebar [data-route=checkout]').click();
+  await secondPage.locator('[data-add-product]').filter({hasText:'Produto Web QA'}).click();
+  await secondPage.locator('.cart-line').filter({hasText:'Produto Web QA'}).waitFor({timeout:12000});
+  await secondPage.locator('#suspend-sale').click();
+  await secondPage.locator('#modal-root .suspended-item').first().waitFor({timeout:12000});
+  const suspendedVisible=await secondPage.locator('#modal-root .suspended-item strong').allTextContents();
+  assert.equal(suspendedVisible.length,1,'terminal B must show only its own suspended sale');
+  assert.ok(!suspendedVisible.includes(originalSuspendedNumber),'terminal B must not resume terminal A sale');
+  await secondPage.locator('#modal-root [data-close-modal]').first().click();
+  await secondPage.locator('#app-sidebar [data-route=cash]').click();
+  await secondPage.locator('[data-cash-web=close]').waitFor({timeout:12000});
+  await secondPage.locator('[data-cash-web=close]').click();
+  await secondPage.locator('.ux-dialog [name=amount]').waitFor({timeout:12000});
+  await secondPage.locator('.ux-dialog__confirm').click();
+  await secondPage.locator('#web-cash-open').waitFor({timeout:12000});
+  const firstStillOpen=await page.evaluate(async()=>{
+    const api=new window.PdvApiClient.ApiClient();
+    return (await api.openCash(localStorage.getItem('artisys.pdv.webTerminalId.v1')))?.id;
+  });
+  assert.equal(firstStillOpen,firstCash,'closing terminal B cannot close terminal A');
+  await secondContext.close();
+
   // Parity: the original sales-history route now offers server-side search and paging.
   await page.locator('#app-sidebar [data-route=sales]').click();
   await page.locator('#web-sales-filter').waitFor({timeout:12000});
