@@ -846,6 +846,12 @@ test('P3 configured item derives variant/addition prices on server and preserves
     const historic=await x.get('a','sales/'+saleId+'?branchId=branch-a');
     assert.equal(historic.body.sale.items[0].unitPriceCents,1450);
     assert.equal(historic.body.sale.items[0].configuration.options[0].name,'Queijo');
+    const report=await x.get('a','reports/details.csv?branchId=branch-a&from=2026-10-17&to=2026-10-17');
+    assert.equal(report.status,200);
+    assert.match(report.body.csv,/Grande/);
+    assert.match(report.body.csv,/Queijo/);
+    assert.doesNotMatch(report.body.csv,/Queijo novo/);
+
     assert.equal((await x.get('a','sales/history?branchId=branch-a')).body.history.items[0].items[0].configuration.variant.name,'Grande');
   }finally{x.close();}
 });
