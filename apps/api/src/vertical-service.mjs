@@ -181,14 +181,27 @@ export function createVerticalService(db){
      if((current.status==='NEW'&&status!=='PREPARING')||(current.status==='PREPARING'&&status!=='READY')||current.status==='READY')throw err(409,'Transição da cozinha inválida.');
      return mutate(t,'restaurant.kitchen:'+id+':'+status,key,async()=>{
        const result={id,status};
-       return {statements:[q('UPDATE restaurant_kitchen_tickets SET status=?,updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status=?',status,now(),t,b,id,current.status)],result};
+       const statements=[q('UPDATE restaurant_kitchen_tickets SET status=?,updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status=?',status,now(),t,b,id,current.status)];
+       if(status==='READY')statements.push(q("UPDATE restaurant_orders SET status='READY',updated_at=? WHERE tenant_id=? AND branch_id=? AND id=(SELECT order_id FROM restaurant_kitchen_tickets WHERE id=? AND tenant_id=? AND branch_id=?) AND status='OPEN'",now(),t,b,id,t,b));
+       return {statements,result};
+     });
+   },
+   async deliverFoodOrder(t,b,id,key){
+     await branchExists(t,b);
+     const order=await first('SELECT id,status FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
+     if(!order)throw err(404,'Pedido não encontrado.');
+     if(order.status!=='READY')throw err(409,'Só é possível entregar pedido pronto.');
+     return mutate(t,'restaurant.deliver:'+id,key,async()=>{
+       const result={id,status:'DELIVERED'};
+       return {statements:[q("UPDATE restaurant_orders SET status='DELIVERED',updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='READY'",now(),t,b,id)],result};
      });
    },
    async wholesaleTiers(t,b){await branchExists(t,b);return all('SELECT id,product_id AS productId,min_quantity_milli / 1000.0 AS minQuantity,unit_price_cents AS unitPriceCents,active FROM wholesale_tiers WHERE tenant_id=? AND branch_id=? ORDER BY product_id,min_quantity_milli',t,b);},
    async saveWholesaleTier(t,b,body,key){
      await branchExists(t,b);await product(t,body.productId);const milli=qty(body.minQuantity),price=cents(body.unitPriceCents,'Preço');
      return mutate(t,'wholesale.tier:'+body.productId+':'+milli,key,async()=>{
-       const id=uuid(),stamp=now(),result={id,productId:body.productId,minQuantity:milli/1000,unitPriceCents:price,active:true};
+       const existing=await first('SELECT id FROM wholesale_tiers WHERE tenant_id=? AND branch_id=? AND product_id=? AND min_quantity_milli=?',t,b,body.productId,milli);
+       const id=existing?.id||uuid(),stamp=now(),result={id,productId:body.productId,minQuantity:milli/1000,unitPriceCents:price,active:true};
        return {statements:[q(`INSERT INTO wholesale_tiers(id,tenant_id,branch_id,product_id,min_quantity_milli,unit_price_cents,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)
          ON CONFLICT(tenant_id,branch_id,product_id,min_quantity_milli) DO UPDATE SET unit_price_cents=excluded.unit_price_cents,active=1,updated_at=excluded.updated_at`,id,t,b,body.productId,milli,price,stamp,stamp)],result};
      });
