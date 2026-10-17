@@ -817,12 +817,19 @@
         {
           "id": "cash-046",
           "name": "Sessões independentes por terminal no mesmo ponto de venda",
-          "status": "gap",
+          "status": "partial",
           "owner": "cash",
           "dependsOn": [
             "cash-040"
           ],
-          "acceptance": "Sessões independentes por terminal no mesmo ponto de venda. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Sessões independentes por terminal no mesmo ponto de venda. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async cash(tenant,branch,terminalId='DEFAULT')",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 independent terminal drawers link every sale"
+          },
+          "reviewNote": "Sessões simultâneas por terminal (identificador persistente no navegador), abertura/fechamento e lançamento de venda com cash_session_id específico, reembolso em terminal indicado, isolamento na mesma filial e auditoria histórica. Aguardam homologação física multicaixa, identidade/cadastro de terminal gerenciado, migração de caixas legados e ensaios concorrentes em dispositivos reais."
         }
       ]
     },
