@@ -18,13 +18,14 @@ const purchasing=readFileSync(new URL('../migrations/0010_purchase_orders.sql',i
 const media=readFileSync(new URL('../migrations/0011_product_media.sql',import.meta.url),'utf8');
 const notesMigration=readFileSync(new URL('../migrations/0012_sale_item_notes.sql',import.meta.url),'utf8');
 const cashTerminalMigration=readFileSync(new URL('../migrations/0013_cash_terminals.sql',import.meta.url),'utf8');
+const checkoutConfigurationMigration=readFileSync(new URL('../migrations/0014_checkout_configurations.sql',import.meta.url),'utf8');
 const NOW=Date.parse('2026-10-17T14:00:00Z');
 const date='2026-10-17T14:00:00.000Z';
 const password='SafeTestPasswordForPdv2026!';
 let num=0;
 const next=()=>('mutation-'+(++num)+'-long');
 async function setup(){
-  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);
+  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);db.exec(checkoutConfigurationMigration);
   const pass=await hashPassword(password);
   for(const [id,email] of [['owner','owner@test.com'],['other','other@test.com'],['viewer','viewer@test.com']])
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
@@ -793,5 +794,88 @@ test('P3 cash credit repayments select the requested terminal, not the first ope
     assert.equal((await x.get('a','cash?branchId=branch-a&terminalId=T-A')).body.session.expectedCashCents,1000);
     assert.equal((await x.get('a','cash?branchId=branch-a&terminalId=T-B')).body.session.expectedCashCents,900);
     assert.notEqual(cA.body.session.id,cB.body.session.id);
+  }finally{x.close();}
+});
+
+
+test('P3 configured item derives variant/addition prices on server and preserves the chosen snapshot after catalogue changes',async()=>{
+  const x=await setup();try{
+    const productId=await x.id('Sanduíche configurável','CONFIG-BURGER',5);
+    const path='products/'+productId+'/configuration';
+    const catalogue={branchId:'branch-a',variants:[
+      {id:'normal',name:'Normal',priceDeltaCents:0},
+      {id:'large',name:'Grande',priceDeltaCents:300}
+    ],groups:[{id:'extras',name:'Adicionais',selectionType:'MULTIPLE',
+      minSelections:1,maxSelections:2,options:[
+        {id:'cheese',name:'Queijo',priceDeltaCents:150},
+        {id:'tomato',name:'Tomate',priceDeltaCents:70}
+      ]}]};
+    const saved=await x.write('a',path,catalogue,{method:'PUT'});
+    assert.equal(saved.status,200,JSON.stringify(saved.body));
+    assert.equal(saved.body.configuration.variants.length,2);
+    assert.equal((await x.get('a',path+'?branchId=branch-a')).body.configuration.groups.length,1);
+    const quote=await x.write('a','products/'+productId+'/configuration/price',{
+      branchId:'branch-a',variantId:'large',selections:['cheese']});
+    assert.equal(quote.status,200,JSON.stringify(quote.body));
+    assert.equal(quote.body.quote.unitPriceCents,1450);
+    assert.equal(quote.body.quote.configurationSnapshot.variant.name,'Grande');
+    await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    const saleId=opened.body.sale.id;
+    const configuredPath='sales/'+saleId+'/items/configured';
+    const key=next();
+    const added=await x.write('a',configuredPath,{
+      branchId:'branch-a',productId,variantId:'large',selections:['cheese'],quantity:2,
+      unitPriceCents:1,note:'Ponto da carne: bem passado'
+    },{key});
+    assert.equal(added.status,200,JSON.stringify(added.body));
+    assert.equal(added.body.sale.totalCents,2900,'client-supplied price must never be trusted');
+    assert.equal(added.body.sale.items[0].configuration.variant.name,'Grande');
+    assert.equal(added.body.sale.items[0].note,'Ponto da carne: bem passado');
+    assert.deepEqual((await x.write('a',configuredPath,{
+      branchId:'branch-a',productId,variantId:'large',selections:['cheese'],quantity:2,
+      unitPriceCents:1,note:'Ponto da carne: bem passado'
+    },{key})).body,added.body,'retries must not duplicate charged items');
+    const paid=await x.write('a','sales/'+saleId+'/complete',{
+      branchId:'branch-a',payments:[{method:'PIX',amountCents:2900}]});
+    assert.equal(paid.status,200,JSON.stringify(paid.body));
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock.find(p=>p.productId===productId).quantity,3);
+    const changed=await x.write('a',path,{...catalogue,
+      groups:[{...catalogue.groups[0],options:[{id:'cheese',name:'Queijo novo',priceDeltaCents:999}]}]},{method:'PUT'});
+    assert.equal(changed.status,200,JSON.stringify(changed.body));
+    const historic=await x.get('a','sales/'+saleId+'?branchId=branch-a');
+    assert.equal(historic.body.sale.items[0].unitPriceCents,1450);
+    assert.equal(historic.body.sale.items[0].configuration.options[0].name,'Queijo');
+    assert.equal((await x.get('a','sales/history?branchId=branch-a')).body.history.items[0].items[0].configuration.variant.name,'Grande');
+  }finally{x.close();}
+});
+
+test('P3 configured item rejects invalid groups, strangers, cross-tenant selections and different options for an existing SKU',async()=>{
+  const x=await setup();try{
+    const productId=await x.id('Pizza personalizável','PIZZA-CONFIG',4);
+    const endpoint='products/'+productId+'/configuration';
+    const config={branchId:'branch-a',variants:[],groups:[
+      {id:'sabor',name:'Sabor',selectionType:'SINGLE',minSelections:1,maxSelections:1,options:[
+        {id:'calabresa',name:'Calabresa',priceDeltaCents:200},
+        {id:'marguerita',name:'Marguerita',priceDeltaCents:150}
+      ]}
+    ]};
+    assert.equal((await x.write('a',endpoint,config,{method:'PUT',who:x.viewer})).status,403);
+    assert.equal((await x.write('b',endpoint,{...config,branchId:'branch-b'},{method:'PUT',who:x.other})).status,404);
+    assert.equal((await x.write('a',endpoint,config,{method:'PUT'})).status,200);
+    assert.equal((await x.write('a',endpoint,{...config,groups:[{...config.groups[0],maxSelections:2}]},{method:'PUT'})).status,400);
+    assert.equal((await x.write('a',endpoint+'/price',{branchId:'branch-a',selections:[]})).status,400);
+    assert.equal((await x.write('a',endpoint+'/price',{branchId:'branch-a',selections:['from-another-product']})).status,400);
+    assert.equal((await x.write('a',endpoint+'/price',{branchId:'branch-a',selections:['calabresa','marguerita']})).status,400);
+    const sale=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
+    const addition='sales/'+sale+'/items/configured';
+    assert.equal((await x.write('a',addition,{branchId:'branch-a',productId,quantity:1,selections:['calabresa']})).status,200);
+    assert.equal((await x.write('a',addition,{branchId:'branch-a',productId,quantity:1,selections:['marguerita']})).status,409,
+      'two differently configured units must never be silently merged or undercharged');
+    assert.equal((await x.write('a',addition,{branchId:'branch-a',productId,quantity:1,selections:['calabresa']})).status,200);
+    const detail=await x.get('a','sales/'+sale+'?branchId=branch-a');
+    assert.equal(detail.body.sale.items[0].quantity,2);
+    assert.equal(detail.body.sale.items[0].unitPriceCents,1200);
+    assert.equal((await x.get('b','products/'+productId+'/configuration?branchId=branch-b',x.other)).status,404);
   }finally{x.close();}
 });
