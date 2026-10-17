@@ -129,7 +129,19 @@ try{
     null,{timeout:12000});
   assert.equal(await page.locator('#ops-sales-body tr[data-search]').count(),1);
   await page.locator('[data-sale-details]').first().click();
-  await page.getByText('Autorizado pelo gerente no teste de paridade').waitFor({timeout:12000});
+  try {
+    await page.getByText('Autorizado pelo gerente no teste de paridade').waitFor({timeout:12000});
+  } catch (error) {
+    const debug={
+      reference:completedSaleNumber,
+      results:await page.locator('#ops-sales-body').innerText(),
+      details:await page.locator('#ops-sale-detail').innerText(),
+      route:await page.locator('body').getAttribute('data-active-route'),
+      notices:await page.locator('[role="alert"]').allTextContents()
+    };
+    console.error('HISTORY_PRICE_OVERRIDE_DIAGNOSTIC',JSON.stringify(debug));
+    throw error;
+  }
   await page.screenshot({path:'qa-artifacts/pdv-parity-sales-history.png',fullPage:true});
 
   mkdirSync('qa-artifacts',{recursive:true});
