@@ -152,6 +152,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
         return json({sale:await service.sale(tenant,branch,id)});
       }
       requireAccess(member,'sales.create',user);
+      if(parts.length===3&&parts[2]==='customer'&&method==='POST')
+        return json({sale:await service.assignSaleCustomer(tenant,branch,id,body.customerId)});
+      if(parts.length===3&&parts[2]==='seller'&&method==='POST')
+        return json({sale:await service.assignSaleSeller(tenant,branch,id,body.sellerId)});
       if(parts[2]==='items'){
         if(parts.length===3&&method==='POST')
           return json({sale:await service.addItem(tenant,branch,id,body,key)});
