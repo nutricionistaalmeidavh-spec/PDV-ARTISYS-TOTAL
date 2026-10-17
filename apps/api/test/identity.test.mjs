@@ -166,3 +166,20 @@ test('health reports setup-required until the isolated D1 identity schema has be
     assert.equal((await ready.json()).status,'identity-ready');
   }finally{db.close();}
 });
+
+test('public Cloudflare deployment keeps authentication disabled until explicitly enabled',async()=>{
+  const db=openLocalDatabase();
+  db.exec(sql);
+  const api=createApi({DB:db,AUTH_ENABLED:'false'});
+  try{
+    const h=await api.fetch(new Request(origin+'/api/v1/health'));
+    assert.equal(h.status,200);
+    const r=await api.fetch(new Request(origin+'/api/v1/auth/login',{
+      method:'POST',headers:{origin,'content-type':'application/json'},
+      body:JSON.stringify({email:'owner@example.test',password:'DummyStrongPassOnlyForCI2026'})
+    }));
+    assert.equal(r.status,503);
+    const attempts=await db.prepare('SELECT COUNT(*) AS n FROM login_throttles').bind().first();
+    assert.equal(attempts.n,0,'staging login must not write into D1');
+  }finally{db.close();}
+});
