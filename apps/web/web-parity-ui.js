@@ -104,6 +104,21 @@
       try{const result=await call('credit/'+id(customerId)),credit=result.credit;
         root.querySelector('[data-credit-result]').innerHTML='<div class="ops-grid"><div class="ops-card"><strong>Limite</strong><h2>'+money(credit.creditLimitCents)+'</h2></div><div class="ops-card"><strong>Utilizado</strong><h2>'+money(credit.balanceCents)+'</h2></div><div class="ops-card"><strong>Disponível</strong><h2>'+money(credit.availableCents)+'</h2></div></div>'+
           card('Movimentações',credit.ledger.map(line=>'<div class="data-row"><span>'+esc(line.type)+'</span><strong>'+money(line.amountCents)+'</strong><small>'+esc(line.occurredAt)+'</small></div>').join('')||'Sem lançamentos');
+        if(window.PdvAccessPolicy?.hasCapability(window.PdvCurrentAccess,'finance.manage')){
+          const payForm=document.createElement('form');
+          payForm.className='ops-form-grid';
+          payForm.innerHTML='<h3>Receber pagamento do crediário</h3>'+field('amount','Valor (R$)',true)+
+            '<label class="field"><span>Forma</span><select name="method"><option value="PIX">PIX</option><option value="BANK_TRANSFER">Transferência bancária</option><option value="CASH">Dinheiro no caixa</option></select></label>'+
+            '<button type="submit" class="ops-primary">Registrar recebimento</button>';
+          root.querySelector('[data-credit-result]').append(payForm);
+          payForm.addEventListener('submit',async submit=>{
+            submit.preventDefault();const button=payForm.querySelector('button');button.disabled=true;
+            try{const d=formData(payForm);
+              await call('credit/'+id(customerId)+'/payments',{method:'POST',body:{amountCents:price(d.amount),method:d.method}});
+              notify('Recebimento registrado.');root.querySelector('[data-credit-form]').dispatchEvent(new Event('submit',{cancelable:true}));
+            }catch(e){showError(e);}finally{button.disabled=false;}
+          });
+        }
       }catch(e){showError(e);}
     });
   }
