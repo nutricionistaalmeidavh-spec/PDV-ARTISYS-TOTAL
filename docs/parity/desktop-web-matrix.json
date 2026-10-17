@@ -1150,12 +1150,12 @@
           "name": "Metas, comissão e ranking de vendedores",
           "status": "partial",
           "webEvidence": {
-            "file": "apps/api/src/vertical-service.mjs",
-            "contains": "commission",
-            "testFile": "apps/api/test/vertical-parity.test.mjs",
-            "testContains": "commissionBps:1000"
+            "file": "apps/api/src/seller-targets.mjs",
+            "contains": "async ranking(t,b,",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 seller monthly goals rank actual net sales"
           },
-          "reviewNote": "Ledger e relatório básico de comissões existentes; metas, ranking e repasses faltam.",
+          "reviewNote": "Meta comercial mensal por vendedor registrada com permissão e idempotência, ranking derivado de vendas líquidas (devoluções na data da restituição), comissões geradas, estornadas e pagas, sem novo livro financeiro. Homologação dos repasses físicos, diferentes bases de comissão, metas multicritério, integração contábil e comparação integral com desktop ainda pendentes.",
           "owner": "reports",
           "dependsOn": [
             "reports-058",
