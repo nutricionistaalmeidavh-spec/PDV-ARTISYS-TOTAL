@@ -186,6 +186,20 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
    await run('INSERT INTO finance_dre_groups(id,tenant_id,branch_id,name,nature,sort_order) VALUES(?,?,?,?,?,?)',key,t,b,label,nature,Number.isInteger(sortOrder)?sortOrder:50);
    return {id:key,name:label,nature};
   },
+  async categories(t,b){
+   await branch(t,b);
+   return many('SELECT id,name,kind,dre_group_id AS dreGroupId FROM finance_categories WHERE tenant_id=? AND branch_id=? ORDER BY name',t,b);
+  },
+  async createCategory(t,b,{name,kind,dreGroupId=null}){
+   await branch(t,b);const label=str(name,100);
+   if(label.length<2||!['INCOME','EXPENSE','BOTH'].includes(kind))throw fail(400,'Categoria financeira inválida.');
+   const group=dreGroupId?await row('finance_dre_groups',t,b,dreGroupId):null;
+   if(group&&kind==='INCOME'&&!['REVENUE','OTHER'].includes(group.nature)||group&&kind==='EXPENSE'&&!['COST','EXPENSE','OTHER'].includes(group.nature))
+    throw fail(400,'Grupo DRE incompatível com categoria.');
+   const key=id();await run('INSERT INTO finance_categories(id,tenant_id,branch_id,name,kind,dre_group_id) VALUES(?,?,?,?,?,?)',
+    key,t,b,label,kind,dreGroupId);
+   return {id:key,name:label,kind,dreGroupId};
+  },
   async costCenters(t,b){return many('SELECT id,name FROM finance_cost_centers WHERE tenant_id=? AND branch_id=? ORDER BY name',t,b);},
   async createCostCenter(t,b,{name}){
    await branch(t,b);const label=str(name,100);if(label.length<2)throw fail(400,'Nome do centro de custo inválido.');
@@ -193,14 +207,26 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
    await run('INSERT INTO finance_cost_centers(id,tenant_id,branch_id,name) VALUES(?,?,?,?)',key,t,b,label);
    return {id:key,name:label};
   },
-  async classify(t,b,entryId,{dreGroupId=null,costCenterId=null}){
+  async classify(t,b,entryId,{dreGroupId=null,costCenterId=null,categoryId=null}){
    const e=await row('finance_entries',t,b,entryId);
-   const g=dreGroupId?await row('finance_dre_groups',t,b,dreGroupId):null;
+   const category=categoryId?await row('finance_categories',t,b,categoryId):null;
+   if(category&&(e.kind==='PAYABLE'&&category.kind==='INCOME'||e.kind==='RECEIVABLE'&&category.kind==='EXPENSE'))
+    throw fail(400,'Categoria incompatível com a conta financeira.');
+   const groupId=dreGroupId||category?.dre_group_id||null;
+   const group=groupId?await row('finance_dre_groups',t,b,groupId):null;
    if(costCenterId)await row('finance_cost_centers',t,b,costCenterId);
-   if(g&&!(e.kind==='PAYABLE'?['COST','EXPENSE','OTHER']:['REVENUE','OTHER']).includes(g.nature))throw fail(400,'Natureza do grupo incompatível.');
-   await run('INSERT INTO finance_entry_dimensions(tenant_id,branch_id,entry_id,dre_group_id,cost_center_id) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,entry_id) DO UPDATE SET dre_group_id=excluded.dre_group_id,cost_center_id=excluded.cost_center_id',
-    t,b,entryId,dreGroupId,costCenterId);
-   return {entryId,dreGroupId,costCenterId};
+   if(group&&!(e.kind==='PAYABLE'?['COST','EXPENSE','OTHER']:['REVENUE','OTHER']).includes(group.nature))
+    throw fail(400,'Natureza do grupo incompatível com a conta.');
+   await run('INSERT INTO finance_entry_dimensions(tenant_id,branch_id,entry_id,dre_group_id,cost_center_id,category_id) VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,entry_id) DO UPDATE SET dre_group_id=excluded.dre_group_id,cost_center_id=excluded.cost_center_id,category_id=excluded.category_id',
+    t,b,entryId,groupId,costCenterId,categoryId);
+   return {entryId,dreGroupId:groupId,costCenterId,categoryId};
+  },
+  async cashflow(t,b,{from,to}={}){
+   await branch(t,b);period({from,to});
+   const settlements=await one("SELECT COALESCE(SUM(CASE WHEN e.kind='RECEIVABLE' THEN s.amount_cents ELSE 0 END),0) AS received,COALESCE(SUM(CASE WHEN e.kind='PAYABLE' THEN s.amount_cents ELSE 0 END),0) AS paid FROM finance_settlements s JOIN finance_entries e ON e.id=s.entry_id AND e.tenant_id=s.tenant_id AND e.branch_id=s.branch_id WHERE e.tenant_id=? AND e.branch_id=? AND substr(s.occurred_at,1,10) BETWEEN ? AND ?",t,b,from,to);
+   const sales=await one("SELECT COALESCE(SUM(p.amount_cents-CASE WHEN p.method='CASH' THEN s.change_cents ELSE 0 END),0) AS amount FROM sale_payments p JOIN sales s ON s.id=p.sale_id AND s.tenant_id=p.tenant_id AND s.branch_id=p.branch_id WHERE s.tenant_id=? AND s.branch_id=? AND s.status='COMPLETED' AND substr(p.created_at,1,10) BETWEEN ? AND ?",t,b,from,to);
+   const future=await one("SELECT COALESCE(SUM(CASE WHEN e.kind='RECEIVABLE' THEN e.amount_cents-COALESCE(x.paid,0) ELSE 0 END),0) AS incoming,COALESCE(SUM(CASE WHEN e.kind='PAYABLE' THEN e.amount_cents-COALESCE(x.paid,0) ELSE 0 END),0) AS outgoing FROM finance_entries e LEFT JOIN (SELECT entry_id,SUM(amount_cents) AS paid FROM finance_settlements GROUP BY entry_id) x ON x.entry_id=e.id WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL AND e.due_date BETWEEN ? AND ?",t,b,from,to);
+   return {from,to,realizedInflowCents:settlements.received+sales.amount,realizedOutflowCents:settlements.paid,projectedReceivableCents:future.incoming,projectedPayableCents:future.outgoing,projectedClosingDeltaCents:settlements.received+sales.amount-settlements.paid+future.incoming-future.outgoing};
   },
   async dre(t,b,filters){
    await branch(t,b);const {from,to,basis}=period(filters);
