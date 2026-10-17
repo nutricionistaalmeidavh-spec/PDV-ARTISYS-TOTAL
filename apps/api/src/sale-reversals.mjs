@@ -4,19 +4,7 @@ export function createSaleReturnAdapter(helpers){
   const {q,first,all,batch,applied,audit,stamp,tenantSale,requiredMutation,quantityMilli,
     normalizeMethod,allocateSaleDiscount,getCash,error,text,randomId}=helpers;
   const refundMethods=new Set(['CASH','PIX','DEBIT_CARD','CREDIT_CARD','OTHER','STORE_CREDIT']);
-  return {
-    async list(tenant,branch,id){
-      await tenantSale(tenant,branch,id);
-      const rows=await all('SELECT * FROM sale_returns WHERE tenant_id=? AND branch_id=? AND sale_id=? ORDER BY created_at,id',tenant,branch,id);
-      return Promise.all(rows.map(async r=>({
-        id:r.id,kind:r.kind,reason:r.reason,amountCents:r.amount_cents,operatorId:r.operator_id,createdAt:r.created_at,
-        items:await all('SELECT sale_item_id AS saleItemId,quantity_milli/1000.0 AS quantity,net_cents AS netCents FROM sale_return_items WHERE return_id=? ORDER BY id',r.id),
-        refunds:await all('SELECT method,amount_cents AS amountCents,cash_session_id AS cashSessionId FROM sale_refund_movements WHERE return_id=? ORDER BY method',r.id)
-      })));
-    },
-    async reverse(tenant,branch,id,user,body,keyHeader,mode='RETURN'){
-      const key=requiredMutation(body,keyHeader),scope='sale.return:'+branch+':'+id+':'+mode;
-      const prior=await applied(tenant,scope,key);if(prior)return prior;
+  async function prepare(tenant,branch,id,body,mode){
       const sale=await tenantSale(tenant,branch,id);
       if(sale.status!=='COMPLETED')throw error(409,'Somente vendas concluídas podem ser devolvidas ou canceladas.');
       const reason=text(body?.reason,240);
@@ -54,6 +42,27 @@ export function createSaleReturnAdapter(helpers){
         return (returned.get(row.id)||0)+delta===row.quantity_milli;
       });
       if(mode==='CANCEL'&&!fullReturn)throw error(409,'O cancelamento exige devolução integral dos itens.');
+    return {sale,reason,original,returned,computed,totalCents};
+  }
+  return {
+    async quote(tenant,branch,id,body,mode='RETURN'){
+      const {sale,reason,computed,totalCents}=await prepare(tenant,branch,id,body,mode);
+      return {saleId:id,status:sale.status,reason,amountCents:totalCents,
+        items:computed.map(row=>({saleItemId:row.saleItemId,quantity:row.quantityMilli/1000,netCents:row.netCents}))};
+    },
+    async list(tenant,branch,id){
+      await tenantSale(tenant,branch,id);
+      const rows=await all('SELECT * FROM sale_returns WHERE tenant_id=? AND branch_id=? AND sale_id=? ORDER BY created_at,id',tenant,branch,id);
+      return Promise.all(rows.map(async r=>({
+        id:r.id,kind:r.kind,reason:r.reason,amountCents:r.amount_cents,operatorId:r.operator_id,createdAt:r.created_at,
+        items:await all('SELECT sale_item_id AS saleItemId,quantity_milli/1000.0 AS quantity,net_cents AS netCents FROM sale_return_items WHERE return_id=? ORDER BY id',r.id),
+        refunds:await all('SELECT method,amount_cents AS amountCents,cash_session_id AS cashSessionId FROM sale_refund_movements WHERE return_id=? ORDER BY method',r.id)
+      })));
+    },
+    async reverse(tenant,branch,id,user,body,keyHeader,mode='RETURN'){
+      const key=requiredMutation(body,keyHeader),scope='sale.return:'+branch+':'+id+':'+mode;
+      const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const {sale,reason,original,returned,computed,totalCents}=await prepare(tenant,branch,id,body,mode);
       // Explicit refund allocation only; never generate funds to unrelated tenders.
       const refunds=body?.refunds;
       if(!Array.isArray(refunds)||refunds.length>6||(totalCents>0&&refunds.length===0))
