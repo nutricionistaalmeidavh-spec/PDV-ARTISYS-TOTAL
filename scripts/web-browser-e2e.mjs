@@ -117,6 +117,7 @@ try{
   await page.locator('.ux-dialog__confirm').click();
   await page.locator('.ux-dialog').waitFor({state:'detached',timeout:12000});
   await page.getByText('Energia QA P4',{exact:true}).first().waitFor();
+  await page.waitForFunction(()=>document.querySelector('#route-content')?.innerText.includes('7,00'),null,{timeout:12000});
   assert.match(await page.locator('#route-content').innerText(),/7,00/);
   await page.screenshot({path:'qa-artifacts/pdv-finance-mobile.png',fullPage:true});
 
