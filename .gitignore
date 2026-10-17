@@ -1,0 +1,9 @@
+node_modules/
+.wrangler/
+.dev.vars*
+!*.example
+dist-check/
+apps/api/.local/
+apps/api/node_modules/
+apps/api/dist-check/
+*.seed.sql
