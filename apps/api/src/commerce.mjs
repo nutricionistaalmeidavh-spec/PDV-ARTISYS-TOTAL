@@ -141,7 +141,7 @@ export function createCommerceService(db,{now=nowISO}={}){
   };
   const dateWindow=value=>{
     if(value==null||value==='')return null;
-    if(typeof value!=='string'||!/^(20\\d\\d)-(0[1-9]|1[0-2])-([0-2]\\d|3[01])$/.test(value)||
+    if(typeof value!=='string'||!/^(20\d\d)-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(value)||
       !Number.isFinite(Date.parse(value+'T00:00:00Z'))||new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)
       throw error(400,'Data inválida: informe AAAA-MM-DD.');
     return value;
@@ -410,9 +410,9 @@ export function createCommerceService(db,{now=nowISO}={}){
         FROM sales WHERE tenant_id=? AND branch_id=? AND status='COMPLETED'
         AND completed_at>=? AND completed_at<=? ORDER BY completed_at,id LIMIT 3000`,tenant,branch,a,b);
       const cell=v=>'"'+String(v??'').replace(/"/g,'""').replace(/^[=+@-]/,'\u0027    async openSale(tenant,branch,user,body,header){')+'"';
-      return '\uFEFF'+'Venda;Data;Total (R$);Desconto (R$);Operador\\r\\n'+
+      return '\uFEFF'+'Venda;Data;Total (R$);Desconto (R$);Operador\r\n'+
         rows.map(x=>[x.saleNumber,x.completedAt,(x.totalCents/100).toFixed(2).replace('.',','),(x.discountCents/100).toFixed(2).replace('.',','),x.operatorId]
-          .map(cell).join(';')).join('\\r\\n');
+          .map(cell).join(';')).join('\r\n');
     },
     async openSale(tenant,branch,user,body,header){
       await branchExists(tenant,branch);
