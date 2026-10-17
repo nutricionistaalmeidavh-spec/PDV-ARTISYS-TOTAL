@@ -3,12 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "node scripts/verify-cloudflare-build.mjs",
-    "test": "cd apps/api && npm test",
+    "test": "npm run test:api && npm run test:core",
     "deploy": "wrangler deploy",
-    "preview": "wrangler preview"
+    "preview": "wrangler preview",
+    "test:api": "cd apps/api && npm test",
+    "test:core": "node --experimental-sqlite --test packages/core/test/*.test.js"
   },
   "devDependencies": {
     "wrangler": "4.137.0"
