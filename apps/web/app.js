@@ -6,7 +6,7 @@
   const { ApiClient } = window.PdvApiClient;
   const api = new ApiClient();
   const routeRegistry = window.PdvRouteRegistry;
-  const WEB_ROUTES=new Set(['home','checkout','products','sales']);
+  const WEB_ROUTES=new Set(['home','checkout','products','sales','cash','finance','reports']);
   if (!routeRegistry) throw new Error('PdvRouteRegistry must load before app.js.');
 
   const ROUTES = {
@@ -200,7 +200,7 @@
   function renderSidebar() {
     const nav = document.getElementById('sidebar-nav');
     const accessPolicy = window.PdvAccessPolicy;
-    const items = api.webMode ? ['home','checkout','products','sales'].filter(route=>canAccessRoute(route))
+    const items = api.webMode ? ['home','checkout','products','sales','cash','finance','reports'].filter(route=>canAccessRoute(route))
       : (accessPolicy?.routesForUser(state.user, moduleAccessOptions()) || ['home']).filter(route=>route!=='settings');
     const parentRoute = {
       finance:'financial-management',
