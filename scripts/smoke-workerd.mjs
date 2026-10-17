@@ -110,7 +110,7 @@ try {
       await page.getByText('Produto do navegador').first().waitFor();
       await page.locator('[data-web-stock]').last().click();
       await page.getByLabel('Quantidade recebida').fill('3');
-      await page.getByRole('button',{name:'Registrar entrada'}).click();
+      await page.locator('#web-stock-form button[type=submit]').click();
       await page.getByRole('button',{name:'Balcão',exact:true}).first().click();
       await page.getByRole('heading',{name:'Balcão'}).waitFor();
       const cartAfter=await page.locator('.cart-list').innerText();
