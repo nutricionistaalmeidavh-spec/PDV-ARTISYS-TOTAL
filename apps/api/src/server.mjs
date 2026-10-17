@@ -10,6 +10,7 @@ const db=openLocalDatabase(process.env.LOCAL_DB_PATH || resolve(here,'../.local/
 db.exec(readFileSync(resolve(here,'../migrations/0001_identity.sql'),'utf8'));
 db.exec(readFileSync(resolve(here,'../migrations/0002_commerce.sql'),'utf8'));
 db.exec(readFileSync(resolve(here,'../migrations/0003_cash_finance.sql'),'utf8'));
+db.exec(readFileSync(resolve(here,'../migrations/0004_advanced_finance.sql'),'utf8'));
 const host=process.env.PDV_HOST||'127.0.0.1',port=Number(process.env.PORT||4175);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('PORT inválida.');
 const api=createApi({DB:db,COOKIE_SECURE:'false',AUTH_ENABLED:process.env.AUTH_ENABLED||'false'});
@@ -22,7 +23,7 @@ const server=createServer(async(req,res)=>{
       res.writeHead(403);res.end();return;
     }
     const chunks=[];let size=0;
-    for await(const chunk of req){size+=chunk.length;if(size>4096){res.writeHead(413);res.end();return;}chunks.push(chunk);}
+    for await(const chunk of req){size+=chunk.length;if(size>262144){res.writeHead(413);res.end();return;}chunks.push(chunk);}
     const body=Buffer.concat(chunks);
     const request=new Request(url,{method:req.method,headers:req.headers,
       ...(['GET','HEAD'].includes(req.method)?{}:{body})});
