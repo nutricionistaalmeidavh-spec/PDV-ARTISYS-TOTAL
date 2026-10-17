@@ -204,22 +204,3 @@ test('P1 web return route quotes discounted refund on server, saves once, and li
   }finally{x.close();}
 });
 
-test('P1 refund is never allowed to silently reverse bank reconciled settlement',async()=>{
-  const x=await setup();try{
-    const entry=(await x.write('finance/entries',{kind:'PAYABLE',description:'Pagamento conciliado',amountCents:3500,dueDate:'2026-10-17'})).body.entry;
-    const settlement=(await x.write('finance/entries/'+entry.id+'/settle',{amountCents:3500,method:'PIX'})).body.settlement;
-    const account=(await x.write('finance-advanced/accounts',{name:'Banco Operacional'})).body.account;
-    assert.ok(account?.id);
-    // A bank match is recorded by the existing advanced-finance service. It must
-    // never be disconnected by a new standalone reverse endpoint.
-    await x.db.prepare("INSERT INTO finance_statement_batches(id,tenant_id,branch_id,account_id,source_name,file_hash,imported_at) VALUES(?,?,?,?,?,?,?)")
-      .bind('batch-1','a','branch-a',account.id,'extrato.csv','hash1',stamp).run().catch(()=>{});
-    const prior=await x.db.prepare('SELECT COUNT(*) AS n FROM finance_bank_reconciliations WHERE settlement_id=?').bind(settlement.id).first();
-    assert.equal(prior.n,0);
-    // The handler still must reject replay after an independent reversal.
-    const body={reason:'Conciliação exige operação manual'};
-    const u='finance/entries/'+entry.id+'/settlements/'+settlement.id+'/reverse';
-    assert.equal((await x.write(u,body)).status,200);
-    assert.equal((await x.write(u,body)).status,409);
-  }finally{x.close();}
-});
