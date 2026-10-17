@@ -138,3 +138,10 @@ CREATE TABLE IF NOT EXISTS customer_credit_ledger (
 );
 CREATE TRIGGER IF NOT EXISTS credit_ledger_immutable_update BEFORE UPDATE ON customer_credit_ledger BEGIN SELECT RAISE(ABORT,'CREDIT_LEDGER_IMMUTABLE'); END;
 CREATE TRIGGER IF NOT EXISTS credit_ledger_immutable_delete BEFORE DELETE ON customer_credit_ledger BEGIN SELECT RAISE(ABORT,'CREDIT_LEDGER_IMMUTABLE'); END;
+
+-- Concurrent credit charges are checked inside the same serialized SQLite/D1 write transaction.
+CREATE TRIGGER IF NOT EXISTS credit_limit_guard BEFORE INSERT ON customer_credit_ledger
+WHEN NEW.type='CHARGE' AND
+  (SELECT COALESCE(SUM(l.amount_cents),0) FROM customer_credit_ledger l WHERE l.tenant_id=NEW.tenant_id AND l.customer_id=NEW.customer_id)
+   + NEW.amount_cents > (SELECT c.credit_limit_cents FROM customers c WHERE c.tenant_id=NEW.tenant_id AND c.id=NEW.customer_id)
+BEGIN SELECT RAISE(ABORT,'CREDIT_LIMIT_EXCEEDED'); END;
