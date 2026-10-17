@@ -179,13 +179,22 @@ try{
         buttons:document.querySelectorAll('[data-sale-details]').length});
     });
     observer.observe(document.getElementById('route-content'),{childList:true,subtree:true});
+    const identities=new WeakMap();let serial=0;
+    const identity=element=>{if(!identities.has(element))identities.set(element,++serial);return identities.get(element);};
     for(const type of ['pointerdown','mousedown','pointerup','mouseup','click']){
       document.addEventListener(type,event=>{
         const target=event.target;
         const button=target.closest?.('[data-sale-details]');
-        trace.push({event:type,tag:target.tagName,id:button?.dataset.saleDetails||null,outer:target.outerHTML?.slice(0,180)||'',isConnected:target.isConnected});
+        trace.push({event:type,tag:target.tagName,id:button?.dataset.saleDetails||null,node:identity(target),
+          disabled:button?.disabled??null,connected:target.isConnected,prevented:event.defaultPrevented});
       },true);
     }
+    const host=document.getElementById('route-content');
+    new MutationObserver(records=>{
+      const count=records.filter(r=>r.removedNodes?.length||r.addedNodes?.length).length;
+      if(count)trace.push({event:'dom-mutation',count,present:Boolean(document.querySelector('#ops-sales-body [data-sale-details]')),
+       disabled:document.querySelector('#ops-sales-body [data-sale-details]')?.disabled});
+    }).observe(host,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled']});
   });
   const buttonGeometry=await page.evaluate(()=>{const el=document.querySelector('#ops-sales-body [data-sale-details]');if(!el)return null;const r=el.getBoundingClientRect();return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},display:getComputedStyle(el).display,visibility:getComputedStyle(el).visibility,centerElement:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML.slice(0,210)}});console.log('SALE_DETAILS_BUTTON_GEOMETRY',JSON.stringify(buttonGeometry));
   await matchingSale.locator('[data-sale-details]').click();
