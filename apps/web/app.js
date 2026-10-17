@@ -647,6 +647,25 @@
     if(['KG','G'].includes(String(product.unit||'').toUpperCase()))return openWeightedProduct(product);
     try {
       if(api.webMode){
+        const catalogue=await api.productConfiguration(productId);
+        if(catalogue.variants?.length||catalogue.groups?.length){
+          await window.PdvRestaurantOrderComposerUi.configure({
+            api,modalRoot,product,
+            onAdd:async line=>{
+              const sale=await ensureSale();
+              state.sale=await api.addConfiguredSaleItem(sale.id,{
+                productId:line.productId,quantity:line.quantity,
+                variantId:line.configuration?.variantId||undefined,
+                selections:line.configuration?.selections||[],
+                comboSelections:line.configuration?.comboSelections||[],
+                note:line.note||''
+              });
+              state.selectedProductId=productId;
+              renderCheckout();
+            }
+          });
+          return;
+        }
         const sale=await ensureSale();
         state.sale=await api.addSaleItem(sale.id,productId,1);
         state.selectedProductId=productId;
