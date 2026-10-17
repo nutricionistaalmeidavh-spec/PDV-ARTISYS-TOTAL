@@ -124,7 +124,18 @@ try{
   // Filter by the sale actually completed above; prior Workerd smoke leaves
   // legitimate independent sales in the same test D1.
   await page.locator('#web-sales-filter [name=query]').fill(completedSaleNumber);
+  // This route previously erased the details after a click during a pending
+  // history query. Assert the GET has completed, rather than matching an old row.
+  const filteredHistoryResponse=page.waitForResponse(response=>{
+    const url=new URL(response.url());
+    return response.request().method()==='GET'&&url.pathname.endsWith('/sales/history')&&
+      url.searchParams.get('query')===completedSaleNumber;
+  },{timeout:12000});
   await page.locator('#web-sales-filter button[type=submit]').click();
+  const filterResult=await filteredHistoryResponse;
+  assert.equal(filterResult.status(),200,'filtered history API must succeed');
+  await page.waitForFunction(reference=>document.querySelector('#web-sales-filter [name=query]')?.value===reference,
+    completedSaleNumber,{timeout:12000});
   // Wait for the requested sale to replace any pre-filter row before clicking.
   // A prior smoke sale can also make the row COUNT equal to one while filtering
   // is still in flight, causing the old detail pane to be cleared on re-render.
