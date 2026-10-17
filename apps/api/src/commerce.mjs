@@ -31,6 +31,7 @@ const has=(object,key)=>hasOwnProperty.call(object,key);
 
 function sqlError(e){
   const message=String(e?.message||e);
+  if(/RESERVED_STOCK_UNAVAILABLE|RESERVATION_STOCK_INSUFFICIENT|KIT_DEFINITION_INVALID|PRODUCT_REFERENCE_TENANT_MISMATCH/i.test(message))return error(409,'Saldo reservado ou vínculo de catálogo incompatível. Atualize e tente novamente.');
   if(/CHECK constraint failed: stock_positions|CHECK constraint failed:.*balance_milli|INSUFFICIENT_STOCK/i.test(message))return error(409,'Estoque insuficiente. Atualize a disponibilidade e tente novamente.');
   if(/PRODUCT_UNIT_WITH_HISTORY/i.test(message))return error(409,'A unidade de produto com venda ou estoque histórico não pode mudar.');
   if(/PRODUCT_HAS_PENDING_SALE/i.test(message))return error(409,'Finalize ou cancele as vendas abertas antes de desativar o produto.');
