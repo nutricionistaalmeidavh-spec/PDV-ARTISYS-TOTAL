@@ -65,7 +65,8 @@ try{
   // Payment has already been seeded with initial method. Replace that line.
   await page.locator('[data-remove-payment]').first().click();
   await page.locator('#new-payment-method').selectOption('PIX');
-  await page.locator('#new-payment-value').fill('12,90');
+  // Use the full remaining sale total; the prior browser smoke leaves a legitimate open draft.
+  // The canonical payment modal pre-fills the exact server-calculated remainder.
   await page.locator('#add-payment').click();
   await page.locator('#confirm-payment').click();
   await page.locator('#finalize-sale').waitFor({timeout:12000});
