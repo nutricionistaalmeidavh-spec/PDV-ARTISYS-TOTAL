@@ -12,6 +12,8 @@ on:
       - 'scripts/verify-cloudflare-build.mjs'
       - 'packages/core/**'
       - 'apps/web/**'
+      - 'docs/parity/**'
+      - 'scripts/check-desktop-parity.mjs'
       - '.github/workflows/verify-saas-foundation.yml'
   workflow_dispatch:
 
@@ -33,6 +35,8 @@ jobs:
           node-version: '22'
       - name: Validate Cloudflare repository-root deployment contract
         run: npm run build
+      - name: Audit evidence of seven desktop-to-web module contracts
+        run: npm run test:parity
       - name: Test canonical sales, inventory, cash and authorization contracts
         run: npm run test:core
       - name: Validate original renderer web syntax (no second app)
