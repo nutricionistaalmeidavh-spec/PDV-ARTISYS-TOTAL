@@ -69,7 +69,8 @@ try{
   // The canonical payment modal pre-fills the exact server-calculated remainder.
   await page.locator('#add-payment').click();
   await page.locator('#confirm-payment').click();
-  await page.locator('#finalize-sale').waitFor({timeout:12000});
+  await page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
+  await page.waitForFunction(()=>document.querySelectorAll('.cart-line').length===0,null,{timeout:12000});
   assert.equal(await page.locator('.cart-line').count(),0,'completed sale clears the cart once');
   mkdirSync('qa-artifacts',{recursive:true});
   await page.screenshot({path:'qa-artifacts/pdv-web-desktop.png',fullPage:true});
