@@ -125,10 +125,13 @@ try{
   // legitimate independent sales in the same test D1.
   await page.locator('#web-sales-filter [name=query]').fill(completedSaleNumber);
   await page.locator('#web-sales-filter button[type=submit]').click();
-  await page.waitForFunction(()=>document.querySelectorAll('#ops-sales-body tr[data-search]').length===1,
-    null,{timeout:12000});
-  assert.equal(await page.locator('#ops-sales-body tr[data-search]').count(),1);
-  await page.locator('[data-sale-details]').first().click();
+  // Wait for the requested sale to replace any pre-filter row before clicking.
+  // A prior smoke sale can also make the row COUNT equal to one while filtering
+  // is still in flight, causing the old detail pane to be cleared on re-render.
+  const matchingSale=page.locator('#ops-sales-body tr[data-search]').filter({hasText:completedSaleNumber});
+  await matchingSale.waitFor({state:'visible',timeout:12000});
+  assert.equal(await matchingSale.count(),1,'filtered history shows the exact completed sale');
+  await matchingSale.locator('[data-sale-details]').click();
   try {
     await page.getByText('Autorizado pelo gerente no teste de paridade').waitFor({timeout:12000});
   } catch (error) {
