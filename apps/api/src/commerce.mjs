@@ -989,12 +989,34 @@ export function createCommerceService(db,{now=nowISO}={}){
           totals.subtotalCents,totals.discountCents,totals.totalCents,payment.changeDueCents,
           completedAt,cash.id,id,tenant,branch)
       ];
+      // Allocate all stock demands through the same immutable sale ledger.
+      // Multiple kits may consume the same component: aggregate once per
+      // sale/product to respect the existing UNIQUE stock movement contract.
+      const debits=new Map();
       for(const line of rows){
         const p=await product(tenant,line.product_id);
-        if(p.track_stock){
-          statements.push(q('INSERT INTO inventory_movements(id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at) VALUES(?,?,?,?,?,?,?,?,?)',
-            randomId(),tenant,branch,line.product_id,-line.quantity_milli,'sale',id,key,completedAt));
+        const kit=await all(`SELECT b.component_id AS productId,b.quantity_milli AS quantityMilli,
+          p.last_cost_cents AS unitCostCents FROM product_bundle_components b
+          JOIN products p ON p.id=b.component_id AND p.tenant_id=b.tenant_id
+          WHERE b.tenant_id=? AND b.kit_id=? ORDER BY b.component_id`,tenant,line.product_id);
+        if(p.track_stock&&kit.length)throw error(409,'Produto com estoque próprio não pode ser kit.');
+        const allocations=kit.length?kit.map(c=>{
+          const numerator=line.quantity_milli*c.quantityMilli;
+          if(!Number.isSafeInteger(numerator)||numerator%1000!==0)
+            throw error(409,'Composição do kit não suporta esta quantidade fracionada.');
+          return {productId:c.productId,milli:numerator/1000,cost:c.unitCostCents};
+        }):p.track_stock?[{productId:p.id,milli:line.quantity_milli,cost:p.last_cost_cents||0}]:[];
+        for(const a of allocations){
+          if(a.milli<=0)throw error(409,'Componente fracionário abaixo da precisão de estoque.');
+          debits.set(a.productId,(debits.get(a.productId)||0)+a.milli);
+          statements.push(q(`INSERT INTO sale_stock_allocations
+            (id,tenant_id,branch_id,sale_id,sale_item_id,component_product_id,quantity_milli,unit_cost_cents,created_at)
+            VALUES(?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,id,line.id,a.productId,a.milli,a.cost,completedAt));
         }
+      }
+      for(const [productId,milli] of debits){
+        statements.push(q('INSERT INTO inventory_movements(id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at) VALUES(?,?,?,?,?,?,?,?,?)',
+          randomId(),tenant,branch,productId,-milli,'sale',id,key,completedAt));
       }
       for(const p of groupedPayments){
         if(p.method==='STORE_CREDIT'){
