@@ -55,6 +55,7 @@
         else if(original==='/api/v1/inventory')operation='inventory';
         else if(original==='/api/v1/inventory/movements')operation=method==='GET'?'inventory/movements':'inventory/receipts';
         else if(original==='/api/v1/inventory/adjustments')operation='inventory/adjustments';
+        else if(original==='/api/v1/inventory/transfers')operation='inventory/transfers';
         else if(original==='/api/v1/cash/open')operation='cash';
         else if(original==='/api/v1/cash/sessions')operation=method==='POST'?'cash/open':'cash/sessions';
         else if(original.startsWith('/api/v1/cash/sessions/'))operation=original.slice(apiRoot.length);
@@ -103,6 +104,7 @@
       if(operation==='inventory')return value.stock;
       if(operation==='inventory/receipts'||operation==='inventory/adjustments')return value.movement;
       if(operation==='inventory/movements')return value.movements;
+      if(operation==='inventory/transfers')return method==='GET'?value.transfers:value.transfer;
       if(operation==='cash')return value.session;
       if(operation==='cash/open')return {session:value.session};
       if(operation==='cash/sessions')return value.sessions;
@@ -193,6 +195,9 @@
     inventoryBalances(filters = {}) { return this.request(`/api/v1/inventory${this.params(filters)}`); }
     inventoryLowStock() { return this.request('/api/v1/inventory/low-stock'); }
     inventoryMovements(filters = {}) { return this.request(`/api/v1/inventory/movements${this.params(filters)}`); }
+    stockTransfers(filters = {}) { return this.request(`/api/v1/inventory/transfers${this.params(filters)}`); }
+    transferStock(body,mutationId) { return this.request('/api/v1/inventory/transfers',{method:'POST',body,mutationId}); }
+    tenantBranches(){if(!this.webMode||!this.tenantId)throw new Error('Selecione o estabelecimento.');return this.webRequest('/api/v1/tenants/'+encodeURIComponent(this.tenantId)+'/branches');}
     async saveInventoryMovement(body) {
       let payload = { ...body };
       if (payload.type === 'inventory-count' && payload.countedQuantity !== undefined) {
