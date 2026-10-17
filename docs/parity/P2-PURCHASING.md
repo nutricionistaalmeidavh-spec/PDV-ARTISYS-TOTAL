@@ -17,7 +17,7 @@ No navegador: **Produtos e estoque → Pedidos de compra**. Crie um pedido com f
 
 Rodar `npm test` (Node 22+), além das migrações locais D1 0001–0010, smoke Workerd, Chromium desktop/mobile e novos testes de concorrência, isolamento, lançamento imutável e cancelamento parcial. Não marcar contrato como `covered` por ter uma rota nova sem homologação contra desktop.
 
-**Ainda pendente da P2 integral:** importação em lote CSV/XLSX com prévia e correção linha a linha; imagens R2 e política de privacidade/expiração; estoque multi-localização; custo médio móvel sobre consumo/vendas/devoluções; integração de pedidos a contas a pagar; validação real de periféricos.
+**Importação CSV em lote com prévia e commit atômico foi entregue em P2.2 (`P2-CSV-IMPORT.md`).** Ainda pendente da P2 integral: importação XLSX e correção assistida linha a linha; imagens R2 e política de privacidade/expiração; estoque multi-localização; custo médio móvel sobre consumo/vendas/devoluções; integração de pedidos a contas a pagar; validação real de periféricos.
 
 ## Deploy e segurança
 
