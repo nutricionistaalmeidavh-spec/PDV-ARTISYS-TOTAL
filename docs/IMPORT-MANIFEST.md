@@ -7,6 +7,8 @@ Data: 17/10/2026 (Brasil).
 | Origem | `nutricionistaalmeidavh-spec/PDV-ARTISYS` |
 | Branch de origem | `main` |
 | Commit da origem (fixado) | `7efea9c61f75be1536a1e516e917218f2b8bf2bf` |
+| Release oficial correspondente | [v2.0.10 (15/10/2026)](https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS/releases/tag/v2.0.10) |
+| Versão em `package.json` da árvore | `2.0.1` (base da resolução de versão no workflow; o CI aplica `2.0.10` somente ao build publicado) |
 | Destino | `nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL` |
 | Caminho no destino | `legacy/pdv-artisys/` |
 | Arquivos rastreados copiados | **900** |

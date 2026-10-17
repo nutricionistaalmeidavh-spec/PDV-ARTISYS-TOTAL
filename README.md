@@ -6,7 +6,7 @@ Novo produto independente para transformar o **PDV Artisys desktop** em um **Saa
 
 ## Onde está o código
 
-- **Snapshot integral e isolado:** [`legacy/pdv-artisys/`](legacy/pdv-artisys) — cópia dos 900 arquivos rastreados do repositório [PDV-ARTISYS](https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS), do commit `7efea9c61f75be1536a1e516e917218f2b8bf2bf`. A GitHub Action conferiu todos os hashes.
+- **Snapshot integral e isolado:** [`legacy/pdv-artisys/`](legacy/pdv-artisys) — cópia dos 900 arquivos rastreados do repositório [PDV-ARTISYS](https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS), commit `7efea9c61f75be1536a1e516e917218f2b8bf2bf`, da [release publicada v2.0.10](https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS/releases/tag/v2.0.10). A GitHub Action conferiu todos os hashes. O `package.json` do snapshot declara `2.0.1` porque o workflow Windows resolve e injeta a versão da release no build; isso não significa que a cópia seja da release 2.0.1.
 - **Roadmap:** [`docs/ROADMAP-SAAS-CLOUDFLARE.md`](docs/ROADMAP-SAAS-CLOUDFLARE.md).
 - **Evidência da importação:** [`docs/IMPORT-MANIFEST.md`](docs/IMPORT-MANIFEST.md).
 

@@ -1,7 +1,7 @@
 # Roadmap — ArtiSys PDV Total (SaaS web Cloudflare)
 
 **Status:** planejamento técnico e importação da base; não é aplicação SaaS pronta.
-**Origem imutável:** `nutricionistaalmeidavh-spec/PDV-ARTISYS` — commit `7efea9c61f75be1536a1e516e917218f2b8bf2bf` (v2.0.1 no README/package.json).
+**Origem imutável:** `nutricionistaalmeidavh-spec/PDV-ARTISYS` — commit `7efea9c61f75be1536a1e516e917218f2b8bf2bf`, correspondente à [release oficial v2.0.10 publicada em 15/10/2026](https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS/releases/tag/v2.0.10). O `README.md` e `package.json` da árvore de origem ainda mencionam `2.0.1`, pois o workflow de Windows calcula a nova versão e executa `npm version` no runner durante o empacotamento, sem atualizar automaticamente a branch `main`.
 **Destino:** `PDV-ARTISYS-TOTAL`. A cópia versionada ficará em `legacy/pdv-artisys/` para não disparar inadvertidamente workflows de releases Windows/macOS ou deploy do Worker comercial do produto desktop.
 **Regra:** NÃO alterar `PDV-ARTISYS`, seu Worker `pdv-artisys`, suas licenças, sua base de clientes ou seus instaladores. Cloudflare SaaS nova, bancos novos, segredos novos e deploy separado.
 
