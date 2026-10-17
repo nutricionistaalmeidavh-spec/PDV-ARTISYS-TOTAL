@@ -558,7 +558,9 @@
       await renderers[route]();
       if(!routeActive(route))return;
       const pageRoot=content.querySelector('.ops-page,.page');
-      await root.PdvOperationalRouteExtensions?.mountRoute?.(route,pageRoot);
+      // Desktop-only extension requires unported finance/accounts routes.
+      // The web renderer already owns the one canonical finance surface.
+      if(!api.webMode)await root.PdvOperationalRouteExtensions?.mountRoute?.(route,pageRoot);
       if(route==='inventory')root.PdvEnterpriseDepthUi?.mountInventory?.(pageRoot);
       if(route==='settings'){
         await root.PdvOperationalDetailExtensions?.mountSettings?.(pageRoot);
