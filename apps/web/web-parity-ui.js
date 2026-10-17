@@ -117,7 +117,7 @@
       '<div class="ops-grid">'+card('Mapa de mesas',`
         <form data-table-form class="ops-form-grid">${field('label','Identificação da mesa',true)}${field('seats','Lugares',true,'4','number')}
           <button class="ops-primary" type="submit">Criar mesa</button></form>
-        ${tables.map(t=>'<div class="data-row"><strong>'+esc(t.label)+'</strong><span>'+esc(t.sessionId?'Ocupada · '+t.partySize+' pessoa(s)':'Livre')+'</span>'+(t.sessionId?'<span>Comanda aberta</span>':'<button class="ops-secondary" type="button" data-open-table="'+esc(t.id)+'">Abrir mesa</button>')+'</div>').join('')||'<p class="ops-muted">Sem mesas.</p>'}`)+
+        ${tables.map(t=>'<div class="data-row"><strong>'+esc(t.label)+'</strong><span>'+esc(t.sessionId?'Ocupada · '+t.partySize+' pessoa(s)':'Livre')+'</span>'+(t.sessionId?'<button class="ops-secondary" type="button" data-close-table="'+esc(t.sessionId)+'">Fechar mesa</button>':'<button class="ops-secondary" type="button" data-open-table="'+esc(t.id)+'">Abrir mesa</button>')+'</div>').join('')||'<p class="ops-muted">Sem mesas.</p>'}`)+
       card('Novo pedido',`<form data-food-form class="ops-form-grid">
       <label class="field"><span>Canal</span><select name="fulfillment"><option value="TABLE">Salão / mesa</option><option value="DELIVERY">Entrega</option><option value="PICKUP">Retirada</option></select></label>
       ${select('tableSessionId','Mesa com comanda aberta',tableOptions)}
@@ -137,6 +137,10 @@
     });
     root.querySelectorAll('[data-open-table]').forEach(button=>button.addEventListener('click',async()=>{
       try{await call('restaurant/tables/'+id(button.dataset.openTable)+'/open',{method:'POST',body:{partySize:1}});notify('Mesa aberta.');await show('FOOD');}catch(e){showError(e);}
+    }));
+    root.querySelectorAll('[data-close-table]').forEach(button=>button.addEventListener('click',async()=>{
+      try{await call('restaurant/sessions/'+id(button.dataset.closeTable)+'/close',{method:'POST',body:{}});
+        notify('Mesa encerrada.');await show('FOOD');}catch(e){showError(e);}
     }));
     root.querySelector('[data-food-form]')?.addEventListener('submit',async event=>{
       event.preventDefault();const data=formData(event.currentTarget),button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
