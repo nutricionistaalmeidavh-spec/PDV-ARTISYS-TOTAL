@@ -1026,6 +1026,111 @@
     routeRegistry.updated('products',{surface:'products'});
   }
 
+  function openWebCategoryForm(){
+    openModal('Nova categoria',`<form id="web-category-form"><div class="field">
+      <label>Nome<input name="name" minlength="2" maxlength="100" required placeholder="Ex.: Bebidas"></label></div>
+      <p role="status" class="web-form-feedback"></p>
+      <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Cancelar</button>
+      <button type="submit" class="primary-button">Salvar categoria</button></div></form>`,{onMount(root){
+      const form=root.querySelector('form');
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();if(form.dataset.pending)return;
+        form.dataset.pending='1';form.querySelector('[type=submit]').disabled=true;
+        try{
+          await api.saveCategory({name:form.elements.name.value.trim()});
+          state.categories=await api.categories();closeModal();renderWebProducts();
+          showToast('Categoria salva.','success');
+        }catch(e){form.querySelector('[role=status]').textContent=e.message;}
+        finally{form.dataset.pending='';}
+      });
+    }});
+  }
+
+  async function openWebKitForm(kit){
+    try{
+      const [all,current]=await Promise.all([api.products(),api.productBundle(kit.id)]);
+      const selected=new Map(current.map(c=>[c.productId,c.quantity]));
+      const ingredients=all.filter(p=>p.id!==kit.id&&p.trackStock&&p.active!==false);
+      if(!ingredients.length){showToast('Cadastre ao menos um produto com estoque para formar um kit.','error');return;}
+      const fields=ingredients.map(p=>`<label class="ops-return-item">
+        <span>${escapeHtml(p.name)} · ${escapeHtml(p.sku)}</span>
+        <small>Quantidade por kit (0 = não utilizar)</small>
+        <input class="ops-input compact" type="number" min="0" max="100000" step="0.001"
+          data-kit-component="${escapeHtml(p.id)}" value="${selected.get(p.id)||0}"></label>`).join('');
+      openModal('Componentes do kit — '+kit.name,`<form id="web-kit-form">
+        <p>O kit não mantém saldo duplicado: vender uma unidade consumirá os componentes definidos aqui.
+          Após a primeira venda, a composição fica protegida para preservar o histórico.</p>
+        <div class="ops-form">${fields}</div><p role="status" class="web-form-feedback"></p>
+        <div class="modal-actions"><button type="button" data-close-modal class="secondary-button">Cancelar</button>
+          <button type="submit" class="primary-button">Salvar composição</button></div>
+      </form>`,{onMount(root){
+        const form=root.querySelector('#web-kit-form');
+        form.addEventListener('submit',async event=>{
+          event.preventDefault();if(form.dataset.pending)return;
+          const components=[...form.querySelectorAll('[data-kit-component]')].map(x=>({
+            productId:x.dataset.kitComponent,quantity:Number(x.value)
+          })).filter(x=>x.quantity>0);
+          if(!components.length){form.querySelector('[role=status]').textContent='Selecione ao menos um componente.';return;}
+          form.dataset.pending='1';form.querySelector('[type=submit]').disabled=true;
+          try{
+            if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+            await api.saveProductBundle(kit.id,components,form.dataset.operationKey);
+            state.products=await api.products();closeModal();renderWebProducts();
+            showToast('Composição registrada no catálogo canônico.','success');
+          }catch(e){form.querySelector('[role=status]').textContent=e.message;}
+          finally{form.dataset.pending='';form.querySelector('[type=submit]').disabled=false;}
+        });
+      }});
+    }catch(e){showToast(e.message,'error');}
+  }
+
+  async function openWebReserveForm(product){
+    try{
+      const reservations=await api.stockReservations({productId:product.id});
+      const active=reservations.filter(r=>r.status==='ACTIVE');
+      const items=active.map(r=>`<div class="data-row">
+        <span><strong>${quantityLabel(r.quantity)}</strong> · ${escapeHtml(r.reason)}</span>
+        <button type="button" class="secondary-button" data-release-reservation="${escapeHtml(r.id)}">Liberar</button>
+      </div>`).join('')||'<p>Nenhuma reserva ativa para este produto.</p>';
+      openModal('Reservar estoque — '+product.name,`<form id="web-reservation-form">
+        <p>Saldo físico: ${quantityLabel(product.balance)} · disponível: ${quantityLabel(product.available??product.balance)}.
+          Reservas impedem vendas ou transferências que consumiriam unidades comprometidas.</p>
+        <div class="field"><label>Quantidade<input type="number" name="quantity" min="0.001"
+          max="${Number(product.available??product.balance)}" step="0.001" required></label></div>
+        <div class="field"><label>Motivo<input name="reason" required minlength="3" maxlength="240"
+          placeholder="Ex.: Pedido aguardando retirada"></label></div>
+        <p role="status" class="web-form-feedback"></p>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Fechar</button>
+          <button type="submit" class="primary-button">Reservar unidades</button></div>
+        <h3>Reservas existentes</h3>${items}
+      </form>`,{onMount(root){
+        const form=root.querySelector('#web-reservation-form');
+        root.querySelectorAll('[data-release-reservation]').forEach(button=>button.addEventListener('click',async()=>{
+          button.disabled=true;
+          try{
+            await api.releaseStockReservation(button.dataset.releaseReservation);
+            state.products=await api.products();closeModal();renderWebProducts();
+            showToast('Reserva liberada.','success');
+          }catch(e){form.querySelector('[role=status]').textContent=e.message;button.disabled=false;}
+        }));
+        form.addEventListener('submit',async event=>{
+          event.preventDefault();if(form.dataset.pending)return;
+          form.dataset.pending='1';form.querySelector('[type=submit]').disabled=true;
+          try{
+            if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+            await api.reserveStock({
+              productId:product.id,quantity:Number(form.elements.quantity.value),
+              reason:form.elements.reason.value.trim()
+            },form.dataset.operationKey);
+            state.products=await api.products();closeModal();renderWebProducts();
+            showToast('Reserva registrada.','success');
+          }catch(e){form.querySelector('[role=status]').textContent=e.message;}
+          finally{form.dataset.pending='';form.querySelector('[type=submit]').disabled=false;}
+        });
+      }});
+    }catch(e){showToast(e.message,'error');}
+  }
+
   function openWebProductForm(){
     openModal('Novo produto',`<form id="web-product-form">
       <div class="field"><label for="web-product-name">Nome do produto</label><input id="web-product-name" name="name" required minlength="2" maxlength="120" autocomplete="off" placeholder="Ex.: Café tradicional"></div>
