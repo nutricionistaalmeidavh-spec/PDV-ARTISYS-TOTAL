@@ -71,3 +71,34 @@ test('DRE cash and accrual differ, sale revenue is never counted twice, tenants 
   assert.equal((await x.service.dre('b','y',{from:'2026-10-01',to:'2026-10-31',basis:'accrual'})).resultCents,0);
  }finally{x.close();}
 });
+test('finance categories and cost centers classify the canonical account, and future cashflow retains open debt',async()=>{
+ const x=await setup();try{
+  await x.db.prepare('INSERT INTO finance_entries(id,tenant_id,branch_id,kind,description,amount_cents,due_date,competence_date,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)')
+   .bind('water','a','x','PAYABLE','Água',5600,'2026-11-17','2026-11-17','u',now).run();
+  const group=await x.service.createGroup('a','x',{name:'Despesas operacionais',nature:'COST'});
+  const center=await x.service.createCostCenter('a','x',{name:'Filial matriz'});
+  const category=await x.service.createCategory('a','x',{name:'Contas de consumo',kind:'EXPENSE',dreGroupId:group.id});
+  const applied=await x.service.classify('a','x','water',{categoryId:category.id,costCenterId:center.id});
+  assert.equal(applied.dreGroupId,group.id);
+  const report=await x.service.dre('a','x',{from:'2026-11-01',to:'2026-11-30',basis:'accrual'});
+  assert.equal(report.costCents,5600);assert.equal(report.expenseCents,0);
+  assert.equal(report.groups[0].costCenterId,center.id);
+  const flow=await x.service.cashflow('a','x',{from:'2026-11-01',to:'2026-11-30'});
+  assert.equal(flow.projectedPayableCents,5600);
+  assert.equal(flow.projectedClosingDeltaCents,-5600);
+  await assert.rejects(x.service.classify('b','y','water',{categoryId:category.id}),error=>error.status===404);
+ }finally{x.close();}
+});
+test('internal bank transfers only pair opposite transactions across distinct accounts, never affect DRE',async()=>{
+ const x=await setup();try{
+  const a=await x.service.createAccount('a','x','u',{name:'Banco um'});
+  const b=await x.service.createAccount('a','x','u',{name:'Banco dois'});
+  await x.service.importStatement('a','x','u',{accountId:a.id,sourceName:'bank-a',transactions:[{date:'2026-10-17',amountCents:-7000,description:'TED',fitId:'ted-a'}]});
+  await x.service.importStatement('a','x','u',{accountId:b.id,sourceName:'bank-b',transactions:[{date:'2026-10-17',amountCents:7000,description:'TED',fitId:'ted-b'}]});
+  const proposals=await x.service.transferSuggestions('a','x');
+  assert.equal(proposals.length,1);
+  assert.equal((await x.service.confirmTransfer('a','x','u',proposals[0])).confirmed,true);
+  assert.equal((await x.service.transferSuggestions('a','x')).length,0);
+  assert.equal((await x.service.dre('a','x',{from:'2026-10-01',to:'2026-10-31',basis:'cash'})).resultCents,0);
+ }finally{x.close();}
+});
