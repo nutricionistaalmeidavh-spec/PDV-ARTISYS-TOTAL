@@ -415,3 +415,34 @@ test('Desktop parity: paginated sale history scopes status, date, operator, sear
     assert.equal((await x.get('a','sales/history?branchId=branch-a',x.viewer)).status,200);
   }finally{x.close();}
 });
+
+test('product editing and deactivation retain canonical sale snapshots, enforce tenant RBAC and idempotency',async()=>{
+  const x=await setup();try{
+    const created=await x.write('a','products',{branchId:'branch-a',name:'Produto Original',sku:'ORIG1',salePriceCents:1000,unit:'UN'});
+    assert.equal(created.status,201,created.body.error);
+    const id=created.body.product.id;
+    const open=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(open.status,201,open.body.error);
+    await x.write('a',`sales/${open.body.sale.id}/items`,{branchId:'branch-a',productId:id,quantity:1});
+    const body={branchId:'branch-a',name:'Produto Atualizado',sku:'NEW1',salePriceCents:2400,unit:'KG',active:false};
+    const path=`products/${id}`,key=next();
+    assert.equal((await x.write('a',path,body,{who:x.viewer,method:'PATCH'})).status,403);
+    assert.equal((await x.write('b',path,{...body,branchId:'branch-b'},{who:x.other,method:'PATCH'})).status,404);
+    assert.equal((await x.write('a',path,{...body,name:'A'},{method:'PATCH'})).status,400);
+    assert.equal((await x.write('a',path,{...body,unit:'INVALID'},{method:'PATCH'})).status,400);
+    const updated=await x.write('a',path,body,{method:'PATCH',key});
+    assert.equal(updated.status,200,JSON.stringify(updated.body));
+    assert.equal(updated.body.product.name,'Produto Atualizado');
+    assert.equal(updated.body.product.salePriceCents,2400);
+    assert.equal(updated.body.product.active,false);
+    const repeated=await x.write('a',path,body,{method:'PATCH',key});
+    assert.deepEqual(repeated.body,updated.body);
+    assert.equal((await x.get('a','products?branchId=branch-a')).body.products.length,0);
+    const archived=await x.get('a',`sales/${open.body.sale.id}?branchId=branch-a`);
+    assert.equal(archived.body.sale.items[0].productName,'Produto Original');
+    assert.equal(archived.body.sale.items[0].unitPriceCents,1000);
+    const reactivated=await x.write('a',path,{branchId:'branch-a',active:true},{method:'PATCH'});
+    assert.equal(reactivated.status,200,JSON.stringify(reactivated.body));
+    assert.equal((await x.get('a','products?branchId=branch-a')).body.products[0].sku,'NEW1');
+  }finally{x.close();}
+});
