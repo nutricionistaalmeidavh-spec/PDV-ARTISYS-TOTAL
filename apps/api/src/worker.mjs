@@ -118,7 +118,15 @@ export function createApi(env,{now=()=>Date.now()}={}){
   return { async fetch(request){
     try{
       const url=new URL(request.url),path=url.pathname,method=request.method;
-      if(method==='GET'&&path==='/api/v1/health')return response({ok:true,service:'pdv-artisys-total',status:'identity-ready'});
+      if(method==='GET'&&path==='/api/v1/health') {
+        // D1 can be auto-provisioned on deploy but still require the initial migration.
+        try {
+          await db.prepare('SELECT id FROM tenants LIMIT 1').bind().first();
+          return response({ok:true,service:'pdv-artisys-total',status:'identity-ready'});
+        } catch {
+          return response({ok:false,service:'pdv-artisys-total',status:'setup-required'},503);
+        }
+      }
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
       if(!['GET','HEAD'].includes(method)&&!originAllowed(request))return failure(403,'Origem da solicitação inválida.');
       if(method==='POST'&&path==='/api/v1/auth/login')return await login(request,env,db,now());
