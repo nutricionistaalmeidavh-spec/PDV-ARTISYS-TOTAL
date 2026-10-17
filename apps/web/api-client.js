@@ -248,7 +248,7 @@
 
     returns(filters = {}) { return this.request(`/api/v1/returns${this.params(filters)}`); }
     returnDetails(id) { return this.request(`/api/v1/returns/${encodeURIComponent(id)}`); }
-    createReturn(body) { return this.request('/api/v1/returns', { method:'POST', body, mutationId:this.mutationId() }); }
+    createReturn(body,mutationId) { return this.request('/api/v1/returns', { method:'POST', body, mutationId:mutationId||this.mutationId() }); }
     quoteSaleReturn(saleId,body){return this.request(`/api/v1/sales/${encodeURIComponent(saleId)}/returns/quote`,{method:'POST',body});}
     saleReturns(saleId){return this.request(`/api/v1/sales/${encodeURIComponent(saleId)}/returns`);}
     cancelReturn(id, reason) { return this.request(`/api/v1/returns/${encodeURIComponent(id)}/cancel`, { method:'POST', body:{reason}, mutationId:this.mutationId() }); }
