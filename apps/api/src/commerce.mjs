@@ -317,6 +317,16 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(Object.hasOwn(body,'trackStock')&&body.trackStock!==Boolean(old.track_stock))
         throw error(409,'O modo de controle de estoque não pode ser alterado após o cadastro.');
       const active=Object.hasOwn(body,'active')?body.active:Boolean(old.active);
+      if(unit!==old.unit){
+        const sold=await first('SELECT 1 AS found FROM sale_items WHERE tenant_id=? AND product_id=? LIMIT 1',tenant,id);
+        const moved=await first('SELECT 1 AS found FROM inventory_movements WHERE tenant_id=? AND product_id=? LIMIT 1',tenant,id);
+        if(sold||moved)throw error(409,'A unidade de um produto já vendido ou movimentado não pode ser alterada sem conversão auditada.');
+      }
+      if(!active&&Boolean(old.active)){
+        const pending=await first(`SELECT s.id FROM sales s JOIN sale_items i ON i.sale_id=s.id
+          WHERE i.tenant_id=? AND i.product_id=? AND s.status IN ('OPEN','SUSPENDED') LIMIT 1`,tenant,id);
+        if(pending)throw error(409,'Há venda aberta ou suspensa contendo o produto. Finalize ou cancele antes de desativar.');
+      }
       const result={id,name,sku,unit,salePriceCents:price,
         trackStock:Boolean(old.track_stock),active,updatedAt:stamp()};
       await batch([
