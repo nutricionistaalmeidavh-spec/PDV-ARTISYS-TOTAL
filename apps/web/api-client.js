@@ -63,6 +63,7 @@
         else if(original.startsWith('/api/v1/finance-advanced/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/reports/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/sales'))operation=original.slice(apiRoot.length);
+        else if(original==='/api/v1/returns')operation='returns';
         else if(/^\/api\/v1\/(customers|suppliers|sellers|restaurant|wholesale|commissions|credit)(\/|$)/.test(original))operation=original.slice(apiRoot.length);
         else throw new Error('Este módulo ainda não está disponível na versão online.');
         targetPath=apiRoot+'tenants/'+encodeURIComponent(this.tenantId)+'/'+operation;
@@ -117,6 +118,9 @@
       if(operation==='reports/sales.csv')return value;
       if(operation==='sales'||operation.startsWith('sales?'))return method==='GET'?value.sales:value.sale;
       if(operation==='sales/history')return value.history;
+      if(operation==='returns')return method==='GET'?value.returns:value.return;
+      if(/^sales\/[^/]+\/returns\/quote$/.test(operation))return value.quote;
+      if(/^sales\/[^/]+\/returns$/.test(operation))return method==='GET'?value.returns:value.result;
       if(operation.startsWith('sales/'))return operation.endsWith('/complete')?{sale:value.sale}:value.sale;
       return value;
     }
@@ -228,7 +232,7 @@
     sales(status = '', limit = 50) { return this.request(`/api/v1/sales${this.params({status,limit})}`); }
     salesHistory(filters = {}) { return this.request(`/api/v1/sales/history${this.params(filters)}`); }
     sale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}`); }
-    saleDetails(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/details`); }
+    saleDetails(id) { return this.webMode?this.sale(id):this.request(`/api/v1/sales/${encodeURIComponent(id)}/details`); }
     openSale(body,mutationId) { return this.request('/api/v1/sales', { method: 'POST', body,mutationId }); }
     setSaleCustomer(id, customerId) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/customer`, { method: 'POST', body: { customerId } }); }
     setSaleSeller(id, sellerId) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/seller`, { method: 'POST', body: { sellerId } }); }
@@ -245,6 +249,8 @@
     returns(filters = {}) { return this.request(`/api/v1/returns${this.params(filters)}`); }
     returnDetails(id) { return this.request(`/api/v1/returns/${encodeURIComponent(id)}`); }
     createReturn(body) { return this.request('/api/v1/returns', { method:'POST', body, mutationId:this.mutationId() }); }
+    quoteSaleReturn(saleId,body){return this.request(`/api/v1/sales/${encodeURIComponent(saleId)}/returns/quote`,{method:'POST',body});}
+    saleReturns(saleId){return this.request(`/api/v1/sales/${encodeURIComponent(saleId)}/returns`);}
     cancelReturn(id, reason) { return this.request(`/api/v1/returns/${encodeURIComponent(id)}/cancel`, { method:'POST', body:{reason}, mutationId:this.mutationId() }); }
 
     financeAccounts(includeInactive = false) { return this.request(`/api/v1/finance/accounts${includeInactive ? '?includeInactive=true' : ''}`); }
