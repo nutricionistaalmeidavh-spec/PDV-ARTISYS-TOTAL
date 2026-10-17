@@ -179,11 +179,15 @@ try{
         buttons:document.querySelectorAll('[data-sale-details]').length});
     });
     observer.observe(document.getElementById('route-content'),{childList:true,subtree:true});
-    document.addEventListener('click',event=>{
-      const button=event.target.closest?.('[data-sale-details]');
-      if(button)trace.push({event:'sale-detail-click',id:button.dataset.saleDetails});
-    },true);
+    for(const type of ['pointerdown','mousedown','pointerup','mouseup','click']){
+      document.addEventListener(type,event=>{
+        const target=event.target;
+        const button=target.closest?.('[data-sale-details]');
+        trace.push({event:type,tag:target.tagName,id:button?.dataset.saleDetails||null,outer:target.outerHTML?.slice(0,180)||'',isConnected:target.isConnected});
+      },true);
+    }
   });
+  const buttonGeometry=await page.evaluate(()=>{const el=document.querySelector('#ops-sales-body [data-sale-details]');if(!el)return null;const r=el.getBoundingClientRect();return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},display:getComputedStyle(el).display,visibility:getComputedStyle(el).visibility,centerElement:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML.slice(0,210)}});console.log('SALE_DETAILS_BUTTON_GEOMETRY',JSON.stringify(buttonGeometry));
   await matchingSale.locator('[data-sale-details]').click();
   const postClick=await page.evaluate(()=>({trace:window.__saleDetailTrace||null,origin:performance.timeOrigin,href:location.href,route:document.body.dataset.activeRoute}));
   console.log('SALE_DETAIL_CLICK_RESULT',JSON.stringify(postClick));
