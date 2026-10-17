@@ -2034,7 +2034,9 @@ function openCategoryForm() {
     state.config={...state.config,
       storeName:context.name||membership.name,
       terminalName:branch.name,
-      terminalId:branch.id,
+      // Branch is tenancy context, NEVER cashier terminal identity.
+      // Keep the stable browser-scoped terminal obtained from ApiClient.initialize().
+      terminalId:api.config.terminalId,
       dataServer:{mode:'cloud',selected:true}
     };
     state.user={
