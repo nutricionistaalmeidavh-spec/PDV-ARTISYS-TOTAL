@@ -1,0 +1,76 @@
+name: Verify SaaS canonical foundation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'apps/api/**'
+      - 'wrangler.jsonc'
+      - 'package.json'
+      - 'scripts/verify-cloudflare-build.mjs'
+      - 'legacy/pdv-artisys/js/core/auth/**'
+      - '.github/workflows/verify-saas-foundation.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: saas-verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  identity-and-cloudflare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Cloudflare repository-root deployment contract
+        run: npm run build
+      - name: Validate entrypoints
+        working-directory: apps/api
+        run: npm run check
+      - name: Test real SQLite isolation and canonical identity
+        working-directory: apps/api
+        run: npm test
+      - name: Smoke test offline self-hosted provisioning
+        working-directory: apps/api
+        env:
+          PDV_OWNER_EMAIL: owner@example.test
+          PDV_OWNER_NAME: Local Owner
+          PDV_TENANT_SLUG: smoke-store
+          PDV_TENANT_NAME: Smoke Store
+          PDV_OWNER_PASSWORD: DummyStrongPassOnlyForCI2026
+          LOCAL_DB_PATH: .local/smoke.sqlite
+        run: |
+          node --experimental-sqlite src/provision.mjs --local
+          node --experimental-sqlite --input-type=module -e "import {openLocalDatabase} from './src/local-db.mjs'; const d=openLocalDatabase('.local/smoke.sqlite'); const r=await d.prepare('SELECT COUNT(*) AS c FROM tenant_memberships').bind().first(); if(r.c!==1)process.exit(1); d.close();"
+      - name: Cloudflare Worker dry run from root (never deploy)
+        run: npx --yes wrangler@4.137.0 deploy --dry-run --outdir dist-check
+      - name: Test isolated D1 schema in Wrangler local emulator
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0001_identity.sql
+      - name: Smoke real Cloudflare Workerd with local D1 and 100k PBKDF2
+        env:
+          PDV_OWNER_EMAIL: owner@example.test
+          PDV_OWNER_NAME: Local Owner
+          PDV_TENANT_SLUG: workerd-test
+          PDV_TENANT_NAME: Workerd Test
+          PDV_OWNER_PASSWORD: DummyStrongPassOnlyForCI2026
+        run: |
+          node --experimental-sqlite apps/api/src/provision.mjs
+          npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/.local/provision.seed.sql
+          node scripts/smoke-workerd.mjs
+      - name: Verify snapshot remains unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f legacy/pdv-artisys/js/core/auth/default-profiles.js
+          test -f legacy/pdv-artisys/js/core/auth/authorization-service.js
+          test -f legacy/pdv-artisys/js/core/auth/principal-resolver.js
+          test -f legacy/pdv-artisys/js/domains/sales/sale-service.js
+          test ! -f apps/api/src/renderer.js

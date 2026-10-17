@@ -1,0 +1,24 @@
+{
+  // Cloudflare Git integration: project root is this repository.
+  // IMPORTANT: this name must match the Worker already created in Cloudflare.
+  "name": "pdv-artisys-total",
+  "main": "apps/api/src/worker.mjs",
+  "compatibility_date": "2026-09-28",
+  "workers_dev": true,
+  // API remains read-only / locked while the SaaS is not provisioned for customers.
+  "vars": { "AUTH_ENABLED": "false" },
+  // Wrangler 4 auto-provisions missing resource IDs; do not invent UUIDs.
+  // Do not ever bind the desktop licensing D1 database here.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pdv-artisys-total",
+      "migrations_dir": "apps/api/migrations"
+    }
+  ],
+  // R2 bucket is provisioned separately from D1, without account API tokens.
+  // It remains unused until the canonical attachment/backup feature exists.
+  "r2_buckets": [
+    { "binding": "FILES" }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "pdv-artisys-total-api",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --experimental-sqlite --test test/*.test.mjs",
+    "dev": "node --experimental-sqlite src/server.mjs",
+    "check": "node --check src/worker.mjs && node --check src/server.mjs && node --check src/provision.mjs"
+  }
+}
