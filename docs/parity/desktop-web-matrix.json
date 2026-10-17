@@ -516,12 +516,19 @@
         {
           "id": "products-030",
           "name": "Fotos de produto em R2 e remoção",
-          "status": "gap",
+          "status": "partial",
           "owner": "inventory",
           "dependsOn": [
             "products-020"
           ],
-          "acceptance": "Fotos de produto em R2 e remoção. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Fotos de produto em R2 e remoção. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "webEvidence": {
+            "file": "apps/api/src/product-media.mjs",
+            "contains": "export async function productMediaRoute(",
+            "testFile": "apps/api/test/p2-photos.test.mjs",
+            "testContains": "P2 photos: R2 stores tenant-scoped private keys"
+          },
+          "reviewNote": "Fotos JPEG/PNG/WebP privadas por empresa com R2 opcional ou SQLite local; homologação física do bucket, fotos legadas e redimensionamento ainda pendentes."
         },
         {
           "id": "products-031",
