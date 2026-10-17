@@ -50,6 +50,8 @@ function formatSale(sale,items=[],payments=[]){
       id:row.id,productId:row.product_id,productName:row.product_name,
       sku:row.sku,quantity:row.quantity_milli/1000,
       unitPriceCents:row.unit_price_cents,
+      catalogUnitPriceCents:row.catalog_unit_price_cents??row.unit_price_cents,
+      priceOverrideReason:row.price_override_reason||null,
       totalCents:Math.round((row.quantity_milli/1000)*row.unit_price_cents)
     })),
     payments:payments.map(row=>({id:row.id,method:row.method,amountCents:row.amount_cents}))
@@ -80,7 +82,10 @@ export function createCommerceService(db,{now=nowISO}={}){
     return row;
   };
   const saleSnapshot=async(sale)=>{
-    const items=await all('SELECT * FROM sale_items WHERE sale_id=? ORDER BY created_at,id',sale.id);
+    const items=await all(`SELECT i.*,
+      (SELECT o.reason FROM sale_item_price_overrides o
+       WHERE o.sale_item_id=i.id ORDER BY o.created_at DESC,o.id DESC LIMIT 1) AS price_override_reason
+      FROM sale_items i WHERE i.sale_id=? ORDER BY i.created_at,i.id`,sale.id);
     const payments=await all('SELECT * FROM sale_payments WHERE sale_id=? ORDER BY created_at,id',sale.id);
     return formatSale(sale,items,payments);
   };
@@ -473,11 +478,36 @@ export function createCommerceService(db,{now=nowISO}={}){
       // Data is re-read after commit for the canonical checkout shape.
       const safe={saleId:id,productId:row.id,quantity:milli/1000};
       await batch([
-        q(`INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at)
-          VALUES(?,?,?,?,?,?,?,?,?,?)
+        q(`INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at,catalog_unit_price_cents)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(sale_id,product_id) DO UPDATE SET quantity_milli=sale_items.quantity_milli+excluded.quantity_milli`,
-          itemId,tenant,branch,id,row.id,row.name,row.sku,milli,row.sale_price_cents,stamp()),
+          itemId,tenant,branch,id,row.id,row.name,row.sku,milli,row.sale_price_cents,stamp(),row.sale_price_cents),
         audit(tenant,scope,key,safe)
+      ]);
+      return snapshot(tenant,branch,id);
+    },
+    async overrideItemPrice(tenant,branch,id,itemId,user,body,header){
+      const key=requiredMutation(body,header),scope='sale.price-override:'+branch+':'+id;
+      const prior=await applied(tenant,scope,key);if(prior)return snapshot(tenant,branch,id);
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+      const row=await first(`SELECT id,unit_price_cents AS currentPriceCents
+        FROM sale_items WHERE id=? AND sale_id=? AND tenant_id=? AND branch_id=?`,
+        itemId,id,tenant,branch);
+      if(!row)throw error(404,'Item não encontrado na venda.');
+      const price=requiredNumber(body?.unitPriceCents,'Preço unitário');
+      const reason=text(body?.reason,240);
+      if(reason.length<3)throw error(400,'Informe a justificativa da alteração de preço.');
+      if(price===row.currentPriceCents)throw error(400,'O novo preço precisa ser diferente do anterior.');
+      await batch([
+        q(`INSERT INTO sale_item_price_overrides
+          (id,tenant_id,branch_id,sale_id,sale_item_id,old_price_cents,
+           new_price_cents,reason,actor_id,mutation_id,created_at)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+          randomId(),tenant,branch,id,itemId,row.currentPriceCents,price,reason,user,key,stamp()),
+        q(`UPDATE sale_items SET unit_price_cents=?
+          WHERE id=? AND sale_id=? AND tenant_id=? AND branch_id=?`,
+          price,itemId,id,tenant,branch),
+        audit(tenant,scope,key,{saleId:id,itemId,unitPriceCents:price,reason})
       ]);
       return snapshot(tenant,branch,id);
     },
