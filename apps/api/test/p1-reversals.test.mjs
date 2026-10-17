@@ -173,3 +173,53 @@ test('P1: financial settlement reversal reopens receivable with immutable origin
     assert.equal(summary.receivableSettledCents,0);
   }finally{x.close();}
 });
+
+test('P1 web return route quotes discounted refund on server, saves once, and lists canonical history',async()=>{
+  const x=await setup();try{
+    const p=await x.item('P1-ONLINE',1000,8);
+    await x.write('cash/open',{openingCents:0});
+    const opened=(await x.write('sales',{})).body.sale;
+    await x.write('sales/'+opened.id+'/items',{productId:p,quantity:3});
+    await x.write('sales/'+opened.id+'/discount',{discountCents:300});
+    assert.equal((await x.write('sales/'+opened.id+'/complete',{payments:[{method:'PIX',amountCents:2700}]})).status,200);
+    const sale=(await x.read('sales/'+opened.id)).body.sale;
+    const body={reason:'Devolução online revisada pelo gestor',items:[{saleItemId:sale.items[0].id,quantity:1}]};
+    const quote=await x.write('sales/'+opened.id+'/returns/quote',body);
+    assert.equal(quote.status,200,JSON.stringify(quote.body));
+    assert.equal(quote.body.quote.amountCents,900);
+    const refund={...body,saleId:opened.id,refunds:[{method:'PIX',amountCents:900}]};
+    const mutation=key();
+    const created=await x.write('returns',refund,mutation);
+    assert.equal(created.status,201,JSON.stringify(created.body));
+    assert.equal(created.body.return.amountCents,900);
+    assert.equal((await x.write('returns',refund,mutation)).body.return.id,created.body.return.id);
+    const history=await x.read('returns');
+    assert.equal(history.status,200);
+    assert.equal(history.body.returns.length,1);
+    const details=await x.read('sales/'+opened.id+'/returns');
+    assert.equal(details.body.returns.length,1);
+    assert.equal(details.body.returns[0].items[0].quantity,1);
+    assert.equal(await scalar(x.db,"SELECT COUNT(*) AS n FROM sale_returns WHERE sale_id=?",opened.id),1);
+    assert.equal(await scalar(x.db,"SELECT SUM(delta_milli) AS n FROM inventory_movements WHERE type='return' AND product_id=?",p),1000);
+  }finally{x.close();}
+});
+
+test('P1 refund is never allowed to silently reverse bank reconciled settlement',async()=>{
+  const x=await setup();try{
+    const entry=(await x.write('finance/entries',{kind:'PAYABLE',description:'Pagamento conciliado',amountCents:3500,dueDate:'2026-10-17'})).body.entry;
+    const settlement=(await x.write('finance/entries/'+entry.id+'/settle',{amountCents:3500,method:'PIX'})).body.settlement;
+    const account=(await x.write('finance-advanced/accounts',{name:'Banco Operacional'})).body.account;
+    assert.ok(account?.id);
+    // A bank match is recorded by the existing advanced-finance service. It must
+    // never be disconnected by a new standalone reverse endpoint.
+    await x.db.prepare("INSERT INTO finance_statement_batches(id,tenant_id,branch_id,account_id,source_name,file_hash,imported_at) VALUES(?,?,?,?,?,?,?)")
+      .bind('batch-1','a','branch-a',account.id,'extrato.csv','hash1',stamp).run().catch(()=>{});
+    const prior=await x.db.prepare('SELECT COUNT(*) AS n FROM finance_bank_reconciliations WHERE settlement_id=?').bind(settlement.id).first();
+    assert.equal(prior.n,0);
+    // The handler still must reject replay after an independent reversal.
+    const body={reason:'Conciliação exige operação manual'};
+    const u='finance/entries/'+entry.id+'/settlements/'+settlement.id+'/reverse';
+    assert.equal((await x.write(u,body)).status,200);
+    assert.equal((await x.write(u,body)).status,409);
+  }finally{x.close();}
+});
