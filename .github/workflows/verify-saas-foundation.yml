@@ -80,6 +80,8 @@ jobs:
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0007_stock_transfers.sql
       - name: Test P1 atomic compensations and locked cashier history in local D1
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0008_transaction_reversals.sql
+      - name: Test P2 deep catalog, kit allocation, purchase cost and reservation migration in local D1
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0009_catalog_inventory.sql
       - name: Install one Chromium for all browser regression gates
         run: |
           npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0
