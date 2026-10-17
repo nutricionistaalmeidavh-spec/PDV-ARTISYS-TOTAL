@@ -21,7 +21,7 @@ Nenhum comando de periférico é emitido por alteração de banco ou job em back
 | Chrome/Edge desktop HTTPS: Web Serial genérico | Implementado; requer permissão e quadro de peso válido |
 | USB teclado/HID scanner | Compatível pelo campo de busca já existente |
 | ESC/POS serial (impressora/gaveta) | Adaptador genérico, modelos físicos não homologados |
-| Urano US31/2 POP-S com protocolo 9600/8N2 e 0x04/0x05 | Configuração exibida, parser específico ainda não migrado; leitura recusa payload não verificado |
+| Urano US31/2 POP-S com protocolo 9600/8N2 e 0x04/0x05 | Parser de quadros USE-P2/USE-CB2 migrado e coberto por testes; sem homologação com equipamento físico |
 | Safari/iOS/Firefox sem Web Serial | Entrada manual; sem acesso direto serial |
 | Térmica USB driver do SO | Pelo diálogo de impressão; impressão silenciosa fora do escopo |
 | Impressão silenciosa, filas de jobs com retry persistente, seleção programática de impressora | Exigem **agente local opcional**, nunca simular por Cloudflare |
@@ -30,7 +30,7 @@ Nenhum comando de periférico é emitido por alteração de banco ou job em back
 ## Próxima etapa de paridade total
 
 - Criar agente local open source/self-hosted **opcional**, pareado por terminal com lista restrita de comandos e autenticação, sem porta pública na LAN, compatível com adaptadores existentes; eliminar duplicação e reportar resultado real do spooler.
-- Migrar e testar o parser Urano POP-S exato do módulo compartilhado, preservando o framing e seus testes; não trocar por regex genérica.
+- Validar leitura em equipamento Urano físico; o parser foi portado com reconhecimento de frames e testes automatizados, mas compatibilidade física permanece não homologada.
 - Projetar job canônico tenant/filial/terminal com idempotência e tentativas auditáveis no D1; impedir impressão duplicada ao repetir a venda, sem inventar impressão enviada.
 - Homologar equipamento físico com fabricante/modelo/firmware, 58/80 mm, corte, gaveta, desconexão, replug, falha de driver, retomada e impressão concorrente.
 - Só usar status FIELD_VERIFIED depois de teste real registrado. Os testes em CI provam somente o caminho de software.
