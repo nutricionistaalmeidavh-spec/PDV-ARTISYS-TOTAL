@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "desktop": {
     "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
     "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -32,8 +32,13 @@
             "file": "apps/web/app.js",
             "contains": "const WEB_ROUTES",
             "testFile": "scripts/web-browser-e2e.mjs",
-            "testContains": "data-route"
-          }
+            "testContains": "data-route",
+            "testAssertionContains": "assert.equal(await page.locator('#product-search').inputValue(),'Web QA','search query survives cart mutation');",
+            "testRunner": "playwright"
+          },
+          "owner": "web-shell",
+          "dependsOn": [],
+          "acceptance": "Navegação básica por tela. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "home-002",
@@ -42,12 +47,22 @@
           "webEvidence": {
             "file": "apps/web/app.js",
             "contains": "renderHome"
-          }
+          },
+          "owner": "web-shell",
+          "dependsOn": [
+            "home-001"
+          ],
+          "acceptance": "Painel e atalhos conforme perfil/capacidade. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "home-003",
           "name": "Indicadores operacionais reais e alertas no início",
-          "status": "gap"
+          "status": "gap",
+          "owner": "web-shell",
+          "dependsOn": [
+            "home-001"
+          ],
+          "acceptance": "Indicadores operacionais reais e alertas no início. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "home-004",
@@ -56,7 +71,12 @@
           "webEvidence": {
             "file": "apps/web/app.js",
             "contains": "renderCheckout"
-          }
+          },
+          "owner": "web-shell",
+          "dependsOn": [
+            "home-001"
+          ],
+          "acceptance": "Persistência de filtros, foco e scroll ao navegar. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         }
       ]
     },
@@ -77,8 +97,13 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async openSale(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 lifecycle:"
-          }
+            "testContains": "P3 lifecycle:",
+            "testAssertionContains": "assert.equal(cash.status,201,cash.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "sales",
+          "dependsOn": [],
+          "acceptance": "Abertura de venda. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-006",
@@ -88,8 +113,16 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async addItem(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 lifecycle:"
-          }
+            "testContains": "P3 lifecycle:",
+            "testAssertionContains": "assert.equal(cash.status,201,cash.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-005",
+            "products-020"
+          ],
+          "acceptance": "Adição, alteração e remoção de itens. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-007",
@@ -98,7 +131,12 @@
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "async discount("
-          }
+          },
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-005"
+          ],
+          "acceptance": "Desconto de venda com permissão. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-008",
@@ -108,8 +146,16 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async complete(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 lifecycle:"
-          }
+            "testContains": "P3 lifecycle:",
+            "testAssertionContains": "assert.equal(cash.status,201,cash.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-005",
+            "cash-040"
+          ],
+          "acceptance": "Pagamento em dinheiro e troco e PIX/cartão apenas registrados. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-009",
@@ -118,7 +164,12 @@
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "async transition("
-          }
+          },
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-005"
+          ],
+          "acceptance": "Venda suspensa e retomada. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-010",
@@ -128,8 +179,15 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async overrideItemPrice(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "Desktop parity: price override"
-          }
+            "testContains": "Desktop parity: price override",
+            "testAssertionContains": "assert.equal(added.status,200,added.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-006"
+          ],
+          "acceptance": "Alteração autorizada do preço de item com motivo e auditoria. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-011",
@@ -141,7 +199,12 @@
             "testFile": "apps/api/test/vertical-parity.test.mjs",
             "testContains": "sales/${sale.id}/customer"
           },
-          "reviewNote": "Vínculo canônico provado via API, mas a seleção completa no checkout web ainda requer validação."
+          "reviewNote": "Vínculo canônico provado via API, mas a seleção completa no checkout web ainda requer validação.",
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-005"
+          ],
+          "acceptance": "Vincular cliente à venda. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-012",
@@ -153,7 +216,12 @@
             "testFile": "apps/api/test/vertical-parity.test.mjs",
             "testContains": "commissionBps:1000"
           },
-          "reviewNote": "Seleção e lançamento de comissões existem; repasse, estornos e perfis ainda não têm paridade."
+          "reviewNote": "Seleção e lançamento de comissões existem; repasse, estornos e perfis ainda não têm paridade.",
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-005"
+          ],
+          "acceptance": "Vendedor/garçom individual e comissões. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-013",
@@ -165,12 +233,22 @@
             "testFile": "apps/api/test/vertical-parity.test.mjs",
             "testContains": "creditLimitCents:5000"
           },
-          "reviewNote": "Crédito com limite, ledger e recebimentos testados; falta devolução e relatórios equivalentes."
+          "reviewNote": "Crédito com limite, ledger e recebimentos testados; falta devolução e relatórios equivalentes.",
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-011"
+          ],
+          "acceptance": "Crediário/crédito da loja com limite e contas. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-014",
           "name": "Estorno de venda concluída e reversão estoque/caixa",
-          "status": "gap"
+          "status": "gap",
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-008"
+          ],
+          "acceptance": "Estorno de venda concluída e reversão estoque/caixa. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-015",
@@ -179,7 +257,12 @@
           "webEvidence": {
             "file": "apps/web/app.js",
             "contains": "scan-focus"
-          }
+          },
+          "owner": "sales",
+          "dependsOn": [
+            "products-020"
+          ],
+          "acceptance": "Bipagem de código de barras com semântica original. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-016",
@@ -191,12 +274,22 @@
             "testFile": "apps/api/test/commerce.test.mjs",
             "testContains": "P6 weighted product"
           },
-          "reviewNote": "Venda por peso e protocolo web implementados; paridade com balanças físicas depende de homologação."
+          "reviewNote": "Venda por peso e protocolo web implementados; paridade com balanças físicas depende de homologação.",
+          "owner": "sales",
+          "dependsOn": [
+            "products-020"
+          ],
+          "acceptance": "Produtos por peso com balança/inserção manual. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-017",
           "name": "Observações e configurações de itens",
-          "status": "gap"
+          "status": "gap",
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-006"
+          ],
+          "acceptance": "Observações e configurações de itens. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-018",
@@ -208,12 +301,23 @@
             "testFile": "apps/api/test/peripherals-web.test.mjs",
             "testContains": "diálogo de impressão não altera a venda"
           },
-          "reviewNote": "Diálogo browser e ESC/POS existem; reimpressão histórica e impressão física dependem de QA."
+          "reviewNote": "Diálogo browser e ESC/POS existem; reimpressão histórica e impressão física dependem de QA.",
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-008"
+          ],
+          "acceptance": "Comprovante de venda e reimpressão/PDF. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "checkout-019",
           "name": "Kits e combos operacionais sem duplicar estoque",
-          "status": "gap"
+          "status": "gap",
+          "owner": "sales",
+          "dependsOn": [
+            "checkout-006",
+            "products-021"
+          ],
+          "acceptance": "Kits e combos operacionais sem duplicar estoque. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         }
       ]
     },
@@ -234,8 +338,13 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async createProduct(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 commerce:"
-          }
+            "testContains": "P3 commerce:",
+            "testAssertionContains": "assert.equal(p.status,201,p.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "inventory",
+          "dependsOn": [],
+          "acceptance": "Cadastro básico de produto com SKU e preço. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-021",
@@ -245,8 +354,15 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async stock(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "immutable stock ledger:"
-          }
+            "testContains": "immutable stock ledger:",
+            "testAssertionContains": "assert.equal(a.status,201,a.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "inventory",
+          "dependsOn": [
+            "products-020"
+          ],
+          "acceptance": "Consulta de saldo do estoque por filial. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-022",
@@ -256,8 +372,15 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async receipt(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "immutable stock ledger:"
-          }
+            "testContains": "immutable stock ledger:",
+            "testAssertionContains": "assert.equal(a.status,201,a.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "inventory",
+          "dependsOn": [
+            "products-020"
+          ],
+          "acceptance": "Recebimento e abertura de saldo imutável. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-023",
@@ -269,22 +392,42 @@
             "testFile": "apps/api/test/commerce.test.mjs",
             "testContains": "product editing and deactivation retain canonical sale snapshots"
           },
-          "reviewNote": "Editar, desativar e reativar produtos sem sobrescrever snapshots históricos; UI e testes adicionados, aguarda execução CI e revisão de concorrência."
+          "reviewNote": "Editar, desativar e reativar produtos sem sobrescrever snapshots históricos; UI e testes adicionados, aguarda execução CI e revisão de concorrência.",
+          "owner": "inventory",
+          "dependsOn": [
+            "products-020"
+          ],
+          "acceptance": "Editar e desativar produtos sem apagar histórico. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-024",
           "name": "Categorias/cadastro e filtros",
-          "status": "gap"
+          "status": "gap",
+          "owner": "inventory",
+          "dependsOn": [
+            "products-020"
+          ],
+          "acceptance": "Categorias/cadastro e filtros. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-025",
           "name": "Código de barras independente do SKU",
-          "status": "gap"
+          "status": "gap",
+          "owner": "inventory",
+          "dependsOn": [
+            "products-020"
+          ],
+          "acceptance": "Código de barras independente do SKU. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-026",
           "name": "Custo, marca, unidade e estoque mínimo",
-          "status": "gap"
+          "status": "gap",
+          "owner": "inventory",
+          "dependsOn": [
+            "products-020"
+          ],
+          "acceptance": "Custo, marca, unidade e estoque mínimo. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-027",
@@ -294,8 +437,15 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async inventoryMovements(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "Desktop parity: stock adjustment"
-          }
+            "testContains": "Desktop parity: stock adjustment",
+            "testAssertionContains": "assert.equal((await x.write('a',path,negative,{who:x.viewer})).status,403);",
+            "testRunner": "node-test"
+          },
+          "owner": "inventory",
+          "dependsOn": [
+            "products-021"
+          ],
+          "acceptance": "Histórico e filtro de movimentações de estoque. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-028",
@@ -304,7 +454,12 @@
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "async adjustStock("
-          }
+          },
+          "owner": "inventory",
+          "dependsOn": [
+            "products-027"
+          ],
+          "acceptance": "Inventário contado, ajustes positivos e negativos. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-029",
@@ -316,22 +471,42 @@
             "testFile": "apps/api/test/commerce.test.mjs",
             "testContains": "inventory transfer moves one immutable"
           },
-          "reviewNote": "Transferência imutável entre filiais com saldo projetado, mutação idempotente, RBAC e interface web implementada; locais de estoque internos, reservas e CI final ainda pendentes."
+          "reviewNote": "Transferência imutável entre filiais com saldo projetado, mutação idempotente, RBAC e interface web implementada; locais de estoque internos, reservas e CI final ainda pendentes.",
+          "owner": "inventory",
+          "dependsOn": [
+            "products-027"
+          ],
+          "acceptance": "Locais de estoque, transferências e reservas. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-030",
           "name": "Fotos de produto em R2 e remoção",
-          "status": "gap"
+          "status": "gap",
+          "owner": "inventory",
+          "dependsOn": [
+            "products-020"
+          ],
+          "acceptance": "Fotos de produto em R2 e remoção. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-031",
           "name": "Variações, parent e lotes",
-          "status": "gap"
+          "status": "gap",
+          "owner": "inventory",
+          "dependsOn": [
+            "products-020"
+          ],
+          "acceptance": "Variações, parent e lotes. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "products-032",
           "name": "Importação de catálogo com prévia e validação",
-          "status": "gap"
+          "status": "gap",
+          "owner": "inventory",
+          "dependsOn": [
+            "products-020"
+          ],
+          "acceptance": "Importação de catálogo com prévia e validação. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         }
       ]
     },
@@ -352,8 +527,13 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "const listing=",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "lifecycle:"
-          }
+            "testContains": "lifecycle:",
+            "testAssertionContains": "assert.equal(cash.status,201,cash.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "sales-history",
+          "dependsOn": [],
+          "acceptance": "Listagem simples de vendas em filial. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "history-034",
@@ -362,7 +542,12 @@
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "saleSnapshot"
-          }
+          },
+          "owner": "sales-history",
+          "dependsOn": [
+            "history-033"
+          ],
+          "acceptance": "Detalhamento de venda e pagamentos registrados. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "history-035",
@@ -371,7 +556,12 @@
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "async salesHistory("
-          }
+          },
+          "owner": "sales-history",
+          "dependsOn": [
+            "history-033"
+          ],
+          "acceptance": "Filtro por período, operador, cliente, vendedor, status e pesquisa. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "history-036",
@@ -381,18 +571,35 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async salesHistory(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "Desktop parity: paginated sale history"
-          }
+            "testContains": "Desktop parity: paginated sale history",
+            "testAssertionContains": "assert.equal(open1.status,201);assert.equal(open2.status,201);",
+            "testRunner": "node-test"
+          },
+          "owner": "sales-history",
+          "dependsOn": [
+            "history-033"
+          ],
+          "acceptance": "Paginação por offset/cursor para histórico extenso. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "history-037",
           "name": "Cancelamento de venda concluída com reversões",
-          "status": "gap"
+          "status": "gap",
+          "owner": "sales-history",
+          "dependsOn": [
+            "checkout-014"
+          ],
+          "acceptance": "Cancelamento de venda concluída com reversões. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "history-038",
           "name": "Devoluções parciais, autorizações e estornos",
-          "status": "gap"
+          "status": "gap",
+          "owner": "sales-history",
+          "dependsOn": [
+            "checkout-014"
+          ],
+          "acceptance": "Devoluções parciais, autorizações e estornos. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "history-039",
@@ -404,7 +611,12 @@
             "testFile": "scripts/web-browser-e2e.mjs",
             "testContains": "data-history-print-sale"
           },
-          "reviewNote": "Reimpressão de vendas concluídas implementada no histórico web com recibo canônico; exportação histórica detalhada e validação em hardware físico ainda pendentes."
+          "reviewNote": "Reimpressão de vendas concluídas implementada no histórico web com recibo canônico; exportação histórica detalhada e validação em hardware físico ainda pendentes.",
+          "owner": "sales-history",
+          "dependsOn": [
+            "history-034"
+          ],
+          "acceptance": "Reimpressão e exportação do histórico detalhado. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         }
       ]
     },
@@ -425,8 +637,13 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async openCash(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 cash:"
-          }
+            "testContains": "P3 cash:",
+            "testAssertionContains": "assert.equal(session.status,201,session.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "cash",
+          "dependsOn": [],
+          "acceptance": "Abertura e sessão única por filial. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "cash-041",
@@ -436,8 +653,15 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async cashAdjust(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 cash:"
-          }
+            "testContains": "P3 cash:",
+            "testAssertionContains": "assert.equal(session.status,201,session.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "cash",
+          "dependsOn": [
+            "cash-040"
+          ],
+          "acceptance": "Suprimento e sangria auditáveis. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "cash-042",
@@ -447,8 +671,15 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async closeCash(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 cash:"
-          }
+            "testContains": "P3 cash:",
+            "testAssertionContains": "assert.equal(session.status,201,session.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "cash",
+          "dependsOn": [
+            "cash-040"
+          ],
+          "acceptance": "Fechamento, contagem e divergência. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "cash-043",
@@ -457,22 +688,42 @@
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "async cashSessions("
-          }
+          },
+          "owner": "cash",
+          "dependsOn": [
+            "cash-040"
+          ],
+          "acceptance": "Histórico recente de sessões e movimentações. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "cash-044",
           "name": "Histórico completo filtrado por operador, data e terminal",
-          "status": "gap"
+          "status": "gap",
+          "owner": "cash",
+          "dependsOn": [
+            "cash-043"
+          ],
+          "acceptance": "Histórico completo filtrado por operador, data e terminal. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "cash-045",
           "name": "Estorno/retorno de vendas em sessões encerradas",
-          "status": "gap"
+          "status": "gap",
+          "owner": "cash",
+          "dependsOn": [
+            "history-038"
+          ],
+          "acceptance": "Estorno/retorno de vendas em sessões encerradas. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "cash-046",
           "name": "Sessões independentes por terminal no mesmo ponto de venda",
-          "status": "gap"
+          "status": "gap",
+          "owner": "cash",
+          "dependsOn": [
+            "cash-040"
+          ],
+          "acceptance": "Sessões independentes por terminal no mesmo ponto de venda. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         }
       ]
     },
@@ -493,8 +744,13 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async createFinanceEntry(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P4 finance:"
-          }
+            "testContains": "P4 finance:",
+            "testAssertionContains": "assert.equal(first.status,201,first.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "finance",
+          "dependsOn": [],
+          "acceptance": "Criação manual de contas a pagar e receber. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "finance-048",
@@ -504,8 +760,15 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async settleFinanceEntry(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P4 finance:"
-          }
+            "testContains": "P4 finance:",
+            "testAssertionContains": "assert.equal(first.status,201,first.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "finance",
+          "dependsOn": [
+            "finance-047"
+          ],
+          "acceptance": "Liquidação parcial e controle de saldo. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "finance-049",
@@ -515,8 +778,15 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async cancelFinanceEntry(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P4 finance:"
-          }
+            "testContains": "P4 finance:",
+            "testAssertionContains": "assert.equal(first.status,201,first.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "finance",
+          "dependsOn": [
+            "finance-047"
+          ],
+          "acceptance": "Cancelamento apenas de contas não liquidadas. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "finance-050",
@@ -526,8 +796,15 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async financeSummary(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P4 finance:"
-          }
+            "testContains": "P4 finance:",
+            "testAssertionContains": "assert.equal(first.status,201,first.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "finance",
+          "dependsOn": [
+            "finance-047"
+          ],
+          "acceptance": "Resumo financeiro por filial. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "finance-051",
@@ -539,12 +816,22 @@
             "testFile": "apps/api/test/advanced-finance.test.mjs",
             "testContains": "repeated or overlapping imported statements"
           },
-          "reviewNote": "Contas bancárias e lançamentos importados existem; carteiras e todos os vínculos do desktop não verificados."
+          "reviewNote": "Contas bancárias e lançamentos importados existem; carteiras e todos os vínculos do desktop não verificados.",
+          "owner": "finance",
+          "dependsOn": [
+            "finance-047"
+          ],
+          "acceptance": "Contas bancárias/carteiras e lançamentos vinculados. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "finance-052",
           "name": "Reversão de liquidações com trilha de auditoria",
-          "status": "gap"
+          "status": "gap",
+          "owner": "finance",
+          "dependsOn": [
+            "finance-048"
+          ],
+          "acceptance": "Reversão de liquidações com trilha de auditoria. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "finance-053",
@@ -556,7 +843,12 @@
             "testFile": "apps/api/test/advanced-finance.test.mjs",
             "testContains": "finance categories and cost centers"
           },
-          "reviewNote": "Classificação por categoria e centro implementada; filtros completos por banco/vencimento ainda incompletos."
+          "reviewNote": "Classificação por categoria e centro implementada; filtros completos por banco/vencimento ainda incompletos.",
+          "owner": "finance",
+          "dependsOn": [
+            "finance-047"
+          ],
+          "acceptance": "Filtros completos por categoria, centro de custo, banco e vencimento. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "finance-054",
@@ -568,7 +860,12 @@
             "testFile": "apps/api/test/advanced-finance.test.mjs",
             "testContains": "finance categories and cost centers"
           },
-          "reviewNote": "Grupos DRE/categorias testados; plano de contas do desktop não integralmente reproduzido."
+          "reviewNote": "Grupos DRE/categorias testados; plano de contas do desktop não integralmente reproduzido.",
+          "owner": "finance",
+          "dependsOn": [
+            "finance-047"
+          ],
+          "acceptance": "Plano de contas e grupos DRE. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "finance-055",
@@ -578,9 +875,16 @@
             "file": "apps/api/src/advanced-finance.mjs",
             "contains": "async dre(",
             "testFile": "apps/api/test/advanced-finance.test.mjs",
-            "testContains": "DRE cash and accrual differ"
+            "testContains": "DRE cash and accrual differ",
+            "testAssertionContains": "assert.equal(accrual.expenseCents,4000);assert.equal(cash.expenseCents,1000);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "DRE caixa/competência e fluxo de caixa com saldos testados."
+          "reviewNote": "DRE caixa/competência e fluxo de caixa com saldos testados.",
+          "owner": "finance",
+          "dependsOn": [
+            "finance-047"
+          ],
+          "acceptance": "Fluxo de caixa e DRE por regime de caixa e competência. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "finance-056",
@@ -592,7 +896,12 @@
             "testFile": "apps/api/test/advanced-finance.test.mjs",
             "testContains": "internal bank transfers"
           },
-          "reviewNote": "Importação e deduplicação, conciliação e transferências testadas; extratos reais demandam QA."
+          "reviewNote": "Importação e deduplicação, conciliação e transferências testadas; extratos reais demandam QA.",
+          "owner": "finance",
+          "dependsOn": [
+            "finance-051"
+          ],
+          "acceptance": "Extratos OFX/CSV, conciliação e transferências. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "finance-057",
@@ -604,7 +913,12 @@
             "testFile": "apps/api/test/advanced-finance.test.mjs",
             "testContains": "generation is idempotent"
           },
-          "reviewNote": "Regras de recorrência testadas; alertas proativos ainda não implementados."
+          "reviewNote": "Regras de recorrência testadas; alertas proativos ainda não implementados.",
+          "owner": "finance",
+          "dependsOn": [
+            "finance-047"
+          ],
+          "acceptance": "Regras de recorrência e alertas financeiros. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         }
       ]
     },
@@ -625,8 +939,13 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async reports(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P4 reports:"
-          }
+            "testContains": "P4 reports:",
+            "testAssertionContains": "assert.equal(paid.status,200,paid.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "reports",
+          "dependsOn": [],
+          "acceptance": "Resumo de vendas concluídas por período. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "reports-059",
@@ -636,8 +955,15 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "methodTotals",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P4 reports:"
-          }
+            "testContains": "P4 reports:",
+            "testAssertionContains": "assert.equal(paid.status,200,paid.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "reports",
+          "dependsOn": [
+            "reports-058"
+          ],
+          "acceptance": "Distribuição por método e ranking de produtos. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "reports-060",
@@ -646,7 +972,12 @@
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "inventory,cash,finance"
-          }
+          },
+          "owner": "reports",
+          "dependsOn": [
+            "reports-058"
+          ],
+          "acceptance": "Estoques, caixa e contas manuais básicos. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "reports-061",
@@ -656,18 +987,36 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async salesCsv(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P4 reports:"
-          }
+            "testContains": "P4 reports:",
+            "testAssertionContains": "assert.equal(paid.status,200,paid.body.error);",
+            "testRunner": "node-test"
+          },
+          "owner": "reports",
+          "dependsOn": [
+            "reports-058"
+          ],
+          "acceptance": "CSV de vendas e impressão pelo navegador. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "reports-062",
           "name": "Detalhamento filtrado por cliente, vendedor, produto e meio de pagamento",
-          "status": "gap"
+          "status": "gap",
+          "owner": "reports",
+          "dependsOn": [
+            "reports-058"
+          ],
+          "acceptance": "Detalhamento filtrado por cliente, vendedor, produto e meio de pagamento. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "reports-063",
           "name": "Margem/custo histórico do produto e lucro real",
-          "status": "gap"
+          "status": "gap",
+          "owner": "reports",
+          "dependsOn": [
+            "reports-058",
+            "products-026"
+          ],
+          "acceptance": "Margem/custo histórico do produto e lucro real. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "reports-064",
@@ -679,17 +1028,33 @@
             "testFile": "apps/api/test/vertical-parity.test.mjs",
             "testContains": "commissionBps:1000"
           },
-          "reviewNote": "Ledger e relatório básico de comissões existentes; metas, ranking e repasses faltam."
+          "reviewNote": "Ledger e relatório básico de comissões existentes; metas, ranking e repasses faltam.",
+          "owner": "reports",
+          "dependsOn": [
+            "reports-058",
+            "checkout-012"
+          ],
+          "acceptance": "Metas, comissão e ranking de vendedores. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "reports-065",
           "name": "Comparativos entre períodos e análise de tendências",
-          "status": "gap"
+          "status": "gap",
+          "owner": "reports",
+          "dependsOn": [
+            "reports-058"
+          ],
+          "acceptance": "Comparativos entre períodos e análise de tendências. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "reports-066",
           "name": "Relatórios de estoque mínimo, transferências e cobertura",
-          "status": "gap"
+          "status": "gap",
+          "owner": "reports",
+          "dependsOn": [
+            "products-027"
+          ],
+          "acceptance": "Relatórios de estoque mínimo, transferências e cobertura. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "reports-067",
@@ -699,17 +1064,31 @@
             "file": "apps/api/src/advanced-finance.mjs",
             "contains": "async dre(",
             "testFile": "apps/api/test/advanced-finance.test.mjs",
-            "testContains": "finance categories and cost centers"
+            "testContains": "finance categories and cost centers",
+            "testAssertionContains": "assert.equal(applied.dreGroupId,group.id);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Relatório DRE com agrupamentos e centros de custo verificado em teste."
+          "reviewNote": "Relatório DRE com agrupamentos e centros de custo verificado em teste.",
+          "owner": "reports",
+          "dependsOn": [
+            "finance-055"
+          ],
+          "acceptance": "DRE e relatórios financeiros com centros de custo. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         },
         {
           "id": "reports-068",
           "name": "Exportação detalhada e formatos equivalentes ao desktop",
-          "status": "gap"
+          "status": "gap",
+          "owner": "reports",
+          "dependsOn": [
+            "reports-061"
+          ],
+          "acceptance": "Exportação detalhada e formatos equivalentes ao desktop. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
         }
       ]
     }
   ],
-  "reviewedAt": "2026-10-17"
+  "reviewedAt": "2026-10-17",
+  "scope": "seven-screen-operations",
+  "certification": null
 }
