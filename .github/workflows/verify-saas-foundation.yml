@@ -77,6 +77,19 @@ jobs:
           node --experimental-sqlite apps/api/src/provision.mjs
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/.local/provision.seed.sql
           node scripts/smoke-workerd.mjs
+      - name: Install isolated browser QA runtime
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.63.0
+          npx playwright install chromium --with-deps
+      - name: E2E original PDV renderer in Chromium (desktop + mobile)
+        run: node scripts/web-browser-e2e.mjs
+      - name: Save browser visual QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdv-total-browser-qa
+          path: qa-artifacts/
+          if-no-files-found: ignore
       - name: Verify a single maintained product, with no legacy desktop copy
         shell: bash
         run: |
