@@ -266,8 +266,11 @@ export function createVerticalService(db){
      if(amount>amountOutstanding.total)throw err(409,'Pagamento excede o débito disponível.');
      let cashSession=null;
      if(method==='CASH'){
-       cashSession=await first("SELECT id FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND status='OPEN'",t,b);
-       if(!cashSession)throw err(409,'Abra o caixa para receber dinheiro.');
+       const terminal=String(body?.terminalId||'DEFAULT').trim();
+       if(!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(terminal))
+         throw err(400,'Identificador do terminal inválido.');
+       cashSession=await first("SELECT id FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND terminal_id=? AND status='OPEN'",t,b,terminal);
+       if(!cashSession)throw err(409,'Abra o caixa deste terminal para receber dinheiro.');
      }
      return mutate(t,'credit.payment:'+customerId,key,async()=>{
        const id=uuid(),stamp=now(),result={id,customerId,amountCents:amount,method,receivedAt:stamp};
