@@ -213,6 +213,33 @@
     accessSecurity() { return this.request('/api/v1/access/security'); }
     revokeAccessSession(id) { return this.request(`/api/v1/access/sessions/${encodeURIComponent(id)}`, { method:'DELETE' }); }
 
+    webProductPhotoUrl(id){
+      if(!this.webMode||!this.tenantId||!this.branchId)throw new Error('Selecione a empresa e a filial.');
+      return '/api/v1/tenants/'+encodeURIComponent(this.tenantId)+'/products/'+encodeURIComponent(id)+
+        '/photo?branchId='+encodeURIComponent(this.branchId);
+    }
+    async uploadWebProductPhoto(id,file,mutationId=this.mutationId()){
+      if(!file||!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2097152)
+        throw new Error('Selecione JPEG, PNG ou WebP com até 2 MB.');
+      let response;
+      try{response=await root.fetch(this.webProductPhotoUrl(id),{
+        method:'PUT',credentials:'same-origin',redirect:'error',
+        headers:{'content-type':file.type,'x-mutation-id':mutationId},body:file
+      });}catch{throw new Error('Não foi possível enviar a imagem. Confira a conexão.');}
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok)throw Object.assign(new Error(payload.error||'Falha ao salvar a imagem.'),{status:response.status});
+      return payload;
+    }
+    async removeWebProductPhoto(id,mutationId=this.mutationId()){
+      let response;
+      try{response=await root.fetch(this.webProductPhotoUrl(id),{
+        method:'DELETE',credentials:'same-origin',redirect:'error',
+        headers:{'x-mutation-id':mutationId}
+      });}catch{throw new Error('Não foi possível remover a foto. Confira a conexão.');}
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok)throw Object.assign(new Error(payload.error||'Falha ao remover a imagem.'),{status:response.status});
+      return payload;
+    }
     productBundle(id){return this.request('/api/v1/products/'+encodeURIComponent(id)+'/bundle');}
     saveProductBundle(id,components,mutationId){return this.request('/api/v1/products/'+encodeURIComponent(id)+'/bundle',{method:'POST',body:{components},mutationId});}
     stockReservations(filters={}){return this.request('/api/v1/inventory/reservations'+this.params(filters));}
