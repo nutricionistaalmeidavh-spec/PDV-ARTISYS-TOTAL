@@ -9,13 +9,14 @@ const origin='https://pdv-total.test';
 const identity=readFileSync(new URL('../migrations/0001_identity.sql',import.meta.url),'utf8');
 const commerce=readFileSync(new URL('../migrations/0002_commerce.sql',import.meta.url),'utf8');
 const finance=readFileSync(new URL('../migrations/0003_cash_finance.sql',import.meta.url),'utf8');
+const vertical=readFileSync(new URL('../migrations/0005_vertical_parity.sql',import.meta.url),'utf8');
 const NOW=Date.parse('2026-10-17T14:00:00Z');
 const date='2026-10-17T14:00:00.000Z';
 const password='SafeTestPasswordForPdv2026!';
 let num=0;
 const next=()=>('mutation-'+(++num)+'-long');
 async function setup(){
-  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);
+  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);
   const pass=await hashPassword(password);
   for(const [id,email] of [['owner','owner@test.com'],['other','other@test.com'],['viewer','viewer@test.com']])
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
@@ -255,7 +256,6 @@ test('P4 reports: summed sales, noncash breakdown and bounded CSV are tenant sco
   }finally{x.close();}
 });
 
-
 test('P6 weighted product uses canonical KG line, precise payment and stock',async()=>{
   const x=await setup();try{
     const p=await x.write('a','products',{branchId:'branch-a',name:'Queijo por peso',sku:'QUEIJO-KG',unit:'KG',salePriceCents:3990,trackStock:true});
@@ -279,7 +279,7 @@ test('P6 weighted product uses canonical KG line, precise payment and stock',asy
     const paid=await x.write('a','sales/'+saleId+'/complete',{branchId:'branch-a',payments:[{method:'PIX',amountCents:4988}]});
     assert.equal(paid.status,200,paid.body.error);
     assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock[0].quantity,3.75);
-    assert.equal((await x.db.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE type='sale'").first()).n,1);
+    assert.equal((await x.db.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE type='sale'").bind().first()).n,1);
   }finally{x.close();}
 });
 
