@@ -764,3 +764,34 @@ test('P3 independent terminal drawers link every sale to its originating open ca
   assert.equal((await x.get('a','cash?branchId=branch-a&terminalId=../../unsafe')).status,400);
  }finally{x.close();}
 });
+
+test('P3 cash credit repayments select the requested terminal, not the first open drawer',async()=>{
+  const x=await setup();try{
+    const p=await x.id('Crediário terminal','CREDIT-T-A',4);
+    const customer=await x.write('a','customers',{branchId:'branch-a',name:'Consumidor caixa múltiplo',creditLimitCents:10000});
+    assert.equal(customer.status,201,JSON.stringify(customer.body));
+    const customerId=customer.body.customer.id;
+    const cA=await x.write('a','cash/open',{branchId:'branch-a',terminalId:'T-A',openingCents:1000});
+    const cB=await x.write('a','cash/open',{branchId:'branch-a',terminalId:'T-B',openingCents:500});
+    const open=await x.write('a','sales',{branchId:'branch-a',terminalId:'T-A'});
+    const saleId=open.body.sale.id;
+    assert.equal((await x.write('a','sales/'+saleId+'/customer',{branchId:'branch-a',customerId})).status,200);
+    assert.equal((await x.write('a','sales/'+saleId+'/items',{branchId:'branch-a',productId:p,quantity:1})).status,200);
+    const charge=await x.write('a','sales/'+saleId+'/complete',{branchId:'branch-a',payments:[{method:'STORE_CREDIT',amountCents:1000}]});
+    assert.equal(charge.status,200,JSON.stringify(charge.body));
+    const route='credit/'+customerId+'/payments';
+    const invalid=await x.write('a',route,{branchId:'branch-a',terminalId:'../T',method:'CASH',amountCents:200});
+    assert.equal(invalid.status,400);
+    const missing=await x.write('a',route,{branchId:'branch-a',terminalId:'T-Z',method:'CASH',amountCents:200});
+    assert.equal(missing.status,409);
+    const paid=await x.write('a',route,{branchId:'branch-a',terminalId:'T-B',method:'CASH',amountCents:400});
+    assert.equal(paid.status,201,JSON.stringify(paid.body));
+    const records=await x.db.prepare('SELECT cash_session_id AS cashId FROM customer_credit_receipts WHERE customer_id=?')
+      .bind(customerId).all();
+    assert.equal(records.results.length,1);
+    assert.equal(records.results[0].cashId,cB.body.session.id);
+    assert.equal((await x.get('a','cash?branchId=branch-a&terminalId=T-A')).body.session.expectedCashCents,1000);
+    assert.equal((await x.get('a','cash?branchId=branch-a&terminalId=T-B')).body.session.expectedCashCents,900);
+    assert.notEqual(cA.body.session.id,cB.body.session.id);
+  }finally{x.close();}
+});
