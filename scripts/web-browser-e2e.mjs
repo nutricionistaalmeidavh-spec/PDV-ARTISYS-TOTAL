@@ -164,6 +164,21 @@ try{
       try{const result=await original.call(this,id);trace.push({event:'api-sale-ok',id,status:result?.status});return result;}
       catch(error){trace.push({event:'api-sale-error',id,message:error.message});throw error;}
     };
+    // Diagnose pointer dispatch as well as re-render races. A locator click can
+    // finish after the target was replaced between pointerdown and pointerup.
+    for(const name of ['pointerdown','pointerup','click']){
+      window.addEventListener(name,event=>{
+        if(trace.length>35)return;
+        const el=event.target;
+        trace.push({event:name,tag:el?.tagName,buttonId:el?.closest?.('[data-sale-details]')?.dataset.saleDetails||null});
+      },true);
+    }
+    const observer=new MutationObserver(()=>{
+      if(trace.length>35)return;
+      trace.push({event:'history-dom-mutation',filter:document.querySelector('#ops-sales-body')?.dataset.historyQuery,
+        buttons:document.querySelectorAll('[data-sale-details]').length});
+    });
+    observer.observe(document.getElementById('route-content'),{childList:true,subtree:true});
     document.addEventListener('click',event=>{
       const button=event.target.closest?.('[data-sale-details]');
       if(button)trace.push({event:'sale-detail-click',id:button.dataset.saleDetails});
