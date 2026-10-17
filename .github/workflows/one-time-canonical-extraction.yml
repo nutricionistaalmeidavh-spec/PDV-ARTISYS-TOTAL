@@ -45,7 +45,7 @@ jobs:
           git mv legacy/pdv-artisys/vendor/artisys-printing/src/receipt-document.js packages/core/vendor/printing/src/receipt-document.js
           git mv legacy/pdv-artisys/vendor/artisys-printing/src/renderers/plain-text.js packages/core/vendor/printing/src/renderers/plain-text.js
           printf "%s\\n" "'use strict';" "module.exports={...require('./src/receipt-document'),...require('./src/renderers/plain-text')};" > packages/core/vendor/printing/index.js
-          sed -i "s@require('@artisys/printing')@require('../../../vendor/printing')@g" packages/core/js/domains/printing/receipt-renderer.js
+          sed -i "s#require('@artisys/printing')#require('../../../vendor/printing')#g" packages/core/js/domains/printing/receipt-renderer.js
           git mv legacy/pdv-artisys/desktop/renderer/* apps/web/
           for file in \
             authorization-service.test.js \
