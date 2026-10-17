@@ -27,8 +27,21 @@ try{
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
   const context=await browser.newContext({viewport:{width:1366,height:860},deviceScaleFactor:1});
   const page=await context.newPage();
+  const unexpectedHttp=[];
   page.on('pageerror',error=>errors.push(error.message));
-  page.on('console',message=>{if(message.type()==='error')errors.push(message.text());});
+  page.on('response',response=>{
+    if(response.status()<400)return;
+    const pathname=new URL(response.url()).pathname;
+    if(response.status()===401&&pathname==='/api/v1/auth/session')return; // expected on initial unauthenticated render
+    unexpectedHttp.push(response.status()+' '+pathname);
+  });
+  page.on('console',message=>{
+    if(message.type()!=='error')return;
+    // Chrome emits a generic 401 console error with no URL. All such responses
+    // are independently inspected above, so this isn't a blanket status waiver.
+    if(message.text().includes('status of 401 (Unauthorized)'))return;
+    errors.push(message.text());
+  });
   await page.goto(origin,{waitUntil:'domcontentloaded'});
   await page.locator('#web-login-form').waitFor({timeout:12000});
   await page.locator('#web-email').fill('owner@example.test');
@@ -78,6 +91,7 @@ try{
   await page.screenshot({path:'qa-artifacts/pdv-web-mobile.png',fullPage:true});
   const geometry=await page.evaluate(()=>({width:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}));
   assert.ok(geometry.scroll<=geometry.width+12,'mobile layout has horizontal overflow '+JSON.stringify(geometry));
+  assert.deepEqual(unexpectedHttp,[],'unexpected browser HTTP errors');
   assert.deepEqual(errors,[],'browser console or script failures');
   console.log('PASS: real Chromium login -> canonical product -> stock -> checkout -> cash -> payment -> sale, responsive 390px.');
 }finally{
