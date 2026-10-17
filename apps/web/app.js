@@ -55,6 +55,7 @@
     discountPercent: 0,
     paymentDraft: [],
     selectedSellerId: '',
+    pendingNewSaleKey:null,
     photoSyncStatus: null,
     productionRoutes: []
   };
@@ -199,7 +200,8 @@
   function renderSidebar() {
     const nav = document.getElementById('sidebar-nav');
     const accessPolicy = window.PdvAccessPolicy;
-    const items = (accessPolicy?.routesForUser(state.user, moduleAccessOptions()) || ['home']).filter(route=>route!=='settings'&&(!api.webMode||WEB_ROUTES.has(route)));
+    const items = api.webMode ? ['home','checkout','products','sales'].filter(route=>canAccessRoute(route))
+      : (accessPolicy?.routesForUser(state.user, moduleAccessOptions()) || ['home']).filter(route=>route!=='settings');
     const parentRoute = {
       finance:'financial-management',
       'finance-banks':'financial-management',
@@ -390,8 +392,7 @@
     content.querySelector('.sale-panel')?.insertAdjacentHTML('afterbegin', `<div class="customer-block"><label class="checkout-context-label" for="seller-select">Vendedor / Garçom</label><select id="seller-select" class="secondary-button checkout-seller-select">${state.sellers.map((seller) => `<option value="${seller.id}" ${seller.id === (sale?.sellerId || state.selectedSellerId) ? 'selected' : ''}>${escapeHtml(seller.name)}</option>`).join('')}</select></div>`);
     if(api.webMode){
       content.querySelector('#checkout-documents')?.remove();
-      content.querySelector('.customer-block')?.remove();
-      content.querySelector('.checkout-seller-select')?.closest('.customer-block')?.remove();
+      content.querySelectorAll('.customer-block').forEach(block=>{block.hidden=true;});
       content.querySelector('#scan-focus')?.setAttribute('title','Digite ou use um leitor USB como teclado');
       content.querySelector('#clear-cart')?.setAttribute('title','Remove itens desta venda, sem apagá-la');
       content.querySelector('#discount-percent')?.toggleAttribute('disabled',!window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount'));
@@ -442,7 +443,7 @@
     const weightLabel=weight?`${quantityLabel(Number(weight.grams||0))} g · ${escapeHtml(String(weight.source||'MANUAL')==='SCALE'?'balança':String(weight.source||'MANUAL')==='BARCODE'?'etiqueta':'manual')}`:null;
     const documentLabel=sourceDocument?`${escapeHtml(sourceDocument.orderNumber||sourceDocument.id||'Pedido')} · preço do pedido`:null;
     const priceDetails = changed ? `<small><s>${ui.formatCents(item.catalogUnitPriceCents)}</s> → ${ui.formatCents(item.unitPriceCents)}${item.priceOverrideReason ? ` · ${escapeHtml(item.priceOverrideReason)}` : ''}${documentLabel?` · ${documentLabel}`:''}</small>` : `<small>${ui.formatCents(item.unitPriceCents)}${weightLabel?` · ${weightLabel}`:''}${documentLabel?` · ${documentLabel}`:''}</small>`;
-    const priceButton = !sourceDocument&&window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount') ? `<button type="button" class="secondary-button cart-price-edit" data-price-item="${item.id}">Alterar preço</button>` : '';
+    const priceButton = !api.webMode&&!sourceDocument&&window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount') ? `<button type="button" class="secondary-button cart-price-edit" data-price-item="${item.id}">Alterar preço</button>` : '';
     const quantityControl=sourceDocument?`<div class="qty-control"><span>${quantityLabel(item.quantity)} · pedido</span></div>`:weight?`<div class="qty-control"><span>${weightLabel}</span></div>`:configured?`<div class="qty-control"><button type="button" data-configured-qty-minus="${item.id}">−</button><span>${quantityLabel(item.quantity)}</span><button type="button" data-configured-qty-plus="${item.id}">＋</button></div>`:`<div class="qty-control"><button type="button" data-qty-minus="${item.productId}">−</button><span>${quantityLabel(item.quantity)}</span><button type="button" data-qty-plus="${item.productId}">＋</button></div>`;
     const remove=sourceDocument?'':weight?`<button type="button" class="cart-remove-button" data-remove-weighted="${item.id}" aria-label="Remover pesagem">×</button>`:configured?`<button type="button" class="cart-remove-button" data-remove-configured="${item.id}" aria-label="Remover esta configuração">×</button>`:`<button type="button" class="cart-remove-button" data-remove="${item.productId}">×</button>`;
     return `<div class="cart-line ${state.selectedProductId === item.productId ? 'selected' : ''}" data-select-product="${item.productId}"><div><strong>${escapeHtml(item.productName)}</strong>${configurationSummary?`<small>${escapeHtml(configurationSummary)}</small>`:''}${priceDetails}${priceButton}</div>${quantityControl}<div class="line-total">${ui.formatCents(item.totalCents)} ${remove}</div></div>`;
@@ -546,7 +547,8 @@
   async function ensureSale() {
     if (state.sale?.status === 'OPEN') return state.sale;
     const saleNumber = `${new Date().toISOString().slice(2,10).replace(/-/g,'')}-${Date.now().toString().slice(-6)}`;
-    clearCheckoutDocumentContext(); state.sale = await api.openSale({ saleNumber, terminalId: state.config.terminalId, sellerId: state.selectedSellerId || state.user.id }); state.discountPercent = 0; return state.sale;
+    if(api.webMode&&!state.pendingNewSaleKey)state.pendingNewSaleKey=api.mutationId();
+    clearCheckoutDocumentContext(); state.sale = await api.openSale({ saleNumber, terminalId: state.config.terminalId, sellerId: state.selectedSellerId || state.user.id },state.pendingNewSaleKey); state.pendingNewSaleKey=null; state.discountPercent = 0; return state.sale;
   }
 
   async function setSelectedSeller(event) {
@@ -991,8 +993,9 @@
         const button=form.querySelector('[type=submit]'),status=form.querySelector('.web-form-feedback');
         form.dataset.pending='true';button.disabled=true;button.textContent='Salvando…';
         try{
+          if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
           const product=await api.saveProduct({name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
-            salePriceCents:centsFromInput(form.elements.price.value),trackStock:form.elements.track.checked});
+            salePriceCents:centsFromInput(form.elements.price.value),trackStock:form.elements.track.checked},form.dataset.operationKey);
           state.products=await api.products();
           closeModal();renderWebProducts();showToast('Produto '+product.name+' cadastrado.','success');
         }catch(error){status.textContent=error.message;}
@@ -1015,7 +1018,8 @@
         const button=form.querySelector('[type=submit]'),status=form.querySelector('.web-form-feedback');
         form.dataset.pending='true';button.disabled=true;button.textContent='Registrando…';
         try{
-          await api.request('/api/v1/inventory/movements',{method:'POST',body:{
+          if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+          await api.request('/api/v1/inventory/movements',{method:'POST',mutationId:form.dataset.operationKey,body:{
             productId:product.id,quantity:Number(form.elements.quantity.value),type:'purchase'
           }});
           state.products=await api.products();
@@ -1367,7 +1371,14 @@ function openCategoryForm() {
     }
   }
 
-  function logout() { void api.logout(); state.user = null; window.PdvCurrentAccess=null; state.sale = null; clearCheckoutDocumentContext(); updateTopbar(); if(api.webMode)showWebLogin();else showLogin(); }
+  async function logout() {
+    if(api.webMode){
+      try{await api.logout();}catch(error){showToast('Não foi possível encerrar a sessão. Tente novamente.', 'error');return;}
+      state.user=null;window.PdvCurrentAccess=null;state.sale=null;clearCheckoutDocumentContext();updateTopbar();renderSidebar();showWebLogin();
+      return;
+    }
+    api.logout();state.user=null;window.PdvCurrentAccess=null;state.sale=null;clearCheckoutDocumentContext();updateTopbar();showLogin();
+  }
 
   async function executeShortcut(action) {
     if (!action || !state.user) return;
