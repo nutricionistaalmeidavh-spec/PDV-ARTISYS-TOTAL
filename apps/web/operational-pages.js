@@ -70,7 +70,94 @@
     document.getElementById('ops-inventory-form')?.addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget);const type=String(form.get('type'));const quantity=Number(form.get('quantity'));const quantityDelta=type==='adjustment-out'?-Math.abs(quantity):type==='inventory-count'?undefined:Math.abs(quantity);try{const body={productId:form.get('productId'),type,reason:form.get('reason')};if(type==='inventory-count')body.countedQuantity=quantity;else body.quantityDelta=quantityDelta;await api.saveInventoryMovement(body);showToast('Movimentação registrada.','success');await renderInventory();}catch(error){showToast(error.message,'error');}});
   }
 
+
+  // Same operational-pages renderer, with the Cloudflare persistence contract.
+  async function renderWebCash(){
+    const cfg=await ready();
+    const [open,sessions]=await Promise.all([api.openCash(cfg.terminalId),api.cashSessions({terminalId:cfg.terminalId})]);
+    const movements=open?await api.cashMovements(open.id):[];
+    if(!routeActive('cash'))return;
+    const counts=sessions.filter(row=>row.status==='CLOSED').length;
+    const cashControls=open?`<div class="ops-actions">
+      <button class="ops-secondary" type="button" data-cash-web="supply">Suprimento</button>
+      <button class="ops-secondary" type="button" data-cash-web="withdraw">Sangria</button>
+      <button class="ops-danger" type="button" data-cash-web="close">Fechar caixa</button></div>`
+      :`<form id="web-cash-open" class="ops-form">
+        <label for="web-cash-opening">Fundo inicial (R$)</label>
+        <input id="web-cash-opening" name="amount" class="ops-input" inputmode="decimal"
+          autocomplete="off" value="0,00" required>
+        <button type="submit" class="ops-primary">Abrir caixa</button>
+        <p class="ops-muted" role="status"></p>
+      </form>`;
+    const overview=`<div class="ops-metrics">
+      ${metric('Situação',open?'Caixa aberto':'Sem caixa aberto')}
+      ${metric('Dinheiro esperado',open?money(open.expectedCashCents):'—','Somente dinheiro físico')}
+      ${metric('Fechamentos anteriores',String(counts))}
+    </div><div class="ops-grid two">
+      <section class="ops-card"><h2>${open?'Caixa em operação':'Iniciar caixa'}</h2>
+        ${open?`<dl class="ops-details"><div><dt>Abertura</dt><dd>${when(open.openedAt)}</dd></div>
+          <div><dt>Fundo inicial</dt><dd>${money(open.openingCents)}</dd></div>
+          <div><dt>Operador</dt><dd>${escapeHtml(open.operatorId)}</dd></div></dl>`:''}${cashControls}
+      </section>
+      <section class="ops-card"><h2>Movimentações</h2>
+      <div class="ops-table-wrap"><table class="ops-table"><thead><tr>
+        <th>Quando</th><th>Tipo</th><th>Forma</th><th>Valor</th></tr></thead>
+        <tbody>${movements.map(m=>`<tr><td>${when(m.createdAt)}</td>
+          <td>${escapeHtml(cashMovementLabel(m.type))}</td>
+          <td>${escapeHtml(cashPaymentLabel(m.paymentMethod))}</td>
+          <td>${money(m.amountCents)}</td></tr>`).join('')||`<tr><td colspan="4">${empty('Sem movimentos nesta sessão.')}</td></tr>`}</tbody>
+      </table></div></section></div>
+      <section class="ops-card"><h2>Histórico de fechamento</h2><div class="ops-table-wrap">
+        <table class="ops-table"><thead><tr><th>Abertura</th><th>Fechamento</th>
+          <th>Esperado</th><th>Contado</th><th>Divergência</th></tr></thead><tbody>
+        ${sessions.filter(row=>row.status==='CLOSED').map(row=>`<tr>
+          <td>${when(row.openedAt)}</td><td>${when(row.closedAt)}</td>
+          <td>${money(row.expectedCashCents)}</td><td>${money(row.countedCashCents)}</td>
+          <td>${money(row.divergenceCents)}</td></tr>`).join('')||
+            `<tr><td colspan="5">${empty('Nenhum fechamento anterior.')}</td></tr>`}
+        </tbody></table></div></section>`;
+    content.innerHTML=page('Caixa','Abertura, suprimento, sangria e conferência real por filial.',overview);
+    content.querySelector('#web-cash-open')?.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const form=event.currentTarget;if(form.dataset.pending==='true')return;
+      if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+      const button=form.querySelector('button[type=submit]'),notice=form.querySelector('[role=status]');
+      button.disabled=true;form.dataset.pending='true';
+      try{
+        await api.createCash({terminalId:cfg.terminalId,initialCashCents:centsInput(form.elements.amount.value)},form.dataset.operationKey);
+        showToast('Caixa aberto.','success');await renderWebCash();
+      }catch(error){notice.textContent=error.message;}
+      finally{button.disabled=false;form.dataset.pending='false';}
+    });
+    content.querySelectorAll('[data-cash-web]').forEach(button=>button.addEventListener('click',async()=>{
+      if(button.disabled)return;
+      const action=button.dataset.cashWeb,closing=action==='close';
+      if(!ux?.openFormDialog){showToast('Diálogo indisponível.','error');return;}
+      const result=await ux.openFormDialog({
+        title:closing?'Fechar caixa':action==='supply'?'Registrar suprimento':'Registrar sangria',
+        description:closing?'Confira quanto há em dinheiro físico. PIX e cartão não são incluídos na contagem.':
+          'Registre apenas movimentos reais de dinheiro físico neste caixa.',
+        confirmLabel:closing?'Confirmar fechamento':'Registrar movimento',
+        tone:closing?'danger':'default',initialFocus:'first',
+        body:`<label>${closing?'Dinheiro contado (R$)':'Valor (R$)'}
+          <input name="amount" class="ops-input" inputmode="decimal"
+            autocomplete="off" value="${closing?(open.expectedCashCents/100).toFixed(2).replace('.',','):'0,00'}" required>
+          </label>${closing?'':'<label>Observação<textarea name="note" class="ops-input" rows="2"></textarea></label>'}`,
+        validate:data=>{
+          const value=centsInput(data.amount);
+          return value<0||(!closing&&value===0)?{message:'Informe um valor válido.',field:'amount'}:null;
+        },
+        onConfirm:data=>api.cashAction(open.id,action,closing
+          ?{countedCashCents:centsInput(data.amount)}
+          :{amountCents:centsInput(data.amount),note:String(data.note||'').trim()})
+      });
+      if(result.confirmed){showToast(closing?'Caixa conferido e fechado.':'Movimentação registrada.','success');await renderWebCash();}
+    }));
+    root.PdvRouteRegistry?.updated?.('cash',{surface:'cash'});
+  }
+
   async function renderCash(){
+    if(api.webMode)return renderWebCash();
     const cfg=await ready();let open=null;try{open=await api.openCash(cfg.terminalId);}catch{}
     const sessions=await api.cashSessions({terminalId:cfg.terminalId});
     const movements=open?await api.cashMovements(open.id):[];
