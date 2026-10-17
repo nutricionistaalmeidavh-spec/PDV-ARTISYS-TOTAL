@@ -82,3 +82,12 @@ test('loopback bridge blocks wrong Origin, missing token, DNS rebinding and unsu
     assert.equal(opt.headers.get('access-control-allow-private-network'),'true');
   }finally{await new Promise(ok=>server.close(ok));q.close();rmSync(dir,{recursive:true,force:true});}
 });
+
+
+test('local serial drawer config works on macOS and Linux without sharing OS-specific stty flags', async()=>{
+  const {sttyArgs}=await import('../../../tools/local-hardware-bridge/stty-args.mjs');
+  const expected=['9600','cs8','-cstopb','-parenb','raw','-echo'];
+  assert.deepEqual(sttyArgs('/dev/cu.usbserial-A','darwin'),['-f','/dev/cu.usbserial-A',...expected]);
+  assert.deepEqual(sttyArgs('/dev/ttyUSB0','linux'),['-F','/dev/ttyUSB0',...expected]);
+  assert.throws(()=>sttyArgs('/dev/ttyUSB0','win32'),/não suportado|unsupported/i);
+});
