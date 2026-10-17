@@ -54,6 +54,10 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
        if(method==='GET'){permission(member,user,'restaurant.orders.view');return json({orders:await svc.foodOrders(tenantId,branch,url.searchParams.get('fulfillment')||'')});}
        if(method==='POST'){permission(member,user,'restaurant.orders.create');return json({order:await svc.createFoodOrder(tenantId,branch,user,body,key)},201);}
      }
+     if(parts[1]==='orders'&&parts.length===4&&parts[3]==='deliver'&&method==='POST'){
+       permission(member,user,'restaurant.orders.transfer');
+       return json({order:await svc.deliverFoodOrder(tenantId,branch,parts[2],key)});
+     }
      if(parts[1]==='kitchen'){
        if(parts.length===2&&method==='GET'){permission(member,user,'kitchen.view');return json({tickets:await svc.kitchen(tenantId,branch)});}
        if(parts.length===3&&method==='PATCH'){permission(member,user,'kitchen.update_status');return json({ticket:await svc.updateKitchen(tenantId,branch,parts[2],body,key)});}
