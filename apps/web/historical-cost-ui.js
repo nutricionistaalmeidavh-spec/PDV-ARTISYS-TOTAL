@@ -5,6 +5,11 @@
   const { ApiClient } = root.PdvApiClient || {};
   if (!ApiClient) return;
   const api = new ApiClient();
+  // The desktop cost extension owns only the Electron sale-details surface.
+  // In web mode, operational-pages.js is the canonical renderer; intercepting
+  // the click here attempted the legacy /sales/:id/details endpoint, swallowed
+  // the event and left the sale detail empty despite a valid web sale snapshot.
+  if(api.webMode)return;
   const ui = root.PdvUiModel;
 
   function escapeHtml(value){return String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'})[char]);}
