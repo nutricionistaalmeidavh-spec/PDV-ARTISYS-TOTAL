@@ -57,6 +57,7 @@
         else if(original==='/api/v1/cash/sessions')operation=method==='POST'?'cash/open':'cash/sessions';
         else if(original.startsWith('/api/v1/cash/sessions/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/finance/'))operation=original.slice(apiRoot.length);
+        else if(original.startsWith('/api/v1/finance-advanced/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/reports/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/sales'))operation=original.slice(apiRoot.length);
         else throw new Error('Este módulo ainda não está disponível na versão online.');
