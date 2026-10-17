@@ -534,6 +534,23 @@ export function createCommerceService(db,{now=nowISO}={}){
       ]);
       return snapshot(tenant,branch,id);
     },
+    async addWeightedItem(tenant,branch,id,body,header){
+      const grams=body?.grams;
+      if(!Number.isSafeInteger(grams)||grams<=0||grams>100000000)
+        throw error(400,'Informe o peso em gramas inteiras.');
+      const source=String(body?.source||'MANUAL').toUpperCase();
+      if(!['MANUAL','SCALE','BARCODE'].includes(source))throw error(400,'Origem de pesagem inválida.');
+      const row=await product(tenant,body?.productId);
+      if(String(row.unit).toUpperCase()!=='KG')throw error(400,'O produto precisa estar cadastrado em quilogramas.');
+      return this.addItem(tenant,branch,id,{
+        productId:row.id,quantity:grams/1000,grams,weightSource:source
+      },header);
+    },
+    async removeWeightedItem(tenant,branch,id,itemId){
+      const found=await first('SELECT product_id AS productId FROM sale_items WHERE id=? AND sale_id=? AND tenant_id=? AND branch_id=?',itemId,id,tenant,branch);
+      if(!found)throw error(404,'Item pesado não encontrado.');
+      return this.removeItem(tenant,branch,id,found.productId);
+    },
     async changeItem(tenant,branch,id,productId,quantity){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const milli=quantityMilli(quantity);
