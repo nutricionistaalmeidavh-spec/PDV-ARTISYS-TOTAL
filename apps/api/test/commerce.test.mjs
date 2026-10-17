@@ -438,6 +438,10 @@ test('product editing and deactivation retain canonical sale snapshots, enforce 
     const repeated=await x.write('a',path,body,{method:'PATCH',key});
     assert.deepEqual(repeated.body,updated.body);
     assert.equal((await x.get('a','products?branchId=branch-a')).body.products.length,0);
+    assert.equal((await x.get('a','products?branchId=branch-a&includeInactive=true',x.viewer)).status,403);
+    const inactive=await x.get('a','products?branchId=branch-a&includeInactive=true');
+    assert.equal(inactive.body.products.length,1);
+    assert.equal(inactive.body.products[0].active,false);
     const archived=await x.get('a',`sales/${open.body.sale.id}?branchId=branch-a`);
     assert.equal(archived.body.sale.items[0].productName,'Produto Original');
     assert.equal(archived.body.sale.items[0].unitPriceCents,1000);
