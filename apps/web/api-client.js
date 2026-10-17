@@ -3,6 +3,20 @@
 (function attach(root, factory) {
   root.PdvApiClient = factory(root);
 })(window, function factory(root) {
+  // The ID is a nonsecret terminal identity. Keep it stable for this browser
+  // installation; never let two different browser profiles share "WEB".
+  function webTerminalIdentity(){
+    const key='artisys.pdv.webTerminalId.v1';
+    const store=root.localStorage;
+    if(!store||typeof store.getItem!=='function'||typeof root.crypto?.randomUUID!=='function')
+      throw new Error('Este navegador não suporta identificação segura e persistente do caixa.');
+    let id=store.getItem(key);
+    if(!id||!/^WEB-[a-f0-9-]{36}$/.test(id)){
+      id='WEB-'+root.crypto.randomUUID();
+      store.setItem(key,id);
+    }
+    return id;
+  }
   // Shared browser context belongs to one client module, never to individual views.
   const browserContext={tenantId:null,branchId:null};
   class ApiClient {
@@ -22,7 +36,7 @@
     async initialize() {
       this.config = this.webMode ? {
         storeName:'PDV Total',terminalName:'Navegador',version:'Web',
-        terminalId:'WEB',dataServer:{mode:'cloud',selected:true}
+        terminalId:webTerminalIdentity(),dataServer:{mode:'cloud',selected:true}
       } : await root.artisysDesktop.getConfig();
       return this.config;
     }
