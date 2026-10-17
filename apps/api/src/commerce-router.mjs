@@ -46,6 +46,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
     if(!branch)throw Object.assign(new Error('Selecione a filial antes de continuar.'),{status:400});
     const tenant=tenantId,user=session.userId;
     if(feature==='products'){
+      if(parts.length===2&&parts[1].length<=128&&method==='PATCH'){
+        requireAccess(member,'products.manage',user);
+        return json({product:await service.updateProduct(tenant,branch,parts[1],body,key)});
+      }
       if(parts.length!==1)return null;
       if(method==='GET'){
         requireAccess(member,'products.view',user);
