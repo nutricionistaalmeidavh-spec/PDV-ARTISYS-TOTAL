@@ -13,13 +13,17 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 
 **Não existe uma segunda árvore `legacy/` no código ativo**. O commit original importado e os 900 arquivos continuam auditáveis no histórico Git; instaladores, Electron, auto-update Windows/macOS, CI do desktop, licença desktop e artefatos específicos não são carregados aqui.
 
-## Estado atual — P3 validada em QA
+## Estado atual — P3, P4 e P5 (fluxos web)
 
-A interface única do PDV (`apps/web/`) agora é empacotada como assets do Worker (`npm run build`). Em ambiente **local Workerd/D1**, passou pelo fluxo de login, cadastro de produto, entrada no estoque, abertura de caixa, venda, pagamento **registrado** e baixa única de estoque. O núcleo reaproveita os cálculos canônicos de preço/pagamento/quantidade e preserva o ledger como fonte do saldo.
+- **P3:** balcão, produtos, estoque por ledger, venda e pagamentos registrados, abertura, suprimento, sangria e fechamento reconciliado do caixa por filial; regras de cálculos importadas do núcleo canônico.
+- **P4:** contas manuais a pagar/receber, liquidação parcial e consulta de saldo; relatórios de vendas, pagamentos, produtos, estoque, caixa e financeiro; exportação CSV, impressão/PDF no navegador. Nenhuma conta manual replica pagamentos de vendas.
+- **P5:** o **mesmo renderer** com navegação adaptativa para desktop/celular, layout mobile, manifesto instalável, ícones 192/512 e Service Worker que guarda **somente arquivos públicos**. Offline é apenas casca de interface: a API e mutações exigem internet; não há fila offline.
 
-**Produção não foi liberada:** `wrangler.jsonc` conserva `AUTH_ENABLED=false`. O sistema **não cobra de fato via PIX/cartão**; registra a forma informada. Falta validar o D1 remoto, concluir o onboarding, assinaturas, recursos avançados, fechamento/rotinas fiscais, impressão e segurança operacional. **Não vender assinaturas nem liberar clientes ainda.**
+**Status comercial:** a aplicação está configurada com `AUTH_ENABLED=false` em produção; login e mutações continuam bloqueados. A aprovação dos testes em Workerd/D1 local não equivale a aprovação de onboarding, migrações remotas, segurança, cobrança ou fiscal. **Não comercializar ainda** sem os gates da [implantação](docs/DEPLOY-CLOUDFLARE.md).
 
-**Evidência de QA:** 57 testes de núcleo, 14 de API, esquema D1 no Wrangler, Workerd/D1 local, jornada Chromium e tela 390px. O check de build da **Cloudflare no GitHub falhava já na main anterior ao P3**; Actions verde **não comprova deploy remoto**. Para diagnosticar, obter a primeira mensagem de erro em Cloudflare → Workers & Pages → pdv-artisys-total → Builds.
+**Fora do escopo concluído:** cartão/PIX são *formas informadas*, não captura pelo adquirente; emissão NFC-e/NF-e, hardware/impressão térmica silenciosa, assinaturas, importação histórica, gestão avançada de clientes/restaurante/atacado e reconciliação bancária automática ainda exigem entregas próprias.
+
+**Evidências exigidas para merge:** `npm run test` (núcleo + API), `npm run build` e `npm run check:web`, migrations no D1 local, dry-run Wrangler, testes Workerd e jornada Chromium incluindo caixa/financeiro/relatórios/PWA. Código do PDV Artisys original: não modificado.
 
 ## Segurança e canonicidade
 
