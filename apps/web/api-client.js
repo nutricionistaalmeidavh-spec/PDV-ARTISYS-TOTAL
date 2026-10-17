@@ -3,15 +3,21 @@
 (function attach(root, factory) {
   root.PdvApiClient = factory(root);
 })(window, function factory(root) {
+  // Shared browser context belongs to one client module, never to individual views.
+  const browserContext={tenantId:null,branchId:null};
   class ApiClient {
     constructor() {
       this.webMode=!root.artisysDesktop;
       this.sessionToken=this.webMode?'':(root.sessionStorage?.getItem('artisys.sessionToken')||'');
-      this.tenantId=null;
-      this.branchId=null;
+      this.context=browserContext;
       this.completionKeys=new Map();
       this.config = null;
     }
+
+    get tenantId(){return this.context.tenantId;}
+    set tenantId(id){this.context.tenantId=id;}
+    get branchId(){return this.context.branchId;}
+    set branchId(id){this.context.branchId=id;}
 
     async initialize() {
       this.config = this.webMode ? {
@@ -40,7 +46,7 @@
       const original=url.pathname;
       const apiRoot='/api/v1/';
       if(!original.startsWith(apiRoot))throw new Error('Rota não autorizada.');
-      let operation='',targetPath=original,resource='';
+      let operation='',targetPath=original;
       const direct=['/api/v1/health','/api/v1/auth/login','/api/v1/auth/session','/api/v1/tenants'];
       if(!direct.includes(original)&&!original.startsWith('/api/v1/tenants/')){
         if(!this.tenantId||!this.branchId)throw new Error('Escolha o estabelecimento e a filial antes de continuar.');
@@ -124,14 +130,14 @@
       root.sessionStorage?.setItem('artisys.sessionToken', this.sessionToken);
       return result;
     }
-    logout() { if(this.webMode){ this.completionKeys.clear();this.tenantId=null;this.branchId=null;return this.webRequest('/api/v1/auth/session',{method:'DELETE'}); } this.sessionToken = ''; root.sessionStorage?.removeItem('artisys.sessionToken'); }
+    async logout() { if(this.webMode){ const result=await this.webRequest('/api/v1/auth/session',{method:'DELETE'});this.completionKeys.clear();this.tenantId=null;this.branchId=null;return result; } this.sessionToken = ''; root.sessionStorage?.removeItem('artisys.sessionToken'); }
     currentSession() { return this.request('/api/v1/auth/session'); }
     authorizeReturn(body) { return this.request('/api/v1/auth/authorize', { method:'POST', body }); }
 
     categories(includeInactive = false) { return this.request(`/api/v1/categories${includeInactive ? '?includeInactive=true' : ''}`); }
     saveCategory(body) { return this.request('/api/v1/categories', { method: 'POST', body }); }
     products(includeInactive = false) { return this.request(`/api/v1/products${includeInactive ? '?includeInactive=true' : ''}`); }
-    saveProduct(body) { return this.request('/api/v1/products', { method: 'POST', body }); }
+    saveProduct(body,mutationId) { return this.request('/api/v1/products', { method: 'POST', body,mutationId }); }
     removeProduct(productId) { return this.request(`/api/v1/products/${encodeURIComponent(productId)}`, { method: 'DELETE' }); }
     recipe(productId) { return this.request(`/api/v1/vertical/recipes/${encodeURIComponent(productId)}`); }
     saveRecipe(productId, body) { return this.request(`/api/v1/vertical/recipes/${encodeURIComponent(productId)}`, { method: 'PUT', body }); }
@@ -174,7 +180,7 @@
     }
 
     openCash(terminalId) { return this.request(`/api/v1/cash/open?terminalId=${encodeURIComponent(terminalId)}`); }
-    createCash(body) { return this.request('/api/v1/cash/sessions', { method: 'POST', body, mutationId:this.mutationId() }); }
+    createCash(body,mutationId=this.mutationId()) { return this.request('/api/v1/cash/sessions', { method: 'POST', body, mutationId }); }
     cashAction(sessionId, action, body) { return this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/${action}`, { method: 'POST', body, mutationId:action === 'close' ? this.mutationId() : undefined }); }
     cashSessions(filters = {}) { return this.request(`/api/v1/cash/sessions${this.params(filters)}`); }
     cashMovements(sessionId) { return this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/movements`); }
@@ -185,7 +191,7 @@
     salesHistory(filters = {}) { return this.request(`/api/v1/sales/history${this.params(filters)}`); }
     sale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}`); }
     saleDetails(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/details`); }
-    openSale(body) { return this.request('/api/v1/sales', { method: 'POST', body }); }
+    openSale(body,mutationId) { return this.request('/api/v1/sales', { method: 'POST', body,mutationId }); }
     setSaleCustomer(id, customerId) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/customer`, { method: 'POST', body: { customerId } }); }
     setSaleSeller(id, sellerId) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/seller`, { method: 'POST', body: { sellerId } }); }
     addSaleItem(id, productId, quantity = 1) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/items`, { method: 'POST', body: { productId, quantity } }); }
