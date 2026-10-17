@@ -94,7 +94,7 @@
       const payload=body==null?{}:{...body};
       if(!['GET','HEAD'].includes(method)){
         if(operation)payload.branchId=this.branchId;
-        if(/^sales\/[^/]+\/(returns|cancel)$/.test(operation)&&!payload.terminalId)
+        if((/^sales\/[^/]+\/(returns|cancel)$/.test(operation)||/^credit\/[^/]+\/payments$/.test(operation))&&!payload.terminalId)
           payload.terminalId=this.config?.terminalId||webTerminalIdentity();
         let key=mutationId;
         const completion=/^sales\/[^/]+\/complete$/.test(operation);
