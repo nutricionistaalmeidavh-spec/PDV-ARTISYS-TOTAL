@@ -52,10 +52,12 @@ CREATE TRIGGER IF NOT EXISTS inventory_movements_immutable_delete BEFORE DELETE 
 BEGIN SELECT RAISE(ABORT,'INVENTORY_LEDGER_IMMUTABLE'); END;
 CREATE TRIGGER IF NOT EXISTS inventory_project_after_insert AFTER INSERT ON inventory_movements
 BEGIN
-  INSERT INTO stock_positions(tenant_id,branch_id,product_id,balance_milli)
-  VALUES(NEW.tenant_id,NEW.branch_id,NEW.product_id,NEW.delta_milli)
-  ON CONFLICT(tenant_id,branch_id,product_id)
-  DO UPDATE SET balance_milli=stock_positions.balance_milli + excluded.balance_milli;
+  -- Never attempt INSERT of a negative provisional balance: SQLite evaluates
+  -- CHECK before the UPSERT conflict action, even if a positive row exists.
+  INSERT OR IGNORE INTO stock_positions(tenant_id,branch_id,product_id,balance_milli)
+  VALUES(NEW.tenant_id,NEW.branch_id,NEW.product_id,0);
+  UPDATE stock_positions SET balance_milli=balance_milli + NEW.delta_milli
+  WHERE tenant_id=NEW.tenant_id AND branch_id=NEW.branch_id AND product_id=NEW.product_id;
 END;
 
 CREATE TABLE IF NOT EXISTS cash_sessions (
