@@ -145,3 +145,67 @@ WHEN NEW.type='CHARGE' AND
   (SELECT COALESCE(SUM(l.amount_cents),0) FROM customer_credit_ledger l WHERE l.tenant_id=NEW.tenant_id AND l.customer_id=NEW.customer_id)
    + NEW.amount_cents > (SELECT c.credit_limit_cents FROM customers c WHERE c.tenant_id=NEW.tenant_id AND c.id=NEW.customer_id)
 BEGIN SELECT RAISE(ABORT,'CREDIT_LIMIT_EXCEEDED'); END;
+
+-- Settlement is a receivable reduction, never new revenue.
+CREATE TABLE IF NOT EXISTS customer_credit_receipts (
+ id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,
+ customer_id TEXT NOT NULL,cash_session_id TEXT,
+ method TEXT NOT NULL CHECK(method IN('CASH','PIX','BANK_TRANSFER')),
+ amount_cents INTEGER NOT NULL CHECK(amount_cents>0),
+ received_by TEXT NOT NULL REFERENCES users(id),received_at TEXT NOT NULL,
+ FOREIGN KEY(tenant_id,branch_id) REFERENCES branches(tenant_id,id),
+ FOREIGN KEY(tenant_id,customer_id) REFERENCES customers(tenant_id,id),
+ FOREIGN KEY(tenant_id,branch_id,cash_session_id) REFERENCES cash_sessions(tenant_id,branch_id,id),
+ CHECK(method<>'CASH' OR cash_session_id IS NOT NULL)
+);
+CREATE TRIGGER IF NOT EXISTS credit_receipts_immutable_update BEFORE UPDATE ON customer_credit_receipts BEGIN SELECT RAISE(ABORT,'CREDIT_RECEIPT_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS credit_receipts_immutable_delete BEFORE DELETE ON customer_credit_receipts BEGIN SELECT RAISE(ABORT,'CREDIT_RECEIPT_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS credit_receipt_requires_open_cash BEFORE INSERT ON customer_credit_receipts
+WHEN NEW.method='CASH' AND NOT EXISTS(SELECT 1 FROM cash_sessions s
+ WHERE s.tenant_id=NEW.tenant_id AND s.branch_id=NEW.branch_id AND s.id=NEW.cash_session_id AND s.status='OPEN')
+BEGIN SELECT RAISE(ABORT,'CASH_SESSION_NOT_OPEN'); END;
+CREATE TRIGGER IF NOT EXISTS credit_overpayment_guard BEFORE INSERT ON customer_credit_ledger
+WHEN NEW.type='PAYMENT' AND (
+ (SELECT COALESCE(SUM(l.amount_cents),0) FROM customer_credit_ledger l WHERE l.tenant_id=NEW.tenant_id AND l.customer_id=NEW.customer_id)
+ + NEW.amount_cents < 0
+)
+BEGIN SELECT RAISE(ABORT,'CREDIT_OVERPAYMENT'); END;
+
+-- Update cash closing and withdrawal guards to include credit settlements in CASH.
+-- D1 applies a migration atomically; no externally-visible period without these guards.
+DROP TRIGGER IF EXISTS cash_withdraw_cannot_overdraw;
+CREATE TRIGGER cash_withdraw_cannot_overdraw BEFORE INSERT ON cash_adjustments
+WHEN NEW.type='WITHDRAWAL' AND NEW.amount_cents > (
+ SELECT s.opening_cents +
+   COALESCE((SELECT SUM(cm.amount_cents) FROM cash_movements cm
+     WHERE cm.tenant_id=s.tenant_id AND cm.branch_id=s.branch_id
+       AND cm.cash_session_id=s.id AND cm.method='CASH'),0) +
+   COALESCE((SELECT SUM(cr.amount_cents) FROM customer_credit_receipts cr
+     WHERE cr.tenant_id=s.tenant_id AND cr.branch_id=s.branch_id
+       AND cr.cash_session_id=s.id AND cr.method='CASH'),0) +
+   COALESCE((SELECT SUM(CASE WHEN a.type='SUPPLY' THEN a.amount_cents ELSE -a.amount_cents END)
+     FROM cash_adjustments a WHERE a.tenant_id=s.tenant_id AND a.branch_id=s.branch_id
+       AND a.cash_session_id=s.id),0)
+ FROM cash_sessions s WHERE s.tenant_id=NEW.tenant_id
+   AND s.branch_id=NEW.branch_id AND s.id=NEW.cash_session_id
+)
+BEGIN SELECT RAISE(ABORT,'CASH_INSUFFICIENT'); END;
+DROP TRIGGER IF EXISTS cash_close_reconciliation_guard;
+CREATE TRIGGER cash_close_reconciliation_guard BEFORE UPDATE OF status ON cash_sessions
+WHEN NEW.status='CLOSED' AND OLD.status='OPEN' AND (
+ NEW.counted_cash_cents IS NULL OR NEW.counted_cash_cents<0 OR
+ NEW.expected_cash_cents IS NULL OR
+ NEW.expected_cash_cents <> (
+   OLD.opening_cents +
+   COALESCE((SELECT SUM(cm.amount_cents) FROM cash_movements cm
+     WHERE cm.tenant_id=OLD.tenant_id AND cm.branch_id=OLD.branch_id
+       AND cm.cash_session_id=OLD.id AND cm.method='CASH'),0) +
+   COALESCE((SELECT SUM(cr.amount_cents) FROM customer_credit_receipts cr
+     WHERE cr.tenant_id=OLD.tenant_id AND cr.branch_id=OLD.branch_id
+       AND cr.cash_session_id=OLD.id AND cr.method='CASH'),0) +
+   COALESCE((SELECT SUM(CASE WHEN a.type='SUPPLY' THEN a.amount_cents ELSE -a.amount_cents END)
+     FROM cash_adjustments a WHERE a.tenant_id=OLD.tenant_id AND a.branch_id=OLD.branch_id
+       AND a.cash_session_id=OLD.id),0)
+ )
+)
+BEGIN SELECT RAISE(ABORT,'CASH_CLOSING_STALE'); END;
