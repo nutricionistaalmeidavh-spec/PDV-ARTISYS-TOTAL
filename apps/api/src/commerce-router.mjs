@@ -79,7 +79,7 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
     if(feature==='sales'){
       if(parts.length===1&&method==='GET'){
         requireAccess(member,'sales.view',user);
-        return json({sales:await service.listSales(tenant,branch,25)});
+        return json({sales:await service.listSales(tenant,branch,Number(url.searchParams.get('limit')||25),url.searchParams.get('status')||null)});
       }
       if(parts.length===1&&method==='POST'){
         requireAccess(member,'sales.create',user);
