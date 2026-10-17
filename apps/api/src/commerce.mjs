@@ -5,7 +5,7 @@ import paymentRules from '../../../packages/core/js/domains/payments/payment-rul
 import inventoryRules from '../../../packages/core/js/domains/inventory/inventory-rules.js';
 import cashRules from '../../../packages/core/js/domains/cash/cash-rules.js';
 
-const {calculateSaleTotals}=salePricing;
+const {calculateSaleTotals,allocateSaleDiscount}=salePricing;
 const {resolvePayment,normalizeMethod}=paymentRules;
 const {roundQuantity}=inventoryRules;
 const {calculateCashClosing}=cashRules;
@@ -13,7 +13,7 @@ const MAX_LINES=80;
 const nowISO=()=>new Date().toISOString();
 const randomId=()=>crypto.randomUUID();
 const error=(status,message)=>Object.assign(new Error(message),{status});
-const allowedPayments=new Set(['CASH','PIX','DEBIT_CARD','CREDIT_CARD','OTHER']);
+const allowedPayments=new Set(['CASH','PIX','DEBIT_CARD','CREDIT_CARD','OTHER','STORE_CREDIT']);
 const validKey=value=>typeof value==='string'&&/^[a-zA-Z0-9_-]{8,100}$/.test(value);
 const text=(value,max=120)=>typeof value==='string'?value.trim().slice(0,max):'';
 const integer=(value,max=1_000_000_000)=>Number.isSafeInteger(value)&&value>=0&&value<=max;
@@ -33,6 +33,7 @@ function sqlError(e){
   if(/CASH_SESSION_NOT_OPEN/i.test(message))return error(409,'O caixa foi fechado. Abra outro antes de finalizar.');
   if(/CASH_INSUFFICIENT/i.test(message))return error(409,'Saldo físico insuficiente para a sangria.');
   if(/CASH_CLOSING_STALE/i.test(message))return error(409,'O saldo do caixa mudou. Atualize e confira novamente.');
+  if(/CREDIT_LIMIT_EXCEEDED/i.test(message))return error(409,'Limite de crédito insuficiente. Atualize a ficha do cliente.');
   if(/FINANCE_OVERPAY_OR_CANCELLED/i.test(message))return error(409,'A conta mudou de situação ou o pagamento excede o saldo.');
   if(/SALE_NOT_OPEN|FINAL_SALE_IMMUTABLE/i.test(message))return error(409,'Esta venda mudou de estado. Atualize antes de continuar.');
   if(/UNIQUE constraint failed|constraint failed/i.test(message))return error(409,'Registro já alterado. Atualize os dados e tente novamente.');
@@ -43,7 +44,7 @@ function formatSale(sale,items=[],payments=[]){
   return {
     id:sale.id,tenantId:sale.tenant_id,branchId:sale.branch_id,
     saleNumber:sale.sale_number,operatorId:sale.operator_id,
-    status:sale.status,subtotalCents:sale.subtotal_cents,
+    status:sale.status,customerId:sale.customer_id||null,sellerId:sale.seller_id||sale.operator_id,subtotalCents:sale.subtotal_cents,
     discountCents:sale.discount_cents,totalCents:sale.total_cents,
     changeCents:sale.change_cents,completedAt:sale.completed_at,
     items:items.map(row=>({
@@ -82,7 +83,9 @@ export function createCommerceService(db,{now=nowISO}={}){
   const saleSnapshot=async(sale)=>{
     const items=await all('SELECT * FROM sale_items WHERE sale_id=? ORDER BY created_at,id',sale.id);
     const payments=await all('SELECT * FROM sale_payments WHERE sale_id=? ORDER BY created_at,id',sale.id);
-    return formatSale(sale,items,payments);
+    // A store-credit tender belongs to the credit ledger, not to cash or card payments.
+    const credit=await all("SELECT id,'STORE_CREDIT' AS method,amount_cents AS amount_cents FROM customer_credit_ledger WHERE tenant_id=? AND branch_id=? AND sale_id=? AND type='CHARGE'",sale.tenant_id,sale.branch_id,sale.id);
+    return formatSale(sale,items,[...payments,...credit]);
   };
   const requireOpen=sale=>{if(sale.status!=='OPEN')throw error(409,'Esta venda não está aberta. Atualize e continue.');};
   const branchExists=async(tenant,branch)=>{
@@ -447,17 +450,36 @@ export function createCommerceService(db,{now=nowISO}={}){
       const prior=await applied(tenant,scope,key);if(prior)return prior;
       const id=randomId(),created=stamp();
       const saleNumber='W-'+id.slice(0,8).toUpperCase();
-      const result={id,tenantId:tenant,branchId:branch,saleNumber,operatorId:user,status:'OPEN',
+      const sellerId=body?.sellerId||user;
+       const seller=await first('SELECT user_id FROM tenant_memberships WHERE tenant_id=? AND user_id=? AND active=1',tenant,sellerId);
+       if(!seller)throw error(404,'Vendedor não encontrado neste estabelecimento.');
+       const result={id,tenantId:tenant,branchId:branch,saleNumber,operatorId:user,sellerId,customerId:null,status:'OPEN',
         items:[],payments:[],subtotalCents:0,discountCents:0,totalCents:0,changeCents:0,completedAt:null};
       await batch([
-        q('INSERT INTO sales(id,tenant_id,branch_id,operator_id,sale_number,status,created_at) VALUES(?,?,?,?,?,?,?)',
-          id,tenant,branch,user,saleNumber,'OPEN',created),
+        q('INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,sale_number,status,created_at) VALUES(?,?,?,?,?,?,?,?)',
+          id,tenant,branch,user,sellerId,saleNumber,'OPEN',created),
         audit(tenant,scope,key,result)
       ]);
       return result;
     },
     sale: snapshot,
     listSales:listing,
+    async assignSaleCustomer(tenant,branch,id,customerId){
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+      if(customerId){
+        const customer=await first('SELECT id FROM customers WHERE tenant_id=? AND id=? AND active=1',tenant,customerId);
+        if(!customer)throw error(404,'Cliente não encontrado neste estabelecimento.');
+      }
+      await run("UPDATE sales SET customer_id=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN'",customerId||null,tenant,branch,id);
+      return snapshot(tenant,branch,id);
+    },
+    async assignSaleSeller(tenant,branch,id,sellerId){
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+      const seller=await first('SELECT user_id FROM tenant_memberships WHERE tenant_id=? AND user_id=? AND active=1',tenant,sellerId);
+      if(!seller)throw error(404,'Vendedor não encontrado neste estabelecimento.');
+      await run("UPDATE sales SET seller_id=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN'",sellerId,tenant,branch,id);
+      return snapshot(tenant,branch,id);
+    },
     async addItem(tenant,branch,id,body,header){
       const key=requiredMutation(body,header),scope='sale.add-item:'+id;
       const previous=await applied(tenant,scope,key);if(previous)return snapshot(tenant,branch,id);
@@ -533,7 +555,18 @@ export function createCommerceService(db,{now=nowISO}={}){
       const grouped=new Map();
       for(const p of normalized)grouped.set(p.method,(grouped.get(p.method)||0)+p.amountCents);
       const groupedPayments=[...grouped].map(([method,amountCents])=>({method,amountCents}));
-      const payment=resolvePayment({totalCents:totals.totalCents,payments:groupedPayments,creditMethods:[]});
+      const creditCents=grouped.get('STORE_CREDIT')||0;
+       let customer=null,usedCreditCents=0;
+       if(creditCents){
+         if(!sale.customer_id)throw error(409,'Selecione um cliente para usar o crediário.');
+         customer=await first('SELECT id,name,credit_limit_cents AS creditLimitCents FROM customers WHERE tenant_id=? AND id=? AND active=1',tenant,sale.customer_id);
+         if(!customer)throw error(404,'Cliente não encontrado neste estabelecimento.');
+         const usage=await first('SELECT COALESCE(SUM(amount_cents),0) AS used FROM customer_credit_ledger WHERE tenant_id=? AND customer_id=?',tenant,customer.id);
+         usedCreditCents=usage.used;
+       }
+       let payment;
+       try{payment=resolvePayment({totalCents:totals.totalCents,payments:groupedPayments,creditMethods:['STORE_CREDIT'],availableCreditCents:customer?Math.max(0,customer.creditLimitCents-usedCreditCents):0,customerName:customer?.name});}
+       catch(e){throw error(409,e.message);}
       if(payment.status!=='paid')throw error(409,'Pagamento incompleto. Revise os valores antes de finalizar.');
       const cash=await this.cash(tenant,branch);
       if(!cash)throw error(409,'Abra o caixa antes de finalizar a venda.');
@@ -561,6 +594,11 @@ export function createCommerceService(db,{now=nowISO}={}){
         }
       }
       for(const p of groupedPayments){
+        if(p.method==='STORE_CREDIT'){
+          statements.push(q(`INSERT INTO customer_credit_ledger(id,tenant_id,branch_id,customer_id,sale_id,type,amount_cents,reference_key,occurred_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+            randomId(),tenant,branch,customer.id,id,'CHARGE',p.amountCents,'sale:'+id,completedAt));
+          continue;
+        }
         statements.push(q('INSERT INTO sale_payments(id,tenant_id,branch_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?)',
           randomId(),tenant,branch,id,p.method,p.amountCents,completedAt));
         // The tendered cash and change are reported separately; only net cash
@@ -568,6 +606,18 @@ export function createCommerceService(db,{now=nowISO}={}){
         const drawerCents=p.method==='CASH'?p.amountCents-payment.changeDueCents:p.amountCents;
         if(drawerCents>0)statements.push(q('INSERT INTO cash_movements(id,tenant_id,branch_id,cash_session_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?,?)',
           randomId(),tenant,branch,cash.id,id,p.method,drawerCents,completedAt));
+      }
+      // Commission rules are read from the single tenant registry and snapshotted
+      // in an immutable financial ledger in the same transaction as sale completion.
+      const sellerId=sale.seller_id||sale.operator_id;
+      const discounted=allocateSaleDiscount(rows.map(r=>({id:r.id,productId:r.product_id,unitPriceCents:r.unit_price_cents,quantity:r.quantity_milli/1000})),totals.discountCents);
+      for(const line of discounted){
+        const rule=await first(`SELECT commission_bps AS bps FROM seller_commission_rules
+          WHERE tenant_id=? AND seller_id=? AND active=1 AND (product_id=? OR product_id IS NULL)
+          ORDER BY CASE WHEN product_id=? THEN 0 ELSE 1 END LIMIT 1`,tenant,sellerId,line.productId,line.productId);
+        const commissionCents=Math.round(line.netTotalCents*(rule?.bps||0)/10000);
+        if(commissionCents>0)statements.push(q(`INSERT INTO seller_commission_ledger(id,tenant_id,branch_id,seller_id,sale_id,sale_item_id,kind,amount_cents,reference_key,occurred_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,sellerId,id,line.id,'EARNED',commissionCents,'sale:'+id+':item:'+line.id,completedAt));
       }
       // Stock is decremented only in the same D1 batch; no secondary EventBus
       // inventory subscriber is registered, therefore one sale has one effect.
