@@ -131,6 +131,29 @@ test('P3 lifecycle: open cash, open sale, add item exactly once, calculate origi
   }finally{x.close();}
 });
 
+test('P3 checkout discounts reject over-subtotal amounts without changing authorized sale',async()=>{
+  const x=await setup();try{
+    const pid=await x.id('Discountable item','DISC-BOUND',2);
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(opened.status,201,opened.body.error);
+    const sid=opened.body.sale.id,path=`sales/${sid}/discount`;
+    const item=await x.write('a',`sales/${sid}/items`,{branchId:'branch-a',productId:pid,quantity:1});
+    assert.equal(item.body.sale.subtotalCents,1000);
+    const valid=await x.write('a',path,{branchId:'branch-a',discountCents:350});
+    assert.equal(valid.status,200,valid.body.error);
+    assert.equal(valid.body.sale.totalCents,650);
+    const tooLarge=await x.write('a',path,{branchId:'branch-a',discountCents:1001});
+    assert.equal(tooLarge.status,400,'Must reject excess discounts rather than silently clamp them');
+    assert.equal((await x.get('a',`sales/${sid}?branchId=branch-a`)).body.sale.discountCents,350,
+      'Rejected mutation must preserve prior authorized discount');
+    assert.equal((await x.write('a',path,{branchId:'branch-a',discountCents:25},{who:x.viewer})).status,403);
+    assert.equal((await x.write('b',path,{branchId:'branch-b',discountCents:25},{who:x.other})).status,404);
+    const full=await x.write('a',path,{branchId:'branch-a',discountCents:1000});
+    assert.equal(full.status,200,full.body.error);
+    assert.equal(full.body.sale.totalCents,0,'A 100% discount must remain valid when authorized');
+  }finally{x.close();}
+});
+
 test('P3 D1 batch rolls back full sale when two items exceed the last available unit',async()=>{
   const x=await setup();try{
     const a=await x.id('Last item','LAST',1);
