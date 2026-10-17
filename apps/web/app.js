@@ -980,7 +980,7 @@
   function openWebProductForm(){
     openModal('Novo produto',`<form id="web-product-form">
       <div class="field"><label for="web-product-name">Nome do produto</label><input id="web-product-name" name="name" required minlength="2" maxlength="120" autocomplete="off" placeholder="Ex.: Café tradicional"></div>
-      <div class="field-grid"><div class="field"><label for="web-product-sku">SKU / código</label><input id="web-product-sku" name="sku" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._-]*" placeholder="Ex.: CAFE-001"></div>
+      <div class="field-grid"><div class="field"><label for="web-product-sku">SKU / código</label><input id="web-product-sku" name="sku" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]*" placeholder="Ex.: CAFE-001"></div>
       <div class="field"><label for="web-product-price">Preço de venda (R$)</label><input id="web-product-price" name="price" inputmode="decimal" required placeholder="0,00"></div></div>
       <label class="web-checkbox"><input name="track" type="checkbox" checked> Controlar saldo no estoque</label>
       <p class="web-form-feedback" role="status" aria-live="polite"></p>
