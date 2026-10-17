@@ -287,7 +287,7 @@
     if(api.webMode){
       const [open,suspended]=await Promise.all([api.sales('OPEN',25),api.sales('SUSPENDED',25)]);
       state.suspendedSales=suspended;
-      if(!state.sale||state.sale.status!=='OPEN')state.sale=open.find(sale=>sale.operatorId===state.user?.id)||null;
+      if(!state.sale||state.sale.status!=='OPEN'||state.sale.terminalId!==state.config.terminalId)state.sale=open.find(sale=>sale.operatorId===state.user?.id&&sale.terminalId===state.config.terminalId)||null;
       state.discountPercent=state.sale?.subtotalCents?Number((state.sale.discountCents/state.sale.subtotalCents*100).toFixed(2)):0;
       return;
     }
