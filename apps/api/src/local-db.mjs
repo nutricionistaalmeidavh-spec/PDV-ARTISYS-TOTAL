@@ -19,6 +19,18 @@ export function openLocalDatabase(filename=':memory:') {
         }
       };
     },
+    async batch(statements) {
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const results=[];
+        for(const statement of statements)results.push(await statement.run());
+        db.exec('COMMIT');
+        return results;
+      } catch(error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+    },
     exec:sql=>db.exec(sql),
     close:()=>db.close()
   };
