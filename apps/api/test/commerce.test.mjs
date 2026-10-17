@@ -255,3 +255,60 @@ test('P4 reports: summed sales, noncash breakdown and bounded CSV are tenant sco
     assert.equal((await x.get('a','reports/summary?branchId=branch-a&from=invalid')).status,400);
   }finally{x.close();}
 });
+
+test('P6 weighted product uses canonical KG line, precise payment and stock',async()=>{
+  const x=await setup();try{
+    const p=await x.write('a','products',{branchId:'branch-a',name:'Queijo por peso',sku:'QUEIJO-KG',unit:'KG',salePriceCents:3990,trackStock:true});
+    assert.equal(p.status,201,p.body.error);
+    assert.equal(p.body.product.unit,'KG');
+    const id=p.body.product.id;
+    await x.write('a','inventory/receipts',{branchId:'branch-a',productId:id,quantity:5,type:'opening'});
+    await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+    const saleId=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
+    const key=next(), body={branchId:'branch-a',productId:id,grams:1250,source:'SCALE'};
+    const one=await x.write('a','sales/'+saleId+'/items/weighted',body,{key});
+    assert.equal(one.status,200,one.body.error);
+    assert.equal(one.body.sale.items[0].quantity,1.25);
+    assert.equal(one.body.sale.totalCents,4988);
+    const repeat=await x.write('a','sales/'+saleId+'/items/weighted',body,{key});
+    assert.equal(repeat.body.sale.items[0].quantity,1.25,'retry must not add twice');
+    const audit=await x.db.prepare('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?')
+      .bind('a','sale.add-item:'+saleId,key).first();
+    assert.equal(JSON.parse(audit.result_json).weightSource,'SCALE');
+    assert.equal(JSON.parse(audit.result_json).grams,1250);
+    const paid=await x.write('a','sales/'+saleId+'/complete',{branchId:'branch-a',payments:[{method:'PIX',amountCents:4988}]});
+    assert.equal(paid.status,200,paid.body.error);
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock[0].quantity,3.75);
+    assert.equal((await x.db.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE type='sale'").bind().first()).n,1);
+  }finally{x.close();}
+});
+
+test('P6 invalid weights, non-KG items and other-tenant users are rejected',async()=>{
+  const x=await setup();try{
+    const kg=await x.write('a','products',{branchId:'branch-a',name:'Tomate',sku:'TOMATE-KG',unit:'KG',salePriceCents:1000});
+    const un=await x.write('a','products',{branchId:'branch-a',name:'Sabonete',sku:'SABONETE',unit:'UN',salePriceCents:1000});
+    const sid=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
+    const path='sales/'+sid+'/items/weighted';
+    assert.equal((await x.write('a',path,{branchId:'branch-a',productId:kg.body.product.id,grams:1.25,source:'SCALE'})).status,400);
+    assert.equal((await x.write('a',path,{branchId:'branch-a',productId:kg.body.product.id,grams:-10,source:'MANUAL'})).status,400);
+    assert.equal((await x.write('a',path,{branchId:'branch-a',productId:kg.body.product.id,grams:150,source:'UNTRUSTED'})).status,400);
+    assert.equal((await x.write('a',path,{branchId:'branch-a',productId:un.body.product.id,grams:150,source:'MANUAL'})).status,400);
+    assert.equal((await x.write('b',path,{branchId:'branch-b',productId:kg.body.product.id,grams:150,source:'SCALE'},{who:x.other})).status,404);
+    assert.equal((await x.write('a',path,{branchId:'branch-a',productId:kg.body.product.id,grams:150,source:'SCALE'},{who:x.viewer})).status,403);
+    assert.equal((await x.get('a','sales/'+sid+'?branchId=branch-a')).body.sale.items.length,0);
+  }finally{x.close();}
+});
+
+
+test('P6 gram-denominated weighted product prices in grams without kilogram conversion',async()=>{
+  const x=await setup();try{
+    const p=await x.write('a','products',{branchId:'branch-a',name:'Tempero por grama',sku:'TEMPERO-G',unit:'G',salePriceCents:10});
+    assert.equal(p.status,201,p.body.error);
+    await x.write('a','inventory/receipts',{branchId:'branch-a',productId:p.body.product.id,quantity:1000,type:'opening'});
+    const sale=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
+    const added=await x.write('a','sales/'+sale+'/items/weighted',{branchId:'branch-a',productId:p.body.product.id,grams:125,source:'MANUAL'});
+    assert.equal(added.status,200,added.body.error);
+    assert.equal(added.body.sale.items[0].quantity,125);
+    assert.equal(added.body.sale.totalCents,1250);
+  }finally{x.close();}
+});
