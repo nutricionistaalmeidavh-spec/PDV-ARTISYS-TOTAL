@@ -5,6 +5,7 @@ import paymentRules from '../../../packages/core/js/domains/payments/payment-rul
 import inventoryRules from '../../../packages/core/js/domains/inventory/inventory-rules.js';
 import cashRules from '../../../packages/core/js/domains/cash/cash-rules.js';
 import {createSaleReturnAdapter} from './sale-reversals.mjs';
+import {createCatalogDepthService} from './catalog-depth.mjs';
 
 const {calculateSaleTotals,allocateSaleDiscount}=salePricing;
 const {resolvePayment,normalizeMethod}=paymentRules;
@@ -197,6 +198,8 @@ export function createCommerceService(db,{now=nowISO}={}){
       :await all('SELECT id FROM sales WHERE tenant_id=? AND branch_id=? ORDER BY created_at DESC,id DESC LIMIT ?',tenant,branch,n);
     return Promise.all(rows.map(row=>snapshot(tenant,branch,row.id)));
   };
+  const catalogDepth=createCatalogDepthService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,
+    quantityMilli,error,text,randomId});
   const saleReversals=createSaleReturnAdapter({
     q,first,all,batch,applied,audit,stamp,tenantSale,requiredMutation,quantityMilli,
     normalizeMethod,allocateSaleDiscount,error,text,randomId,
@@ -208,6 +211,14 @@ export function createCommerceService(db,{now=nowISO}={}){
     }
   });
   return {
+    categories:(t,b)=>catalogDepth.categories(t,b),
+    createCategory:(t,b,u,body,key)=>catalogDepth.createCategory(t,b,u,body,key),
+    productBundle:(t,b,id)=>catalogDepth.bundle(t,b,id),
+    setBundle:(t,b,id,u,body,key)=>catalogDepth.setBundle(t,b,id,u,body,key),
+    reserveStock:(t,b,u,body,key)=>catalogDepth.reserveStock(t,b,u,body,key),
+    releaseReservation:(t,b,id,u,key)=>catalogDepth.releaseReservation(t,b,id,u,key),
+    stockReservations:(t,b,filters)=>catalogDepth.reservations(t,b,filters),
+    purchaseCosts:(t,b,filters)=>catalogDepth.purchaseCosts(t,b,filters),
     async salesHistory(tenant,branch,filters={}){
       await branchExists(tenant,branch);
       const status=text(filters.status||'',32).toUpperCase();
@@ -341,12 +352,21 @@ export function createCommerceService(db,{now=nowISO}={}){
       await branchExists(tenant,branch);
       const cap=Math.min(100,Math.max(1,Math.trunc(Number(limit)||100)));
       const rows=await all(`SELECT p.id,p.sku,p.name,p.sale_price_cents AS salePriceCents,p.unit,
-        p.track_stock AS trackStock,p.active,COALESCE(s.balance_milli,0) AS balanceMilli
+        p.track_stock AS trackStock,p.active,COALESCE(s.balance_milli,0) AS balanceMilli,
+        COALESCE((SELECT SUM(r.quantity_milli) FROM inventory_reservations r
+          WHERE r.tenant_id=p.tenant_id AND r.branch_id=? AND r.product_id=p.id
+          AND r.status='ACTIVE'),0) AS reservedMilli,p.brand,p.barcode,p.category_id,
+          p.parent_product_id,p.variant_label,p.last_cost_cents
         FROM products p LEFT JOIN stock_positions s ON s.tenant_id=p.tenant_id
         AND s.product_id=p.id AND s.branch_id=?
         WHERE p.tenant_id=? AND (?=1 OR p.active=1)
-        ORDER BY p.name,p.id LIMIT ?`,branch,tenant,includeInactive?1:0,cap);
-      return rows.map(x=>({...x,trackStock:Boolean(x.trackStock),active:Boolean(x.active),balance:x.balanceMilli/1000,menuEnabled:true,categoryId:null,barcode:x.sku}));
+        ORDER BY p.name,p.id LIMIT ?`,branch,branch,tenant,includeInactive?1:0,cap);
+      return rows.map(x=>({...x,trackStock:Boolean(x.trackStock),active:Boolean(x.active),
+        balance:x.balanceMilli/1000,reserved:x.reservedMilli/1000,
+        available:(x.balanceMilli-x.reservedMilli)/1000,menuEnabled:true,
+        brand:x.brand||'',barcode:x.barcode||x.sku,categoryId:x.category_id||null,
+        parentProductId:x.parent_product_id||null,variantLabel:x.variant_label||null,
+        lastCostCents:x.last_cost_cents||0}));
     },
     async createProduct(tenant,user,body,header){
       const key=requiredMutation(body,header),scope='product.create';
@@ -356,11 +376,25 @@ export function createCommerceService(db,{now=nowISO}={}){
       const price=requiredNumber(body?.salePriceCents,'Preço');
       const unit=String(body?.unit||'UN').trim().toUpperCase();
       if(!new Set(['UN','KG','G','L','M','M2','M3','CX','PCT']).has(unit))throw error(400,'Unidade de produto inválida.');
+      const brand=text(body?.brand,100),barcode=text(body?.barcode,80)||null;
+      const categoryId=body?.categoryId||null,parentProductId=body?.parentProductId||null;
+      const variantLabel=text(body?.variantLabel,80)||null;
+      if((parentProductId&&!variantLabel)||(!parentProductId&&variantLabel))
+        throw error(400,'Variação exige produto pai e nome da variação.');
+      if(barcode&&!/^[A-Za-z0-9._-]{4,80}$/.test(barcode))throw error(400,'Código de barras inválido.');
+      if(categoryId&&!await first('SELECT id FROM product_categories WHERE tenant_id=? AND id=?',tenant,categoryId))
+        throw error(404,'Categoria não encontrada nesta empresa.');
+      if(parentProductId&&!await first('SELECT id FROM products WHERE tenant_id=? AND id=? AND parent_product_id IS NULL AND active=1',tenant,parentProductId))
+        throw error(404,'Produto pai não encontrado nesta empresa.');
       const id=randomId(),created=stamp();
-      const result={id,name,sku,salePriceCents:price,unit,trackStock:body?.trackStock!==false,active:true};
+      const result={id,name,sku,salePriceCents:price,unit,trackStock:body?.trackStock!==false,
+        active:true,brand,barcode,categoryId,parentProductId,variantLabel,lastCostCents:0};
       await batch([
-        q('INSERT INTO products(id,tenant_id,sku,name,sale_price_cents,unit,track_stock,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',
-          id,tenant,sku,name,price,unit,result.trackStock?1:0,created,created),
+        q(`INSERT INTO products(id,tenant_id,sku,name,sale_price_cents,unit,track_stock,created_at,updated_at,
+           brand,barcode,category_id,parent_product_id,variant_label)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          id,tenant,sku,name,price,unit,result.trackStock?1:0,created,created,
+          brand,barcode,categoryId,parentProductId,variantLabel),
         audit(tenant,scope,key,result)
       ]);
       return result;
@@ -369,7 +403,7 @@ export function createCommerceService(db,{now=nowISO}={}){
       await branchExists(tenant,branch);
       const key=requiredMutation(body,header),scope='product.update:'+id;
       const previous=await applied(tenant,scope,key);if(previous)return previous;
-      if(!['name','sku','salePriceCents','unit','active'].some(field=>Object.hasOwn(body,field)))
+      if(!['name','sku','salePriceCents','unit','active','brand','barcode','categoryId','parentProductId','variantLabel'].some(field=>Object.hasOwn(body,field)))
         throw error(400,'Informe ao menos um campo de produto para editar.');
       const old=await first('SELECT * FROM products WHERE tenant_id=? AND id=?',tenant,id);
       if(!old)throw error(404,'Produto não encontrado.');
@@ -396,16 +430,30 @@ export function createCommerceService(db,{now=nowISO}={}){
           WHERE i.tenant_id=? AND i.product_id=? AND s.status IN ('OPEN','SUSPENDED') LIMIT 1`,tenant,id);
         if(pending)throw error(409,'Há venda aberta ou suspensa contendo o produto. Finalize ou cancele antes de desativar.');
       }
-      const result={id,name,sku,unit,salePriceCents:price,
-        trackStock:Boolean(old.track_stock),active,updatedAt:stamp()};
+      const brand=Object.hasOwn(body,'brand')?text(body.brand,100):old.brand||'';
+      const barcode=Object.hasOwn(body,'barcode')?(text(body.barcode,80)||null):old.barcode;
+      const categoryId=Object.hasOwn(body,'categoryId')?(body.categoryId||null):old.category_id;
+      const parentProductId=Object.hasOwn(body,'parentProductId')?(body.parentProductId||null):old.parent_product_id;
+      const variantLabel=Object.hasOwn(body,'variantLabel')?(text(body.variantLabel,80)||null):old.variant_label;
+      if(barcode&&!/^[A-Za-z0-9._-]{4,80}$/.test(barcode))throw error(400,'Código de barras inválido.');
+      if((parentProductId&&!variantLabel)||(!parentProductId&&variantLabel)||parentProductId===id)
+        throw error(400,'Produto pai e variação inválidos.');
+      if(categoryId&&!await first('SELECT id FROM product_categories WHERE id=? AND tenant_id=?',categoryId,tenant))
+        throw error(404,'Categoria não encontrada nesta empresa.');
+      if(parentProductId&&!await first('SELECT id FROM products WHERE id=? AND tenant_id=? AND parent_product_id IS NULL',parentProductId,tenant))
+        throw error(404,'Produto pai não encontrado nesta empresa.');
+      const result={id,name,sku,unit,salePriceCents:price,brand,barcode,categoryId,parentProductId,variantLabel,
+        trackStock:Boolean(old.track_stock),active,lastCostCents:old.last_cost_cents,updatedAt:stamp()};
       await batch([
-        q('UPDATE products SET name=?,sku=?,sale_price_cents=?,unit=?,active=?,updated_at=? WHERE id=? AND tenant_id=?',
-          name,sku,price,unit,active?1:0,result.updatedAt,id,tenant),
+        q(`UPDATE products SET name=?,sku=?,sale_price_cents=?,unit=?,active=?,updated_at=?,
+          brand=?,barcode=?,category_id=?,parent_product_id=?,variant_label=? WHERE id=? AND tenant_id=?`,
+          name,sku,price,unit,active?1:0,result.updatedAt,
+          brand,barcode,categoryId,parentProductId,variantLabel,id,tenant),
         audit(tenant,scope,key,result)
       ]);
       return result;
     },
-    async receipt(tenant,branch,body,header){
+    async receipt(tenant,branch,user,body,header){
       await branchExists(tenant,branch);
       const key=requiredMutation(body,header),scope='inventory.receipt:'+branch;
       const prior=await applied(tenant,scope,key);if(prior)return prior;
@@ -414,12 +462,27 @@ export function createCommerceService(db,{now=nowISO}={}){
       const milli=quantityMilli(body?.quantity);
       if(!milli)throw error(400,'Informe quantidade positiva com até três casas decimais.');
       const kind=body?.type==='opening'?'opening':'purchase';
-      const result={movementId:randomId(),productId:row.id,branchId:branch,quantity:milli/1000,type:kind};
-      await batch([
+      const hasCost=Object.hasOwn(body,'unitCostCents')&&body.unitCostCents!=null;
+      const cost=hasCost?requiredNumber(body.unitCostCents,'Custo unitário'):null;
+      const supplierId=body?.supplierId||null;
+      if(supplierId&&!await first('SELECT id FROM suppliers WHERE tenant_id=? AND id=? AND active=1',tenant,supplierId))
+        throw error(404,'Fornecedor não encontrado nesta empresa.');
+      if(supplierId&&!hasCost)throw error(400,'Compra com fornecedor exige custo unitário.');
+      const at=stamp(),result={movementId:randomId(),productId:row.id,branchId:branch,
+        quantity:milli/1000,type:kind,...(hasCost?{unitCostCents:cost,supplierId}:{})};
+      const statements=[
         q('INSERT INTO inventory_movements(id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at) VALUES(?,?,?,?,?,?,?,?,?)',
-          result.movementId,tenant,branch,row.id,milli,kind,null,key,stamp()),
-        audit(tenant,scope,key,result)
-      ]);
+          result.movementId,tenant,branch,row.id,milli,kind,null,key,at)
+      ];
+      if(hasCost){
+        statements.push(q(`INSERT INTO purchase_cost_history
+          (id,tenant_id,branch_id,product_id,movement_id,supplier_id,unit_cost_cents,quantity_milli,operator_id,created_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,row.id,result.movementId,supplierId,cost,milli,user,at));
+        statements.push(q('UPDATE products SET last_cost_cents=?,updated_at=? WHERE tenant_id=? AND id=?',
+          cost,at,tenant,row.id));
+      }
+      statements.push(audit(tenant,scope,key,result));
+      await batch(statements);
       return result;
     },
     async stock(tenant,branch,limit=100){
