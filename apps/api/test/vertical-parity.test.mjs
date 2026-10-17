@@ -88,3 +88,31 @@ test('P7 wholesale: quantity tier quote keeps immutable price snapshot and branc
    assert.equal((await x.request('b','wholesale/orders?branchId=filial-b','GET',undefined,{as:'b'})).body.orders.length,0);
  }finally{x.close();}
 });
+
+test('P7 crediário and commissions are posted once in canonical sale completion, not as duplicate cash',async()=>{
+ const x=await setup();try{
+   const c=(await x.request('a','customers','POST',{branchId:'filial-a',name:'Cliente Crédito',creditLimitCents:5000})).body.customer;
+   const product=(await x.request('a','products','POST',{branchId:'filial-a',sku:'TESTECRED',name:'Kit',salePriceCents:3000,trackStock:false})).body.product;
+   const rule=await x.request('a','commissions/rules','POST',{branchId:'filial-a',sellerId:'a-user',commissionBps:1000});
+   assert.equal(rule.status,201,JSON.stringify(rule.body));
+   const cash=await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:1000});
+   assert.equal(cash.status,201,JSON.stringify(cash.body));
+   const sale=(await x.request('a','sales','POST',{branchId:'filial-a',sellerId:'a-user'})).body.sale;
+   assert.equal((await x.request('a',`sales/${sale.id}/customer`,'POST',{branchId:'filial-a',customerId:c.id})).status,200);
+   assert.equal((await x.request('a',`sales/${sale.id}/items`,'POST',{branchId:'filial-a',productId:product.id,quantity:1})).status,200);
+   const paymentKey=crypto.randomUUID();
+   const pay=await x.request('a',`sales/${sale.id}/complete`,'POST',{branchId:'filial-a',payments:[{method:'STORE_CREDIT',amountCents:3000}]},{key:paymentKey});
+   assert.equal(pay.status,200,JSON.stringify(pay.body));
+   assert.equal((await x.request('a',`sales/${sale.id}/complete`,'POST',{branchId:'filial-a',payments:[{method:'STORE_CREDIT',amountCents:3000}]},{key:paymentKey})).status,200);
+   const credit=await x.request('a',`credit/${c.id}?branchId=filial-a`);
+   assert.equal(credit.body.credit.balanceCents,3000);
+   const ledger=await x.db.prepare('SELECT COUNT(*) AS n FROM seller_commission_ledger WHERE tenant_id=?').bind('a').first();
+   assert.equal(ledger.n,1);
+   const drawer=await x.db.prepare('SELECT COUNT(*) AS n FROM cash_movements WHERE sale_id=?').bind(sale.id).first();
+   assert.equal(drawer.n,0,'sale paid by credit must never be a cash movement');
+   const second=(await x.request('a','sales','POST',{branchId:'filial-a'})).body.sale;
+   await x.request('a',`sales/${second.id}/customer`,'POST',{branchId:'filial-a',customerId:c.id});
+   await x.request('a',`sales/${second.id}/items`,'POST',{branchId:'filial-a',productId:product.id,quantity:1});
+   assert.equal((await x.request('a',`sales/${second.id}/complete`,'POST',{branchId:'filial-a',payments:[{method:'STORE_CREDIT',amountCents:3000}]})).status,409);
+ }finally{x.close();}
+});
