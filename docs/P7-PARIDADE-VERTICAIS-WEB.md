@@ -5,7 +5,7 @@ Implementação isolada na branch `feat/web-p7-customers-restaurant-wholesale-cr
 ## Arquitetura
 
 - **Núcleo canônico**: `packages/core/js/domains/sales/pricing.js` e `inventory-rules.js` para totais, descontos e quantidades; `apps/api/src/commerce.mjs` é o único escritor de vendas, pagamentos comuns e estoque.
-- **Banco canônico**: D1/SQLite com `0004_vertical_parity.sql`. Isolamento de tenant e branch via membership autenticada e foreign keys compostas.
+- **Banco canônico**: D1/SQLite com `0005_vertical_parity.sql`. Isolamento de tenant e branch via membership autenticada e foreign keys compostas.
 - **Clientes**: cadastro, ativação e limite de crédito; usado pelo balcão, atacado e restaurante. Fornecedores têm cadastro separado e vínculo de empresa.
 - **Vendedores**: mesma identidade `users` + `tenant_memberships`; sem criar tabela paralela de usuários/vendedores. Regra de comissão por vendedor/produto; comissão imutável contabilizada na **mesma transação** que conclui venda.
 - **Restaurante**: mesas e sessão exclusiva por mesa, pedidos salão/retirada/entrega com KDS, exigência de produção READY antes da entrega, fechamento só sem pedidos pendentes. Documento de pedido não baixa estoque automaticamente; saldo real fica no balcão.
@@ -14,7 +14,7 @@ Implementação isolada na branch `feat/web-p7-customers-restaurant-wholesale-cr
 
 ## Aplicação da migração
 
-Executar as migrações **uma vez, na ordem** 0001 -> 0002 -> 0003 -> 0004 para novos ambientes. Para ambientes existentes somente aplicar `0004_vertical_parity.sql`. Faça backup do D1/SQLite antes de executar. O sistema **não deve** habilitar `AUTH_ENABLED` nem expor contas sem provisionamento e QA. Cloudflare é hospedagem opcional; o núcleo Node.js, SQLite e a interface são executáveis localmente sem serviço pago.
+Executar as migrações **uma vez, na ordem** 0001 -> 0002 -> 0003 -> 0005 para novos ambientes. Para ambientes existentes somente aplicar `0005_vertical_parity.sql`. Faça backup do D1/SQLite antes de executar. O sistema **não deve** habilitar `AUTH_ENABLED` nem expor contas sem provisionamento e QA. Cloudflare é hospedagem opcional; o núcleo Node.js, SQLite e a interface são executáveis localmente sem serviço pago.
 
 ## Gates de paridade antes de declarar completo
 
@@ -38,7 +38,7 @@ A suíte `apps/api/test/vertical-parity.test.mjs` testa:
 - Recebimento de crediário no caixa e impedimento de pagamento a maior.
 - Comissão uma vez por item na conclusão da venda.
 
-A suíte `apps/api/test/commerce.test.mjs` executa o core anterior com a migração 0004, garantindo que vendas/caixa/financeiro antigos sigam funcionando.
+A suíte `apps/api/test/commerce.test.mjs` executa o core anterior com a migração 0005, garantindo que vendas/caixa/financeiro antigos sigam funcionando.
 
 ## Estratégia de integração paralela
 
