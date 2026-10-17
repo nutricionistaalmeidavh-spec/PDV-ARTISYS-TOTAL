@@ -3,10 +3,12 @@
 import salePricing from '../../../packages/core/js/domains/sales/pricing.js';
 import paymentRules from '../../../packages/core/js/domains/payments/payment-rules.js';
 import inventoryRules from '../../../packages/core/js/domains/inventory/inventory-rules.js';
+import cashRules from '../../../packages/core/js/domains/cash/cash-rules.js';
 
 const {calculateSaleTotals}=salePricing;
 const {resolvePayment,normalizeMethod}=paymentRules;
 const {roundQuantity}=inventoryRules;
+const {calculateCashClosing}=cashRules;
 const MAX_LINES=80;
 const nowISO=()=>new Date().toISOString();
 const randomId=()=>crypto.randomUUID();
@@ -100,6 +102,57 @@ export function createCommerceService(db,{now=nowISO}={}){
     if(!validKey(key))throw error(400,'Identificador único da operação obrigatório.');
     return key;
   };
+
+  const cashSession=async(tenant,branch,id)=>{
+    const row=await first('SELECT * FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND id=?',tenant,branch,id);
+    if(!row)throw error(404,'Caixa não encontrado.');
+    return row;
+  };
+  const cashLines=async(tenant,branch,id)=>{
+    const sales=await all(`SELECT cm.id,cm.method AS paymentMethod,cm.amount_cents AS amountCents,
+      cm.created_at AS createdAt,'SALE' AS type,cm.sale_id AS saleId
+      FROM cash_movements cm WHERE cm.tenant_id=? AND cm.branch_id=?
+        AND cm.cash_session_id=? ORDER BY cm.created_at,cm.id`,tenant,branch,id);
+    const adjustments=await all(`SELECT id,'CASH' AS paymentMethod,amount_cents AS amountCents,
+      created_at AS createdAt,type, NULL AS saleId,note FROM cash_adjustments
+      WHERE tenant_id=? AND branch_id=? AND cash_session_id=? ORDER BY created_at,id`,tenant,branch,id);
+    return [...sales,...adjustments].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id)));
+  };
+  const cashClosing=async(tenant,branch,session,countedCashCents=0)=>{
+    const lines=await cashLines(tenant,branch,session.id);
+    // Reuse original authoritative closing arithmetic: noncash tenders never
+    // count toward expected physical cash.
+    const closing=calculateCashClosing({
+      initialCashCents:session.opening_cents,movements:lines,
+      countedByMethod:{CASH:countedCashCents}
+    });
+    return {closing,lines};
+  };
+  const financeRow=async(tenant,branch,id)=>{
+    const row=await first(`SELECT e.id,e.tenant_id AS tenantId,e.branch_id AS branchId,
+      e.description,e.kind,e.amount_cents AS amountCents,e.due_date AS dueDate,
+      e.created_at AS createdAt,e.cancelled_at AS cancelledAt,
+      COALESCE(SUM(f.amount_cents),0) AS settledCents
+      FROM finance_entries e LEFT JOIN finance_settlements f ON f.entry_id=e.id
+      WHERE e.id=? AND e.tenant_id=? AND e.branch_id=? GROUP BY e.id`,id,tenant,branch);
+    if(!row)throw error(404,'Lançamento financeiro não encontrado.');
+    const openCents=row.amountCents-row.settledCents;
+    return {...row,openCents,status:row.cancelledAt?'CANCELLED':openCents===0?'SETTLED':row.settledCents?'PARTIAL':'OPEN'};
+  };
+  const dateWindow=value=>{
+    if(value==null||value==='')return null;
+    if(typeof value!=='string'||!/^(20\\d\\d)-(0[1-9]|1[0-2])-([0-2]\\d|3[01])$/.test(value)||
+      !Number.isFinite(Date.parse(value+'T00:00:00Z'))||new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)
+      throw error(400,'Data inválida: informe AAAA-MM-DD.');
+    return value;
+  };
+  const period=({from='',to=''}={})=>{
+    const a=dateWindow(from),b=dateWindow(to);
+    if(a&&b&&a>b)throw error(400,'O início não pode ser posterior ao fim.');
+    if(a&&b&&(Date.parse(b)-Date.parse(a))>366*86400000)
+      throw error(400,'Máximo de 366 dias por consulta.');
+    return {a:a?a+'T00:00:00.000Z':'0000',b:b?b+'T23:59:59.999Z':'9999'};
+  };
   const snapshot=async(tenant,branch,id)=>{
     const s=await tenantSale(tenant,branch,id);
     const view=await saleSnapshot(s);
@@ -171,9 +224,14 @@ export function createCommerceService(db,{now=nowISO}={}){
     },
     async cash(tenant,branch){
       await branchExists(tenant,branch);
-      return first(`SELECT c.id,c.status,c.opening_cents AS openingCents,c.opened_at AS openedAt,
-        c.operator_id AS operatorId FROM cash_sessions c
-        WHERE c.tenant_id=? AND c.branch_id=? AND c.status='OPEN' LIMIT 1`,tenant,branch);
+      const row=await first(`SELECT * FROM cash_sessions c WHERE c.tenant_id=? AND c.branch_id=?
+        AND c.status='OPEN' LIMIT 1`,tenant,branch);
+      if(!row)return null;
+      const {closing}=await cashClosing(tenant,branch,row,0);
+      return {id:row.id,status:row.status,operatorId:row.operator_id,
+        openingCents:row.opening_cents,initialCashCents:row.opening_cents,
+        openedAt:row.opened_at,expectedCashCents:closing.expectedCashCents,
+        branchId:branch};
     },
     async openCash(tenant,branch,user,body,header){
       await branchExists(tenant,branch);
@@ -187,6 +245,174 @@ export function createCommerceService(db,{now=nowISO}={}){
         audit(tenant,scope,key,result)
       ]);
       return result;
+    },
+
+    async cashSessions(tenant,branch,{limit=40}={}){
+      await branchExists(tenant,branch);
+      const rows=await all(`SELECT * FROM cash_sessions WHERE tenant_id=? AND branch_id=?
+        ORDER BY opened_at DESC,id DESC LIMIT ?`,tenant,branch,Math.min(50,Math.max(1,Number(limit)||40)));
+      return Promise.all(rows.map(async row=>{
+        const {closing}=await cashClosing(tenant,branch,row,row.counted_cash_cents||0);
+        return {id:row.id,operatorId:row.operator_id,status:row.status,
+          openedAt:row.opened_at,closedAt:row.closed_at,
+          openingCents:row.opening_cents,initialCashCents:row.opening_cents,
+          expectedCashCents:row.expected_cash_cents??closing.expectedCashCents,
+          countedCashCents:row.counted_cash_cents,divergenceCents:row.divergence_cents,
+          branchId:branch};
+      }));
+    },
+    async cashMovements(tenant,branch,id){
+      await cashSession(tenant,branch,id);
+      return cashLines(tenant,branch,id);
+    },
+    async cashAdjust(tenant,branch,id,user,body,keyHeader,type){
+      const key=requiredMutation(body,keyHeader),scope='cash.'+type.toLowerCase()+':'+branch+':'+id;
+      const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const session=await cashSession(tenant,branch,id);
+      if(session.status!=='OPEN')throw error(409,'O caixa não está aberto.');
+      const amount=requiredNumber(body?.amountCents,'Valor');
+      if(amount===0)throw error(400,'Informe valor maior que zero.');
+      const {closing}=await cashClosing(tenant,branch,session);
+      if(type==='WITHDRAWAL'&&amount>closing.expectedCashCents)
+        throw error(409,'Dinheiro insuficiente para a sangria.');
+      const result={id:randomId(),sessionId:id,type,amountCents:amount,
+        note:text(body?.note||'',240),createdAt:stamp()};
+      await batch([
+        q('INSERT INTO cash_adjustments(id,tenant_id,branch_id,cash_session_id,type,amount_cents,note,mutation_id,operator_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
+          result.id,tenant,branch,id,type,amount,result.note,key,user,result.createdAt),
+        audit(tenant,scope,key,result)
+      ]);
+      return result;
+    },
+    async closeCash(tenant,branch,id,user,body,keyHeader){
+      const key=requiredMutation(body,keyHeader),scope='cash.close:'+branch+':'+id;
+      const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const session=await cashSession(tenant,branch,id);
+      if(session.status!=='OPEN')throw error(409,'Este caixa já foi fechado.');
+      const counted=requiredNumber(body?.countedCashCents??body?.countedByMethod?.CASH,'Valor contado');
+      const {closing}=await cashClosing(tenant,branch,session,counted);
+      const result={id,branchId:branch,status:'CLOSED',closedAt:stamp(),
+        expectedCashCents:closing.expectedCashCents,countedCashCents:counted,
+        divergenceCents:closing.divergenceCents,operatorId:session.operator_id};
+      await batch([
+        q(`UPDATE cash_sessions SET status='CLOSED',closed_at=?,closed_by_user_id=?,
+          expected_cash_cents=?,counted_cash_cents=?,divergence_cents=?
+          WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'`,
+          result.closedAt,user,result.expectedCashCents,counted,result.divergenceCents,id,tenant,branch),
+        q('INSERT INTO domain_events(id,tenant_id,branch_id,aggregate_type,aggregate_id,type,payload_json,mutation_id,occurred_at) VALUES(?,?,?,?,?,?,?,?,?)',
+          randomId(),tenant,branch,'cash',id,'cash.closed',JSON.stringify(result),key,result.closedAt),
+        audit(tenant,scope,key,result)
+      ]);
+      return result;
+    },
+    async financeEntries(tenant,branch,{kind='',status='',query='',limit=100}={}){
+      await branchExists(tenant,branch);
+      if(kind&&!['PAYABLE','RECEIVABLE'].includes(kind))throw error(400,'Tipo financeiro inválido.');
+      if(status&&!['OPEN','PARTIAL','SETTLED','CANCELLED','OVERDUE'].includes(status))
+        throw error(400,'Situação financeira inválida.');
+      const rows=await all(`SELECT e.id FROM finance_entries e WHERE e.tenant_id=? AND e.branch_id=?
+        ORDER BY e.due_date,e.created_at DESC LIMIT ?`,tenant,branch,Math.min(200,Math.max(1,Number(limit)||100)));
+      const result=await Promise.all(rows.map(r=>financeRow(tenant,branch,r.id)));
+      const today=new Date().toISOString().slice(0,10);
+      return result.map(row=>({...row,isOverdue:row.status!=='SETTLED'&&row.status!=='CANCELLED'&&row.dueDate<today}))
+        .filter(row=>(!kind||row.kind===kind)&&(!query||row.description.toLowerCase().includes(String(query).slice(0,120).toLowerCase()))&&
+        (!status||(status==='OVERDUE'?row.isOverdue:row.status===status)));
+    },
+    async createFinanceEntry(tenant,branch,user,body,keyHeader){
+      await branchExists(tenant,branch);
+      const key=requiredMutation(body,keyHeader),scope='finance.create:'+branch;
+      const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const kind=body?.kind,description=text(body?.description,180),amount=requiredNumber(body?.amountCents,'Valor');
+      const dueDate=dateWindow(body?.dueDate);
+      if(!['PAYABLE','RECEIVABLE'].includes(kind)||description.length<2||!dueDate||!amount)
+        throw error(400,'Informe tipo, descrição, valor positivo e vencimento.');
+      const result={id:randomId(),kind,description,amountCents:amount,dueDate,
+        branchId:branch,createdAt:stamp(),settledCents:0,openCents:amount,status:'OPEN'};
+      await batch([
+        q('INSERT INTO finance_entries(id,tenant_id,branch_id,kind,description,amount_cents,due_date,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
+          result.id,tenant,branch,kind,description,amount,dueDate,user,result.createdAt),
+        audit(tenant,scope,key,result)
+      ]);
+      return result;
+    },
+    async settleFinanceEntry(tenant,branch,id,user,body,keyHeader){
+      const key=requiredMutation(body,keyHeader),scope='finance.settle:'+branch+':'+id;
+      const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const entry=await financeRow(tenant,branch,id);
+      if(entry.status==='CANCELLED'||entry.openCents===0)throw error(409,'Conta encerrada ou cancelada.');
+      const amount=requiredNumber(body?.amountCents,'Valor');
+      const method=body?.method;
+      if(!amount||amount>entry.openCents||!['PIX','BANK_TRANSFER','CASH','DEBIT_CARD','CREDIT_CARD','OTHER'].includes(method))
+        throw error(400,'Informe valor até o saldo aberto e uma forma válida.');
+      const result={id:randomId(),entryId:id,amountCents:amount,method,occurredAt:stamp()};
+      await batch([
+        q('INSERT INTO finance_settlements(id,tenant_id,branch_id,entry_id,amount_cents,method,occurred_at,operator_id,mutation_id) VALUES(?,?,?,?,?,?,?,?,?)',
+          result.id,tenant,branch,id,amount,method,result.occurredAt,user,key),
+        audit(tenant,scope,key,result)
+      ]);
+      return {...result,entry:await financeRow(tenant,branch,id)};
+    },
+    async cancelFinanceEntry(tenant,branch,id,user,body,keyHeader){
+      const key=requiredMutation(body,keyHeader),scope='finance.cancel:'+branch+':'+id;
+      const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const entry=await financeRow(tenant,branch,id);
+      if(entry.settledCents!==0||entry.status==='CANCELLED')throw error(409,'Conta liquidada ou já cancelada.');
+      const result={id,status:'CANCELLED',cancelledAt:stamp()};
+      await batch([
+        q('UPDATE finance_entries SET cancelled_at=? WHERE id=? AND tenant_id=? AND branch_id=? AND cancelled_at IS NULL',
+          result.cancelledAt,id,tenant,branch),
+        audit(tenant,scope,key,result)
+      ]);
+      return result;
+    },
+    async financeSummary(tenant,branch){
+      const rows=await this.financeEntries(tenant,branch,{limit:200});
+      const summary={payableOpenCents:0,receivableOpenCents:0,payableSettledCents:0,
+        receivableSettledCents:0,overduePayableCents:0,overdueReceivableCents:0};
+      for(const row of rows){
+        if(row.status==='CANCELLED')continue;
+        const k=row.kind==='PAYABLE'?'payable':'receivable';
+        summary[k+'OpenCents']+=row.openCents;
+        summary[k+'SettledCents']+=row.settledCents;
+        if(row.isOverdue)summary[row.kind==='PAYABLE'?'overduePayableCents':'overdueReceivableCents']+=row.openCents;
+      }
+      return summary;
+    },
+    async reports(tenant,branch,{from,to}={}){
+      await branchExists(tenant,branch);
+      const {a,b}=period({from,to});
+      const sales=await first(`SELECT COUNT(*) AS count,COALESCE(SUM(total_cents),0) AS totalCents,
+        COALESCE(SUM(discount_cents),0) AS discountsCents FROM sales
+        WHERE tenant_id=? AND branch_id=? AND status='COMPLETED' AND completed_at>=? AND completed_at<=?`,
+        tenant,branch,a,b);
+      const payments=await all(`SELECT p.method,COALESCE(SUM(CASE WHEN p.method='CASH'
+        THEN p.amount_cents-s.change_cents ELSE p.amount_cents END),0) AS amountCents
+        FROM sale_payments p JOIN sales s ON s.id=p.sale_id
+        WHERE s.tenant_id=? AND s.branch_id=? AND s.status='COMPLETED' AND s.completed_at>=? AND s.completed_at<=?
+        GROUP BY p.method ORDER BY p.method`,tenant,branch,a,b);
+      const products=await all(`SELECT si.product_id AS productId,si.product_name AS name,
+        SUM(si.quantity_milli)/1000.0 AS quantity,COUNT(DISTINCT si.sale_id) AS salesCount,
+        SUM(si.quantity_milli*si.unit_price_cents)/1000 AS grossCents
+        FROM sale_items si JOIN sales s ON s.id=si.sale_id
+        WHERE s.tenant_id=? AND s.branch_id=? AND s.status='COMPLETED' AND s.completed_at>=? AND s.completed_at<=?
+        GROUP BY si.product_id,si.product_name ORDER BY grossCents DESC LIMIT 50`,tenant,branch,a,b);
+      const inventory=await this.stock(tenant,branch,100);
+      const cash=await this.cashSessions(tenant,branch,{limit:50});
+      const finance=await this.financeSummary(tenant,branch);
+      return {period:{from:from||null,to:to||null},sales,methodTotals:payments,
+        products,inventory,cash,finance};
+    },
+    async salesCsv(tenant,branch,{from,to}={}){
+      const {a,b}=period({from,to});
+      await branchExists(tenant,branch);
+      const rows=await all(`SELECT sale_number AS saleNumber,completed_at AS completedAt,
+        total_cents AS totalCents,discount_cents AS discountCents,operator_id AS operatorId
+        FROM sales WHERE tenant_id=? AND branch_id=? AND status='COMPLETED'
+        AND completed_at>=? AND completed_at<=? ORDER BY completed_at,id LIMIT 3000`,tenant,branch,a,b);
+      const cell=v=>'"'+String(v??'').replace(/"/g,'""').replace(/^[=+@-]/,'\u0027    async openSale(tenant,branch,user,body,header){')+'"';
+      return '\uFEFF'+'Venda;Data;Total (R$);Desconto (R$);Operador\\r\\n'+
+        rows.map(x=>[x.saleNumber,x.completedAt,(x.totalCents/100).toFixed(2).replace('.',','),(x.discountCents/100).toFixed(2).replace('.',','),x.operatorId]
+          .map(cell).join(';')).join('\\r\\n');
     },
     async openSale(tenant,branch,user,body,header){
       await branchExists(tenant,branch);
