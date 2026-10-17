@@ -9,6 +9,6 @@
   "scripts": {
     "test": "node --experimental-sqlite --test test/*.test.mjs",
     "dev": "node --experimental-sqlite src/server.mjs",
-    "check": "node --check src/commerce.mjs && node --check src/commerce-router.mjs && node --check src/worker.mjs && node --check src/server.mjs && node --check src/provision.mjs"
+    "check": "node --check src/commerce.mjs && node --check src/commerce-router.mjs && node --check src/vertical-service.mjs && node --check src/vertical-router.mjs && node --check src/worker.mjs && node --check src/server.mjs && node --check src/provision.mjs"
   }
 }
