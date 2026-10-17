@@ -452,9 +452,11 @@
     const documentLabel=sourceDocument?`${escapeHtml(sourceDocument.orderNumber||sourceDocument.id||'Pedido')} · preço do pedido`:null;
     const priceDetails = changed ? `<small><s>${ui.formatCents(item.catalogUnitPriceCents)}</s> → ${ui.formatCents(item.unitPriceCents)}${item.priceOverrideReason ? ` · ${escapeHtml(item.priceOverrideReason)}` : ''}${documentLabel?` · ${documentLabel}`:''}</small>` : `<small>${ui.formatCents(item.unitPriceCents)}${weightLabel?` · ${weightLabel}`:''}${documentLabel?` · ${documentLabel}`:''}</small>`;
     const priceButton = !sourceDocument&&window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount') ? `<button type="button" class="secondary-button cart-price-edit" data-price-item="${item.id}">Alterar preço</button>` : '';
+    const noteButton=api.webMode?`<button type="button" class="secondary-button" data-item-note="${escapeHtml(item.id)}">Observação</button>`:'';
+    const noteLabel=item.note?`<small>Obs.: ${escapeHtml(item.note)}</small>`:'';
     const quantityControl=sourceDocument?`<div class="qty-control"><span>${quantityLabel(item.quantity)} · pedido</span></div>`:weight?`<div class="qty-control"><span>${weightLabel}</span></div>`:configured?`<div class="qty-control"><button type="button" data-configured-qty-minus="${item.id}">−</button><span>${quantityLabel(item.quantity)}</span><button type="button" data-configured-qty-plus="${item.id}">＋</button></div>`:`<div class="qty-control"><button type="button" data-qty-minus="${item.productId}">−</button><span>${quantityLabel(item.quantity)}</span><button type="button" data-qty-plus="${item.productId}">＋</button></div>`;
     const remove=sourceDocument?'':weight?`<button type="button" class="cart-remove-button" data-remove-weighted="${item.id}" aria-label="Remover pesagem">×</button>`:configured?`<button type="button" class="cart-remove-button" data-remove-configured="${item.id}" aria-label="Remover esta configuração">×</button>`:`<button type="button" class="cart-remove-button" data-remove="${item.productId}">×</button>`;
-    return `<div class="cart-line ${state.selectedProductId === item.productId ? 'selected' : ''}" data-select-product="${item.productId}"><div><strong>${escapeHtml(item.productName)}</strong>${configurationSummary?`<small>${escapeHtml(configurationSummary)}</small>`:''}${priceDetails}${priceButton}</div>${quantityControl}<div class="line-total">${ui.formatCents(item.totalCents)} ${remove}</div></div>`;
+    return `<div class="cart-line ${state.selectedProductId === item.productId ? 'selected' : ''}" data-select-product="${item.productId}"><div><strong>${escapeHtml(item.productName)}</strong>${configurationSummary?`<small>${escapeHtml(configurationSummary)}</small>`:''}${noteLabel}${priceDetails}${priceButton}${noteButton}</div>${quantityControl}<div class="line-total">${ui.formatCents(item.totalCents)} ${remove}</div></div>`;
   }
 
   function bindCheckoutEvents() {
@@ -473,6 +475,7 @@
     content.querySelectorAll('[data-remove-weighted]').forEach((button) => button.addEventListener('click', () => removeWeightedItem(button.dataset.removeWeighted)));
     content.querySelectorAll('[data-remove-configured]').forEach(button=>button.addEventListener('click',()=>removeConfiguredItem(button.dataset.removeConfigured)));
     content.querySelectorAll('[data-price-item]').forEach((button) => button.addEventListener('click', () => openPriceOverride(button.dataset.priceItem)));
+    content.querySelectorAll('[data-item-note]').forEach(button=>button.addEventListener('click',()=>openSaleLineNote(button.dataset.itemNote)));
     document.getElementById('seller-select')?.addEventListener('change', setSelectedSeller);
     document.getElementById('new-sale')?.addEventListener('click', newSale);
     document.getElementById('remove-item')?.addEventListener('click', () => state.selectedProductId ? removeProduct(state.selectedProductId) : showToast('Selecione um item.', 'error'));
@@ -564,6 +567,34 @@
     if (!state.sale) return;
     try { state.sale = await api.setSaleSeller(state.sale.id, state.selectedSellerId); renderCheckout(); }
     catch (error) { showToast(error.message, 'error'); renderCheckout(); }
+  }
+
+  function openSaleLineNote(itemId){
+    const item=state.sale?.items?.find(x=>x.id===itemId);
+    if(!api.webMode||!item||state.sale.status!=='OPEN')return;
+    openModal('Observação do item',`<form id="sale-item-note-form">
+      <p>${escapeHtml(item.productName)}. A observação será preservada no histórico da venda.</p>
+      <div class="field"><label>Observação (até 240 caracteres)
+        <textarea name="note" rows="3" maxlength="240"
+          placeholder="Ex.: sem gelo, embalagem separada">${escapeHtml(item.note||'')}</textarea></label></div>
+      <p role="status" class="web-form-feedback"></p>
+      <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Cancelar</button>
+        <button type="submit" class="primary-button">Salvar observação</button></div>
+    </form>`,{onMount(root){
+      const form=root.querySelector('#sale-item-note-form');
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();if(form.dataset.pending)return;
+        const button=form.querySelector('[type=submit]'),notice=form.querySelector('[role=status]');
+        const note=form.elements.note.value;if(note.length>240){notice.textContent='Máximo de 240 caracteres.';return;}
+        button.disabled=true;form.dataset.pending='true';
+        try{
+          if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+          state.sale=await api.setSaleItemNote(state.sale.id,itemId,note,form.dataset.operationKey);
+          closeModal();renderCheckout();showToast('Observação salva no item.','success');
+        }catch(error){notice.textContent=error.message;}
+        finally{button.disabled=false;form.dataset.pending='';}
+      });
+    }});
   }
 
   function openPriceOverride(itemId) {
