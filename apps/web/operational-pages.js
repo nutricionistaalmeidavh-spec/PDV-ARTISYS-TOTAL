@@ -191,7 +191,9 @@
     }));
   }
 
+  let salesHistoryRenderSequence=0;
   async function renderSalesHistory(filters={}){
+    const renderSequence=++salesHistoryRenderSequence;
     await ready();
     const historyFilter={status:filters.status??'COMPLETED',
       from:filters.from||'',to:filters.to||'',query:filters.query||'',
@@ -208,11 +210,11 @@
       <button class="ops-primary" type="submit">Filtrar vendas</button></form>
       <p class="ops-muted">Encontradas ${history.total} vendas · página ${Math.floor(history.offset/history.limit)+1}</p>
       </section>`:'';
-    const body=`${historyTools}<section class="ops-card"><div class="ops-card-head"><h2>${api.webMode?'Histórico de vendas':'Vendas concluídas'}</h2>${api.webMode?'':'<input id="ops-sales-search" class="ops-input compact" placeholder="Venda, cliente, vendedor ou operador">'}</div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Venda</th><th>Data</th><th>Vendedor</th><th>Operador</th><th>Cliente</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="ops-sales-body">${sales.map(row=>`<tr data-search="${escapeHtml(`${row.saleNumber||''} ${row.customerName||''} ${row.sellerName||''} ${row.operatorName||''}`.toLowerCase())}"><td><strong>${escapeHtml(row.saleNumber||row.id)}</strong></td><td>${when(row.completedAt||row.openedAt)}</td><td>${escapeHtml(row.sellerName||row.sellerId||'—')}</td><td>${escapeHtml(row.operatorName||row.operatorId||'—')}</td><td>${escapeHtml(row.customerName||'Consumidor')}</td><td>${money(row.totalCents)}</td><td>${badge(row.status)}</td><td><button class="ops-link" data-sale-details="${escapeHtml(row.id)}">Detalhes</button></td></tr>`).join('')||`<tr><td colspan="8">${empty('Nenhuma venda concluída.')}</td></tr>`}</tbody></table></div>${api.webMode?`<div class="ops-actions">
+    const body=`${historyTools}<section class="ops-card"><div class="ops-card-head"><h2>${api.webMode?'Histórico de vendas':'Vendas concluídas'}</h2>${api.webMode?'':'<input id="ops-sales-search" class="ops-input compact" placeholder="Venda, cliente, vendedor ou operador">'}</div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Venda</th><th>Data</th><th>Vendedor</th><th>Operador</th><th>Cliente</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="ops-sales-body" data-history-query="${escapeHtml(historyFilter.query)}" data-history-status="${escapeHtml(historyFilter.status)}">${sales.map(row=>`<tr data-search="${escapeHtml(`${row.saleNumber||''} ${row.customerName||''} ${row.sellerName||''} ${row.operatorName||''}`.toLowerCase())}"><td><strong>${escapeHtml(row.saleNumber||row.id)}</strong></td><td>${when(row.completedAt||row.openedAt)}</td><td>${escapeHtml(row.sellerName||row.sellerId||'—')}</td><td>${escapeHtml(row.operatorName||row.operatorId||'—')}</td><td>${escapeHtml(row.customerName||'Consumidor')}</td><td>${money(row.totalCents)}</td><td>${badge(row.status)}</td><td><button class="ops-link" data-sale-details="${escapeHtml(row.id)}">Detalhes</button></td></tr>`).join('')||`<tr><td colspan="8">${empty('Nenhuma venda concluída.')}</td></tr>`}</tbody></table></div>${api.webMode?`<div class="ops-actions">
       <button class="ops-secondary" type="button" data-history-page="-1" ${history.offset===0?'disabled':''}>← Anterior</button>
       <button class="ops-secondary" type="button" data-history-page="1" ${history.offset+history.items.length>=history.total?'disabled':''}>Próxima →</button>
     </div>`:''}</section><section id="ops-sale-detail"></section>`;
-    if(!routeActive('sales'))return;
+    if(!routeActive('sales')||renderSequence!==salesHistoryRenderSequence)return;
     content.innerHTML=page('Últimas vendas','Histórico imutável, pagamentos, itens e devoluções.',body);
     content.querySelector('#web-sales-filter')?.addEventListener('submit',event=>{
       event.preventDefault();
