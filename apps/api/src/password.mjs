@@ -1,5 +1,6 @@
 const encoder = new TextEncoder();
-const ITERATIONS = 210000;
+// Cloudflare Workers WebCrypto rejects PBKDF2 counts above 100,000.
+export const ITERATIONS = 100000;
 function hex(bytes) { return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2,'0')).join(''); }
 function unhex(str) {
   if (typeof str !== 'string' || !/^(?:[a-f0-9]{2})+$/.test(str)) throw new Error('Invalid hex');
@@ -22,7 +23,7 @@ export async function verifyPassword(password,stored) {
   const parts=String(stored||'').split(':');
   if(parts.length!==5 || parts[0]!=='pbkdf2'||parts[1]!=='sha256')return false;
   const iterations=Number(parts[2]);
-  if(!Number.isInteger(iterations)||iterations<150000||iterations>500000||!/^([a-f0-9]{64})$/.test(parts[4]))return false;
+  if(!Number.isInteger(iterations)||iterations<100000||iterations>100000||!/^([a-f0-9]{64})$/.test(parts[4]))return false;
   let actual;
   try{actual=await derive(password,unhex(parts[3]),iterations);}catch{return false;}
   const a=unhex(actual),b=unhex(parts[4]);
