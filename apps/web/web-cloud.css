@@ -53,3 +53,6 @@ body[data-runtime="web"] .checkout-main{min-width:0}
 @media(prefers-reduced-motion:reduce){
   body[data-runtime="web"] *,body[data-runtime="web"] *::before,body[data-runtime="web"] *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+
+/* Keep the original checkout layout owners mounted while hiding desktop-only controls. */
+body[data-runtime="web"] [hidden]{display:none!important}
