@@ -5,16 +5,24 @@
 })(window, function factory(root) {
   class ApiClient {
     constructor() {
-      this.sessionToken = root.sessionStorage?.getItem('artisys.sessionToken') || '';
+      this.webMode=!root.artisysDesktop;
+      this.sessionToken=this.webMode?'':(root.sessionStorage?.getItem('artisys.sessionToken')||'');
+      this.tenantId=null;
+      this.branchId=null;
+      this.completionKeys=new Map();
       this.config = null;
     }
 
     async initialize() {
-      this.config = await root.artisysDesktop.getConfig();
+      this.config = this.webMode ? {
+        storeName:'PDV Total',terminalName:'Navegador',version:'Web',
+        terminalId:'WEB',dataServer:{mode:'cloud',selected:true}
+      } : await root.artisysDesktop.getConfig();
       return this.config;
     }
 
     async request(path, { method = 'GET', body, mutationId } = {}) {
+      if(this.webMode)return this.webRequest(path,{method,body,mutationId});
       const persistedToken = root.sessionStorage?.getItem('artisys.sessionToken') || '';
       if (persistedToken) this.sessionToken = persistedToken;
       const result = await root.artisysDesktop.apiRequest({ path, method, body, mutationId, sessionToken: this.sessionToken });
@@ -25,6 +33,75 @@
         throw error;
       }
       return result.payload;
+    }
+
+    async webRequest(path,{method='GET',body,mutationId}={}){
+      const url=new URL(path,root.location.origin);
+      const original=url.pathname;
+      const apiRoot='/api/v1/';
+      if(!original.startsWith(apiRoot))throw new Error('Rota não autorizada.');
+      let operation='',targetPath=original,resource='';
+      const direct=['/api/v1/health','/api/v1/auth/login','/api/v1/auth/session','/api/v1/tenants'];
+      if(!direct.includes(original)&&!original.startsWith('/api/v1/tenants/')){
+        if(!this.tenantId||!this.branchId)throw new Error('Escolha o estabelecimento e a filial antes de continuar.');
+        if(original==='/api/v1/products')operation='products';
+        else if(original==='/api/v1/inventory')operation='inventory';
+        else if(original==='/api/v1/inventory/movements')operation='inventory/receipts';
+        else if(original==='/api/v1/cash/open')operation='cash';
+        else if(original==='/api/v1/cash/sessions')operation=method==='POST'?'cash/open':'cash';
+        else if(original.startsWith('/api/v1/sales'))operation=original.slice(apiRoot.length);
+        else throw new Error('Este módulo ainda não está disponível na versão online.');
+        targetPath=apiRoot+'tenants/'+encodeURIComponent(this.tenantId)+'/'+operation;
+        if(method==='GET'||method==='DELETE')url.searchParams.set('branchId',this.branchId);
+      }
+      const target=new URL(targetPath,root.location.origin);
+      for(const [k,v] of url.searchParams)target.searchParams.set(k,v);
+      const headers={'accept':'application/json'};
+      if(!['GET','HEAD'].includes(method))headers['content-type']='application/json';
+      const payload=body==null?{}:{...body};
+      if(!['GET','HEAD'].includes(method)){
+        if(operation)payload.branchId=this.branchId;
+        let key=mutationId;
+        const completion=/^sales\\/[^/]+\\/complete$/.test(operation);
+        if(completion){
+          key=this.completionKeys.get(operation)||key||this.mutationId();
+          this.completionKeys.set(operation,key);
+        }
+        if(!key)key=this.mutationId();
+        headers['x-mutation-id']=key;
+      }
+      let response;
+      try{response=await root.fetch(target,{method,credentials:'same-origin',headers,
+        ...(['GET','HEAD'].includes(method)?{}:{body:JSON.stringify(payload)})});}
+      catch{throw new Error('Sem conexão. Seus dados permanecem na tela; tente novamente.');}
+      let value;try{value=await response.json();}catch{value={};}
+      if(!response.ok){
+        const e=new Error(value.error||'Não foi possível concluir a operação.');
+        e.status=response.status;
+        throw e;
+      }
+      if(/^sales\\/[^/]+\\/complete$/.test(operation))this.completionKeys.delete(operation);
+      if(operation==='products')return method==='GET'?value.products:value.product;
+      if(operation==='inventory')return value.stock;
+      if(operation==='inventory/receipts')return value.movement;
+      if(operation==='cash'||operation==='cash/open')return value.session;
+      if(operation==='sales'||operation.startsWith('sales?'))return method==='GET'?value.sales:value.sale;
+      if(operation.startsWith('sales/'))return operation.endsWith('/complete')?{sale:value.sale}:value.sale;
+      return value;
+    }
+
+    async chooseWebTenant(membership){
+      if(!this.webMode)throw new Error('Somente para acesso web.');
+      const tenantId=String(membership?.tenantId||'');
+      if(!tenantId)throw new Error('Estabelecimento não disponível.');
+      const [branches,context]=await Promise.all([
+        this.webRequest('/api/v1/tenants/'+encodeURIComponent(tenantId)+'/branches'),
+        this.webRequest('/api/v1/tenants/'+encodeURIComponent(tenantId)+'/context')
+      ]);
+      if(!branches.branches?.length)throw new Error('Este estabelecimento não possui filial ativa.');
+      this.tenantId=tenantId;
+      this.branchId=branches.branches[0].id;
+      return {branch:branches.branches[0],context};
     }
 
     params(values = {}) {
@@ -42,11 +119,12 @@
     verifySetupActivation(email, code) { return this.request('/api/v1/setup/activation/verify', { method:'POST', body:{email,code} }); }
     async login(body) {
       const result = await this.request('/api/v1/auth/login', { method: 'POST', body });
+      if(this.webMode)return result;
       this.sessionToken = result.sessionToken;
       root.sessionStorage?.setItem('artisys.sessionToken', this.sessionToken);
       return result;
     }
-    logout() { this.sessionToken = ''; root.sessionStorage?.removeItem('artisys.sessionToken'); }
+    logout() { if(this.webMode){ this.completionKeys.clear();this.tenantId=null;this.branchId=null;return this.webRequest('/api/v1/auth/session',{method:'DELETE'}); } this.sessionToken = ''; root.sessionStorage?.removeItem('artisys.sessionToken'); }
     currentSession() { return this.request('/api/v1/auth/session'); }
     authorizeReturn(body) { return this.request('/api/v1/auth/authorize', { method:'POST', body }); }
 
