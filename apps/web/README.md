@@ -25,4 +25,4 @@ Repositório fonte do PDV Artisys desktop original: **não modificar**.
 
 ## Periféricos web
 
-O Balcão incorpora **Dispositivos locais** para impressão via navegador/PDF, Web Serial genérico com consentimento e comandos ESC/POS experimentais. O fluxo pós-venda consulta a venda canônica antes de imprimir. Veja [limites e homologação](../../docs/WEB-PERIPHERALS.md). Não anunciar paridade completa de hardware, protocolo Urano ou impressão silenciosa antes da entrega do agente opcional e dos testes físicos.
+O Balcão incorpora **Dispositivos locais** para impressão via navegador/PDF, Web Serial genérico com consentimento e comandos ESC/POS experimentais. O fluxo pós-venda consulta a venda canônica antes de imprimir. Veja [limites e homologação](../../docs/WEB-PERIPHERALS.md). Não anunciar paridade completa de hardware, homologação física Urano ou impressão silenciosa antes da entrega do agente opcional e dos testes físicos.
