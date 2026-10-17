@@ -1,0 +1,1131 @@
+{
+  "schemaVersion": 1,
+  "scope": "desktop-published-capabilities",
+  "baseline": {
+    "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+    "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+    "manifest": "release/capabilities.json",
+    "publishedCapabilities": [
+      "desktop-windows-local-first",
+      "central-lan-server",
+      "paired-multi-terminal",
+      "catalog-products-customers-sellers",
+      "catalog-options-variants-combos",
+      "catalog-parent-child-variants-core",
+      "catalog-kits-component-stock-snapshot",
+      "catalog-promotional-combos-user-configurable",
+      "recipe-versioning-and-ingredient-consumption",
+      "optional-local-module-registry",
+      "inventory-ledger-and-low-stock",
+      "sales-checkout-mixed-manual-payments",
+      "sales-observation-internal-and-optional-non-fiscal-printing",
+      "cash-open-supply-withdraw-close",
+      "sales-history-returns-and-reversals",
+      "finance-payables-receivables",
+      "operational-reports-and-csv-export",
+      "historical-cost-snapshot-and-margin",
+      "stock-locations-reservations-and-transfers",
+      "purchase-orders-partial-receiving-moving-average-payable",
+      "sales-orders-pickup-delivery-reservation-fulfillment",
+      "checkout-open-commands-and-orders-without-reentry",
+      "wholesale-quantity-pricing-and-b2b-orders",
+      "wholesale-customer-policy-minimum-order-payment-credit",
+      "thermal-print-queue-and-retry",
+      "shared-artisys-printing-renderer-and-drivers",
+      "shared-artisys-serialport-peripheral-runtime",
+      "hardware-protocol-simulation-ci-and-recovery-tests",
+      "non-fiscal-sale-prebill-kitchen-and-cash-printing",
+      "configurable-non-fiscal-receipt-branding-name-address-phone-logo",
+      "restaurant-tables-tabs-orders-and-table-transfer",
+      "restaurant-advanced-split-settlement-service-charge-and-item-transfer",
+      "restaurant-checkout-reusing-sales-cash-and-inventory",
+      "kitchen-kds-stations-product-routing-and-printer-routing",
+      "shared-kds-routing-for-food-orders",
+      "optional-pizzeria-size-flavors-crust-and-pricing-policy",
+      "food-delivery-pickup-counter-workflow",
+      "food-unified-orders-with-optional-daily-ticket-and-legacy-history",
+      "optional-market-bakery-weighted-items-and-orders",
+      "optional-retail-variants-sku-barcode-and-variant-stock",
+      "first-run-segment-onboarding-and-editable-module-recommendations",
+      "local-mobile-access-qr-material",
+      "versioned-hardware-compatibility-evidence",
+      "waiter-lan-device",
+      "kitchen-lan-device",
+      "hashed-revocable-mobile-device-credentials",
+      "self-hosted-mobile-ui-on-local-lan",
+      "restaurant-service-requests-waiter-and-bill",
+      "restaurant-operational-reports-and-csv-export",
+      "barcode-scale-drawer-adapters",
+      "versioned-backup-validate-restore",
+      "csv-xlsx-import-preview-commit",
+      "audit-health-sanitized-logs",
+      "diagnostic-zip",
+      "persistent-pilot-readiness-checklist",
+      "server-terminal-and-terminal-deployment-profiles"
+    ],
+    "sourceManifestCount": 56
+  },
+  "web": {
+    "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL"
+  },
+  "fullSystemClaim": "incomplete",
+  "definitions": {
+    "partial": "Existem testes canônicos ligados a parte da capacidade, mas o conjunto não tem equivalência provada.",
+    "gap": "Ainda não há evidência para declarar a capacidade integralmente equivalente; implementação pode ser parcial.",
+    "covered": "Exige testes de comportamento independentes e atestado; nunca deduzir só por nome de arquivo."
+  },
+  "contracts": [
+    {
+      "id": "cap-001",
+      "capability": "desktop-windows-local-first",
+      "owner": "operations",
+      "dependsOn": [],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 0
+      },
+      "testedContractRefs": [],
+      "acceptance": "desktop windows local first: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-002",
+      "capability": "central-lan-server",
+      "owner": "operations",
+      "dependsOn": [
+        "cash-046"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 1
+      },
+      "testedContractRefs": [],
+      "acceptance": "central lan server: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-003",
+      "capability": "paired-multi-terminal",
+      "owner": "identity",
+      "dependsOn": [
+        "cash-046"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 2
+      },
+      "testedContractRefs": [],
+      "acceptance": "paired multi terminal: Comprovar escopo, revogação, permissões e dois dispositivos concorrentes autenticados.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-004",
+      "capability": "catalog-products-customers-sellers",
+      "owner": "catalog",
+      "dependsOn": [
+        "products-020",
+        "checkout-011",
+        "checkout-012"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 3
+      },
+      "testedContractRefs": [
+        "products-020"
+      ],
+      "acceptance": "catalog products customers sellers: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-005",
+      "capability": "catalog-options-variants-combos",
+      "owner": "catalog",
+      "dependsOn": [
+        "products-031",
+        "checkout-017",
+        "checkout-019"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 4
+      },
+      "testedContractRefs": [],
+      "acceptance": "catalog options variants combos: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-006",
+      "capability": "catalog-parent-child-variants-core",
+      "owner": "catalog",
+      "dependsOn": [
+        "products-031"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 5
+      },
+      "testedContractRefs": [],
+      "acceptance": "catalog parent child variants core: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-007",
+      "capability": "catalog-kits-component-stock-snapshot",
+      "owner": "catalog",
+      "dependsOn": [
+        "checkout-019",
+        "products-021"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 6
+      },
+      "testedContractRefs": [
+        "products-021"
+      ],
+      "acceptance": "catalog kits component stock snapshot: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-008",
+      "capability": "catalog-promotional-combos-user-configurable",
+      "owner": "catalog",
+      "dependsOn": [
+        "checkout-019"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 7
+      },
+      "testedContractRefs": [],
+      "acceptance": "catalog promotional combos user configurable: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-009",
+      "capability": "recipe-versioning-and-ingredient-consumption",
+      "owner": "catalog",
+      "dependsOn": [
+        "products-031",
+        "checkout-019"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 8
+      },
+      "testedContractRefs": [],
+      "acceptance": "recipe versioning and ingredient consumption: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-010",
+      "capability": "optional-local-module-registry",
+      "owner": "modules",
+      "dependsOn": [],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 9
+      },
+      "testedContractRefs": [],
+      "acceptance": "optional local module registry: Comprovar habilitação, autorização e desabilitação sem apagar histórico.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-011",
+      "capability": "inventory-ledger-and-low-stock",
+      "owner": "inventory",
+      "dependsOn": [
+        "products-021",
+        "products-027"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 10
+      },
+      "testedContractRefs": [
+        "products-021",
+        "products-027"
+      ],
+      "acceptance": "inventory ledger and low stock: Comprovar ledger único, concorrência, reservas e movimentações imutáveis.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-012",
+      "capability": "sales-checkout-mixed-manual-payments",
+      "owner": "sales",
+      "dependsOn": [
+        "checkout-008"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 11
+      },
+      "testedContractRefs": [
+        "checkout-008"
+      ],
+      "acceptance": "sales checkout mixed manual payments: Comprovar fluxo completo de venda com snapshots e eventos idempotentes.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-013",
+      "capability": "sales-observation-internal-and-optional-non-fiscal-printing",
+      "owner": "sales",
+      "dependsOn": [
+        "checkout-017",
+        "checkout-018"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 12
+      },
+      "testedContractRefs": [],
+      "acceptance": "sales observation internal and optional non fiscal printing: Comprovar fluxo completo de venda com snapshots e eventos idempotentes.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-014",
+      "capability": "cash-open-supply-withdraw-close",
+      "owner": "cash",
+      "dependsOn": [
+        "cash-040",
+        "cash-041",
+        "cash-042"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 13
+      },
+      "testedContractRefs": [
+        "cash-040",
+        "cash-041",
+        "cash-042"
+      ],
+      "acceptance": "cash open supply withdraw close: Comprovar sessões, reconciliação e fluxos simultâneos por terminal.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-015",
+      "capability": "sales-history-returns-and-reversals",
+      "owner": "sales",
+      "dependsOn": [
+        "history-033",
+        "history-037",
+        "history-038"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 14
+      },
+      "testedContractRefs": [
+        "history-033"
+      ],
+      "acceptance": "sales history returns and reversals: Comprovar fluxo completo de venda com snapshots e eventos idempotentes.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-016",
+      "capability": "finance-payables-receivables",
+      "owner": "finance",
+      "dependsOn": [
+        "finance-047",
+        "finance-048"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 15
+      },
+      "testedContractRefs": [
+        "finance-047",
+        "finance-048"
+      ],
+      "acceptance": "finance payables receivables: Comprovar contas em centavos, reversões, conciliações e limites de permissão.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-017",
+      "capability": "operational-reports-and-csv-export",
+      "owner": "reports",
+      "dependsOn": [
+        "reports-058",
+        "reports-061"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 16
+      },
+      "testedContractRefs": [
+        "reports-058",
+        "reports-061"
+      ],
+      "acceptance": "operational reports and csv export: Conciliar dados de base com CSV e resultados por filial/período sem estimar lucro indevidamente.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-018",
+      "capability": "historical-cost-snapshot-and-margin",
+      "owner": "reports",
+      "dependsOn": [
+        "reports-063"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 17
+      },
+      "testedContractRefs": [],
+      "acceptance": "historical cost snapshot and margin: Conciliar dados de base com CSV e resultados por filial/período sem estimar lucro indevidamente.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-019",
+      "capability": "stock-locations-reservations-and-transfers",
+      "owner": "inventory",
+      "dependsOn": [
+        "products-029"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 18
+      },
+      "testedContractRefs": [],
+      "acceptance": "stock locations reservations and transfers: Comprovar ledger único, concorrência, reservas e movimentações imutáveis.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-020",
+      "capability": "purchase-orders-partial-receiving-moving-average-payable",
+      "owner": "procurement",
+      "dependsOn": [
+        "products-029",
+        "finance-047"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 19
+      },
+      "testedContractRefs": [
+        "finance-047"
+      ],
+      "acceptance": "purchase orders partial receiving moving average payable: Comprovar recebimento parcial, custo médio, contas e reservas em transação.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-021",
+      "capability": "sales-orders-pickup-delivery-reservation-fulfillment",
+      "owner": "orders",
+      "dependsOn": [
+        "checkout-017",
+        "products-029"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 20
+      },
+      "testedContractRefs": [],
+      "acceptance": "sales orders pickup delivery reservation fulfillment: Comprovar pedidos e faturamento via a mesma venda canônica, sem baixa duplicada.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-022",
+      "capability": "checkout-open-commands-and-orders-without-reentry",
+      "owner": "orders",
+      "dependsOn": [
+        "checkout-005"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 21
+      },
+      "testedContractRefs": [
+        "checkout-005"
+      ],
+      "acceptance": "checkout open commands and orders without reentry: Comprovar pedidos e faturamento via a mesma venda canônica, sem baixa duplicada.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-023",
+      "capability": "wholesale-quantity-pricing-and-b2b-orders",
+      "owner": "wholesale",
+      "dependsOn": [
+        "checkout-011",
+        "checkout-012"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 22
+      },
+      "testedContractRefs": [],
+      "acceptance": "wholesale quantity pricing and b2b orders: Comprovar políticas B2B e cotação/preço congelado, crediário e checkout canônico.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-024",
+      "capability": "wholesale-customer-policy-minimum-order-payment-credit",
+      "owner": "wholesale",
+      "dependsOn": [
+        "checkout-013"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 23
+      },
+      "testedContractRefs": [],
+      "acceptance": "wholesale customer policy minimum order payment credit: Comprovar políticas B2B e cotação/preço congelado, crediário e checkout canônico.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-025",
+      "capability": "thermal-print-queue-and-retry",
+      "owner": "hardware",
+      "dependsOn": [
+        "checkout-018"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 24
+      },
+      "testedContractRefs": [],
+      "acceptance": "thermal print queue and retry: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-026",
+      "capability": "shared-artisys-printing-renderer-and-drivers",
+      "owner": "hardware",
+      "dependsOn": [
+        "checkout-018"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 25
+      },
+      "testedContractRefs": [],
+      "acceptance": "shared artisys printing renderer and drivers: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-027",
+      "capability": "shared-artisys-serialport-peripheral-runtime",
+      "owner": "hardware",
+      "dependsOn": [
+        "checkout-016"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 26
+      },
+      "testedContractRefs": [],
+      "acceptance": "shared artisys serialport peripheral runtime: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-028",
+      "capability": "hardware-protocol-simulation-ci-and-recovery-tests",
+      "owner": "hardware",
+      "dependsOn": [
+        "checkout-016",
+        "checkout-018"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 27
+      },
+      "testedContractRefs": [],
+      "acceptance": "hardware protocol simulation ci and recovery tests: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-029",
+      "capability": "non-fiscal-sale-prebill-kitchen-and-cash-printing",
+      "owner": "hardware",
+      "dependsOn": [
+        "checkout-018"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 28
+      },
+      "testedContractRefs": [],
+      "acceptance": "non fiscal sale prebill kitchen and cash printing: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-030",
+      "capability": "configurable-non-fiscal-receipt-branding-name-address-phone-logo",
+      "owner": "hardware",
+      "dependsOn": [
+        "checkout-018"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 29
+      },
+      "testedContractRefs": [],
+      "acceptance": "configurable non fiscal receipt branding name address phone logo: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-031",
+      "capability": "restaurant-tables-tabs-orders-and-table-transfer",
+      "owner": "restaurant",
+      "dependsOn": [
+        "checkout-017"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 30
+      },
+      "testedContractRefs": [],
+      "acceptance": "restaurant tables tabs orders and table transfer: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-032",
+      "capability": "restaurant-advanced-split-settlement-service-charge-and-item-transfer",
+      "owner": "restaurant",
+      "dependsOn": [
+        "checkout-017",
+        "checkout-008"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 31
+      },
+      "testedContractRefs": [
+        "checkout-008"
+      ],
+      "acceptance": "restaurant advanced split settlement service charge and item transfer: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-033",
+      "capability": "restaurant-checkout-reusing-sales-cash-and-inventory",
+      "owner": "restaurant",
+      "dependsOn": [
+        "checkout-008",
+        "products-021"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 32
+      },
+      "testedContractRefs": [
+        "checkout-008",
+        "products-021"
+      ],
+      "acceptance": "restaurant checkout reusing sales cash and inventory: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-034",
+      "capability": "kitchen-kds-stations-product-routing-and-printer-routing",
+      "owner": "restaurant",
+      "dependsOn": [
+        "checkout-017",
+        "checkout-018"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 33
+      },
+      "testedContractRefs": [],
+      "acceptance": "kitchen kds stations product routing and printer routing: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-035",
+      "capability": "shared-kds-routing-for-food-orders",
+      "owner": "restaurant",
+      "dependsOn": [
+        "checkout-017"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 34
+      },
+      "testedContractRefs": [],
+      "acceptance": "shared kds routing for food orders: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-036",
+      "capability": "optional-pizzeria-size-flavors-crust-and-pricing-policy",
+      "owner": "restaurant",
+      "dependsOn": [
+        "checkout-017"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 35
+      },
+      "testedContractRefs": [],
+      "acceptance": "optional pizzeria size flavors crust and pricing policy: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-037",
+      "capability": "food-delivery-pickup-counter-workflow",
+      "owner": "restaurant",
+      "dependsOn": [
+        "checkout-017"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 36
+      },
+      "testedContractRefs": [],
+      "acceptance": "food delivery pickup counter workflow: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-038",
+      "capability": "food-unified-orders-with-optional-daily-ticket-and-legacy-history",
+      "owner": "restaurant",
+      "dependsOn": [
+        "checkout-017",
+        "history-034"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 37
+      },
+      "testedContractRefs": [],
+      "acceptance": "food unified orders with optional daily ticket and legacy history: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-039",
+      "capability": "optional-market-bakery-weighted-items-and-orders",
+      "owner": "weighted-sales",
+      "dependsOn": [
+        "checkout-016"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 38
+      },
+      "testedContractRefs": [],
+      "acceptance": "optional market bakery weighted items and orders: Comprovar precisão por peso, unidade e idempotência, além de modelo físico testado.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-040",
+      "capability": "optional-retail-variants-sku-barcode-and-variant-stock",
+      "owner": "catalog",
+      "dependsOn": [
+        "products-025",
+        "products-031"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 39
+      },
+      "testedContractRefs": [],
+      "acceptance": "optional retail variants sku barcode and variant stock: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-041",
+      "capability": "first-run-segment-onboarding-and-editable-module-recommendations",
+      "owner": "onboarding",
+      "dependsOn": [
+        "home-002"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 40
+      },
+      "testedContractRefs": [],
+      "acceptance": "first run segment onboarding and editable module recommendations: Comprovar recomendações e escolha de módulos independentes de licença desktop.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-042",
+      "capability": "local-mobile-access-qr-material",
+      "owner": "mobile",
+      "dependsOn": [
+        "home-001"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 41
+      },
+      "testedContractRefs": [
+        "home-001"
+      ],
+      "acceptance": "local mobile access qr material: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-043",
+      "capability": "versioned-hardware-compatibility-evidence",
+      "owner": "hardware",
+      "dependsOn": [
+        "checkout-016",
+        "checkout-018"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 42
+      },
+      "testedContractRefs": [],
+      "acceptance": "versioned hardware compatibility evidence: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-044",
+      "capability": "waiter-lan-device",
+      "owner": "mobile",
+      "dependsOn": [],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 43
+      },
+      "testedContractRefs": [],
+      "acceptance": "waiter lan device: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-045",
+      "capability": "kitchen-lan-device",
+      "owner": "mobile",
+      "dependsOn": [],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 44
+      },
+      "testedContractRefs": [],
+      "acceptance": "kitchen lan device: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-046",
+      "capability": "hashed-revocable-mobile-device-credentials",
+      "owner": "identity",
+      "dependsOn": [],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 45
+      },
+      "testedContractRefs": [],
+      "acceptance": "hashed revocable mobile device credentials: Comprovar escopo, revogação, permissões e dois dispositivos concorrentes autenticados.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-047",
+      "capability": "self-hosted-mobile-ui-on-local-lan",
+      "owner": "mobile",
+      "dependsOn": [
+        "home-001"
+      ],
+      "status": "partial",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 46
+      },
+      "testedContractRefs": [
+        "home-001"
+      ],
+      "acceptance": "self hosted mobile ui on local lan: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
+      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+    },
+    {
+      "id": "cap-048",
+      "capability": "restaurant-service-requests-waiter-and-bill",
+      "owner": "restaurant",
+      "dependsOn": [
+        "checkout-017"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 47
+      },
+      "testedContractRefs": [],
+      "acceptance": "restaurant service requests waiter and bill: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-049",
+      "capability": "restaurant-operational-reports-and-csv-export",
+      "owner": "reports",
+      "dependsOn": [
+        "reports-062",
+        "reports-068"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 48
+      },
+      "testedContractRefs": [],
+      "acceptance": "restaurant operational reports and csv export: Conciliar dados de base com CSV e resultados por filial/período sem estimar lucro indevidamente.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-050",
+      "capability": "barcode-scale-drawer-adapters",
+      "owner": "hardware",
+      "dependsOn": [
+        "checkout-015",
+        "checkout-016",
+        "checkout-018"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 49
+      },
+      "testedContractRefs": [],
+      "acceptance": "barcode scale drawer adapters: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-051",
+      "capability": "versioned-backup-validate-restore",
+      "owner": "operations",
+      "dependsOn": [],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 50
+      },
+      "testedContractRefs": [],
+      "acceptance": "versioned backup validate restore: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-052",
+      "capability": "csv-xlsx-import-preview-commit",
+      "owner": "data-import",
+      "dependsOn": [
+        "products-032"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 51
+      },
+      "testedContractRefs": [],
+      "acceptance": "csv xlsx import preview commit: Comprovar CSV e XLSX com prévia, falha por linha, rollback e reexecução idempotente.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-053",
+      "capability": "audit-health-sanitized-logs",
+      "owner": "operations",
+      "dependsOn": [],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 52
+      },
+      "testedContractRefs": [],
+      "acceptance": "audit health sanitized logs: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-054",
+      "capability": "diagnostic-zip",
+      "owner": "operations",
+      "dependsOn": [],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 53
+      },
+      "testedContractRefs": [],
+      "acceptance": "diagnostic zip: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-055",
+      "capability": "persistent-pilot-readiness-checklist",
+      "owner": "operations",
+      "dependsOn": [],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 54
+      },
+      "testedContractRefs": [],
+      "acceptance": "persistent pilot readiness checklist: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    },
+    {
+      "id": "cap-056",
+      "capability": "server-terminal-and-terminal-deployment-profiles",
+      "owner": "operations",
+      "dependsOn": [
+        "cash-046"
+      ],
+      "status": "gap",
+      "sourceEvidence": {
+        "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+        "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+        "file": "release/capabilities.json",
+        "manifestIndex": 55
+      },
+      "testedContractRefs": [],
+      "acceptance": "server terminal and terminal deployment profiles: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
+      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+    }
+  ],
+  "notes": "Inventário sem duplicar serviços ou assumir paridade por mera presença de código; o manifesto cobre capacidades publicadas no desktop, não todos os subfluxos. Subfluxos serão decompostos em cenários E2E por domínio."
+}
