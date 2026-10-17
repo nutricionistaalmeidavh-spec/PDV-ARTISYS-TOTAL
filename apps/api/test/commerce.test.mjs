@@ -113,7 +113,7 @@ test('P3 lifecycle: open cash, open sale, add item exactly once, calculate origi
     assert.equal(changedKey.status,409);
     assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock[0].quantity,2);
     const stats=await x.db.prepare('SELECT (SELECT COUNT(*) FROM inventory_movements WHERE type=\'sale\') AS s,(SELECT COUNT(*) FROM domain_events WHERE type=\'sale.completed\') AS e,(SELECT COUNT(*) FROM sale_payments) AS p').bind().first();
-    assert.deepEqual(stats,{s:1,e:1,p:1});
+    assert.deepEqual({...stats},{s:1,e:1,p:1});
   }finally{x.close();}
 });
 
