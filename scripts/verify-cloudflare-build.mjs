@@ -23,6 +23,7 @@ must(existsSync(resolve(root,'apps/api/migrations/0009_catalog_inventory.sql')),
 must(existsSync(resolve(root,'apps/api/migrations/0010_purchase_orders.sql')),'P2 canonical purchase orders schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0011_product_media.sql')),'P2 private product media schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0012_sale_item_notes.sql')),'P3 sale line notes schema missing');
+must(existsSync(resolve(root,'apps/api/migrations/0013_cash_terminals.sql')),'P3 terminal cash schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0002_commerce.sql')),'commerce schema missing');
 must(existsSync(resolve(root,'packages/core/js/domains/sales/sale-service.js')),'canonical sales core missing');
 must(existsSync(resolve(root,'packages/core/js/domains/inventory/inventory-service.js')),'canonical inventory core missing');
