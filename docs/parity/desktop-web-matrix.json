@@ -262,7 +262,14 @@
         {
           "id": "products-023",
           "name": "Editar e desativar produtos sem apagar histórico",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async updateProduct(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "product editing and deactivation retain canonical sale snapshots"
+          },
+          "reviewNote": "Editar, desativar e reativar produtos sem sobrescrever snapshots históricos; UI e testes adicionados, aguarda execução CI e revisão de concorrência."
         },
         {
           "id": "products-024",
