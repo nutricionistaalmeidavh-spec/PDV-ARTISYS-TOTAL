@@ -69,3 +69,30 @@ test('sem permissão explícita não tenta ler porta física',async()=>{
   const {window:w}=browser();
   await assert.rejects(w.PdvWebHardware.readWeight(),/Porta serial requer/);
 });
+
+
+test('Urano POP-S lê apenas PESO L de USE-CB2 e ignora a tara',()=>{
+  const {window:w}=browser();
+  const raw='DATA: 00/00/00 TARA:   0.500kg      PESO L:  1.542kg      R$/kg: 0.00';
+  assert.equal(w.PdvWebHardwareUtils.parseUranoWeight(new TextEncoder().encode(raw)),1.542);
+});
+test('Urano POP-S lê os frames binários completos USE-P2',()=>{
+  const {window:w}=browser(),parse=w.PdvWebHardwareUtils.parseUranoWeight;
+  function frame(weight){
+    const bytes=new Uint8Array(56).fill(0x20);
+    bytes[0]=27;bytes.set(new TextEncoder().encode('T2'),1);
+    bytes[3]=27;bytes[4]=66;bytes[5]=27;bytes.set(new TextEncoder().encode('N0'),6);
+    bytes.set(new TextEncoder().encode(weight.padStart(6,' ')),18);
+    bytes.set(new TextEncoder().encode('kg'),24);
+    bytes[51]=27;bytes[52]=69;bytes[53]=27;bytes.set(new TextEncoder().encode('P1'),54);
+    return bytes;
+  }
+  assert.equal(parse(frame('1.250')),1.25);
+  assert.equal(parse(frame('0.000')),0);
+});
+test('Urano POP-S rejeita frames incompletos, resposta numérica solta e tara',()=>{
+  const {window:w}=browser(),parse=w.PdvWebHardwareUtils.parseUranoWeight;
+  for (const frame of ['1.250','TARA: 0.500kg','PESO L:','garbage']){
+    assert.throws(()=>parse(new TextEncoder().encode(frame)),/Urano|frame/i);
+  }
+});
