@@ -1,0 +1,576 @@
+{
+  "schemaVersion": 1,
+  "desktop": {
+    "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+    "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+    "mode": "read-only evidence; never import desktop runtime to SaaS"
+  },
+  "web": {
+    "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL",
+    "mainAtAudit": "ad036a2095c863aebbdd3b3282957133466a8bd4"
+  },
+  "parityClaim": "incomplete",
+  "definitions": {
+    "covered": "Existing backend and regression contract verified for precisely this subset, not complete feature parity.",
+    "partial": "A comparable interface/service exists but desktop behaviors or test coverage remain incomplete.",
+    "gap": "Desktop feature has not been implemented or independently verified in the active SaaS route."
+  },
+  "modules": [
+    {
+      "id": "home",
+      "label": "Início e navegação",
+      "desktopEvidence": [
+        "desktop/renderer/app.js",
+        "test/home-role-model.test.js"
+      ],
+      "contracts": [
+        {
+          "id": "home-001",
+          "name": "Navegação básica por tela",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/web/app.js",
+            "contains": "const WEB_ROUTES",
+            "testFile": "scripts/web-browser-e2e.mjs",
+            "testContains": "data-route"
+          }
+        },
+        {
+          "id": "home-002",
+          "name": "Painel e atalhos conforme perfil/capacidade",
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/web/app.js",
+            "contains": "renderHome"
+          }
+        },
+        {
+          "id": "home-003",
+          "name": "Indicadores operacionais reais e alertas no início",
+          "status": "gap"
+        },
+        {
+          "id": "home-004",
+          "name": "Persistência de filtros, foco e scroll ao navegar",
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/web/app.js",
+            "contains": "renderCheckout"
+          }
+        }
+      ]
+    },
+    {
+      "id": "checkout",
+      "label": "PDV e conclusão de vendas",
+      "desktopEvidence": [
+        "server/router.js",
+        "js/domains/sales/sale-service.js",
+        "test/sales-enhancements.test.js"
+      ],
+      "contracts": [
+        {
+          "id": "checkout-005",
+          "name": "Abertura de venda",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async openSale(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 lifecycle:"
+          }
+        },
+        {
+          "id": "checkout-006",
+          "name": "Adição, alteração e remoção de itens",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async addItem(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 lifecycle:"
+          }
+        },
+        {
+          "id": "checkout-007",
+          "name": "Desconto de venda com permissão",
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async discount("
+          }
+        },
+        {
+          "id": "checkout-008",
+          "name": "Pagamento em dinheiro e troco e PIX/cartão apenas registrados",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async complete(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 lifecycle:"
+          }
+        },
+        {
+          "id": "checkout-009",
+          "name": "Venda suspensa e retomada",
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async transition("
+          }
+        },
+        {
+          "id": "checkout-010",
+          "name": "Alteração autorizada do preço de item com motivo e auditoria",
+          "status": "gap"
+        },
+        {
+          "id": "checkout-011",
+          "name": "Vincular cliente à venda",
+          "status": "gap"
+        },
+        {
+          "id": "checkout-012",
+          "name": "Vendedor/garçom individual e comissões",
+          "status": "gap"
+        },
+        {
+          "id": "checkout-013",
+          "name": "Crediário/crédito da loja com limite e contas",
+          "status": "gap"
+        },
+        {
+          "id": "checkout-014",
+          "name": "Estorno de venda concluída e reversão estoque/caixa",
+          "status": "gap"
+        },
+        {
+          "id": "checkout-015",
+          "name": "Bipagem de código de barras com semântica original",
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/web/app.js",
+            "contains": "scan-focus"
+          }
+        },
+        {
+          "id": "checkout-016",
+          "name": "Produtos por peso com balança/inserção manual",
+          "status": "gap"
+        },
+        {
+          "id": "checkout-017",
+          "name": "Observações e configurações de itens",
+          "status": "gap"
+        },
+        {
+          "id": "checkout-018",
+          "name": "Comprovante de venda e reimpressão/PDF",
+          "status": "gap"
+        },
+        {
+          "id": "checkout-019",
+          "name": "Kits e combos operacionais sem duplicar estoque",
+          "status": "gap"
+        }
+      ]
+    },
+    {
+      "id": "products",
+      "label": "Produtos e estoque",
+      "desktopEvidence": [
+        "server/router.js",
+        "js/domains/inventory/inventory-service.js",
+        "test/inventory-logistics.test.js"
+      ],
+      "contracts": [
+        {
+          "id": "products-020",
+          "name": "Cadastro básico de produto com SKU e preço",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async createProduct(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 commerce:"
+          }
+        },
+        {
+          "id": "products-021",
+          "name": "Consulta de saldo do estoque por filial",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async stock(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "immutable stock ledger:"
+          }
+        },
+        {
+          "id": "products-022",
+          "name": "Recebimento e abertura de saldo imutável",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async receipt(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "immutable stock ledger:"
+          }
+        },
+        {
+          "id": "products-023",
+          "name": "Editar e desativar produtos sem apagar histórico",
+          "status": "gap"
+        },
+        {
+          "id": "products-024",
+          "name": "Categorias/cadastro e filtros",
+          "status": "gap"
+        },
+        {
+          "id": "products-025",
+          "name": "Código de barras independente do SKU",
+          "status": "gap"
+        },
+        {
+          "id": "products-026",
+          "name": "Custo, marca, unidade e estoque mínimo",
+          "status": "gap"
+        },
+        {
+          "id": "products-027",
+          "name": "Histórico e filtro de movimentações de estoque",
+          "status": "gap"
+        },
+        {
+          "id": "products-028",
+          "name": "Inventário contado, ajustes positivos e negativos",
+          "status": "gap"
+        },
+        {
+          "id": "products-029",
+          "name": "Locais de estoque, transferências e reservas",
+          "status": "gap"
+        },
+        {
+          "id": "products-030",
+          "name": "Fotos de produto em R2 e remoção",
+          "status": "gap"
+        },
+        {
+          "id": "products-031",
+          "name": "Variações, parent e lotes",
+          "status": "gap"
+        },
+        {
+          "id": "products-032",
+          "name": "Importação de catálogo com prévia e validação",
+          "status": "gap"
+        }
+      ]
+    },
+    {
+      "id": "history",
+      "label": "Histórico de vendas",
+      "desktopEvidence": [
+        "server/router.js",
+        "js/domains/sales/sale-service.js",
+        "test/e15-returns-history.test.js"
+      ],
+      "contracts": [
+        {
+          "id": "history-033",
+          "name": "Listagem simples de vendas em filial",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "const listing=",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "lifecycle:"
+          }
+        },
+        {
+          "id": "history-034",
+          "name": "Detalhamento de venda e pagamentos registrados",
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "saleSnapshot"
+          }
+        },
+        {
+          "id": "history-035",
+          "name": "Filtro por período, operador, cliente, vendedor, status e pesquisa",
+          "status": "gap"
+        },
+        {
+          "id": "history-036",
+          "name": "Paginação por offset/cursor para histórico extenso",
+          "status": "gap"
+        },
+        {
+          "id": "history-037",
+          "name": "Cancelamento de venda concluída com reversões",
+          "status": "gap"
+        },
+        {
+          "id": "history-038",
+          "name": "Devoluções parciais, autorizações e estornos",
+          "status": "gap"
+        },
+        {
+          "id": "history-039",
+          "name": "Reimpressão e exportação do histórico detalhado",
+          "status": "gap"
+        }
+      ]
+    },
+    {
+      "id": "cash",
+      "label": "Caixa",
+      "desktopEvidence": [
+        "server/router.js",
+        "js/domains/cash/cash-service.js",
+        "test/cash-service.test.js"
+      ],
+      "contracts": [
+        {
+          "id": "cash-040",
+          "name": "Abertura e sessão única por filial",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async openCash(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 cash:"
+          }
+        },
+        {
+          "id": "cash-041",
+          "name": "Suprimento e sangria auditáveis",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async cashAdjust(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 cash:"
+          }
+        },
+        {
+          "id": "cash-042",
+          "name": "Fechamento, contagem e divergência",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async closeCash(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 cash:"
+          }
+        },
+        {
+          "id": "cash-043",
+          "name": "Histórico recente de sessões e movimentações",
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async cashSessions("
+          }
+        },
+        {
+          "id": "cash-044",
+          "name": "Histórico completo filtrado por operador, data e terminal",
+          "status": "gap"
+        },
+        {
+          "id": "cash-045",
+          "name": "Estorno/retorno de vendas em sessões encerradas",
+          "status": "gap"
+        },
+        {
+          "id": "cash-046",
+          "name": "Sessões independentes por terminal no mesmo ponto de venda",
+          "status": "gap"
+        }
+      ]
+    },
+    {
+      "id": "finance",
+      "label": "Financeiro",
+      "desktopEvidence": [
+        "server/router.js",
+        "server/erp-finance-router.js",
+        "test/e16-finance.test.js"
+      ],
+      "contracts": [
+        {
+          "id": "finance-047",
+          "name": "Criação manual de contas a pagar e receber",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async createFinanceEntry(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 finance:"
+          }
+        },
+        {
+          "id": "finance-048",
+          "name": "Liquidação parcial e controle de saldo",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async settleFinanceEntry(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 finance:"
+          }
+        },
+        {
+          "id": "finance-049",
+          "name": "Cancelamento apenas de contas não liquidadas",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async cancelFinanceEntry(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 finance:"
+          }
+        },
+        {
+          "id": "finance-050",
+          "name": "Resumo financeiro por filial",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async financeSummary(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 finance:"
+          }
+        },
+        {
+          "id": "finance-051",
+          "name": "Contas bancárias/carteiras e lançamentos vinculados",
+          "status": "gap"
+        },
+        {
+          "id": "finance-052",
+          "name": "Reversão de liquidações com trilha de auditoria",
+          "status": "gap"
+        },
+        {
+          "id": "finance-053",
+          "name": "Filtros completos por categoria, centro de custo, banco e vencimento",
+          "status": "gap"
+        },
+        {
+          "id": "finance-054",
+          "name": "Plano de contas e grupos DRE",
+          "status": "gap"
+        },
+        {
+          "id": "finance-055",
+          "name": "Fluxo de caixa e DRE por regime de caixa e competência",
+          "status": "gap"
+        },
+        {
+          "id": "finance-056",
+          "name": "Extratos OFX/CSV, conciliação e transferências",
+          "status": "gap"
+        },
+        {
+          "id": "finance-057",
+          "name": "Regras de recorrência e alertas financeiros",
+          "status": "gap"
+        }
+      ]
+    },
+    {
+      "id": "reports",
+      "label": "Relatórios",
+      "desktopEvidence": [
+        "server/router.js",
+        "js/domains/reporting/report-service.js",
+        "test/e17-reporting.test.js"
+      ],
+      "contracts": [
+        {
+          "id": "reports-058",
+          "name": "Resumo de vendas concluídas por período",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async reports(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 reports:"
+          }
+        },
+        {
+          "id": "reports-059",
+          "name": "Distribuição por método e ranking de produtos",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "methodTotals",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 reports:"
+          }
+        },
+        {
+          "id": "reports-060",
+          "name": "Estoques, caixa e contas manuais básicos",
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "inventory,cash,finance"
+          }
+        },
+        {
+          "id": "reports-061",
+          "name": "CSV de vendas e impressão pelo navegador",
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async salesCsv(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P4 reports:"
+          }
+        },
+        {
+          "id": "reports-062",
+          "name": "Detalhamento filtrado por cliente, vendedor, produto e meio de pagamento",
+          "status": "gap"
+        },
+        {
+          "id": "reports-063",
+          "name": "Margem/custo histórico do produto e lucro real",
+          "status": "gap"
+        },
+        {
+          "id": "reports-064",
+          "name": "Metas, comissão e ranking de vendedores",
+          "status": "gap"
+        },
+        {
+          "id": "reports-065",
+          "name": "Comparativos entre períodos e análise de tendências",
+          "status": "gap"
+        },
+        {
+          "id": "reports-066",
+          "name": "Relatórios de estoque mínimo, transferências e cobertura",
+          "status": "gap"
+        },
+        {
+          "id": "reports-067",
+          "name": "DRE e relatórios financeiros com centros de custo",
+          "status": "gap"
+        },
+        {
+          "id": "reports-068",
+          "name": "Exportação detalhada e formatos equivalentes ao desktop",
+          "status": "gap"
+        }
+      ]
+    }
+  ]
+}
