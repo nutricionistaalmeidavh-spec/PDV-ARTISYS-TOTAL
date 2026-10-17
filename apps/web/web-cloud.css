@@ -56,3 +56,94 @@ body[data-runtime="web"] .checkout-main{min-width:0}
 
 /* Keep the original checkout layout owners mounted while hiding desktop-only controls. */
 body[data-runtime="web"] [hidden]{display:none!important}
+
+/* P5 / one existing renderer. Stable layout; only route content scrolls. */
+body[data-runtime="web"] .web-finance-filters,
+body[data-runtime="web"] .web-report-filter{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;margin:16px 0}
+body[data-runtime="web"] .web-finance-filters label,
+body[data-runtime="web"] .web-report-filter label{display:grid;gap:6px;min-width:min(100%,165px);font-size:13px;font-weight:700;color:var(--muted)}
+body[data-runtime="web"] .web-finance-filters label:first-child{flex:1 1 220px}
+body[data-runtime="web"] .web-finance-actions{white-space:nowrap}
+body[data-runtime="web"] .ops-page{min-width:0}
+body[data-runtime="web"] .ops-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+body[data-runtime="web"] .ops-table{min-width:520px}
+body[data-runtime="web"] .ops-metrics{min-width:0}
+body[data-runtime="web"] .report-v2-tabs{overflow-x:auto;scrollbar-width:thin}
+body[data-runtime="web"] .report-v2-tab{white-space:nowrap;min-height:42px}
+body[data-runtime="web"] .ops-head-actions{display:flex;gap:8px;flex-wrap:wrap}
+body[data-runtime="web"] button{touch-action:manipulation}
+body[data-runtime="web"] [aria-live="polite"]{overflow-wrap:anywhere}
+/* Offline state is deliberately explicit: no queuing or locally committed sales. */
+#web-offline-alert{display:none}
+body[data-offline] #web-offline-alert{
+ display:block;position:fixed;z-index:85;top:72px;left:80px;right:0;
+ padding:10px 16px;background:#fff3e6;color:#734200;border-bottom:1px solid #efd1a4;
+ font-size:13px;line-height:1.4;text-align:center;font-weight:700
+}
+@media(max-width:800px){
+ body[data-runtime="web"] .topbar-context .clock{display:none}
+ body[data-runtime="web"] .ops-grid.two{grid-template-columns:1fr}
+ body[data-runtime="web"] .ops-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:680px){
+ body[data-runtime="web"] .desktop-frame{display:block;min-width:0}
+ body[data-runtime="web"] .app-column{
+   height:100dvh;min-height:0;padding-bottom:calc(70px + env(safe-area-inset-bottom));
+   grid-template-rows:58px minmax(0,1fr) 0;box-sizing:border-box
+ }
+ body[data-runtime="web"] .sidebar{
+   position:fixed;inset:auto 0 0;z-index:20;height:calc(68px + env(safe-area-inset-bottom));
+   display:flex;flex-direction:row;align-items:stretch;padding-bottom:env(safe-area-inset-bottom);
+   box-sizing:border-box;border:0;border-top:1px solid var(--line);
+   background:#fff;box-shadow:0 -8px 24px rgba(8,26,53,.10)
+ }
+ body[data-runtime="web"] .sidebar .brand-mark,
+ body[data-runtime="web"] .sidebar .sidebar-back,
+ body[data-runtime="web"] .sidebar>[data-route="settings"]{display:none!important}
+ body[data-runtime="web"] .sidebar-nav{
+   flex-direction:row;align-items:stretch;gap:2px;padding:5px 8px;
+   min-height:0;height:100%;width:100%;overflow-y:hidden;overflow-x:auto;scrollbar-width:none;
+   justify-content:flex-start
+ }
+ body[data-runtime="web"] .sidebar-nav .nav-button{
+   flex:0 0 60px;width:60px;max-height:55px;height:55px;padding:5px 1px;
+   border-radius:12px;font-size:22px;box-shadow:none
+ }
+ body[data-runtime="web"] .sidebar-nav .nav-label{font-size:10px;max-width:60px}
+ body[data-runtime="web"] .topbar{
+   padding:0 12px;gap:8px;min-width:0;overflow:hidden;-webkit-app-region:no-drag
+ }
+ body[data-runtime="web"] .topbar-brand{font-size:20px;gap:4px;flex:none}
+ body[data-runtime="web"] .topbar-context{gap:4px;justify-content:flex-end}
+ body[data-runtime="web"] .topbar-context .context-pill{padding:0 6px;font-size:11px;overflow:hidden}
+ body[data-runtime="web"] .topbar-context .context-pill:not(.operator-pill){display:none}
+ body[data-runtime="web"] .topbar-context .operator-pill strong{max-width:92px;overflow:hidden;text-overflow:ellipsis}
+ body[data-runtime="web"] .topbar-context .operator-pill small{display:none}
+ body[data-runtime="web"] .status-pill{font-size:10px;gap:5px;padding:0 5px;height:38px}
+ body[data-runtime="web"] .route-content{padding:10px 11px 18px;min-height:0}
+ body[data-runtime="web"] .app-footer{display:none}
+ body[data-runtime="web"] .ops-page{padding:0;max-width:100%}
+ body[data-runtime="web"] .ops-head{flex-direction:column;align-items:flex-start;gap:10px}
+ body[data-runtime="web"] .ops-head-actions{width:100%}
+ body[data-runtime="web"] .ops-head-actions button{flex:1 1 auto}
+ body[data-runtime="web"] .web-finance-filters,
+ body[data-runtime="web"] .web-report-filter{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ body[data-runtime="web"] .web-finance-filters button,
+ body[data-runtime="web"] .web-report-filter button{grid-column:1/-1}
+ body[data-runtime="web"] .web-finance-filters label{min-width:0}
+ body[data-runtime="web"] .ops-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ body[data-runtime="web"] .ops-metric{min-width:0;padding:12px}
+ body[data-runtime="web"] .ops-metric strong{overflow-wrap:anywhere}
+ body[data-offline] #web-offline-alert{left:0;top:58px}
+}
+@media print{
+ body[data-runtime="web"] .sidebar,
+ body[data-runtime="web"] .topbar,
+ body[data-runtime="web"] .app-footer,
+ body[data-runtime="web"] .ops-head-actions,
+ body[data-runtime="web"] .web-report-filter,
+ body[data-runtime="web"] .report-v2-tabs{display:none!important}
+ body[data-runtime="web"] .desktop-frame,
+ body[data-runtime="web"] .app-column{display:block;height:auto!important;padding:0!important}
+ body[data-runtime="web"] .route-content{overflow:visible;padding:0;background:#fff}
+}

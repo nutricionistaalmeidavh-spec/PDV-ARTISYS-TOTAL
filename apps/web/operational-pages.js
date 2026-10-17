@@ -70,7 +70,94 @@
     document.getElementById('ops-inventory-form')?.addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget);const type=String(form.get('type'));const quantity=Number(form.get('quantity'));const quantityDelta=type==='adjustment-out'?-Math.abs(quantity):type==='inventory-count'?undefined:Math.abs(quantity);try{const body={productId:form.get('productId'),type,reason:form.get('reason')};if(type==='inventory-count')body.countedQuantity=quantity;else body.quantityDelta=quantityDelta;await api.saveInventoryMovement(body);showToast('Movimentação registrada.','success');await renderInventory();}catch(error){showToast(error.message,'error');}});
   }
 
+
+  // Same operational-pages renderer, with the Cloudflare persistence contract.
+  async function renderWebCash(){
+    const cfg=await ready();
+    const [open,sessions]=await Promise.all([api.openCash(cfg.terminalId),api.cashSessions({terminalId:cfg.terminalId})]);
+    const movements=open?await api.cashMovements(open.id):[];
+    if(!routeActive('cash'))return;
+    const counts=sessions.filter(row=>row.status==='CLOSED').length;
+    const cashControls=open?`<div class="ops-actions">
+      <button class="ops-secondary" type="button" data-cash-web="supply">Suprimento</button>
+      <button class="ops-secondary" type="button" data-cash-web="withdraw">Sangria</button>
+      <button class="ops-danger" type="button" data-cash-web="close">Fechar caixa</button></div>`
+      :`<form id="web-cash-open" class="ops-form">
+        <label for="web-cash-opening">Fundo inicial (R$)</label>
+        <input id="web-cash-opening" name="amount" class="ops-input" inputmode="decimal"
+          autocomplete="off" value="0,00" required>
+        <button type="submit" class="ops-primary">Abrir caixa</button>
+        <p class="ops-muted" role="status"></p>
+      </form>`;
+    const overview=`<div class="ops-metrics">
+      ${metric('Situação',open?'Caixa aberto':'Sem caixa aberto')}
+      ${metric('Dinheiro esperado',open?money(open.expectedCashCents):'—','Somente dinheiro físico')}
+      ${metric('Fechamentos anteriores',String(counts))}
+    </div><div class="ops-grid two">
+      <section class="ops-card"><h2>${open?'Caixa em operação':'Iniciar caixa'}</h2>
+        ${open?`<dl class="ops-details"><div><dt>Abertura</dt><dd>${when(open.openedAt)}</dd></div>
+          <div><dt>Fundo inicial</dt><dd>${money(open.openingCents)}</dd></div>
+          <div><dt>Operador</dt><dd>${escapeHtml(open.operatorId)}</dd></div></dl>`:''}${cashControls}
+      </section>
+      <section class="ops-card"><h2>Movimentações</h2>
+      <div class="ops-table-wrap"><table class="ops-table"><thead><tr>
+        <th>Quando</th><th>Tipo</th><th>Forma</th><th>Valor</th></tr></thead>
+        <tbody>${movements.map(m=>`<tr><td>${when(m.createdAt)}</td>
+          <td>${escapeHtml(cashMovementLabel(m.type))}</td>
+          <td>${escapeHtml(cashPaymentLabel(m.paymentMethod))}</td>
+          <td>${money(m.amountCents)}</td></tr>`).join('')||`<tr><td colspan="4">${empty('Sem movimentos nesta sessão.')}</td></tr>`}</tbody>
+      </table></div></section></div>
+      <section class="ops-card"><h2>Histórico de fechamento</h2><div class="ops-table-wrap">
+        <table class="ops-table"><thead><tr><th>Abertura</th><th>Fechamento</th>
+          <th>Esperado</th><th>Contado</th><th>Divergência</th></tr></thead><tbody>
+        ${sessions.filter(row=>row.status==='CLOSED').map(row=>`<tr>
+          <td>${when(row.openedAt)}</td><td>${when(row.closedAt)}</td>
+          <td>${money(row.expectedCashCents)}</td><td>${money(row.countedCashCents)}</td>
+          <td>${money(row.divergenceCents)}</td></tr>`).join('')||
+            `<tr><td colspan="5">${empty('Nenhum fechamento anterior.')}</td></tr>`}
+        </tbody></table></div></section>`;
+    content.innerHTML=page('Caixa','Abertura, suprimento, sangria e conferência real por filial.',overview);
+    content.querySelector('#web-cash-open')?.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const form=event.currentTarget;if(form.dataset.pending==='true')return;
+      if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+      const button=form.querySelector('button[type=submit]'),notice=form.querySelector('[role=status]');
+      button.disabled=true;form.dataset.pending='true';
+      try{
+        await api.createCash({terminalId:cfg.terminalId,initialCashCents:centsInput(form.elements.amount.value)},form.dataset.operationKey);
+        showToast('Caixa aberto.','success');await renderWebCash();
+      }catch(error){notice.textContent=error.message;}
+      finally{button.disabled=false;form.dataset.pending='false';}
+    });
+    content.querySelectorAll('[data-cash-web]').forEach(button=>button.addEventListener('click',async()=>{
+      if(button.disabled)return;
+      const action=button.dataset.cashWeb,closing=action==='close';
+      if(!ux?.openFormDialog){showToast('Diálogo indisponível.','error');return;}
+      const result=await ux.openFormDialog({
+        title:closing?'Fechar caixa':action==='supply'?'Registrar suprimento':'Registrar sangria',
+        description:closing?'Confira quanto há em dinheiro físico. PIX e cartão não são incluídos na contagem.':
+          'Registre apenas movimentos reais de dinheiro físico neste caixa.',
+        confirmLabel:closing?'Confirmar fechamento':'Registrar movimento',
+        tone:closing?'danger':'default',initialFocus:'first',
+        body:`<label>${closing?'Dinheiro contado (R$)':'Valor (R$)'}
+          <input name="amount" class="ops-input" inputmode="decimal"
+            autocomplete="off" value="${closing?(open.expectedCashCents/100).toFixed(2).replace('.',','):'0,00'}" required>
+          </label>${closing?'':'<label>Observação<textarea name="note" class="ops-input" rows="2"></textarea></label>'}`,
+        validate:data=>{
+          const value=centsInput(data.amount);
+          return value<0||(!closing&&value===0)?{message:'Informe um valor válido.',field:'amount'}:null;
+        },
+        onConfirm:data=>api.cashAction(open.id,action,closing
+          ?{countedCashCents:centsInput(data.amount)}
+          :{amountCents:centsInput(data.amount),note:String(data.note||'').trim()})
+      });
+      if(result.confirmed){showToast(closing?'Caixa conferido e fechado.':'Movimentação registrada.','success');await renderWebCash();}
+    }));
+    root.PdvRouteRegistry?.updated?.('cash',{surface:'cash'});
+  }
+
   async function renderCash(){
+    if(api.webMode)return renderWebCash();
     const cfg=await ready();let open=null;try{open=await api.openCash(cfg.terminalId);}catch{}
     const sessions=await api.cashSessions({terminalId:cfg.terminalId});
     const movements=open?await api.cashMovements(open.id):[];
@@ -139,7 +226,114 @@
     form?.elements?.namedItem?.(name)?.focus?.({preventScroll:true});
   }
 
+
+  async function renderWebFinance(filters={}){
+    await ready();
+    const selected={query:String(filters.query||'').slice(0,100),kind:String(filters.kind||'')};
+    const [summary,entries]=await Promise.all([api.financeSummary(),api.financeEntries(selected)]);
+    if(!routeActive('finance'))return;
+    const permitted=root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'finance.manage')===true;
+    const today=new Date().toISOString().slice(0,10);
+    const items=entries.map(entry=>`<tr>
+      <td><strong>${escapeHtml(entry.description)}</strong>
+        <small class="ops-muted">${escapeHtml(entry.kind==='PAYABLE'?'A pagar':'A receber')}</small></td>
+      <td>${dateOnly(entry.dueDate)}</td>
+      <td>${money(entry.amountCents)}</td>
+      <td>${money(entry.openCents)}</td>
+      <td>${financeStatusBadge(entry)}</td>
+      <td class="web-finance-actions">${permitted&&entry.status!=='CANCELLED'&&entry.openCents>0?
+         `<button class="ops-secondary" type="button" data-web-settle="${escapeHtml(entry.id)}">Liquidar</button>`:''}
+       ${permitted&&entry.status==='OPEN'?
+         `<button class="ops-link" type="button" data-web-cancel="${escapeHtml(entry.id)}">Cancelar</button>`:''}</td></tr>`).join('');
+    const markup=`<div class="ops-metrics">
+      ${metric('A pagar',money(summary.payableOpenCents))}
+      ${metric('A receber',money(summary.receivableOpenCents))}
+      ${metric('Recebido',money(summary.receivableSettledCents))}
+      ${metric('Pago',money(summary.payableSettledCents))}
+    </div><section class="ops-card">
+      <div class="ops-card-head"><div><h2>Lançamentos</h2>
+        <p>Contas manuais. Vendas do PDV são contabilizadas nos relatórios sem duplicar recebimentos.</p></div>
+        ${permitted?'<button type="button" class="ops-primary" id="web-finance-new">Novo lançamento</button>':''}
+      </div><form id="web-finance-filters" class="web-finance-filters">
+        <label>Descrição<input name="query" class="ops-input" type="search"
+          placeholder="Buscar lançamento" value="${escapeHtml(selected.query)}"></label>
+        <label>Tipo<select name="kind" class="ops-input">
+          <option value="">Todos</option><option value="PAYABLE" ${selected.kind==='PAYABLE'?'selected':''}>A pagar</option>
+          <option value="RECEIVABLE" ${selected.kind==='RECEIVABLE'?'selected':''}>A receber</option>
+        </select></label><button class="ops-secondary" type="submit">Filtrar</button>
+      </form><div class="ops-table-wrap"><table class="ops-table"><thead>
+        <tr><th>Descrição</th><th>Vencimento</th><th>Valor</th><th>Em aberto</th><th>Situação</th><th>Ações</th></tr>
+        </thead><tbody>${items||`<tr><td colspan="6">${empty('Nenhum lançamento encontrado.')}</td></tr>`}</tbody></table></div>
+      <p class="ops-muted">Os lançamentos manuais não alteram o dinheiro de caixa automaticamente; suprimentos e sangrias são feitos no módulo Caixa.</p>
+      </section>`;
+    content.innerHTML=page('Financeiro','Contas a pagar e a receber com histórico de liquidação.',markup);
+    content.querySelector('#web-finance-filters')?.addEventListener('submit',event=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      void renderWebFinance({query:form.elements.query.value,kind:form.elements.kind.value});
+    });
+    content.querySelector('#web-finance-new')?.addEventListener('click',async()=>{
+      if(!ux?.openFormDialog)return;
+      const key=api.mutationId();
+      const result=await ux.openFormDialog({
+        title:'Novo lançamento',
+        description:'Registre uma obrigação ou um recebimento manual, sem duplicar vendas.',
+        confirmLabel:'Criar lançamento',initialFocus:'first',
+        body:`<label>Tipo<select name="kind" class="ops-input">
+          <option value="PAYABLE">Conta a pagar</option>
+          <option value="RECEIVABLE">Conta a receber</option></select></label>
+          <label>Descrição<input name="description" class="ops-input" required maxlength="180"></label>
+          <label>Valor (R$)<input name="amount" class="ops-input" inputmode="decimal" required></label>
+          <label>Vencimento<input type="date" name="dueDate" class="ops-input" value="${today}" required></label>`,
+        validate:data=>centsInput(data.amount)<=0||String(data.description||'').trim().length<2?
+          {message:'Informe descrição e valor maior que zero.',field:'description'}:null,
+        onConfirm:data=>api.createFinanceEntry({
+          kind:String(data.kind),description:String(data.description||'').trim(),
+          amountCents:centsInput(data.amount),dueDate:String(data.dueDate)
+        },key)
+      });
+      if(result.confirmed){showToast('Lançamento criado.','success');await renderWebFinance(selected);}
+    });
+    content.querySelectorAll('[data-web-settle]').forEach(button=>button.addEventListener('click',async()=>{
+      const entry=entries.find(e=>e.id===button.dataset.webSettle);
+      if(!entry||!ux?.openFormDialog)return;
+      const key=api.mutationId();
+      const result=await ux.openFormDialog({
+        title:'Liquidar '+entry.description,
+        description:'Registre somente valor já recebido ou pago de verdade.',
+        confirmLabel:'Registrar liquidação',initialFocus:'first',
+        body:`<label>Valor (R$)<input name="amount" class="ops-input" inputmode="decimal"
+          value="${(entry.openCents/100).toFixed(2).replace('.',',')}" required></label>
+          <label>Forma<select name="method" class="ops-input">
+          <option value="PIX">PIX</option><option value="BANK_TRANSFER">Transferência</option>
+          <option value="CASH">Dinheiro</option><option value="DEBIT_CARD">Débito</option>
+          <option value="CREDIT_CARD">Crédito</option><option value="OTHER">Outra</option>
+          </select></label>`,
+        validate:data=>{
+          const amount=centsInput(data.amount);
+          return amount<=0||amount>entry.openCents?
+            {message:'O valor deve ser positivo e não exceder o saldo aberto.',field:'amount'}:null;
+        },
+        onConfirm:data=>api.settleFinanceEntry(entry.id,{
+          amountCents:centsInput(data.amount),method:String(data.method)
+        },key)
+      });
+      if(result.confirmed){showToast('Liquidação registrada.','success');await renderWebFinance(selected);}
+    }));
+    content.querySelectorAll('[data-web-cancel]').forEach(button=>button.addEventListener('click',async()=>{
+      if(button.disabled)return;
+      if(!root.confirm('Cancelar este lançamento sem liquidações?'))return;
+      button.disabled=true;
+      try{
+        await api.cancelFinanceEntry(button.dataset.webCancel,'Cancelado pelo operador',api.mutationId());
+        showToast('Lançamento cancelado.','success');await renderWebFinance(selected);
+      }catch(e){showToast(e.message,'error');button.disabled=false;}
+    }));
+    root.PdvRouteRegistry?.updated?.('finance',{surface:'finance'});
+  }
+
   async function renderFinance(filters=null){
+    if(api.webMode)return renderWebFinance(filters||{});
     await ready();
     const state=normalizeFinanceFilters(filters===null?financeFilterState:filters);
     financeFilterState={...state};
@@ -364,7 +558,9 @@
       await renderers[route]();
       if(!routeActive(route))return;
       const pageRoot=content.querySelector('.ops-page,.page');
-      await root.PdvOperationalRouteExtensions?.mountRoute?.(route,pageRoot);
+      // Desktop-only extension requires unported finance/accounts routes.
+      // The web renderer already owns the one canonical finance surface.
+      if(!api.webMode)await root.PdvOperationalRouteExtensions?.mountRoute?.(route,pageRoot);
       if(route==='inventory')root.PdvEnterpriseDepthUi?.mountInventory?.(pageRoot);
       if(route==='settings'){
         await root.PdvOperationalDetailExtensions?.mountSettings?.(pageRoot);

@@ -48,6 +48,7 @@ try{
   await page.locator('#web-password').fill('DummyStrongPassOnlyForCI2026');
   await page.locator('#web-login-form button[type=submit]').click();
   await page.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
+  await page.locator('#product-search').waitFor({state:'visible',timeout:12000});
   assert.equal(await page.locator('#product-search').count(),1,'only the canonical checkout renderer should exist');
   await page.locator('#app-sidebar [data-route=products]').click();
   await page.locator('#web-new-product').click();
@@ -91,8 +92,80 @@ try{
   await page.screenshot({path:'qa-artifacts/pdv-web-mobile.png',fullPage:true});
   const geometry=await page.evaluate(()=>({width:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}));
   assert.ok(geometry.scroll<=geometry.width+12,'mobile layout has horizontal overflow '+JSON.stringify(geometry));
-  assert.deepEqual(unexpectedHttp,[],'unexpected browser HTTP errors');
-  assert.deepEqual(errors,[],'browser console or script failures');
+
+  // P3: Close the very same cash session used by checkout.
+  await page.locator('#app-sidebar [data-route=cash]').click();
+  await page.getByRole('heading',{name:'Caixa',exact:true}).waitFor({timeout:12000});
+  await page.locator('[data-cash-web=close]').waitFor({timeout:12000});
+  await page.locator('[data-cash-web=close]').click();
+  await page.locator('.ux-dialog [name=amount]').waitFor();
+  await page.locator('.ux-dialog__confirm').click();
+  await page.locator('[data-cash-web=close]').waitFor({state:'detached',timeout:12000});
+  assert.match(await page.locator('#route-content').innerText(),/Histórico de fechamento/);
+
+  // P4: Create and partially settle a manual payable with the existing UX dialog.
+  await page.locator('#app-sidebar [data-route=finance]').click();
+  await page.getByRole('heading',{name:'Financeiro',exact:true}).waitFor({timeout:12000});
+  await page.locator('#web-finance-new').click();
+  await page.locator('.ux-dialog [name=description]').fill('Energia QA P4');
+  await page.locator('.ux-dialog [name=amount]').fill('12,00');
+  await page.locator('.ux-dialog [name=dueDate]').fill('2026-10-25');
+  await page.locator('.ux-dialog__confirm').click();
+  await page.getByText('Energia QA P4').waitFor({timeout:12000});
+  await page.locator('[data-web-settle]').first().click();
+  await page.locator('.ux-dialog [name=amount]').fill('5,00');
+  await page.locator('.ux-dialog__confirm').click();
+  await page.locator('.ux-dialog').waitFor({state:'detached',timeout:12000});
+  await page.getByText('Energia QA P4',{exact:true}).first().waitFor();
+  await page.waitForFunction(()=>document.querySelector('#route-content')?.innerText.includes('7,00'),null,{timeout:12000});
+  assert.match(await page.locator('#route-content').innerText(),/7,00/);
+  await page.screenshot({path:'qa-artifacts/pdv-finance-mobile.png',fullPage:true});
+
+  // P4: Shared ReportsV2 owner, no duplicate report rendering pipeline.
+  await page.locator('#app-sidebar [data-route=reports]').click();
+  await page.getByRole('heading',{name:'Relatórios comerciais'}).waitFor({timeout:12000});
+  const report=await page.locator('#route-content').innerText();
+  assert.match(report,/Faturamento registrado/i);
+  await page.locator('[data-report-web=finance]').click();
+  await page.getByText('A pagar').first().waitFor();
+  await page.screenshot({path:'qa-artifacts/pdv-reports-mobile.png',fullPage:true});
+  await page.locator('[data-report-web=overview]').click();
+  const downloadEvent=page.waitForEvent('download');
+  await page.locator('#web-report-export').click();
+  const download=await downloadEvent;
+  assert.match(download.suggestedFilename(),/vendas-.*\.csv$/);
+  const manifest=await page.evaluate(async()=>fetch('/manifest.webmanifest').then(r=>r.json()));
+  assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.icons.length,2);
+  await page.evaluate(()=>navigator.serviceWorker.ready);
+  const cachesFound=await page.evaluate(async()=> (await caches.keys()).filter(x=>x.startsWith('pdv-total-shell-')));
+  assert.equal(cachesFound.length,1,'only the current public shell may be cached');
+  await page.setViewportSize({width:1366,height:860});
+  await page.screenshot({path:'qa-artifacts/pdv-reports-desktop.png',fullPage:true});
+
+  assert.deepEqual(unexpectedHttp,[],'unexpected online HTTP errors');
+  assert.deepEqual(errors,[],'online browser console or script failures');
+  // P5: An offline reload may display only cached public UI. Never queue or cache sales.
+  await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
+  // ready only guarantees an active registration; wait for this page to be
+  // actually controlled before testing offline navigation via the shell.
+  await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller),null,{timeout:12000});
+  // Chromium's Playwright network emulation can abort top-level navigations
+  // before the Service Worker handles them. Verify the already-installed
+  // public shell exists, then simulate offline API failure on the same page.
+  const publicShell=await page.evaluate(async()=>{
+    const found=await caches.match('/index.html');
+    return Boolean(found?.ok&&(await found.text()).includes('PDV Total'));
+  });
+  assert.equal(publicShell,true,'public offline shell missing from versioned SW cache');
+  await context.setOffline(true);
+  await page.locator('#web-offline-alert').waitFor({state:'visible',timeout:8000});
+  const apiOffline=await page.evaluate(()=>fetch('/api/v1/auth/session')
+    .then(()=>false,()=>true));
+  assert.equal(apiOffline,true,'offline API fetch must fail, never serve cached private JSON');
+  await context.setOffline(false);
+  console.log('PASS: P3 cash close, P4 manual finance + partial settlement, ReportsV2 CSV and P5 safe offline PWA.');
+  // Network errors after explicit offline toggle are expected; no state writes are queued.
   console.log('PASS: real Chromium login -> canonical product -> stock -> checkout -> cash -> payment -> sale, responsive 390px.');
 }finally{
   await browser?.close();

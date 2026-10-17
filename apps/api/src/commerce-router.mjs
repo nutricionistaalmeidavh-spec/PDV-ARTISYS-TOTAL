@@ -38,7 +38,7 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
   const feature=parts[0];
   const key=request.headers.get('x-mutation-id');
   try {
-    if(!['products','inventory','cash','sales'].includes(feature))return null;
+    if(!['products','inventory','cash','sales','finance','reports'].includes(feature))return null;
     const body=writeMethods.has(method) ? (method==='DELETE'&&!request.headers.has('content-type')?{}:await payload(request)) : {};
     if(!['GET','HEAD','POST','PUT','PATCH','DELETE'].includes(method))return null;
     const branch=body.branchId||url.searchParams.get('branchId');
@@ -74,6 +74,66 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       if(parts[1]==='open'&&parts.length===2&&method==='POST'){
         requireAccess(member,'cash.open',user);
         return json({session:await service.openCash(tenant,branch,user,body,key)},201);
+      }
+    }
+
+    if(feature==='cash'&&parts[1]==='sessions'){
+      if(parts.length===2&&method==='GET'){
+        requireAccess(member,'cash.view',user);
+        return json({sessions:await service.cashSessions(tenant,branch)});
+      }
+      const id=parts[2];
+      if(id&&id.length<=128){
+        if(parts.length===4&&parts[3]==='movements'&&method==='GET'){
+          requireAccess(member,'cash.view',user);
+          return json({movements:await service.cashMovements(tenant,branch,id)});
+        }
+        if(parts.length===4&&method==='POST'&&['supply','withdraw','close'].includes(parts[3])){
+          const action=parts[3];
+          requireAccess(member,'cash.'+(action==='close'?'close':action),user);
+          const result=action==='close'
+            ?await service.closeCash(tenant,branch,id,user,body,key)
+            :await service.cashAdjust(tenant,branch,id,user,body,key,action==='supply'?'SUPPLY':'WITHDRAWAL');
+          return json({result});
+        }
+      }
+    }
+    if(feature==='finance'){
+      if(parts.length===2&&parts[1]==='summary'&&method==='GET'){
+        requireAccess(member,'finance.view',user);
+        return json({summary:await service.financeSummary(tenant,branch)});
+      }
+      if(parts.length===2&&parts[1]==='entries'&&method==='GET'){
+        requireAccess(member,'finance.view',user);
+        return json({entries:await service.financeEntries(tenant,branch,{
+          kind:url.searchParams.get('kind')||'',status:url.searchParams.get('status')||'',
+          query:url.searchParams.get('query')||''
+        })});
+      }
+      if(parts.length===2&&parts[1]==='entries'&&method==='POST'){
+        requireAccess(member,'finance.manage',user);
+        return json({entry:await service.createFinanceEntry(tenant,branch,user,body,key)},201);
+      }
+      if(parts.length===4&&parts[1]==='entries'&&parts[2].length<=128&&method==='POST'){
+        requireAccess(member,'finance.manage',user);
+        if(parts[3]==='settle')
+          return json({settlement:await service.settleFinanceEntry(tenant,branch,parts[2],user,body,key)});
+        if(parts[3]==='cancel')
+          return json({result:await service.cancelFinanceEntry(tenant,branch,parts[2],user,body,key)});
+      }
+    }
+    if(feature==='reports'){
+      if(parts.length===2&&parts[1]==='summary'&&method==='GET'){
+        requireAccess(member,'reports.view',user);
+        return json({report:await service.reports(tenant,branch,{
+          from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||''
+        })});
+      }
+      if(parts.length===2&&parts[1]==='sales.csv'&&method==='GET'){
+        requireAccess(member,'reports.view',user);
+        return json({csv:await service.salesCsv(tenant,branch,{
+          from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||''
+        })});
       }
     }
     if(feature==='sales'){

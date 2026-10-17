@@ -54,7 +54,10 @@
         else if(original==='/api/v1/inventory')operation='inventory';
         else if(original==='/api/v1/inventory/movements')operation='inventory/receipts';
         else if(original==='/api/v1/cash/open')operation='cash';
-        else if(original==='/api/v1/cash/sessions')operation=method==='POST'?'cash/open':'cash';
+        else if(original==='/api/v1/cash/sessions')operation=method==='POST'?'cash/open':'cash/sessions';
+        else if(original.startsWith('/api/v1/cash/sessions/'))operation=original.slice(apiRoot.length);
+        else if(original.startsWith('/api/v1/finance/'))operation=original.slice(apiRoot.length);
+        else if(original.startsWith('/api/v1/reports/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/sales'))operation=original.slice(apiRoot.length);
         else throw new Error('Este módulo ainda não está disponível na versão online.');
         targetPath=apiRoot+'tenants/'+encodeURIComponent(this.tenantId)+'/'+operation;
@@ -92,6 +95,13 @@
       if(operation==='inventory/receipts')return value.movement;
       if(operation==='cash')return value.session;
       if(operation==='cash/open')return {session:value.session};
+      if(operation==='cash/sessions')return value.sessions;
+      if(operation.startsWith('cash/sessions/'))return operation.endsWith('/movements')?value.movements:value.result;
+      if(operation==='finance/summary')return value.summary;
+      if(operation==='finance/entries')return method==='GET'?value.entries:value.entry;
+      if(operation.startsWith('finance/entries/'))return value.settlement||value.result||value.entry;
+      if(operation==='reports/summary')return value.report;
+      if(operation==='reports/sales.csv')return value;
       if(operation==='sales'||operation.startsWith('sales?'))return method==='GET'?value.sales:value.sale;
       if(operation.startsWith('sales/'))return operation.endsWith('/complete')?{sale:value.sale}:value.sale;
       return value;
@@ -182,7 +192,16 @@
 
     openCash(terminalId) { return this.request(`/api/v1/cash/open?terminalId=${encodeURIComponent(terminalId)}`); }
     createCash(body,mutationId=this.mutationId()) { return this.request('/api/v1/cash/sessions', { method: 'POST', body, mutationId }); }
-    cashAction(sessionId, action, body) { return this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/${action}`, { method: 'POST', body, mutationId:action === 'close' ? this.mutationId() : undefined }); }
+    async cashAction(sessionId, action, body) {
+      if(!this.webMode)return this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/${action}`,{method:'POST',body,mutationId:action==='close'?this.mutationId():undefined});
+      const scope='cash/'+sessionId+'/'+action;
+      let key=this.completionKeys.get(scope);
+      if(!key){key=this.mutationId();this.completionKeys.set(scope,key);}
+      try{
+        const result=await this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/${action}`,{method:'POST',body,mutationId:key});
+        this.completionKeys.delete(scope);return result;
+      }catch(error){if(error.status&&error.status!==503)this.completionKeys.delete(scope);throw error;}
+    }
     cashSessions(filters = {}) { return this.request(`/api/v1/cash/sessions${this.params(filters)}`); }
     cashMovements(sessionId) { return this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/movements`); }
 
@@ -214,10 +233,10 @@
     createFinanceAccount(body) { return this.request('/api/v1/finance/accounts', { method:'POST', body }); }
     financeEntries(filters = {}) { return this.request(`/api/v1/finance/entries${this.params(filters)}`); }
     financeEntry(id) { return this.request(`/api/v1/finance/entries/${encodeURIComponent(id)}`); }
-    createFinanceEntry(body) { return this.request('/api/v1/finance/entries', { method:'POST', body }); }
+    createFinanceEntry(body,mutationId) { return this.request('/api/v1/finance/entries', { method:'POST', body,mutationId }); }
     financeSummary(filters = {}) { return this.request(`/api/v1/finance/summary${this.params(filters)}`); }
-    settleFinanceEntry(id, body) { return this.request(`/api/v1/finance/entries/${encodeURIComponent(id)}/settle`, { method:'POST', body }); }
-    cancelFinanceEntry(id, reason) { return this.request(`/api/v1/finance/entries/${encodeURIComponent(id)}/cancel`, { method:'POST', body:{reason} }); }
+    settleFinanceEntry(id, body,mutationId) { return this.request(`/api/v1/finance/entries/${encodeURIComponent(id)}/settle`, { method:'POST', body,mutationId }); }
+    cancelFinanceEntry(id, reason,mutationId) { return this.request(`/api/v1/finance/entries/${encodeURIComponent(id)}/cancel`, { method:'POST', body:{reason},mutationId }); }
     reverseFinanceSettlement(id, reason) { return this.request(`/api/v1/finance/settlements/${encodeURIComponent(id)}/reverse`, { method:'POST', body:{reason} }); }
 
     reportSales(filters = {}) { return this.request(`/api/v1/reports/sales${this.params(filters)}`); }

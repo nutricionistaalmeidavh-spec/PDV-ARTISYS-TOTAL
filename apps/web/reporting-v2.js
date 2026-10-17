@@ -338,7 +338,109 @@
     return `${periodText} · Vendedor/Garçom: ${sellerName}`;
   }
 
+
+  // Web mode stays within the original PdvReportsV2 route owner and state.
+  // Backend D1 aggregates are authoritative; no replica or browser-side ledger.
+  async function renderWebReports(next={}){
+    await ready();
+    state={...state,...next};
+    markActive();
+    const date=new Date().toISOString().slice(0,10);
+    if(!state.fromDate)state.fromDate=date.slice(0,8)+'01';
+    if(!state.toDate)state.toDate=date;
+    const fromDate=state.fromDate,toDate=state.toDate;
+    const query=new URLSearchParams({from:fromDate,to:toDate});
+    const available=['overview','products','payments','inventory','cash','finance'];
+    if(!available.includes(state.view))state.view='overview';
+    let report;
+    try{
+      report=await api.request('/api/v1/reports/summary?'+query.toString());
+    }catch(error){
+      if(routeActive())content.innerHTML=`<section class="ops-page report-v2-page">
+        <header class="ops-head"><div><h1>Relatórios</h1><p>Não foi possível consultar os dados.</p></div></header>
+        <section class="ops-card"><div class="ops-empty">${escapeHtml(error.message)}</div></section></section>`;
+      return;
+    }
+    if(!routeActive())return;
+    const sale=report.sales||{},cash=report.cash||[],inventory=report.inventory||[],
+      payments=report.methodTotals||[],products=report.products||[],finance=report.finance||{};
+    const total=Number(sale.totalCents)||0,count=Number(sale.count)||0;
+    const value=(v)=>money(Number(v)||0);
+    const viewLabels={overview:'Visão geral',products:'Produtos',payments:'Recebimentos',
+      inventory:'Estoque',cash:'Caixa',finance:'Financeiro'};
+    const table=(heads,rows,colspan=heads.length)=>`<div class="ops-table-wrap"><table class="ops-table">
+      <thead><tr>${heads.map(x=>`<th>${escapeHtml(x)}</th>`).join('')}</tr></thead><tbody>
+      ${rows.length?rows.join(''):`<tr><td colspan="${colspan}"><div class="ops-empty">Nenhum registro neste período.</div></td></tr>`}
+      </tbody></table></div>`;
+    const productsTable=()=>table(['Produto','Unidades','Vendas','Valor bruto'],products.map(p=>`<tr>
+      <td>${escapeHtml(p.name)}</td><td>${qty(p.quantity)}</td><td>${p.salesCount}</td>
+      <td>${value(p.grossCents)}</td></tr>`));
+    const paymentsTable=()=>table(['Forma','Recebido'],payments.map(p=>`<tr>
+      <td>${escapeHtml(paymentLabel(p.method))}</td><td>${value(p.amountCents)}</td></tr>`));
+    const inventoryTable=()=>table(['Produto','SKU','Saldo'],inventory.map(p=>`<tr>
+      <td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.sku)}</td><td>${qty(p.quantity)}</td></tr>`));
+    const cashTable=()=>table(['Abertura','Fechamento','Esperado','Contado','Divergência'],cash.map(s=>`<tr>
+      <td>${when(s.openedAt)}</td><td>${when(s.closedAt)}</td>
+      <td>${value(s.expectedCashCents)}</td><td>${s.countedCashCents==null?'—':value(s.countedCashCents)}</td>
+      <td>${s.divergenceCents==null?'—':value(s.divergenceCents)}</td></tr>`));
+    const financeTable=()=>`<div class="ops-metrics">
+      ${metric('A pagar',value(finance.payableOpenCents))}
+      ${metric('A receber',value(finance.receivableOpenCents))}
+      ${metric('Pago',value(finance.payableSettledCents))}
+      ${metric('Recebido',value(finance.receivableSettledCents))}
+      </div><p class="ops-muted">Estes valores vêm de contas manuais. Vendas do balcão aparecem separadas no resumo comercial.</p>`;
+    const overview=`<div class="ops-metrics">
+      ${metric('Faturamento registrado',value(total))}
+      ${metric('Vendas concluídas',String(count))}
+      ${metric('Ticket médio',value(count?Math.round(total/count):0))}
+      ${metric('Descontos',value(sale.discountsCents))}
+      </div><div class="ops-grid two">
+      <section class="ops-card"><h2>Meios de pagamento</h2>${paymentsTable()}</section>
+      <section class="ops-card"><h2>Mais vendidos</h2>${productsTable()}</section></div>`;
+    const views={overview,products:productsTable(),payments:paymentsTable(),inventory:inventoryTable(),
+      cash:cashTable(),finance:financeTable()};
+    const tabs=available.map(key=>`<button type="button" data-report-web="${key}"
+      class="report-v2-tab ${state.view===key?'active':''}"
+      role="tab" aria-selected="${state.view===key?'true':'false'}"
+      aria-controls="report-v2-body">${viewLabels[key]}</button>`).join('');
+    content.innerHTML=`<section class="ops-page report-v2-page web-report-page">
+      <header class="ops-head"><div><span class="web-section-kicker">DADOS CANÔNICOS · D1</span>
+        <h1>Relatórios comerciais</h1><p>Dados registrados pelo PDV Total, separados por filial.</p></div>
+        <div class="ops-head-actions"><button id="web-report-export" class="ops-secondary" type="button">
+          Exportar vendas CSV</button><button id="web-report-print" class="ops-primary" type="button">
+          Imprimir / PDF</button></div></header>
+      <form id="web-report-filter" class="web-report-filter">
+        <label>De<input name="from" type="date" class="ops-input" value="${escapeHtml(fromDate)}" required></label>
+        <label>Até<input name="to" type="date" class="ops-input" value="${escapeHtml(toDate)}" required></label>
+        <button class="ops-primary" type="submit">Aplicar período</button>
+      </form><nav class="report-v2-tabs" role="tablist" aria-label="Categorias de relatório">${tabs}</nav>
+      <div id="report-v2-body" role="tabpanel"><section class="ops-card">
+        ${views[state.view]||overview}</section></div>
+      <p class="ops-muted">Relatório não fiscal. Formas PIX e cartão representam pagamentos registrados manualmente no caixa.</p>
+    </section>`;
+    content.querySelector('#web-report-filter')?.addEventListener('submit',event=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      if(form.elements.from.value>form.elements.to.value){showToast('A data inicial deve ser anterior à final.','error');return;}
+      void renderWebReports({fromDate:form.elements.from.value,toDate:form.elements.to.value});
+    });
+    content.querySelectorAll('[data-report-web]').forEach(button=>button.addEventListener('click',()=>void renderWebReports({view:button.dataset.reportWeb})));
+    content.querySelector('#web-report-print')?.addEventListener('click',()=>root.print());
+    content.querySelector('#web-report-export')?.addEventListener('click',async()=>{
+      const button=content.querySelector('#web-report-export');
+      button.disabled=true;
+      try{
+        const result=await api.exportSalesCsv({from:state.fromDate,to:state.toDate});
+        downloadCsvText('vendas-'+state.fromDate+'-'+state.toDate+'.csv',result.csv||'');
+        showToast('Relatório exportado.','success');
+      }catch(e){showToast(e.message||'Falha ao exportar.','error');}
+      finally{button.disabled=false;}
+    });
+    root.PdvUiLifecycle?.emit?.('reports:updated',{surface:'reports'});
+  }
+
   async function renderReportsV2(next = {}) {
+    if(api.webMode)return renderWebReports(next);
     await ready();
     markActive();
     const today = businessToday();

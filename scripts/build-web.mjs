@@ -1,4 +1,6 @@
 import {mkdirSync,cpSync,copyFileSync,readFileSync,writeFileSync,readdirSync,rmSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {buildPwaIcons} from './pwa-icons.mjs';
 import {resolve,dirname,extname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -17,9 +19,35 @@ for(const desktopScript of ['first-access-ui.js','updater-ui.js','hardware-scale
 html=html.replace('ArtiSys PDV</h1><p>Inicializando sistema local...','PDV Total</h1><p>Conectando ao seu estabelecimento...');
 html=html.replace('<div class="window-controls" aria-label="Controles da janela">','<div class="window-controls" hidden aria-label="Controles da janela">');
 html=html.replace('<span>Rede Local</span>','<span>Cloudflare</span>').replace('Sistema local</span>','Sistema online</span>');
-html=html.replace('</head>','  <link rel="stylesheet" href="./web-cloud.css" />\n</head>');
+html=html.replace('</head>',`  <meta name="theme-color" content="#081a35" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/pdv-total-192.png" />
+  <link rel="stylesheet" href="./web-cloud.css" />
+</head>`);
+html=html.replace('<body class="theme-home">','<body class="theme-home"><div id="web-offline-alert" role="status" aria-live="polite">Sem conexão com o servidor. Consultas e vendas exigem internet; nenhuma operação será enviada automaticamente.</div>');
+html=html.replace('</body>','  <script defer src="./pwa-register.js"></script>\n</body>');
 writeFileSync(filename,html,'utf8');
 copyFileSync(resolve(root,'packages/core/shared/order-composer.js'),resolve(output,'order-composer.js'));
+buildPwaIcons(output);
+// Cache only public, reproducible assets, never authenticated API responses.
+const publicAssets=[];
+const collect=(folder,relative='')=>{
+  for(const entry of readdirSync(folder,{withFileTypes:true})){
+    const path=relative+'/'+entry.name;
+    if(entry.isDirectory())collect(resolve(folder,entry.name),path);
+    else if(path!=='/sw.js'&&!path.endsWith('.map'))publicAssets.push(path);
+  }
+};
+collect(output);
+publicAssets.sort();
+const fingerprint=createHash('sha256');
+for(const asset of publicAssets)fingerprint.update(asset).update(readFileSync(resolve(output,asset.slice(1))));
+const swfile=resolve(output,'sw.js');
+const sw=readFileSync(swfile,'utf8').replace('__SHELL_CACHE__','pdv-total-shell-'+fingerprint.digest('hex').slice(0,14))
+  .replace('__ASSET_PRECACHE__',JSON.stringify(publicAssets));
+writeFileSync(swfile,sw,'utf8');
 const assets=readdirSync(output,{recursive:true});
 if(assets.length<40)throw new Error('Missing original UI assets');
 if(html.includes('../../packages/core'))throw new Error('Foreign asset path in web HTML');
