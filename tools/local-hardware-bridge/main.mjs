@@ -47,7 +47,7 @@ async function openDrawer(){
     if(!/^\/dev\/(ttyUSB\d+|ttyACM\d+|cu\.[A-Za-z0-9._-]{1,64})$/.test(drawer))throw Error('Porta serial não permitida.');
     // Serial drawer support on Unix depends on local device access and stty.
     const {openSync,writeSync,closeSync}=await import('node:fs');
-    await exec('stty',['-F',drawer,'9600','cs8','-cstopb','-parenb','raw','-echo'],{timeout:5000});
+    await exec('stty',[process.platform==='darwin'?'-f':'-F',drawer,'9600','cs8','-cstopb','-parenb','raw','-echo'],{timeout:5000});
     const fd=openSync(drawer,'w');try{writeSync(fd,Buffer.from([27,112,0,25,250]));}finally{closeSync(fd);}
   }
 }
