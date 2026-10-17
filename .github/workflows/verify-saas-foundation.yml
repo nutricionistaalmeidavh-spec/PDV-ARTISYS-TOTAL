@@ -1,0 +1,43 @@
+name: Verify SaaS canonical foundation
+
+on:
+  push:
+    branches:
+      - feat/p1-p2-canonical-cloudflare-identity
+  pull_request:
+    paths:
+      - 'apps/api/**'
+      - 'legacy/pdv-artisys/js/core/auth/**'
+      - '.github/workflows/verify-saas-foundation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  identity-and-cloudflare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate entrypoints
+        working-directory: apps/api
+        run: npm run check
+      - name: Test real SQLite isolation and canonical identity
+        working-directory: apps/api
+        run: npm test
+      - name: Cloudflare Worker dry run (never deploy)
+        working-directory: apps/api
+        run: npx --yes wrangler@4.137.0 deploy --dry-run --outdir dist-check
+      - name: Verify snapshot remains unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f legacy/pdv-artisys/js/core/auth/default-profiles.js
+          test -f legacy/pdv-artisys/js/core/auth/authorization-service.js
+          test -f legacy/pdv-artisys/js/core/auth/principal-resolver.js
+          test -f legacy/pdv-artisys/js/domains/sales/sale-service.js
+          test ! -f apps/api/src/renderer.js
