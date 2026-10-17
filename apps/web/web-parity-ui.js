@@ -196,7 +196,7 @@
         <label class="field"><span>Recebimento</span><select name="fulfillmentType"><option value="PICKUP">Retirada</option><option value="DELIVERY">Entrega</option></select></label>
         <button class="ops-primary" type="submit">Criar cotação</button></form>`)+
       '</div>'+card('Faixas cadastradas',(tiers.tiers||[]).map(t=>'<div class="data-row"><strong>'+esc(products.find(p=>p.id===t.productId)?.name||t.productId)+'</strong><span>≥ '+esc(t.minQuantity)+'</span><strong>'+money(t.unitPriceCents)+'</strong></div>').join('')||'<p>Sem faixas.</p>')+
-      card('Cotações',(quotes.orders||[]).map(o=>'<div class="data-row"><div><strong>'+esc(customers.find(c=>c.id===o.customerId)?.name||o.customerId)+'</strong><small>'+money(o.totalCents)+'</small></div><span>'+esc(o.status)+'</span>'+(o.status==='QUOTE'?'<button type="button" class="ops-secondary" data-confirm-quote="'+esc(o.id)+'">Confirmar cotação</button>':'')+'</div>').join('')||'<p>Sem cotações.</p>'));
+      card('Cotações',(quotes.orders||[]).map(o=>'<div class="data-row"><div><strong>'+esc(customers.find(c=>c.id===o.customerId)?.name||o.customerId)+'</strong><small>'+money(o.totalCents)+'</small></div><span>'+esc(o.status)+'</span>'+(o.status==='QUOTE'?'<button type="button" class="ops-secondary" data-confirm-quote="'+esc(o.id)+'">Confirmar cotação</button>':o.status==='CONFIRMED'?'<button type="button" class="ops-primary" data-checkout-quote="'+esc(o.id)+'">'+(o.saleId?'Continuar cobrança':'Cobrar no Balcão')+'</button>':'')+'</div>').join('')||'<p>Sem cotações.</p>'));
     root.querySelector('[data-tier-form]')?.addEventListener('submit',async event=>{
       event.preventDefault();const d=formData(event.currentTarget);
       try{await call('wholesale/tiers',{method:'POST',body:{productId:d.productId,minQuantity:Number(d.minQuantity),unitPriceCents:price(d.unitPrice)}});
@@ -207,6 +207,13 @@
       try{await call('wholesale/orders',{method:'POST',body:{customerId:d.customerId,fulfillmentType:d.fulfillmentType,items:[{productId:d.productId,quantity:Number(d.quantity)}]}});
         notify('Cotação criada.');await show('WHOLESALE');}catch(e){showError(e);}
     });
+    root.querySelectorAll('[data-checkout-quote]').forEach(button=>button.addEventListener('click',async()=>{
+      button.disabled=true;
+      try{const order=(quotes.orders||[]).find(x=>x.id===button.dataset.checkoutQuote);
+        const saleId=order.saleId||(await call('sales',{method:'POST',body:{wholesaleOrderId:order.id}})).id;
+        await window.PdvAppNavigation?.openCheckoutSale(saleId);
+      }catch(e){showError(e);button.disabled=false;}
+    }));
     root.querySelectorAll('[data-confirm-quote]').forEach(button=>button.addEventListener('click',async()=>{
       try{await call('wholesale/orders/'+id(button.dataset.confirmQuote)+'/confirm',{method:'POST',body:{}});
         notify('Cotação confirmada.');await show('WHOLESALE');}catch(e){showError(e);}
