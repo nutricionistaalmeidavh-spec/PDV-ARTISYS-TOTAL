@@ -239,18 +239,15 @@
     }));
     document.getElementById('ops-sales-search')?.addEventListener('input',event=>{const q=event.target.value.toLowerCase();document.querySelectorAll('#ops-sales-body tr[data-search]').forEach(row=>row.hidden=!row.dataset.search.includes(q));});
     content.querySelectorAll('[data-sale-details]').forEach(button=>{
-      let pressedPointerId=null;
       let lastOpenAt=0;
-      button.addEventListener('pointerdown',event=>{
-        if(event.isPrimary&&event.button===0)pressedPointerId=event.pointerId;
-      });
-      button.addEventListener('pointercancel',()=>{pressedPointerId=null;});
-      // Some browser adapters dispatch pointerup without the matching click.
-      // Activate from a completed primary pointer press, preserving keyboard
-      // click support and de-duplicating a subsequent native click.
+      // A real browser can deliver pointerup without a subsequent click after
+      // history filtering. Do not rely on an equal pointerId from pointerdown:
+      // some Chromium/device adapters report a different value, leaving
+      // otherwise valid user activation silently ignored.
+      // Keyboard activation still uses the click handler below. Its 500ms
+      // guard de-duplicates the native click following pointerup.
       button.addEventListener('pointerup',event=>{
-        if(pressedPointerId!==event.pointerId||!event.isPrimary||button.disabled)return;
-        pressedPointerId=null;
+        if(!event.isPrimary||event.button!==0||button.disabled)return;
         button.click();
       });
       button.addEventListener('click',async event=>{
