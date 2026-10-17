@@ -56,6 +56,9 @@
         else if(original==='/api/v1/inventory/movements')operation=method==='GET'?'inventory/movements':'inventory/receipts';
         else if(original==='/api/v1/inventory/adjustments')operation='inventory/adjustments';
         else if(original==='/api/v1/inventory/transfers')operation='inventory/transfers';
+        else if(original.startsWith('/api/v1/inventory/reservations'))operation=original.slice(apiRoot.length);
+        else if(original==='/api/v1/inventory/purchase-costs')operation='inventory/purchase-costs';
+        else if(original==='/api/v1/inventory/receipts')operation='inventory/receipts';
         else if(original==='/api/v1/cash/open')operation='cash';
         else if(original==='/api/v1/cash/sessions')operation=method==='POST'?'cash/open':'cash/sessions';
         else if(original.startsWith('/api/v1/cash/sessions/'))operation=original.slice(apiRoot.length);
@@ -97,6 +100,8 @@
       }
       if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
+      if(operation==='products/categories')return method==='GET'?value.categories:value.category;
+      if(/^products\/[^/]+\/bundle$/.test(operation))return method==='GET'?value.components:value.bundle;
       if(operation.startsWith('products/'))return value.product;
       if(operation==='customers')return method==='GET'?value.customers:value.customer;
       if(operation==='suppliers')return method==='GET'?value.suppliers:value.supplier;
@@ -106,6 +111,9 @@
       if(operation==='inventory/receipts'||operation==='inventory/adjustments')return value.movement;
       if(operation==='inventory/movements')return value.movements;
       if(operation==='inventory/transfers')return method==='GET'?value.transfers:value.transfer;
+      if(operation==='inventory/reservations')return method==='GET'?value.reservations:value.reservation;
+      if(/^inventory\/reservations\/[^/]+\/release$/.test(operation))return value.reservation;
+      if(operation==='inventory/purchase-costs')return value.costs;
       if(operation==='cash')return value.session;
       if(operation==='cash/open')return {session:value.session};
       if(operation==='cash/sessions')return value.sessions;
@@ -163,8 +171,8 @@
     currentSession() { return this.request('/api/v1/auth/session'); }
     authorizeReturn(body) { return this.request('/api/v1/auth/authorize', { method:'POST', body }); }
 
-    categories(includeInactive = false) { return this.request(`/api/v1/categories${includeInactive ? '?includeInactive=true' : ''}`); }
-    saveCategory(body) { return this.request('/api/v1/categories', { method: 'POST', body }); }
+    categories(includeInactive = false) { return this.request(this.webMode?'/api/v1/products/categories':`/api/v1/categories${includeInactive ? '?includeInactive=true' : ''}`); }
+    saveCategory(body) { return this.request(this.webMode?'/api/v1/products/categories':'/api/v1/categories', { method: 'POST', body }); }
     products(includeInactive = false) { return this.request(`/api/v1/products${includeInactive ? '?includeInactive=true' : ''}`); }
     saveProduct(body,mutationId) { return this.request('/api/v1/products', { method: 'POST', body,mutationId }); }
     updateProduct(id,body,mutationId) { return this.request(`/api/v1/products/${encodeURIComponent(id)}`, { method:'PATCH', body,mutationId }); }
@@ -196,6 +204,13 @@
     accessSecurity() { return this.request('/api/v1/access/security'); }
     revokeAccessSession(id) { return this.request(`/api/v1/access/sessions/${encodeURIComponent(id)}`, { method:'DELETE' }); }
 
+    productBundle(id){return this.request('/api/v1/products/'+encodeURIComponent(id)+'/bundle');}
+    saveProductBundle(id,components,mutationId){return this.request('/api/v1/products/'+encodeURIComponent(id)+'/bundle',{method:'POST',body:{components},mutationId});}
+    stockReservations(filters={}){return this.request('/api/v1/inventory/reservations'+this.params(filters));}
+    reserveStock(body,mutationId){return this.request('/api/v1/inventory/reservations',{method:'POST',body,mutationId});}
+    releaseStockReservation(id,mutationId){return this.request('/api/v1/inventory/reservations/'+encodeURIComponent(id)+'/release',{method:'POST',body:{},mutationId});}
+    purchaseCostHistory(filters={}){return this.request('/api/v1/inventory/purchase-costs'+this.params(filters));}
+    purchaseReceipt(body,mutationId){return this.request('/api/v1/inventory/receipts',{method:'POST',body,mutationId});}
     inventoryBalances(filters = {}) { return this.request(`/api/v1/inventory${this.params(filters)}`); }
     inventoryLowStock() { return this.request('/api/v1/inventory/low-stock'); }
     inventoryMovements(filters = {}) { return this.request(`/api/v1/inventory/movements${this.params(filters)}`); }
