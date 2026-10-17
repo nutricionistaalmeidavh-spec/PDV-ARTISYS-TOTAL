@@ -325,6 +325,9 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       if(parts[2]==='weight-items'&&parts.length===4&&method==='DELETE')
         return json({sale:await service.removeWeightedItem(tenant,branch,id,parts[3])});
       if(parts[2]==='items'){
+        if(parts.length===5&&parts[4]==='note'&&method==='PUT'){
+          return json({sale:await service.changeItemNote(tenant,branch,id,decodeURIComponent(parts[3]),user,body,key)});
+        }
         if(parts.length===5&&parts[4]==='price'&&method==='PUT'){
           requireAccess(member,'sales.discount',user);
           return json({sale:await service.overrideItemPrice(tenant,branch,id,decodeURIComponent(parts[3]),user,body,key)});
