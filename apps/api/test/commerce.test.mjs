@@ -432,6 +432,7 @@ test('product editing and deactivation retain canonical sale snapshots, enforce 
     const done=await x.write('a',`sales/${open.body.sale.id}/complete`,{branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]});
     assert.equal(done.status,200,JSON.stringify(done.body));
     assert.equal((await x.write('a',path,{branchId:'branch-a',unit:'KG'},{method:'PATCH'})).status,409,'Historic unit must not be silently converted');
+    await assert.rejects(x.db.prepare('UPDATE products SET unit=? WHERE tenant_id=? AND id=?').bind('KG','a',id).run(),/PRODUCT_UNIT_WITH_HISTORY/);
     assert.equal((await x.write('a',path,body,{who:x.viewer,method:'PATCH'})).status,403);
     assert.equal((await x.write('b',path,{...body,branchId:'branch-b'},{who:x.other,method:'PATCH'})).status,404);
     assert.equal((await x.write('a',path,{...body,name:'A'},{method:'PATCH'})).status,400);
