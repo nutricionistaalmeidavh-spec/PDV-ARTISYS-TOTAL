@@ -218,14 +218,22 @@
     }catch(e){toast(e.message,'error');}
    });
    content.querySelector('#cloud-export-dre').addEventListener('click',()=>{
-    const safe=value=>{const text=String(value??'');const guarded=/^[=+@\t\r]/.test(text)?"'"+text:text;return '"'+guarded.replace(/"/g,'""')+'"';};
+    const safe=value=>{const text=String(value??'');const guarded=/^[=+@\-\t\r]/.test(text)?"'"+text:text;return '"'+guarded.replace(/"/g,'""')+'"';};
     const rows=[['Grupo','Natureza','Centro de custo','Centavos','Base','De','Até'],...(dre.groups||[]).map(x=>[x.name,x.nature,costCenters.find(c=>c.id===x.costCenterId)?.name||'',x.amountCents,basis,from,to])];
     const blob=new Blob(['\uFEFF'+rows.map(row=>row.map(safe).join(';')).join('\r\n')+'\r\n'],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='dre-'+basis+'-'+from+'-'+to+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
    });
   }catch(e){content.innerHTML=wrap('Gestão e DRE','Falha de consulta.','<div class="ops-error">'+esc(e.message)+'</div>');}
  }
+ if(api.webMode){
  routes.register('finance-banks',{owner:'cloud-finance-advanced',render:renderBanks});
  routes.register('finance-recurrences',{owner:'cloud-finance-advanced',render:renderRecurrences});
+ content.addEventListener('click',event=>{
+  const button=event.target.closest('button[data-route]');
+  if(!button||!button.closest('.ops-page'))return;
+  const navigation=document.querySelector('#sidebar-nav [data-route="'+button.dataset.route+'"]');
+  if(navigation){event.preventDefault();navigation.click();}
+ });
+}
  root.PdvAdvancedFinanceWeb=Object.freeze({renderBanks,renderRecurrences,renderDre});
 })();
