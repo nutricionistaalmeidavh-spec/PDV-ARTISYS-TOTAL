@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'" />
+  <title>ArtiSys PDV</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./toast-ui.css" />
+  <link rel="stylesheet" href="./ux-components.css" />
+  <link rel="stylesheet" href="./products-dense-view.css" />
+  <link rel="stylesheet" href="./customers-master-detail.css" />
+  <link rel="stylesheet" href="./operational-pages.css" />
+  <link rel="stylesheet" href="./settings-hub-ui.css" />
+  <link rel="stylesheet" href="./reporting-v2.css" />
+  <link rel="stylesheet" href="./restaurant-ui.css" />
+  <link rel="stylesheet" href="./restaurant-public-ordering-ui.css" />
+  <link rel="stylesheet" href="./vertical-modules.css" />
+  <link rel="stylesheet" href="./ux-layout-tuning.css" />
+  <link rel="stylesheet" href="./kits-combos.css" />
+  <link rel="stylesheet" href="./product-support.css" />
+  <link rel="stylesheet" href="./product-variants.css" />
+  <link rel="stylesheet" href="./updater-ui.css" />
+  <link rel="stylesheet" href="./ux-home-checkout.css" />
+  <link rel="stylesheet" href="./classic-home-ui.css" />
+  <link rel="stylesheet" href="./access-center-ui.css" />
+  <link rel="stylesheet" href="./post-sale-receipt-ui.css" />
+  <link rel="stylesheet" href="./regression-hardening.css" />
+</head>
+<body class="theme-home">
+  <div class="desktop-frame">
+    <aside id="app-sidebar" class="sidebar" aria-label="Navegação principal">
+      <button class="brand-mark nav-button" data-route="home" title="ArtiSys PDV" aria-label="Ir para início"><span>A</span></button>
+      <nav id="sidebar-nav" class="sidebar-nav"></nav>
+      <div class="sidebar-spacer"></div>
+      <button class="nav-button" data-route="settings" title="Configurações" aria-label="Configurações" hidden><span class="nav-button-icon" data-icon="settings"></span><span class="nav-label">Config.</span></button>
+      <button class="nav-button sidebar-back" data-route="home" title="Voltar ao início" aria-label="Voltar ao início">‹</button>
+    </aside>
+    <section class="app-column">
+      <header id="app-topbar" class="topbar">
+        <div class="topbar-brand"><strong>ARTISYS</strong><span>PDV</span></div>
+        <div class="topbar-context">
+          <div id="network-status" class="status-pill"><i></i><span>Rede Local</span></div>
+          <div class="context-pill"><span data-icon="store"></span><strong id="store-name">Loja Matriz</strong></div>
+          <div class="context-pill"><span data-icon="terminal"></span><strong id="terminal-name">Terminal PDV-01</strong></div>
+          <button id="operator-button" class="context-pill operator-pill" type="button"><span data-icon="user"></span><strong id="operator-name">Sem operador</strong><small id="operator-role"></small></button>
+          <div id="clock" class="clock"></div>
+        </div>
+        <div class="window-controls" aria-label="Controles da janela">
+          <button type="button" data-window="minimize" aria-label="Minimizar">−</button>
+          <button type="button" data-window="maximize" aria-label="Maximizar">□</button>
+          <button type="button" data-window="close" aria-label="Fechar">×</button>
+        </div>
+      </header>
+      <main id="route-content" class="route-content" tabindex="-1"></main>
+      <footer class="app-footer">
+        <div><strong>ARTISYS</strong><span>Tecnologia para o seu negócio.</span></div>
+        <div><span id="footer-status" class="footer-status"><i></i>Sistema local</span><span id="app-version">Versão 0.0.0</span><span>Suporte ArtiSys</span></div>
+      </footer>
+    </section>
+  </div>
+  <div id="auth-overlay" class="overlay" aria-live="polite"><section class="auth-card" data-bootstrap-auth><div class="auth-logo">A</div><h1>ArtiSys PDV</h1><p>Inicializando sistema local...</p></section></div>
+  <div id="modal-root" class="overlay hidden" aria-live="polite"></div>
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <script defer src="./toast-ui.js"></script>
+  <script defer src="./ui-model.js"></script>
+  <script defer src="./currency-input.js"></script>
+  <script defer src="./business-date.js"></script>
+  <script defer src="./api-client.js"></script>
+  <script defer src="./ui-lifecycle.js"></script>
+  <script defer src="./route-registry.js"></script>
+  <script defer src="./access-policy.js"></script>
+  <script defer src="./catalog-user-management-api.js"></script>
+  <script defer src="./catalog-removal-ui.js"></script>
+  <script defer src="./erp-finance-api-client.js"></script>
+  <script defer src="./erp-finance-ui.js"></script>
+  <script defer src="./enterprise-depth-api-client.js"></script>
+  <script defer src="./wholesale-api-client.js"></script>
+  <script defer src="./vertical-api-client.js"></script>
+  <script defer src="./vertical-modules.js"></script>
+  <script defer src="./sale-observation-ui.js"></script>
+  <script defer src="./ux-components.js"></script>
+  <script defer src="./erp-finance-operations-ui.js"></script>
+  <script defer src="./products-dense-view.js"></script>
+  <script defer src="./customers-master-detail-view.js"></script>
+  <script defer src="./home-role-model.js"></script>
+  <script defer src="./access-center-model.js"></script>
+  <script defer src="./access-center-ui.js"></script>
+  <script defer src="./app.js"></script>
+  <script defer src="./first-access-ui.js"></script>
+  <script defer src="./cash-change-ui.js"></script>
+  <script defer src="./products-dense-controller.js"></script>
+  <script defer src="./customers-master-detail-controller.js"></script>
+  <script defer src="./seller-select-sync.js"></script>
+  <script defer src="./reporting-v2.js"></script>
+  <script defer src="./operational-pages.js"></script>
+  <script defer src="./settings-hub-ui.js"></script>
+  <script defer src="./historical-cost-ui.js"></script>
+  <script defer src="./enterprise-depth-ui.js"></script>
+  <script defer src="./route-scroll-ui.js"></script>
+  <script defer src="./delivery-address-ui.js"></script>
+  <script defer src="./admin-ops.js"></script>
+  <script defer src="./restaurant-module-gate.js"></script>
+  <script defer src="../../shared/order-composer.js"></script>
+  <script defer src="./restaurant-order-composer-ui.js"></script>
+  <script defer src="./restaurant-ui.js"></script>
+  <script defer src="./restaurant-public-ordering-ui.js"></script>
+  <script defer src="./wholesale-ui.js"></script>
+  <script defer src="./vertical-parity-p1.js"></script>
+  <script defer src="./e48-e54-ui.js"></script>
+  <script defer src="./module-state-sync.js"></script>
+  <script defer src="./hardware-scale-ui.js"></script>
+  <script defer src="./kits-combos-ui.js"></script>
+  <script defer src="./reload-transition-ui.js"></script>
+  <script defer src="./product-variants-ui.js"></script>
+  <script defer src="./operational-route-extensions.js"></script>
+  <script defer src="./operational-detail-extensions.js"></script>
+  <script defer src="./operational-friendly-fields.js"></script>
+  <script defer src="./returns-ui.js"></script>
+  <script defer src="./updater-ui.js"></script>
+  <script defer src="./ux-home-checkout.js"></script>
+  <script defer src="./classic-home-ui.js"></script>
+  <script defer src="./telemetry-ui.js"></script>
+  <script defer src="./post-sale-receipt-ui.js"></script>
+</body>
+</html>

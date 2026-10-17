@@ -1,0 +1,660 @@
+{
+  "schemaVersion": 1,
+  "description": "Fonte de verdade para rastrear capacidades do backend ate a superficie do cliente. Infraestrutura interna e explicitamente classificada como internal.",
+  "backendIgnore": [
+    "js/domains/workshop/workshop-service.js",
+    "js/domains/services/services-service.js"
+  ],
+  "capabilities": [
+    {
+      "id": "core.catalog-sales",
+      "exposure": "customer",
+      "status": "supported",
+      "targetPhase": 4,
+      "declaredCapabilities": [
+        "catalog-products-customers-sellers",
+        "catalog-options-variants-combos",
+        "catalog-parent-child-variants-core",
+        "catalog-kits-component-stock-snapshot",
+        "catalog-promotional-combos-user-configurable",
+        "recipe-versioning-and-ingredient-consumption",
+        "sales-checkout-mixed-manual-payments",
+        "sales-observation-internal-and-optional-non-fiscal-printing"
+      ],
+      "backend": [
+        {
+          "path": "js/domains/catalog/catalog-service.js"
+        },
+        {
+          "path": "js/domains/catalog/catalog-customization-service.js"
+        },
+        {
+          "path": "js/domains/catalog/kit-combo-service.js"
+        },
+        {
+          "path": "js/domains/catalog/product-photo-service.js"
+        },
+        {
+          "path": "js/domains/inventory/recipe-service.js"
+        },
+        {
+          "path": "js/domains/sales/sale-service.js"
+        },
+        {
+          "path": "js/domains/sales/promotion-sale-service.js"
+        },
+        {
+          "path": "js/domains/sales/commission-service.js"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/router.js"
+        },
+        {
+          "path": "server/kit-combo-router.js"
+        },
+        {
+          "path": "server/product-variant-router.js"
+        }
+      ],
+      "client": [
+        {
+          "path": "desktop/renderer/api-client.js"
+        },
+        {
+          "path": "desktop/renderer/app.js"
+        }
+      ],
+      "ui": [
+        {
+          "path": "desktop/renderer/app.js"
+        },
+        {
+          "path": "desktop/renderer/product-variants-ui.js"
+        },
+        {
+          "path": "desktop/renderer/kits-combos-ui.js"
+        },
+        {
+          "path": "desktop/renderer/sale-observation-ui.js"
+        }
+      ]
+    },
+    {
+      "id": "core.operations",
+      "exposure": "customer",
+      "status": "supported",
+      "targetPhase": 4,
+      "declaredCapabilities": [
+        "inventory-ledger-and-low-stock",
+        "cash-open-supply-withdraw-close",
+        "sales-history-returns-and-reversals",
+        "finance-payables-receivables",
+        "finance-entry-management-dimensions",
+        "finance-bank-reconciliation-and-own-account-transfers",
+        "finance-recurring-rules-and-alerts",
+        "finance-statement-import-history",
+        "finance-alert-hide-restore"
+      ],
+      "backend": [
+        {
+          "path": "js/domains/inventory/inventory-service.js"
+        },
+        {
+          "path": "js/domains/cash/cash-service.js"
+        },
+        {
+          "path": "js/domains/returns/return-service.js"
+        },
+        {
+          "path": "js/domains/finance/finance-service.js"
+        },
+        {
+          "path": "js/domains/finance/finance-dimensions.js"
+        },
+        {
+          "path": "js/domains/finance/statement-import.js"
+        },
+        {
+          "path": "js/domains/finance/reconciliation.js"
+        },
+        {
+          "path": "js/domains/finance/recurrence.js"
+        },
+        {
+          "path": "js/domains/finance/finance-alerts.js"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/router.js"
+        },
+        {
+          "path": "server/erp-finance-router.js"
+        }
+      ],
+      "client": [
+        {
+          "path": "desktop/renderer/api-client.js"
+        },
+        {
+          "path": "desktop/renderer/erp-finance-api-client.js"
+        }
+      ],
+      "ui": [
+        {
+          "path": "desktop/renderer/operational-pages.js"
+        },
+        {
+          "path": "desktop/renderer/erp-finance-operations-ui.js"
+        }
+      ]
+    },
+    {
+      "id": "management.reports",
+      "exposure": "customer",
+      "status": "supported",
+      "targetPhase": 3,
+      "declaredCapabilities": [
+        "operational-reports-and-csv-export"
+      ],
+      "backend": [
+        {
+          "path": "js/domains/reports/reporting-service.js",
+          "marker": "buildSalesSummary"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/router.js",
+          "marker": "/reports/sales"
+        }
+      ],
+      "client": [
+        {
+          "path": "desktop/renderer/api-client.js",
+          "marker": "reportSales"
+        }
+      ],
+      "ui": [
+        {
+          "path": "desktop/renderer/reporting-v2.js",
+          "marker": "PdvReportsV2"
+        }
+      ]
+    },
+    {
+      "id": "printing.customer-documents",
+      "exposure": "admin",
+      "status": "supported",
+      "targetPhase": 7,
+      "declaredCapabilities": [
+        "thermal-print-queue-and-retry",
+        "non-fiscal-sale-prebill-kitchen-and-cash-printing",
+        "configurable-non-fiscal-receipt-branding-name-address-phone-logo",
+        "barcode-scale-drawer-adapters"
+      ],
+      "backend": [
+        {
+          "path": "js/domains/printing/print-service.js"
+        },
+        {
+          "path": "js/domains/printing/non-fiscal-service.js"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/router.js"
+        }
+      ],
+      "client": [
+        {
+          "path": "desktop/renderer/api-client.js"
+        }
+      ],
+      "ui": [
+        {
+          "path": "desktop/renderer/operational-pages.js"
+        },
+        {
+          "path": "desktop/renderer/admin-ops.js",
+          "marker": "settings-company-store"
+        }
+      ]
+    },
+    {
+      "id": "restaurant.operations",
+      "exposure": "customer",
+      "status": "supported",
+      "targetPhase": 5,
+      "declaredCapabilities": [
+        "restaurant-tables-tabs-orders-and-table-transfer",
+        "restaurant-advanced-split-settlement-service-charge-and-item-transfer",
+        "restaurant-checkout-reusing-sales-cash-and-inventory",
+        "kitchen-kds-stations-product-routing-and-printer-routing",
+        "restaurant-service-requests-waiter-and-bill",
+        "restaurant-operational-reports-and-csv-export"
+      ],
+      "backend": [
+        {
+          "path": "js/domains/restaurant/restaurant-service.js"
+        },
+        {
+          "path": "js/domains/restaurant/restaurant-configured-service.js"
+        },
+        {
+          "path": "js/domains/restaurant/restaurant-settlement-service.js"
+        },
+        {
+          "path": "js/domains/restaurant/kitchen-service.js"
+        },
+        {
+          "path": "js/domains/restaurant/mobile-device-service.js"
+        },
+        {
+          "path": "js/domains/restaurant/restaurant-reporting-service.js"
+        },
+        {
+          "path": "js/domains/restaurant/public-ordering-service.js"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/restaurant-router.js"
+        },
+        {
+          "path": "server/public-ordering-router.js"
+        },
+        {
+          "path": "server/e48-e54-router.js"
+        }
+      ],
+      "client": [
+        {
+          "path": "desktop/renderer/restaurant-ui.js"
+        },
+        {
+          "path": "desktop/renderer/restaurant-public-ordering-ui.js"
+        },
+        {
+          "path": "server/customer-menu/app.js"
+        },
+        {
+          "path": "server/mobile/app.js"
+        }
+      ],
+      "ui": [
+        {
+          "path": "desktop/renderer/restaurant-ui.js"
+        },
+        {
+          "path": "desktop/renderer/restaurant-public-ordering-ui.js"
+        },
+        {
+          "path": "server/customer-menu/index.html"
+        },
+        {
+          "path": "server/mobile/index.html"
+        }
+      ]
+    },
+    {
+      "id": "verticals.operations",
+      "exposure": "customer",
+      "status": "supported",
+      "targetPhase": 6,
+      "declaredCapabilities": [
+        "shared-kds-routing-for-food-orders",
+        "optional-pizzeria-size-flavors-crust-and-pricing-policy",
+        "food-delivery-pickup-counter-workflow",
+        "food-unified-orders-with-optional-daily-ticket-and-legacy-history",
+        "optional-market-bakery-weighted-items-and-orders",
+        "optional-retail-variants-sku-barcode-and-variant-stock"
+      ],
+      "backend": [
+        {
+          "path": "js/domains/pizzeria/pizzeria-service.js"
+        },
+        {
+          "path": "js/domains/catalog/configured-item-pricing-service.js"
+        },
+        {
+          "path": "js/domains/delivery/delivery-service.js"
+        },
+        {
+          "path": "js/domains/fast-food/fast-food-service.js"
+        },
+        {
+          "path": "js/domains/market-bakery/market-bakery-service.js"
+        },
+        {
+          "path": "js/domains/retail/retail-service.js"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/vertical-router.js"
+        }
+      ],
+      "client": [
+        {
+          "path": "desktop/renderer/vertical-api-client.js"
+        }
+      ],
+      "ui": [
+        {
+          "path": "desktop/renderer/vertical-modules.js"
+        }
+      ]
+    },
+    {
+      "id": "mobile.lan-experience",
+      "exposure": "customer",
+      "status": "supported",
+      "targetPhase": 5,
+      "declaredCapabilities": [
+        "local-mobile-access-qr-material",
+        "waiter-lan-device",
+        "kitchen-lan-device",
+        "hashed-revocable-mobile-device-credentials",
+        "self-hosted-mobile-ui-on-local-lan"
+      ],
+      "backend": [
+        {
+          "path": "js/core/mobile-access/mobile-access-service.js"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/restaurant-router.js"
+        }
+      ],
+      "client": [
+        {
+          "path": "server/mobile/app.js"
+        }
+      ],
+      "ui": [
+        {
+          "path": "server/mobile/app.js"
+        }
+      ]
+    },
+    {
+      "id": "admin.local-operations",
+      "exposure": "admin",
+      "status": "supported",
+      "targetPhase": 7,
+      "declaredCapabilities": [
+        "optional-local-module-registry",
+        "first-run-segment-onboarding-and-editable-module-recommendations",
+        "versioned-hardware-compatibility-evidence",
+        "versioned-backup-validate-restore",
+        "csv-xlsx-import-preview-commit",
+        "diagnostic-zip",
+        "persistent-pilot-readiness-checklist"
+      ],
+      "backend": [
+        {
+          "path": "js/core/backup/backup-service.js"
+        },
+        {
+          "path": "js/core/settings/settings-service.js"
+        },
+        {
+          "path": "js/core/modules/module-service.js"
+        },
+        {
+          "path": "js/core/onboarding/onboarding-service.js"
+        },
+        {
+          "path": "js/core/hardware/hardware-compatibility-service.js"
+        },
+        {
+          "path": "js/core/import/import-service.js"
+        },
+        {
+          "path": "js/core/pilot/pilot-service.js"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/e48-e54-router.js"
+        },
+        {
+          "path": "server/router.js"
+        },
+        {
+          "path": "server/access-control-router.js"
+        }
+      ],
+      "client": [
+        {
+          "path": "desktop/renderer/admin-ops.js"
+        },
+        {
+          "path": "desktop/renderer/e48-e54-ui.js"
+        }
+      ],
+      "ui": [
+        {
+          "path": "desktop/renderer/admin-ops.js"
+        },
+        {
+          "path": "desktop/renderer/e48-e54-ui.js"
+        }
+      ]
+    },
+    {
+      "id": "operations.enterprise-depth",
+      "exposure": "customer",
+      "status": "supported",
+      "targetPhase": 9,
+      "declaredCapabilities": [
+        "historical-cost-snapshot-and-margin",
+        "stock-locations-reservations-and-transfers",
+        "purchase-orders-partial-receiving-moving-average-payable",
+        "sales-orders-pickup-delivery-reservation-fulfillment",
+        "terminal-bound-stock-location-for-pos-sales"
+      ],
+      "backend": [
+        {
+          "path": "js/domains/reports/historical-reporting-service.js",
+          "marker": "HISTORICAL_SNAPSHOT"
+        },
+        {
+          "path": "js/domains/sales/availability-sale-service.js",
+          "marker": "Estoque disponivel insuficiente"
+        },
+        {
+          "path": "js/domains/inventory/terminal-stock-location-service.js",
+          "marker": "resolveTerminalLocation"
+        },
+        {
+          "path": "js/domains/inventory-logistics/inventory-logistics-service.js",
+          "marker": "createTransfer"
+        },
+        {
+          "path": "js/domains/procurement/procurement-service.js",
+          "marker": "receivePurchaseOrder"
+        },
+        {
+          "path": "js/domains/orders/sales-order-service.js",
+          "marker": "fulfillOrder"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/enterprise-depth-router.js",
+          "marker": "/api/v1/purchase-orders"
+        }
+      ],
+      "client": [
+        {
+          "path": "desktop/renderer/enterprise-depth-api-client.js",
+          "marker": "createPurchaseOrder"
+        }
+      ],
+      "ui": [
+        {
+          "path": "desktop/renderer/enterprise-depth-ui.js",
+          "marker": "Compras e recebimentos"
+        }
+      ]
+    },
+    {
+      "id": "wholesale.operations",
+      "exposure": "customer",
+      "status": "supported",
+      "targetPhase": 9,
+      "declaredCapabilities": [
+        "wholesale-quantity-pricing-and-b2b-orders",
+        "checkout-open-commands-and-orders-without-reentry",
+        "wholesale-customer-policy-minimum-order-payment-credit"
+      ],
+      "backend": [
+        {
+          "path": "js/domains/sales/commercial-pricing-service.js",
+          "marker": "resolveUnitPrice"
+        },
+        {
+          "path": "js/domains/wholesale/wholesale-service.js",
+          "marker": "createQuote"
+        },
+        {
+          "path": "js/domains/orders/sales-order-service.js",
+          "marker": "prepareCheckout"
+        },
+        {
+          "path": "js/domains/wholesale/wholesale-service.js",
+          "marker": "saveCustomerPolicy"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/wholesale-router.js",
+          "marker": "/api/v1/wholesale/orders"
+        },
+        {
+          "path": "server/checkout-document-router.js",
+          "marker": "/api/v1/checkout/documents"
+        }
+      ],
+      "client": [
+        {
+          "path": "desktop/renderer/wholesale-api-client.js",
+          "marker": "createWholesaleQuote"
+        },
+        {
+          "path": "desktop/renderer/api-client.js",
+          "marker": "checkoutDocuments"
+        }
+      ],
+      "ui": [
+        {
+          "path": "desktop/renderer/wholesale-ui.js",
+          "marker": "data-module-workspace=\"WHOLESALE\""
+        },
+        {
+          "path": "desktop/renderer/app.js",
+          "marker": "Comandas e pedidos"
+        }
+      ]
+    },
+    {
+      "id": "infra.local-first",
+      "exposure": "internal",
+      "status": "supported",
+      "targetPhase": 0,
+      "declaredCapabilities": [
+        "desktop-windows-local-first",
+        "central-lan-server",
+        "paired-multi-terminal",
+        "shared-artisys-printing-renderer-and-drivers",
+        "shared-artisys-serialport-peripheral-runtime",
+        "hardware-protocol-simulation-ci-and-recovery-tests",
+        "audit-health-sanitized-logs",
+        "server-terminal-and-terminal-deployment-profiles"
+      ],
+      "backend": [
+        {
+          "path": "js/core/auth/authorization-service.js"
+        },
+        {
+          "path": "js/core/auth/profile-service.js"
+        },
+        {
+          "path": "js/core/auth/device-access-service.js"
+        },
+        {
+          "path": "js/core/auth/access-security-service.js"
+        },
+        {
+          "path": "js/core/auth/principal-resolver.js"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/access-control-router.js"
+        },
+        {
+          "path": "server/auth-session-router.js"
+        },
+        {
+          "path": "server/catalog-management-router.js"
+        }
+      ],
+      "client": [
+        {
+          "path": "desktop/renderer/access-policy.js"
+        },
+        {
+          "path": "desktop/renderer/api-client.js"
+        }
+      ],
+      "ui": [
+        {
+          "path": "desktop/renderer/access-center-ui.js"
+        }
+      ]
+    },
+    {
+      "id": "auth.local-recovery",
+      "exposure": "customer",
+      "status": "supported",
+      "targetPhase": 0,
+      "declaredCapabilities": [
+        "offline-one-time-password-recovery"
+      ],
+      "backend": [
+        {
+          "path": "js/core/auth/local-recovery-service.js",
+          "marker": "createLocalRecoveryService"
+        }
+      ],
+      "api": [
+        {
+          "path": "server/password-recovery-router.js",
+          "marker": "local-confirm"
+        }
+      ],
+      "client": [
+        {
+          "path": "desktop/renderer/first-access-ui.js",
+          "marker": "local-confirm"
+        }
+      ],
+      "ui": [
+        {
+          "path": "desktop/renderer/settings-hub-ui.js",
+          "marker": "settings-local-recovery"
+        },
+        {
+          "path": "desktop/renderer/first-access-ui.js",
+          "marker": "Esqueci minha senha"
+        }
+      ]
+    }
+  ]
+}

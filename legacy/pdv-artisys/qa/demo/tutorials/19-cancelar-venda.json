@@ -1,0 +1,80 @@
+{
+  "name": "19-cancelar-venda",
+  "title": "Cancelar uma venda",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "base"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='checkout']",
+      "name": "abrir-balcao",
+      "holdMs": 450
+    },
+    {
+      "action": "click",
+      "selector": "#new-sale",
+      "name": "iniciar-venda",
+      "holdMs": 350
+    },
+    {
+      "action": "click",
+      "selector": "[data-add-product='tutorial-product']",
+      "name": "adicionar-item",
+      "holdMs": 450
+    },
+    {
+      "action": "click",
+      "selector": "#cancel-sale",
+      "name": "cancelar-venda",
+      "holdMs": 450
+    },
+    {
+      "action": "waitFor",
+      "selector": "#confirm-cancel",
+      "name": "confirmacao-cancelamento",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "fill",
+      "selector": "#cancel-reason",
+      "name": "motivo-cancelamento",
+      "value": "Cancelamento tutorial",
+      "holdMs": 300
+    },
+    {
+      "action": "click",
+      "selector": "#confirm-cancel",
+      "name": "confirmar-cancelamento",
+      "holdMs": 650
+    },
+    {
+      "action": "expectText",
+      "selector": "#toast-root",
+      "name": "venda-cancelada",
+      "expected": "Venda cancelada.",
+      "timeoutMs": 10000,
+      "holdMs": 1000
+    }
+  ]
+}

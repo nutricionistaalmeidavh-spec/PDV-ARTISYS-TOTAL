@@ -1,0 +1,21 @@
+[
+  "O alvo oficial de empacotamento e suporte comercial é Windows x64.",
+  "Todo o núcleo, a Fase 9 de profundidade operacional e os módulos E40-E54 funcionam localmente e na LAN após a ativação comercial inicial; venda, estoque, caixa e demais operações diárias não dependem de SaaS ou nuvem.",
+  "A distribuição oficial exige licença comercial: instalação sem ativação não libera o primeiro acesso nem o login local. O código é validado pelo serviço ArtiSys; depois de ativado, o funcionamento local pode continuar offline conforme o último status conhecido da licença.",
+  "Os módulos opcionais são ativados localmente por configuração; desativá-los não apaga dados históricos.",
+  "Ao transformar um produto comum em produto pai com subitens/variações, qualquer saldo existente no produto pai deve ser zerado ou distribuído antes; depois disso o estoque passa a ser controlado nos subitens.",
+  "Um produto pai com variações ativas não é vendido diretamente: a venda deve identificar uma variação específica para preservar preço, código e estoque corretos.",
+  "Saldos existentes antes da Fase 9 são migrados para MAIN — Estoque principal; o saldo agregado legado permanece como projeção de compatibilidade.",
+  "Vendas concluídas antes da disponibilidade do snapshot histórico de custo não podem ter o custo original reconstruído com certeza; nesses registros o relatório sinaliza ESTIMATED_CURRENT e usa o custo atual como estimativa.",
+  "Compras, recebimentos, reservas, transferências e pedidos da Fase 9 são locais e não constituem contabilidade por partidas dobradas, fiscal de entrada, multiempresa ou sincronização entre servidores independentes.",
+  "A interface móvel é servida pelo próprio PDV na rede local; não depende de CDN nem de internet. O transporte HTTP deve ser usado somente em LAN confiável e não é apresentado como HTTPS.",
+  "O cardápio por QR abre um token opaco específico da mesa. A superfície da equipe registra manifest e service worker somente em HTTPS ou localhost; em HTTP na LAN continua sendo uma aplicação web comum e não é apresentada como PWA instalável.",
+  "Pagamentos são registrados manualmente; não há TEF, PinPad, adquirente, API bancária nem confirmação automática de PIX.",
+  "Impressora, gaveta, balança e outros periféricos dependem do hardware, driver, firmware e conexão disponíveis no terminal onde serão usados.",
+  "A E54.1 valida automaticamente famílias de protocolos e cenários de falha/reconexão. PROTOCOL_VERIFIED significa compatibilidade de protocolo testada por CI, não homologação de um modelo físico específico.",
+  "Nenhum modelo físico específico deve ser declarado homologado sem evidência real registrada. Modelo ainda não testado fisicamente usa UNTESTED_MODEL; somente equipamento realmente testado com evidência usa FIELD_VERIFIED.",
+  "Formatos ou comandos proprietários de balança podem exigir configuração de porta, baud rate, comando e janela de resposta; um formato específico só deve ser anunciado como FIELD_VERIFIED após validação documentada no equipamento real.",
+  "Terminais e dispositivos móveis dependem da disponibilidade do servidor central na LAN; não há sincronização em nuvem como substituto do servidor local.",
+  "Restaurações são preparadas e validadas antes da troca e aplicadas no próximo início controlado do servidor para preservar o banco ativo em caso de falha.",
+  "A V1 não emite NFC-e, NF-e ou NFS-e e não integra SEFAZ/ACBr. Vendas, pedidos, comandas, cozinha/KDS e caixa utilizam somente documentos e impressões não fiscais."
+]

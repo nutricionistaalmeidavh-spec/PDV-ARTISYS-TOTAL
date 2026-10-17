@@ -1,0 +1,105 @@
+name: Tutorial Capture P1-P3
+on:
+  push:
+    branches: [feat/tutorial-videos-p1-p3-30s]
+    paths:
+      - 'qa/demo/tutorials/**'
+      - 'qa/runtime/adapters/tutorials-p1-p3.mjs'
+      - 'qa/artisys-qa.config.json'
+      - 'qa/tutorials/**'
+      - 'scripts/tutorial-videos.mjs'
+      - 'desktop/renderer/enterprise-depth-ui.js'
+      - '.github/workflows/tutorial-capture-p1-p3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tutorial-capture-p1-p3-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        demo:
+          - 13-cadastrar-produto
+          - 14-alterar-preco-estoque
+          - 15-cadastrar-cliente
+          - 16-consultar-estoque
+          - 17-encontrar-venda
+          - 18-detalhes-venda
+          - 19-cancelar-venda
+          - 20-fazer-devolucao
+          - 21-relatorio-vendas
+          - 22-criar-pedido-compra
+          - 23-receber-mercadoria
+          - 24-recebimento-parcial
+          - 25-criar-orcamento-pedido
+          - 26-reservar-atender-pedido
+          - 27-contas-pagar-receber
+          - 28-comissao-vendedor
+          - 29-criar-usuario-operador
+          - 30-alterar-permissoes
+          - 31-parear-terminal
+          - 32-configurar-impressora
+          - 33-diagnostico-impressao
+          - 34-fazer-backup
+          - 35-restaurar-importar-dados
+          - 36-ativar-desativar-modulos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install application dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install QA runtime dependencies
+        run: npm ci --prefix qa/runtime --no-audit --no-fund
+      - name: Ensure capture tools
+        shell: bash
+        run: |
+          missing=()
+          command -v ffmpeg >/dev/null 2>&1 || missing+=(ffmpeg)
+          command -v ffprobe >/dev/null 2>&1 || missing+=(ffmpeg)
+          command -v xvfb-run >/dev/null 2>&1 || missing+=(xvfb)
+          if [ ${#missing[@]} -gt 0 ]; then
+            sudo apt-get update -y
+            sudo apt-get install -y "${missing[@]}"
+          fi
+      - name: Capture tutorial
+        shell: bash
+        env:
+          DEMO: ${{ matrix.demo }}
+        run: |
+          rm -rf "qa-artifacts-${DEMO}" tutorial-output
+          xvfb-run -a node qa/runtime/artisys-qa.mjs demo \
+            --config qa/artisys-qa.config.json \
+            --demo "${DEMO}" \
+            --profile tutorials-p1-p3 \
+            --preset landscape-16x9 \
+            --environment ci \
+            --output "qa-artifacts-${DEMO}"
+          RAW="$(find "qa-artifacts-${DEMO}" -name demo-video.mp4 -print -quit)"
+          test -n "$RAW"
+          mkdir -p tutorial-output
+          npm run qa:tutorials:edit -- \
+            --tutorial "${DEMO}" \
+            --input "$RAW" \
+            --output "tutorial-output/${DEMO}.mp4"
+      - name: Upload final tutorial
+        uses: actions/upload-artifact@v4
+        with:
+          name: tutorial-${{ matrix.demo }}
+          path: tutorial-output/${{ matrix.demo }}.mp4
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload QA evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tutorial-debug-${{ matrix.demo }}
+          path: qa-artifacts-${{ matrix.demo }}
+          if-no-files-found: warn
+          retention-days: 7

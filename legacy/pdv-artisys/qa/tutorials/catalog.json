@@ -1,0 +1,1092 @@
+{
+  "schemaVersion": 1,
+  "maxDurationSec": 30,
+  "editing": {
+    "maxOverlays": 4,
+    "principle": "orient-act-confirm",
+    "format": "burned-subtitles",
+    "core": "ffmpeg"
+  },
+  "tutorials": [
+    {
+      "id": "01-fazer-uma-venda",
+      "title": "Como fazer uma venda",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 28,
+      "goal": "Registrar uma venda do início ao fim.",
+      "success": "Venda concluída e registrada.",
+      "outputFile": "01-fazer-uma-venda.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Como fazer uma venda"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Adicione os itens e revise o total"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 24,
+          "toSec": 28,
+          "text": "Venda concluída"
+        }
+      ]
+    },
+    {
+      "id": "02-buscar-adicionar-produto",
+      "title": "Buscar e adicionar produto",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 18,
+      "goal": "Encontrar um produto e adicioná-lo ao carrinho.",
+      "success": "Produto aparece no carrinho.",
+      "outputFile": "02-buscar-adicionar-produto.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Buscar e adicionar produto"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 4,
+          "toSec": 7,
+          "text": "Busque por nome, código ou barras"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 15,
+          "toSec": 18,
+          "text": "Produto adicionado ao carrinho"
+        }
+      ]
+    },
+    {
+      "id": "03-alterar-quantidade-remover-item",
+      "title": "Alterar quantidade ou remover item",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 18,
+      "goal": "Corrigir quantidade ou remover um item da venda.",
+      "success": "Carrinho atualizado corretamente.",
+      "outputFile": "03-alterar-quantidade-remover-item.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Alterar ou remover item"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 5,
+          "toSec": 8,
+          "text": "Ajuste a quantidade no próprio item"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 15,
+          "toSec": 18,
+          "text": "Carrinho atualizado"
+        }
+      ]
+    },
+    {
+      "id": "04-aplicar-desconto",
+      "title": "Aplicar desconto",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 22,
+      "goal": "Aplicar um desconto permitido à venda.",
+      "success": "Total recalculado com o desconto.",
+      "outputFile": "04-aplicar-desconto.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Aplicar desconto"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Informe o percentual de desconto"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 19,
+          "toSec": 22,
+          "text": "Total recalculado"
+        }
+      ]
+    },
+    {
+      "id": "05-identificar-cliente-vendedor",
+      "title": "Identificar cliente e vendedor",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 20,
+      "goal": "Associar cliente e vendedor à venda quando necessário.",
+      "success": "Cliente e vendedor aparecem vinculados.",
+      "outputFile": "05-identificar-cliente-vendedor.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Cliente e vendedor"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 5,
+          "toSec": 8,
+          "text": "Selecione quem compra e quem vende"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 17,
+          "toSec": 20,
+          "text": "Venda identificada"
+        }
+      ]
+    },
+    {
+      "id": "06-finalizar-dinheiro-troco",
+      "title": "Finalizar em dinheiro e calcular troco",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 22,
+      "goal": "Finalizar uma venda em dinheiro com cálculo de troco.",
+      "success": "Pagamento confirmado e troco exibido.",
+      "outputFile": "06-finalizar-dinheiro-troco.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Pagamento em dinheiro"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 7,
+          "toSec": 10,
+          "text": "Informe o valor recebido"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 19,
+          "toSec": 22,
+          "text": "Pagamento confirmado e troco calculado"
+        }
+      ]
+    },
+    {
+      "id": "07-finalizar-pix-cartao",
+      "title": "Finalizar em PIX ou cartão",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 20,
+      "goal": "Registrar pagamento manual em PIX ou cartão.",
+      "success": "Venda concluída com a forma correta.",
+      "outputFile": "07-finalizar-pix-cartao.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "PIX ou cartão"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Escolha a forma de pagamento"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 17,
+          "toSec": 20,
+          "text": "Venda concluída"
+        }
+      ]
+    },
+    {
+      "id": "08-pagamento-misto",
+      "title": "Fazer pagamento misto",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 28,
+      "goal": "Dividir o pagamento entre duas ou mais formas.",
+      "success": "Soma das formas quita a venda.",
+      "outputFile": "08-pagamento-misto.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Pagamento misto"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Divida o total entre as formas"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Pagamento completo"
+        }
+      ]
+    },
+    {
+      "id": "09-suspender-retomar-venda",
+      "title": "Suspender e retomar venda",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 24,
+      "goal": "Guardar uma venda aberta e retomá-la depois.",
+      "success": "Venda retorna com os itens preservados.",
+      "outputFile": "09-suspender-retomar-venda.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Suspender e retomar venda"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Suspenda para continuar depois"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 21,
+          "toSec": 24,
+          "text": "Venda retomada com os itens"
+        }
+      ]
+    },
+    {
+      "id": "10-abrir-caixa",
+      "title": "Abrir caixa",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 18,
+      "goal": "Abrir a operação de caixa com o saldo inicial.",
+      "success": "Caixa fica aberto para operação.",
+      "outputFile": "10-abrir-caixa.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Como abrir o caixa"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 5,
+          "toSec": 8,
+          "text": "Informe o valor inicial"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 15,
+          "toSec": 18,
+          "text": "Caixa aberto"
+        }
+      ]
+    },
+    {
+      "id": "11-sangria-suprimento",
+      "title": "Fazer sangria ou suprimento",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 22,
+      "goal": "Registrar retirada ou entrada manual no caixa.",
+      "success": "Movimento fica registrado no caixa.",
+      "outputFile": "11-sangria-suprimento.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Sangria ou suprimento"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Escolha o tipo e informe o valor"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 19,
+          "toSec": 22,
+          "text": "Movimento registrado"
+        }
+      ]
+    },
+    {
+      "id": "12-fechar-caixa",
+      "title": "Fechar caixa",
+      "phase": "P0",
+      "audience": "operador",
+      "durationTargetSec": 28,
+      "goal": "Conferir e encerrar a operação de caixa.",
+      "success": "Caixa fica fechado com o fechamento registrado.",
+      "outputFile": "12-fechar-caixa.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Como fechar o caixa"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Confira os valores antes de confirmar"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Caixa fechado"
+        }
+      ]
+    },
+    {
+      "id": "13-cadastrar-produto",
+      "title": "Cadastrar produto",
+      "phase": "P1",
+      "audience": "admin",
+      "durationTargetSec": 28,
+      "goal": "Criar um produto com os dados essenciais para venda.",
+      "success": "Produto fica disponível no catálogo.",
+      "outputFile": "13-cadastrar-produto.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Cadastrar produto"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Preencha identificação, preço e estoque"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Produto cadastrado"
+        }
+      ]
+    },
+    {
+      "id": "14-alterar-preco-estoque",
+      "title": "Alterar preço ou estoque",
+      "phase": "P1",
+      "audience": "admin",
+      "durationTargetSec": 22,
+      "goal": "Atualizar preço ou saldo de um produto.",
+      "success": "Novo valor aparece salvo no produto.",
+      "outputFile": "14-alterar-preco-estoque.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Preço e estoque"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Edite somente o campo necessário"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 19,
+          "toSec": 22,
+          "text": "Alteração salva"
+        }
+      ]
+    },
+    {
+      "id": "15-cadastrar-cliente",
+      "title": "Cadastrar cliente",
+      "phase": "P1",
+      "audience": "operador-admin",
+      "durationTargetSec": 22,
+      "goal": "Criar um cliente para uso em vendas e consultas.",
+      "success": "Cliente fica disponível para seleção.",
+      "outputFile": "15-cadastrar-cliente.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Cadastrar cliente"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Preencha os dados essenciais"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 19,
+          "toSec": 22,
+          "text": "Cliente cadastrado"
+        }
+      ]
+    },
+    {
+      "id": "16-consultar-estoque",
+      "title": "Consultar estoque",
+      "phase": "P1",
+      "audience": "todos",
+      "durationTargetSec": 18,
+      "goal": "Localizar um produto e verificar seu saldo.",
+      "success": "Saldo atual fica visível.",
+      "outputFile": "16-consultar-estoque.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Consultar estoque"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 5,
+          "toSec": 8,
+          "text": "Localize o produto"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 15,
+          "toSec": 18,
+          "text": "Saldo atual exibido"
+        }
+      ]
+    },
+    {
+      "id": "17-encontrar-venda",
+      "title": "Encontrar uma venda",
+      "phase": "P1",
+      "audience": "admin",
+      "durationTargetSec": 20,
+      "goal": "Localizar venda por filtros disponíveis.",
+      "success": "Venda desejada aparece nos resultados.",
+      "outputFile": "17-encontrar-venda.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Encontrar uma venda"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 5,
+          "toSec": 8,
+          "text": "Use número, cliente, data ou vendedor"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 17,
+          "toSec": 20,
+          "text": "Venda localizada"
+        }
+      ]
+    },
+    {
+      "id": "18-detalhes-venda",
+      "title": "Abrir detalhes da venda",
+      "phase": "P1",
+      "audience": "admin",
+      "durationTargetSec": 18,
+      "goal": "Consultar itens, pagamentos e estado de uma venda.",
+      "success": "Detalhes completos ficam visíveis.",
+      "outputFile": "18-detalhes-venda.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Detalhes da venda"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 5,
+          "toSec": 8,
+          "text": "Abra a venda no histórico"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 15,
+          "toSec": 18,
+          "text": "Itens e pagamentos visíveis"
+        }
+      ]
+    },
+    {
+      "id": "19-cancelar-venda",
+      "title": "Cancelar uma venda",
+      "phase": "P1",
+      "audience": "admin",
+      "durationTargetSec": 28,
+      "goal": "Cancelar uma venda preservando seu histórico.",
+      "success": "Venda fica cancelada e rastreável.",
+      "outputFile": "19-cancelar-venda.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Cancelar uma venda"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Revise o impacto antes de confirmar"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Venda cancelada e preservada no histórico"
+        }
+      ]
+    },
+    {
+      "id": "20-fazer-devolucao",
+      "title": "Fazer devolução",
+      "phase": "P1",
+      "audience": "admin",
+      "durationTargetSec": 28,
+      "goal": "Registrar devolução parcial ou total com motivo.",
+      "success": "Devolução fica registrada e os efeitos são revertidos.",
+      "outputFile": "20-fazer-devolucao.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Fazer devolução"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Selecione os itens e informe o motivo"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Devolução registrada"
+        }
+      ]
+    },
+    {
+      "id": "21-relatorio-vendas",
+      "title": "Consultar relatório de vendas",
+      "phase": "P1",
+      "audience": "admin",
+      "durationTargetSec": 22,
+      "goal": "Aplicar filtros e consultar o desempenho de vendas.",
+      "success": "Relatório mostra o período selecionado.",
+      "outputFile": "21-relatorio-vendas.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Relatório de vendas"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Escolha o período e aplique os filtros"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 19,
+          "toSec": 22,
+          "text": "Relatório atualizado"
+        }
+      ]
+    },
+    {
+      "id": "22-criar-pedido-compra",
+      "title": "Criar pedido de compra",
+      "phase": "P2",
+      "audience": "admin",
+      "durationTargetSec": 28,
+      "goal": "Registrar um pedido para fornecedor.",
+      "success": "Pedido fica criado para acompanhamento.",
+      "outputFile": "22-criar-pedido-compra.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Criar pedido de compra"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Adicione fornecedor e itens"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Pedido criado"
+        }
+      ]
+    },
+    {
+      "id": "23-receber-mercadoria",
+      "title": "Receber mercadoria",
+      "phase": "P2",
+      "audience": "admin",
+      "durationTargetSec": 28,
+      "goal": "Registrar o recebimento de itens comprados.",
+      "success": "Estoque e compra ficam atualizados.",
+      "outputFile": "23-receber-mercadoria.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Receber mercadoria"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Confira as quantidades recebidas"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Recebimento registrado"
+        }
+      ]
+    },
+    {
+      "id": "24-recebimento-parcial",
+      "title": "Fazer recebimento parcial",
+      "phase": "P2",
+      "audience": "admin",
+      "durationTargetSec": 28,
+      "goal": "Receber parte de um pedido sem perder o saldo pendente.",
+      "success": "Quantidade recebida e pendente ficam separadas.",
+      "outputFile": "24-recebimento-parcial.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Recebimento parcial"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Informe somente o que chegou agora"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Pendente preservado para o próximo recebimento"
+        }
+      ]
+    },
+    {
+      "id": "25-criar-orcamento-pedido",
+      "title": "Criar orçamento ou pedido",
+      "phase": "P2",
+      "audience": "operador-admin",
+      "durationTargetSec": 28,
+      "goal": "Registrar um orçamento ou pedido para atendimento posterior.",
+      "success": "Documento fica salvo para continuidade.",
+      "outputFile": "25-criar-orcamento-pedido.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Criar orçamento ou pedido"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Adicione cliente e itens"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Documento salvo"
+        }
+      ]
+    },
+    {
+      "id": "26-reservar-atender-pedido",
+      "title": "Reservar e atender pedido",
+      "phase": "P2",
+      "audience": "operador-admin",
+      "durationTargetSec": 28,
+      "goal": "Reservar estoque e avançar o atendimento do pedido.",
+      "success": "Pedido mostra o saldo atendido e pendente.",
+      "outputFile": "26-reservar-atender-pedido.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Reservar e atender pedido"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Atenda somente a quantidade disponível"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Pedido atualizado"
+        }
+      ]
+    },
+    {
+      "id": "27-contas-pagar-receber",
+      "title": "Consultar contas a pagar e receber",
+      "phase": "P2",
+      "audience": "admin",
+      "durationTargetSec": 22,
+      "goal": "Consultar títulos financeiros por situação e período.",
+      "success": "Contas filtradas ficam visíveis.",
+      "outputFile": "27-contas-pagar-receber.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Contas a pagar e receber"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Filtre por período e situação"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 19,
+          "toSec": 22,
+          "text": "Contas encontradas"
+        }
+      ]
+    },
+    {
+      "id": "28-comissao-vendedor",
+      "title": "Consultar comissão por vendedor",
+      "phase": "P2",
+      "audience": "admin",
+      "durationTargetSec": 22,
+      "goal": "Ver vendas e comissão associadas ao vendedor.",
+      "success": "Comissão do período fica visível.",
+      "outputFile": "28-comissao-vendedor.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Comissão por vendedor"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Selecione vendedor e período"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 19,
+          "toSec": 22,
+          "text": "Comissão calculada"
+        }
+      ]
+    },
+    {
+      "id": "29-criar-usuario-operador",
+      "title": "Criar usuário ou operador",
+      "phase": "P3",
+      "audience": "admin",
+      "durationTargetSec": 24,
+      "goal": "Criar acesso interno para uma pessoa operar o sistema.",
+      "success": "Usuário fica criado e disponível para acesso.",
+      "outputFile": "29-criar-usuario-operador.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Criar usuário ou operador"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 7,
+          "toSec": 10,
+          "text": "Defina identificação e perfil"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 21,
+          "toSec": 24,
+          "text": "Usuário criado"
+        }
+      ]
+    },
+    {
+      "id": "30-alterar-permissoes",
+      "title": "Alterar permissões",
+      "phase": "P3",
+      "audience": "admin",
+      "durationTargetSec": 24,
+      "goal": "Ajustar o que um perfil pode acessar ou executar.",
+      "success": "Permissões atualizadas ficam aplicadas.",
+      "outputFile": "30-alterar-permissoes.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Alterar permissões"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 7,
+          "toSec": 10,
+          "text": "Libere somente o necessário"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 21,
+          "toSec": 24,
+          "text": "Permissões atualizadas"
+        }
+      ]
+    },
+    {
+      "id": "31-parear-terminal",
+      "title": "Adicionar ou parear terminal",
+      "phase": "P3",
+      "audience": "admin",
+      "durationTargetSec": 28,
+      "goal": "Autorizar um novo computador, caixa ou totem.",
+      "success": "Terminal fica vinculado e apto a operar.",
+      "outputFile": "31-parear-terminal.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Parear novo terminal"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Autorize o dispositivo no acesso da loja"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Terminal vinculado"
+        }
+      ]
+    },
+    {
+      "id": "32-configurar-impressora",
+      "title": "Configurar impressora",
+      "phase": "P3",
+      "audience": "admin",
+      "durationTargetSec": 28,
+      "goal": "Selecionar e testar uma impressora para comprovantes.",
+      "success": "Impressora fica pronta para uso.",
+      "outputFile": "32-configurar-impressora.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Configurar impressora"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Selecione o destino e faça um teste"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Impressora pronta"
+        }
+      ]
+    },
+    {
+      "id": "33-diagnostico-impressao",
+      "title": "Ver diagnóstico de impressão",
+      "phase": "P3",
+      "audience": "admin",
+      "durationTargetSec": 22,
+      "goal": "Identificar fila, tentativa ou erro de impressão.",
+      "success": "Status e próximo passo ficam claros.",
+      "outputFile": "33-diagnostico-impressao.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Diagnóstico de impressão"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Veja o status e a última tentativa"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 19,
+          "toSec": 22,
+          "text": "Próximo passo identificado"
+        }
+      ]
+    },
+    {
+      "id": "34-fazer-backup",
+      "title": "Fazer backup",
+      "phase": "P3",
+      "audience": "admin",
+      "durationTargetSec": 22,
+      "goal": "Gerar uma cópia de segurança dos dados locais.",
+      "success": "Backup fica concluído e identificável.",
+      "outputFile": "34-fazer-backup.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Fazer backup"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 6,
+          "toSec": 9,
+          "text": "Inicie a cópia de segurança"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 19,
+          "toSec": 22,
+          "text": "Backup concluído"
+        }
+      ]
+    },
+    {
+      "id": "35-restaurar-importar-dados",
+      "title": "Restaurar ou importar dados",
+      "phase": "P3",
+      "audience": "admin",
+      "durationTargetSec": 28,
+      "goal": "Executar restauração ou importação com confirmação do resultado.",
+      "success": "Dados ficam processados e o resultado é exibido.",
+      "outputFile": "35-restaurar-importar-dados.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2.2,
+          "text": "Restaurar ou importar dados"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 8,
+          "toSec": 11,
+          "text": "Revise a origem antes de confirmar"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 25,
+          "toSec": 28,
+          "text": "Processo concluído"
+        }
+      ]
+    },
+    {
+      "id": "36-ativar-desativar-modulos",
+      "title": "Ativar ou desativar módulos",
+      "phase": "P3",
+      "audience": "admin",
+      "durationTargetSec": 24,
+      "goal": "Ajustar os módulos opcionais disponíveis na instalação.",
+      "success": "Estado dos módulos fica atualizado.",
+      "outputFile": "36-ativar-desativar-modulos.mp4",
+      "overlays": [
+        {
+          "purpose": "orient",
+          "fromSec": 0,
+          "toSec": 2,
+          "text": "Ativar ou desativar módulos"
+        },
+        {
+          "purpose": "act",
+          "fromSec": 7,
+          "toSec": 10,
+          "text": "Altere somente os módulos necessários"
+        },
+        {
+          "purpose": "confirm",
+          "fromSec": 21,
+          "toSec": 24,
+          "text": "Configuração atualizada"
+        }
+      ]
+    }
+  ]
+}

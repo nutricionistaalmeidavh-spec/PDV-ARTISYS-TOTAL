@@ -1,0 +1,110 @@
+{
+  "name": "22-criar-pedido-compra",
+  "title": "Criar pedido de compra",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "purchase-create"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='catalog']",
+      "name": "abrir-cadastros",
+      "holdMs": 450
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='inventory']",
+      "name": "abrir-estoque",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#inventory-master-actions",
+      "name": "estoque-pronto",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#enterprise-depth-entry [data-open='purchases']",
+      "name": "abrir-compras",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#enterprise-po-form",
+      "name": "compras-prontas",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "selectOption",
+      "selector": "#enterprise-po-form select[name='supplierId']",
+      "name": "fornecedor",
+      "value": "tutorial-supplier",
+      "holdMs": 200
+    },
+    {
+      "action": "selectOption",
+      "selector": "#enterprise-po-form select[name='productId']",
+      "name": "produto",
+      "value": "tutorial-product",
+      "holdMs": 200
+    },
+    {
+      "action": "fill",
+      "selector": "#enterprise-po-form input[name='quantity']",
+      "name": "quantidade",
+      "value": "10",
+      "holdMs": 200
+    },
+    {
+      "action": "fill",
+      "selector": "#enterprise-po-form input[name='unitCost']",
+      "name": "custo",
+      "value": "4",
+      "holdMs": 200
+    },
+    {
+      "action": "selectOption",
+      "selector": "#enterprise-po-form select[name='locationId']",
+      "name": "local",
+      "value": "MAIN",
+      "holdMs": 200
+    },
+    {
+      "action": "click",
+      "selector": "#enterprise-po-form button[type='submit']",
+      "name": "criar-pedido",
+      "holdMs": 700
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-list]",
+      "name": "pedido-criado",
+      "expected": "Fornecedor Tutorial",
+      "timeoutMs": 10000,
+      "holdMs": 900
+    }
+  ]
+}

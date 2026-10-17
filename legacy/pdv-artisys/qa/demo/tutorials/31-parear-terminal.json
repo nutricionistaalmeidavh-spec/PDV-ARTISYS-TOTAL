@@ -1,0 +1,76 @@
+{
+  "name": "31-parear-terminal",
+  "title": "Adicionar ou parear terminal",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "pair-terminal"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='settings']",
+      "name": "abrir-configuracoes",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#settings-hub",
+      "name": "configuracoes-prontas",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "waitFor",
+      "selector": "#p1-terminal-admin-panel",
+      "name": "terminal-panel-attached",
+      "state": "attached",
+      "timeoutMs": 12000,
+      "holdMs": 150
+    },
+    {
+      "action": "click",
+      "selector": "#settings-hub [data-settings-category='units']",
+      "name": "abrir-unidades",
+      "holdMs": 450
+    },
+    {
+      "action": "waitFor",
+      "selector": "#p1-terminal-admin-panel [data-create-pairing-code]",
+      "name": "pareamento-pronto",
+      "state": "visible",
+      "timeoutMs": 12000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#p1-terminal-admin-panel [data-create-pairing-code]",
+      "name": "gerar-codigo",
+      "holdMs": 700
+    },
+    {
+      "action": "expectVisible",
+      "selector": "#p1-terminal-admin-panel [data-pairing-output] strong",
+      "name": "codigo-gerado",
+      "timeoutMs": 10000,
+      "holdMs": 1000
+    }
+  ]
+}

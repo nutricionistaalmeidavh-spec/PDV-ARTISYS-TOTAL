@@ -1,0 +1,1 @@
+{"name":"@artisys/pricing","version":"0.1.0","type":"module","exports":"./src/index.mjs","files":["src","module.json","README.md","LICENSE"],"scripts":{"test":"node --test","check":"node --check src/index.mjs"},"engines":{"node":">=22"},"license":"MIT"}

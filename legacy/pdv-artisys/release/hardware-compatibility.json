@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 2,
+  "updatedAt": "2026-09-11T14:00:00.000Z",
+  "statusDefinitions": {
+    "PROTOCOL_VERIFIED": "Contrato e comportamento do protocolo validados automaticamente sem alegar teste de um modelo físico específico.",
+    "FIELD_VERIFIED": "Modelo físico específico testado com evidência registrada.",
+    "UNTESTED_MODEL": "Modelo específico ainda não testado fisicamente; pode usar um protocolo já validado.",
+    "PARTIAL": "Compatibilidade conhecida com limitações documentadas.",
+    "UNSUPPORTED": "Não suportado pela versão atual."
+  },
+  "entries": [
+    {
+      "manufacturer": "Protocol",
+      "model": "ESC/POS Epson/Star + Windows spooler",
+      "kind": "PRINTER",
+      "connection": "Windows spooler / TCP / USB / serial conforme driver",
+      "os": "Windows x64 + CI Linux para contratos puros",
+      "status": "PROTOCOL_VERIFIED",
+      "evidence": "CI:test/e54-1-hardware-simulation.test.js",
+      "limitations": "Não declara que qualquer modelo Epson/Star ou compatível foi testado fisicamente. Driver, firmware e interface do equipamento do cliente ainda podem exigir configuração."
+    },
+    {
+      "manufacturer": "Protocol",
+      "model": "Balança serial numérica",
+      "kind": "SCALE",
+      "connection": "RS-232 / USB-Serial",
+      "os": "Windows x64 + CI Linux para contratos puros",
+      "status": "PROTOCOL_VERIFIED",
+      "evidence": "CI:test/e54-1-hardware-simulation.test.js",
+      "limitations": "Valida leitura numérica, vírgula/ponto, resposta fragmentada, timeout e nova tentativa. Comandos proprietários de cada fabricante podem exigir ajuste de PDV_SCALE_COMMAND e baud rate."
+    },
+    {
+      "manufacturer": "Protocol",
+      "model": "Gaveta por serial ou pulso da impressora térmica",
+      "kind": "DRAWER",
+      "connection": "Serial / driver térmico",
+      "os": "Windows x64 + CI Linux para contratos puros",
+      "status": "PROTOCOL_VERIFIED",
+      "evidence": "CI:test/e54-1-hardware-simulation.test.js",
+      "limitations": "O pulso físico e pinagem dependem da impressora/gaveta instalada."
+    },
+    {
+      "manufacturer": "Protocol",
+      "model": "Leitor keyboard-wedge",
+      "kind": "SCANNER",
+      "connection": "USB/HID teclado",
+      "os": "Windows x64",
+      "status": "PROTOCOL_VERIFIED",
+      "evidence": "CI:test/e54-1-hardware-simulation.test.js",
+      "limitations": "Leitores que exigem SDK proprietário não são cobertos; o modo validado é o que envia o código como teclado."
+    },
+    {
+      "manufacturer": "Generic",
+      "model": "Qualquer modelo físico ainda não testado",
+      "kind": "OTHER",
+      "connection": "N/A",
+      "os": "Windows x64",
+      "status": "UNTESTED_MODEL",
+      "evidence": null,
+      "limitations": "Um modelo físico só passa a FIELD_VERIFIED depois de teste documentado no equipamento real."
+    }
+  ]
+}

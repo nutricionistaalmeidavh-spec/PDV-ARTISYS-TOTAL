@@ -1,0 +1,39 @@
+{
+  "product": "PDV-ARTISYS",
+  "version": "1.3.4",
+  "profile": "full",
+  "requiredSteps": ["deps", "lint", "test", "build", "installer", "qa"],
+  "requiredStepsByProfile": {
+    "release": ["security", "evidence", "publish"]
+  },
+  "steps": {
+    "deps": "npm install --no-audit --no-fund",
+    "lint": "npm run docs:check && npm run lint:eventbus && npm run lint:core && npm run lint:desktop && npm run lint:commercial-media",
+    "test": "npm test",
+    "build": "npm run release:manifest",
+    "installer": "npm run dist:win",
+    "qa": "npm run qa:validate",
+    "security": {
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/security-gate.ps1",
+      "profiles": ["release"]
+    },
+    "evidence": {
+      "command": "node scripts/release-evidence.cjs",
+      "profiles": ["release"]
+    },
+    "publish": {
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-github-release.ps1",
+      "profiles": ["release"]
+    }
+  },
+  "reportPath": "artifacts/artisys-release-report.json",
+  "metadata": {
+    "runtime": "windows/amd64",
+    "releaseEngine": "utilidades/modules/artisys-release",
+    "installer": "Electron Builder + NSIS",
+    "qa": "legacy UI E2E flows removed; the future QA suite will be rebuilt from current product flows",
+    "security": "artisys-security release gate",
+    "publisher": "GitHub Releases via artisys-release",
+    "pilot": "woodpecker"
+  }
+}

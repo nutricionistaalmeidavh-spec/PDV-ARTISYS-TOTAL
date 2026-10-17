@@ -1,0 +1,42 @@
+.product-support-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px;align-items:stretch}
+.product-support-card{min-width:0;min-height:380px;padding:0;background:linear-gradient(180deg,#fff 0%,#fbfcff 100%);border-color:#dce5f2;box-shadow:0 12px 28px rgba(25,48,82,.08)}
+.product-support-card details{height:100%}
+.product-support-card summary{display:flex;align-items:center;min-height:80px;padding:16px 20px;cursor:pointer;list-style:none;border-bottom:1px solid #e7edf6;background:linear-gradient(110deg,#f3f7ff,#fff)}
+.product-support-card summary::-webkit-details-marker{display:none}
+.product-support-card summary:after{content:'+';margin-left:auto;color:#5064ef;font-size:22px;font-weight:700}
+.product-support-card details[open] summary:after{content:'−'}
+.product-support-card summary span,.product-support-card summary small{display:block}
+.product-support-card summary strong{font-size:20px;color:#172b4d}
+.product-support-card summary small{margin-top:4px;color:#6f819c}
+.product-support-body{padding:18px 20px}
+.product-support-body>p{margin:0 0 14px;color:#657894}
+.product-support-card .data-row{border-bottom:1px solid #e8edf4}
+.kit-combo-admin{margin:0;padding:0}
+.kit-combo-grid{grid-template-columns:1fr;gap:12px}
+.kit-combo-column{min-height:145px;background:#f5f8fd;border-color:#e1e8f2}
+.food-module-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.food-module-card{display:grid;gap:10px;min-height:180px;padding:20px;text-align:left;color:#1c3152;cursor:pointer;background:linear-gradient(145deg,#fff,#f3f7ff);border-color:#dbe5f2;box-shadow:0 10px 24px rgba(26,49,83,.08)}
+.food-module-card>span:first-child{color:#2768d8}
+.pdv-icon-pizza{display:block;object-fit:contain}
+.food-module-card strong{font-size:19px}
+.food-module-card small{color:#6d7e97}
+.food-module-card .secondary-button{justify-self:start}
+.vertical-page .data-card{border-color:#dce5f2;box-shadow:0 9px 24px rgba(25,48,82,.055)}
+.vertical-page>.page-head{padding:18px 22px;margin-bottom:16px;border:1px solid #dce5f2;border-radius:16px;background:linear-gradient(110deg,#edf4ff,#fff)}
+@media(max-width:1050px){.product-support-grid{grid-template-columns:1fr}.product-support-card{min-height:0}}
+
+
+/* Alimentação: hub operacional compacto. A ativação das áreas permanece em Configurações. */
+.food-workspace>.page-head{margin-bottom:0;padding:13px 18px}
+.food-operation-hub{display:flex;flex-direction:column;gap:12px}
+.food-operation-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.food-operation-heading h2{margin:0;color:#18365c;font-size:22px;letter-spacing:-.02em}
+.food-operation-heading p{margin:4px 0 0;color:#657894;font-size:13px}
+.food-workspace .food-module-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.food-workspace .food-module-card{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:11px;row-gap:4px;min-height:118px;padding:15px 16px;align-content:start}
+.food-workspace .food-module-card>span:first-child{grid-row:1/3}
+.food-workspace .food-module-card strong{font-size:17px;line-height:1.2}
+.food-workspace .food-module-card small{grid-column:2;color:#6d7e97;line-height:1.3}
+.food-workspace .food-module-card .secondary-button{grid-column:2;justify-self:start;margin-top:5px;padding:6px 10px;min-height:0}
+@media(max-width:1050px){.food-workspace .food-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){.food-operation-heading{align-items:flex-start}.food-workspace .food-module-grid{grid-template-columns:1fr}.food-workspace .food-module-card{min-height:104px}}

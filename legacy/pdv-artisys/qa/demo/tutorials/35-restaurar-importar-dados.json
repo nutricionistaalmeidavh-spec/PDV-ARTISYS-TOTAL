@@ -1,0 +1,83 @@
+{
+  "name": "35-restaurar-importar-dados",
+  "title": "Restaurar ou importar dados",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "restore"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='settings']",
+      "name": "abrir-configuracoes",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#settings-hub",
+      "name": "configuracoes-prontas",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#settings-hub [data-settings-category='diagnostics']",
+      "name": "abrir-diagnosticos",
+      "holdMs": 450
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-backup-restore]",
+      "name": "backup-disponivel",
+      "state": "visible",
+      "timeoutMs": 12000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "[data-backup-restore]",
+      "name": "selecionar-backup",
+      "holdMs": 450
+    },
+    {
+      "action": "waitFor",
+      "selector": "#ops-backup-restore-modal [data-restore-confirm]",
+      "name": "confirmacao-restauracao",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 300
+    },
+    {
+      "action": "click",
+      "selector": "#ops-backup-restore-modal [data-restore-confirm]",
+      "name": "preparar-restauracao",
+      "holdMs": 800
+    },
+    {
+      "action": "expectText",
+      "selector": "#toast-root",
+      "name": "restauracao-preparada",
+      "expected": "Restauração preparada",
+      "timeoutMs": 12000,
+      "holdMs": 1000
+    }
+  ]
+}

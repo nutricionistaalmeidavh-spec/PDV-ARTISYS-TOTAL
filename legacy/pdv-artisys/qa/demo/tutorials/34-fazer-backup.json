@@ -1,0 +1,69 @@
+{
+  "name": "34-fazer-backup",
+  "title": "Fazer backup",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "backup"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='settings']",
+      "name": "abrir-configuracoes",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#settings-hub",
+      "name": "configuracoes-prontas",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#settings-hub [data-settings-category='diagnostics']",
+      "name": "abrir-diagnosticos",
+      "holdMs": 450
+    },
+    {
+      "action": "waitFor",
+      "selector": "#ops-backup-now",
+      "name": "backup-pronto",
+      "state": "visible",
+      "timeoutMs": 12000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#ops-backup-now",
+      "name": "criar-backup",
+      "holdMs": 800
+    },
+    {
+      "action": "expectText",
+      "selector": "#settings-backup",
+      "name": "backup-criado",
+      "expected": "Manual",
+      "timeoutMs": 12000,
+      "holdMs": 1000
+    }
+  ]
+}

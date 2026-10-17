@@ -1,0 +1,68 @@
+{
+  "name": "27-contas-pagar-receber",
+  "title": "Consultar contas a pagar e receber",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "finance"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='financial-management']",
+      "name": "abrir-gestao",
+      "holdMs": 350
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='finance']",
+      "name": "abrir-financeiro",
+      "holdMs": 600
+    },
+    {
+      "action": "waitFor",
+      "selector": "#ops-finance-filter",
+      "name": "financeiro-pronto",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "selectOption",
+      "selector": "#ops-finance-filter select[name='kind']",
+      "name": "filtrar-pagar",
+      "value": "PAYABLE",
+      "holdMs": 300
+    },
+    {
+      "action": "click",
+      "selector": "#ops-finance-filter button[type='submit']",
+      "name": "aplicar-filtro",
+      "holdMs": 600
+    },
+    {
+      "action": "expectText",
+      "selector": "#route-content",
+      "name": "conta-a-pagar",
+      "expected": "Fornecedor Tutorial",
+      "timeoutMs": 10000,
+      "holdMs": 900
+    }
+  ]
+}

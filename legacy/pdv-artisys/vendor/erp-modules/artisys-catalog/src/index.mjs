@@ -1,0 +1,3 @@
+export function createCatalogItem(v){if(!v?.id)throw new TypeError('id is required');return{id:String(v.id),sku:v.sku==null?null:String(v.sku),name:String(v.name??''),kind:String(v.kind??'product'),active:v.active!==false,variants:[...(v.variants??[])],metadata:{...(v.metadata??{})}}}
+export function searchCatalog(items,query='',options={}){const q=String(query).trim().toLowerCase();return items.filter(i=>(options.includeInactive||i.active!==false)&&(!q||[i.id,i.sku,i.name,i.kind].some(v=>String(v??'').toLowerCase().includes(q))))}
+export function resolveVariant(item,variantId){return(item.variants??[]).find(v=>String(v.id)===String(variantId))??null}

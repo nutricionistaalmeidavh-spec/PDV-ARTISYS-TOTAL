@@ -1,0 +1,473 @@
+{
+  "name": "access-center-ergonomic",
+  "title": "ArtiSys PDV — Central de Acessos ergonômica",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "waitFor",
+      "selector": "#auth-overlay",
+      "name": "ergonomic-bootstrap",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "authenticateLocalQa",
+      "name": "ergonomic-entrar-admin",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#auth-overlay",
+      "name": "ergonomic-admin-autenticado",
+      "state": "hidden",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "#sidebar-nav button[data-route='access']",
+      "name": "ergonomic-abrir-central",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": ".access-center-page",
+      "name": "ergonomic-central-carregada",
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "screenshot",
+      "name": "ergonomic-central-inicial",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "button[data-access-tab='profiles']",
+      "name": "ergonomic-abrir-perfis",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-new-profile]",
+      "name": "ergonomic-novo-perfil-disponivel",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "tr:has-text('Administrador') [data-edit-profile]",
+      "name": "ergonomic-admin-sem-editar",
+      "state": "detached",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "tr:has-text('Administrador') [data-delete-profile]",
+      "name": "ergonomic-admin-sem-excluir",
+      "state": "detached",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "ergonomic-lista-perfis",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-new-profile]",
+      "name": "ergonomic-iniciar-perfil",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root [data-profile-form][data-profile-step='1']",
+      "name": "ergonomic-perfil-informacoes",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#modal-root input[name='name']",
+      "value": "ZZZ Perfil Ergonomia QA",
+      "name": "ergonomic-preencher-nome"
+    },
+    {
+      "action": "screenshot",
+      "name": "ergonomic-perfil-etapa-informacoes",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-profile-next]",
+      "name": "ergonomic-avancar-permissoes",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root [data-profile-form][data-profile-step='2']",
+      "name": "ergonomic-perfil-permissoes",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-permission-group='catalog']",
+      "name": "ergonomic-grupo-cadastros",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "check",
+      "selector": "#modal-root input[name='permission'][value='products.view']",
+      "name": "ergonomic-permissao-produtos",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-permission-group='inventory']",
+      "name": "ergonomic-grupo-estoque",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "check",
+      "selector": "#modal-root input[name='permission'][value='inventory.view']",
+      "name": "ergonomic-permissao-estoque",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#modal-root [data-permission-search]",
+      "value": "relatórios",
+      "name": "ergonomic-buscar-relatorios"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root input[name='permission'][value='reports.view']",
+      "name": "ergonomic-busca-encontrou-relatorios",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "check",
+      "selector": "#modal-root input[name='permission'][value='reports.view']",
+      "name": "ergonomic-permissao-relatorios",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "ergonomic-permissoes-selecionadas",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-profile-next]",
+      "name": "ergonomic-avancar-revisao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root [data-profile-form][data-profile-step='3']",
+      "name": "ergonomic-perfil-revisao",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#modal-root",
+      "expected": "ZZZ Perfil Ergonomia QA",
+      "name": "ergonomic-revisao-nome",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#modal-root",
+      "expected": "3 permissões selecionadas",
+      "name": "ergonomic-revisao-contagem",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "ergonomic-perfil-etapa-revisao",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-profile-save]",
+      "name": "ergonomic-criar-perfil",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root",
+      "name": "ergonomic-perfil-modal-fechado",
+      "state": "hidden",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectText",
+      "selector": "#route-content",
+      "expected": "ZZZ Perfil Ergonomia QA",
+      "name": "ergonomic-perfil-criado",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "tr:has-text('ZZZ Perfil Ergonomia QA') [data-edit-profile]",
+      "name": "ergonomic-editar-perfil",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root [data-profile-form][data-profile-step='1']",
+      "name": "ergonomic-edicao-informacoes",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#modal-root input[name='name']",
+      "value": "ZZZ Perfil Ergonomia Editado",
+      "name": "ergonomic-editar-nome"
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-profile-next]",
+      "name": "ergonomic-edicao-avancar-permissoes",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-profile-next]",
+      "name": "ergonomic-edicao-avancar-revisao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root [data-profile-form][data-profile-step='3']",
+      "name": "ergonomic-edicao-revisao",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-profile-save]",
+      "name": "ergonomic-salvar-edicao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root",
+      "name": "ergonomic-edicao-fechada",
+      "state": "hidden",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectText",
+      "selector": "#route-content",
+      "expected": "ZZZ Perfil Ergonomia Editado",
+      "name": "ergonomic-perfil-editado",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-access-tab='people']",
+      "name": "ergonomic-abrir-pessoas",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-new-person]",
+      "name": "ergonomic-nova-pessoa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root [data-person-form]",
+      "name": "ergonomic-pessoa-form",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "selector": "#modal-root input[name='name']",
+      "value": "Pessoa Ergonomia QA",
+      "name": "ergonomic-pessoa-nome"
+    },
+    {
+      "action": "fill",
+      "selector": "#modal-root input[name='email']",
+      "value": "ergonomia.qa@example.com",
+      "name": "ergonomic-pessoa-email"
+    },
+    {
+      "action": "fill",
+      "selector": "#modal-root input[name='username']",
+      "value": "ergonomia-qa",
+      "name": "ergonomic-pessoa-usuario"
+    },
+    {
+      "action": "fill",
+      "selector": "#modal-root input[name='password']",
+      "valueFromEnv": "ARTISYS_QA_FORM_FIXTURE",
+      "name": "ergonomic-pessoa-senha"
+    },
+    {
+      "action": "press",
+      "selector": "#modal-root select[name='profileId']",
+      "key": "End",
+      "name": "ergonomic-pessoa-selecionar-perfil",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#modal-root [data-profile-summary]",
+      "expected": "ZZZ Perfil Ergonomia Editado",
+      "name": "ergonomic-pessoa-resumo-perfil",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "ergonomic-pessoa-perfil-no-mesmo-fluxo",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-person-form] button[type='submit']",
+      "name": "ergonomic-criar-pessoa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root",
+      "name": "ergonomic-pessoa-modal-fechado",
+      "state": "hidden",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "expectText",
+      "selector": "tr:has-text('Pessoa Ergonomia QA')",
+      "expected": "ZZZ Perfil Ergonomia Editado",
+      "name": "ergonomic-pessoa-criada-com-perfil",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-access-tab='profiles']",
+      "name": "ergonomic-voltar-perfis",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "tr:has-text('ZZZ Perfil Ergonomia Editado') [data-delete-profile]",
+      "name": "ergonomic-tentar-excluir-em-uso",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root [data-view-profile-users]",
+      "name": "ergonomic-exclusao-em-uso-bloqueada",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "expectText",
+      "selector": "#modal-root",
+      "expected": "Pessoa Ergonomia QA",
+      "name": "ergonomic-exclusao-mostra-pessoa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "ergonomic-exclusao-em-uso",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-view-profile-users]",
+      "name": "ergonomic-ir-para-pessoas",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "button[data-access-tab='people'].active",
+      "name": "ergonomic-pessoas-ativas",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "tr:has-text('Pessoa Ergonomia QA') [data-edit-person]",
+      "name": "ergonomic-editar-pessoa",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root [data-person-form]",
+      "name": "ergonomic-editar-pessoa-form",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "selectOption",
+      "selector": "#modal-root select[name='profileId']",
+      "value": "profile-manager",
+      "name": "ergonomic-reatribuir-gerente",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-person-form] button[type='submit']",
+      "name": "ergonomic-salvar-reatribuicao",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root",
+      "name": "ergonomic-reatribuicao-fechada",
+      "state": "hidden",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "click",
+      "selector": "button[data-access-tab='profiles']",
+      "name": "ergonomic-perfis-final",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "selector": "tr:has-text('ZZZ Perfil Ergonomia Editado') [data-delete-profile]",
+      "name": "ergonomic-excluir-perfil",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "#modal-root [data-confirm-delete-profile]",
+      "name": "ergonomic-confirmacao-exclusao",
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "screenshot",
+      "name": "ergonomic-confirmar-exclusao",
+      "fullPage": true
+    },
+    {
+      "action": "click",
+      "selector": "#modal-root [data-confirm-delete-profile]",
+      "name": "ergonomic-confirmar-excluir",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "tr:has-text('ZZZ Perfil Ergonomia Editado')",
+      "name": "ergonomic-perfil-excluido",
+      "state": "detached",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "screenshot",
+      "name": "ergonomic-final",
+      "fullPage": true
+    }
+  ]
+}

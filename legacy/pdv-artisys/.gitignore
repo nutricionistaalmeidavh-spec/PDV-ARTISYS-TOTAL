@@ -1,0 +1,7 @@
+node_modules/
+dist/
+qa-artifacts*/
+output-*.log
+output-*.cjs
+output-*.json
+output-full-test.log

@@ -1,0 +1,5 @@
+{
+  "platform": "windows-x64",
+  "requestedAt": "2026-09-24T00:20:00-03:00",
+  "reason": "release-1.4.1-route-render-race-and-installer-fixes"
+}

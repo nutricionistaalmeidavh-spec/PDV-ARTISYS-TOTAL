@@ -1,0 +1,110 @@
+{
+  "name": "13-cadastrar-produto",
+  "title": "Cadastrar produto",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "product-create"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='catalog']",
+      "name": "abrir-cadastros",
+      "holdMs": 450
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='inventory']",
+      "name": "abrir-estoque",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#inventory-master-actions",
+      "name": "estoque-pronto",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#inventory-new-product",
+      "name": "novo-produto",
+      "holdMs": 500
+    },
+    {
+      "action": "waitFor",
+      "selector": "#product-form",
+      "name": "form-produto",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "fill",
+      "selector": "#product-form input[name='name']",
+      "name": "nome-produto",
+      "value": "Produto Novo Tutorial",
+      "holdMs": 220
+    },
+    {
+      "action": "fill",
+      "selector": "#product-form input[name='sku']",
+      "name": "sku-produto",
+      "value": "NOVO-TUT",
+      "holdMs": 180
+    },
+    {
+      "action": "fill",
+      "selector": "#product-price",
+      "name": "preco-produto",
+      "value": "12,50",
+      "holdMs": 220
+    },
+    {
+      "action": "fill",
+      "selector": "#product-cost",
+      "name": "custo-produto",
+      "value": "5,00",
+      "holdMs": 220
+    },
+    {
+      "action": "selectOption",
+      "selector": "#product-form select[name='productionDestination']",
+      "name": "destino-direto",
+      "value": "DIRECT",
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#product-form button[type='submit']",
+      "name": "salvar-produto",
+      "holdMs": 800
+    },
+    {
+      "action": "expectText",
+      "selector": "#toast-root",
+      "name": "produto-salvo",
+      "expected": "Produto salvo no Estoque",
+      "timeoutMs": 10000,
+      "holdMs": 900
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+.customers-master-page .page-head { align-items: flex-start; }
+
+.customers-master-toolbar {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr);
+  gap: 10px;
+}
+
+.customers-master-search { min-width: 280px; }
+.customers-master-search kbd {
+  margin-left: auto;
+  padding: 3px 7px;
+  border: 1px solid var(--border-muted);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--surface-muted);
+  font-size: 10px;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.customers-master-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(320px, .75fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.customers-master-list {
+  overflow: hidden;
+  border-color: var(--border-card);
+  box-shadow: var(--shadow-md);
+}
+
+.customers-master-header,
+.customers-master-list > .data-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.4fr) minmax(130px, .8fr) minmax(150px, .9fr) minmax(145px, .9fr) minmax(90px, auto);
+  gap: 14px;
+  align-items: center;
+}
+
+.customers-master-header {
+  padding: 10px 17px;
+  border-bottom: 1px solid var(--line-table);
+  background: var(--surface-muted);
+  color: var(--text-label);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .025em;
+}
+
+.customers-master-header span:last-child { text-align: right; }
+
+.customers-master-row {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  cursor: pointer;
+  transition: background .12s ease, box-shadow .12s ease;
+}
+
+.customers-master-row:hover { background: var(--surface-row-hover); }
+.customers-master-row[aria-selected="true"] {
+  background: #f4f8ff;
+  box-shadow: inset 3px 0 0 #315ea8;
+}
+.customers-master-row:focus-visible {
+  outline: 2px solid #315ea8;
+  outline-offset: -2px;
+}
+
+.customers-master-credit small,
+.customers-master-last-sale small {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+}
+
+.customers-master-last-sale strong { white-space: nowrap; }
+.customers-master-list > .data-row > button:last-child { justify-self: end; }
+
+.customers-master-panel {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+}
+
+.customers-detail-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.customers-master-panel .ux-detail-panel {
+  box-shadow: var(--shadow-md);
+}
+
+.customers-master-panel .ux-detail-panel__fields {
+  grid-template-columns: 1fr;
+}
+
+.customers-master-panel .ux-detail-panel__field strong {
+  overflow-wrap: anywhere;
+}
+
+.customers-history {
+  padding: 16px;
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 8px 22px rgba(40,67,105,.05);
+}
+
+.customers-history__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.customers-history__head small { color: var(--muted); text-align: right; }
+.customers-history ul { list-style: none; margin: 0; padding: 0; }
+.customers-history-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.customers-history-item div { min-width: 0; }
+.customers-history-item small { display: block; margin-top: 3px; color: var(--muted); }
+.customers-history > p { margin: 0; color: var(--muted); }
+
+@media (max-width: 1180px) {
+  .customers-master-layout { grid-template-columns: minmax(0, 1.45fr) minmax(300px, .8fr); }
+  .customers-master-header,
+  .customers-master-list > .data-row {
+    grid-template-columns: minmax(170px, 1.25fr) minmax(120px, .75fr) minmax(135px, .8fr) minmax(135px, .8fr) auto;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 960px) {
+  .customers-master-layout { grid-template-columns: 1fr; }
+  .customers-master-panel { position: static; }
+  .customers-master-header { display: none; }
+  .customers-master-list > .data-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 14px;
+  }
+  .customers-master-list > .data-row > div:first-child { grid-column: 1 / -1; }
+  .customers-master-list > .data-row > button:last-child { justify-self: start; }
+}

@@ -1,0 +1,10 @@
+{
+  "mode": "qa",
+  "demo": "overview-60s",
+  "preset": "landscape-16x9",
+  "flow": "sales-enhancements",
+  "environment": "ci",
+  "viewport": "desktop",
+  "requestedAt": "2026-09-21T14:19:00-03:00",
+  "reason": "user-requested-current-version-ux-audit-pdf-sales-seller"
+}

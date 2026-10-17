@@ -1,0 +1,63 @@
+.toast-root {
+  pointer-events: none;
+}
+
+.toast-root .toast {
+  min-width: 240px;
+  max-width: 360px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 13px;
+  pointer-events: auto;
+}
+
+.toast-message {
+  min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font: inherit;
+  line-height: 1;
+  padding: 0;
+}
+
+.toast-close::before {
+  content: "×";
+  font-size: 20px;
+  line-height: 1;
+}
+
+.toast-close:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.toast-close:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.toast.is-leaving {
+  animation: toastOut 180ms ease forwards;
+  pointer-events: none;
+}
+
+@keyframes toastOut {
+  to {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+}

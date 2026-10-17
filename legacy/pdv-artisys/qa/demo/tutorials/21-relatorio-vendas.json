@@ -1,0 +1,75 @@
+{
+  "name": "21-relatorio-vendas",
+  "title": "Consultar relatório de vendas",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "sale-history"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='financial-management']",
+      "name": "abrir-gestao",
+      "holdMs": 450
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='reports']",
+      "name": "abrir-relatorios",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": ".report-v2-page",
+      "name": "relatorios-prontos",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "fill",
+      "selector": "#report-v2-filter input[name='fromDate']",
+      "name": "periodo-inicial",
+      "value": "01/10/2026",
+      "holdMs": 260
+    },
+    {
+      "action": "fill",
+      "selector": "#report-v2-filter input[name='toDate']",
+      "name": "periodo-final",
+      "value": "03/10/2026",
+      "holdMs": 260
+    },
+    {
+      "action": "click",
+      "selector": "#report-v2-filter button[type='submit']",
+      "name": "aplicar-periodo",
+      "holdMs": 700
+    },
+    {
+      "action": "expectText",
+      "selector": ".report-v2-page",
+      "name": "relatorio-atualizado",
+      "expected": "Relatórios comerciais",
+      "timeoutMs": 10000,
+      "holdMs": 900
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {createContact,addContactChannel,mergeContact} from '../src/index.mjs';
+test('normalizes and updates contacts',()=>{let c=createContact({id:'c1',name:'Fornecedor A',type:'organization',channels:[{type:'phone',value:'123',primary:true}]});c=addContactChannel(c,{type:'email',value:'a@example.com',primary:true});assert.equal(c.channels.find(x=>x.type==='phone').primary,false);c=mergeContact(c,{tags:['supplier']});assert.deepEqual(c.tags,['supplier'])});

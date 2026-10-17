@@ -1,0 +1,62 @@
+name: QA Multi-Device LAN
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Carga do cenário multi-dispositivo"
+        required: true
+        default: full
+        type: choice
+        options:
+          - smoke
+          - full
+          - stress
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-multi-device-lan-${{ github.ref }}-${{ inputs.profile }}
+  cancel-in-progress: false
+
+jobs:
+  multi-device-lan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout PDV
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run multi-device LAN QA
+        shell: bash
+        env:
+          QA_PROFILE: ${{ inputs.profile }}
+        run: |
+          rm -rf qa-artifacts/multi-device
+          xvfb-run -a npm run qa:multi-device -- --profile "${QA_PROFILE:-full}" --output qa-artifacts/multi-device
+
+      - name: Publish QA summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f qa-artifacts/multi-device/summary.md ]; then
+            cat qa-artifacts/multi-device/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload multi-device evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-multi-device-${{ inputs.profile }}-${{ github.run_number }}
+          path: qa-artifacts/multi-device
+          if-no-files-found: warn
+          retention-days: 14

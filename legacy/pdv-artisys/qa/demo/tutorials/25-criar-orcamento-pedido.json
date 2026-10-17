@@ -1,0 +1,103 @@
+{
+  "name": "25-criar-orcamento-pedido",
+  "title": "Criar orçamento ou pedido",
+  "metadata": {
+    "qaAutoAdmin": true
+  },
+  "steps": [
+    {
+      "action": "authenticateLocalQa",
+      "name": "entrar",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "capability",
+      "name": "tutorial.setup",
+      "scenario": "order-create"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#app-topbar",
+      "name": "app-ready",
+      "state": "visible",
+      "timeoutMs": 15000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "button[data-route='catalog']",
+      "name": "abrir-cadastros",
+      "holdMs": 450
+    },
+    {
+      "action": "click",
+      "selector": "button[data-flow-route='inventory']",
+      "name": "abrir-estoque",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#inventory-master-actions",
+      "name": "estoque-pronto",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "click",
+      "selector": "#enterprise-depth-entry [data-open='orders']",
+      "name": "abrir-pedidos",
+      "holdMs": 650
+    },
+    {
+      "action": "waitFor",
+      "selector": "#enterprise-order-form",
+      "name": "pedidos-prontos",
+      "state": "visible",
+      "timeoutMs": 10000,
+      "holdMs": 250
+    },
+    {
+      "action": "selectOption",
+      "selector": "#enterprise-order-form select[name='customerId']",
+      "name": "cliente",
+      "value": "tutorial-customer",
+      "holdMs": 180
+    },
+    {
+      "action": "selectOption",
+      "selector": "#enterprise-order-form select[name='productId']",
+      "name": "produto",
+      "value": "tutorial-product",
+      "holdMs": 180
+    },
+    {
+      "action": "fill",
+      "selector": "#enterprise-order-form input[name='quantity']",
+      "name": "quantidade",
+      "value": "2",
+      "holdMs": 180
+    },
+    {
+      "action": "selectOption",
+      "selector": "#enterprise-order-form select[name='locationId']",
+      "name": "local",
+      "value": "MAIN",
+      "holdMs": 180
+    },
+    {
+      "action": "click",
+      "selector": "#enterprise-order-form button[type='submit']",
+      "name": "criar-orcamento",
+      "holdMs": 700
+    },
+    {
+      "action": "expectText",
+      "selector": "[data-list]",
+      "name": "orcamento-criado",
+      "expected": "Cliente Tutorial",
+      "timeoutMs": 10000,
+      "holdMs": 1000
+    }
+  ]
+}

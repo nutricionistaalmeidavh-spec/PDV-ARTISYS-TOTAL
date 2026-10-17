@@ -1,0 +1,103 @@
+name: build-macos
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/build-macos.sh'
+      - 'scripts/make-macos-icon.sh'
+      - '.github/workflows/build-macos.yml'
+      - 'desktop/**'
+      - 'vendor/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-package:
+    name: macOS ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            arch: x64
+          - os: macos-15
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install open-source SVG rasterizer for ArtiSys icon
+        shell: bash
+        run: |
+          if ! command -v rsvg-convert >/dev/null 2>&1; then
+            brew install librsvg
+          fi
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify Mac packaging contracts and desktop regression tests
+        run: node --test test/macos-packaging.test.js test/updater-service.test.js test/hardware-runtime.test.js
+      - name: Check desktop syntax
+        run: npm run lint:desktop
+      - name: Use exact existing release tag version for manually tagged builds
+        if: ${{ github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' }}
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Release tag inválida'; exit 1; }
+          npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version
+      - name: Build unsigned native macOS DMG and ZIP
+        run: npm run dist:mac
+      - name: Validate DMG, ZIP and release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          find dist -maxdepth 1 -name 'ArtiSys-PDV-*.dmg' -print -quit | grep -q .
+          find dist -maxdepth 1 -name 'ArtiSys-PDV-*.zip' -print -quit | grep -q .
+          test -s dist/latest-mac.yml
+          shasum -a 256 dist/*.dmg dist/*.zip | tee dist/macos-SHA256SUMS.txt
+      - name: Smoke test packaged macOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$(find dist -maxdepth 2 -type d -name 'ArtiSys PDV.app' -print -quit)"
+          if [[ -z "$app" ]]; then echo 'App empacotado não encontrado'; exit 1; fi
+          binary="$app/Contents/MacOS/ArtiSys PDV"
+          if [[ ! -x "$binary" ]]; then echo 'Executável macOS não encontrado'; exit 1; fi
+          ARTISYS_QA=1 ARTISYS_QA_AUTO_LOCAL=1 PDV_ENABLE_LAN=false "$binary" > "$RUNNER_TEMP/artisys-mac-smoke.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          sleep 12
+          if ! kill -0 "$pid" 2>/dev/null; then
+            cat "$RUNNER_TEMP/artisys-mac-smoke.log"
+            echo 'O aplicativo foi encerrado prematuramente'
+            exit 1
+          fi
+          echo 'Aplicativo macOS permaneceu aberto após inicialização'
+      - name: Upload unsigned macOS installer and evidence (not a commercial release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: artisys-macos-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            dist/ArtiSys-PDV-*.dmg
+            dist/ArtiSys-PDV-*.zip
+            dist/*.blockmap
+            dist/latest-mac.yml
+            dist/macos-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
