@@ -17,6 +17,7 @@ must(existsSync(resolve(root,'apps/api/migrations/0002_commerce.sql')),'commerce
 must(existsSync(resolve(root,'apps/api/migrations/0003_cash_finance.sql')),'cash/finance schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0004_advanced_finance.sql')),'advanced finance schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0006_desktop_parity.sql')),'desktop parity additive schema missing');
+must(existsSync(resolve(root,'apps/api/migrations/0007_stock_transfers.sql')),'canonical cross-branch stock transfer schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0002_commerce.sql')),'commerce schema missing');
 must(existsSync(resolve(root,'packages/core/js/domains/sales/sale-service.js')),'canonical sales core missing');
 must(existsSync(resolve(root,'packages/core/js/domains/inventory/inventory-service.js')),'canonical inventory core missing');
