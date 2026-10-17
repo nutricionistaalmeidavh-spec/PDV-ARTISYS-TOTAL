@@ -1,7 +1,8 @@
 import {readFileSync,existsSync} from 'node:fs';
-import {resolve} from 'node:path';
+import {resolve,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
-const root=resolve(import.meta.dirname||new URL('..',import.meta.url).pathname,'..');
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const config=JSON.parse(readFileSync(resolve(root,'wrangler.jsonc'),'utf8').replace(/^\s*\/\/.*$/gm,''));
 const must=(condition,message)=>{if(!condition)throw new Error('Cloudflare build: '+message);};
 must(config.name==='pdv-artisys-total','Worker name does not match Cloudflare project');
