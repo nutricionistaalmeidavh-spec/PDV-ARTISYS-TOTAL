@@ -40,10 +40,12 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
   FOREIGN KEY(tenant_id,branch_id) REFERENCES branches(tenant_id,id) ON DELETE RESTRICT,
   FOREIGN KEY(tenant_id,product_id) REFERENCES products(tenant_id,id) ON DELETE RESTRICT,
   UNIQUE(tenant_id,branch_id,mutation_id,product_id,type),
+  FOREIGN KEY(tenant_id,branch_id,sale_id) REFERENCES sales(tenant_id,branch_id,id) ON DELETE RESTRICT,
   CHECK ((type='sale' AND delta_milli<0 AND sale_id IS NOT NULL)
        OR (type<>'sale' AND sale_id IS NULL))
 );
 CREATE INDEX IF NOT EXISTS idx_inventory_movements ON inventory_movements(tenant_id,branch_id,product_id,occurred_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sale_stock_effect_once ON inventory_movements(tenant_id,branch_id,sale_id,product_id) WHERE type='sale';
 CREATE TRIGGER IF NOT EXISTS inventory_movements_immutable_update BEFORE UPDATE ON inventory_movements
 BEGIN SELECT RAISE(ABORT,'INVENTORY_LEDGER_IMMUTABLE'); END;
 CREATE TRIGGER IF NOT EXISTS inventory_movements_immutable_delete BEFORE DELETE ON inventory_movements
@@ -166,7 +168,7 @@ CREATE TABLE IF NOT EXISTS domain_events (
   mutation_id TEXT NOT NULL,
   occurred_at TEXT NOT NULL,
   FOREIGN KEY(tenant_id,branch_id) REFERENCES branches(tenant_id,id) ON DELETE RESTRICT,
-  UNIQUE(tenant_id,type,aggregate_id,mutation_id)
+  UNIQUE(tenant_id,type,aggregate_id)
 );
 CREATE TRIGGER IF NOT EXISTS domain_events_immutable_update BEFORE UPDATE ON domain_events
 BEGIN SELECT RAISE(ABORT,'DOMAIN_EVENT_IMMUTABLE'); END;
