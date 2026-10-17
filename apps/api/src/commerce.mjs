@@ -541,9 +541,11 @@ export function createCommerceService(db,{now=nowISO}={}){
       const source=String(body?.source||'MANUAL').toUpperCase();
       if(!['MANUAL','SCALE','BARCODE'].includes(source))throw error(400,'Origem de pesagem inválida.');
       const row=await product(tenant,body?.productId);
-      if(String(row.unit).toUpperCase()!=='KG')throw error(400,'O produto precisa estar cadastrado em quilogramas.');
+      const unit=String(row.unit).toUpperCase();
+      if(!['KG','G'].includes(unit))throw error(400,'O produto precisa estar cadastrado em KG ou G.');
+      const quantity=unit==='G'?grams:grams/1000;
       return this.addItem(tenant,branch,id,{
-        productId:row.id,quantity:grams/1000,grams,weightSource:source
+        productId:row.id,quantity,grams,weightSource:source
       },header);
     },
     async removeWeightedItem(tenant,branch,id,itemId){
