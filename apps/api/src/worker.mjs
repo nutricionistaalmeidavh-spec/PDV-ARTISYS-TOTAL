@@ -127,6 +127,9 @@ export function createApi(env,{now=()=>Date.now()}={}){
           return response({ok:false,service:'pdv-artisys-total',status:'setup-required'},503);
         }
       }
+      // A new Cloudflare Git deployment must not accept credentials or write D1
+      // before schema, anti-abuse protections and customer onboarding are ready.
+      if(env.AUTH_ENABLED==='false')return failure(503,'Acesso ainda não habilitado para clientes.');
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
       if(!['GET','HEAD'].includes(method)&&!originAllowed(request))return failure(403,'Origem da solicitação inválida.');
       if(method==='POST'&&path==='/api/v1/auth/login')return await login(request,env,db,now());
