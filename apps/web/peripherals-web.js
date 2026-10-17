@@ -190,24 +190,25 @@
     dialog.id='pdv-peripherals-dialog';
     dialog.setAttribute('aria-label','Dispositivos locais');
     dialog.style.cssText='max-width:min(540px,95vw);border:1px solid #64748b;border-radius:16px;padding:24px;color:#e5e7eb;background:#13233e;box-shadow:0 18px 60px #0008';
-    dialog.innerHTML='<form method="dialog" id="pdv-peripherals-form"><h2>Dispositivos locais</h2><p>Configuração deste navegador. Não altera vendas nem dados do servidor.</p><label>Papel <select name="paperMm"><option value="58">58 mm</option><option value="80">80 mm</option></select></label><p><label>Impressora <select name="printerMode"><option value="browser">Diálogo do sistema (recomendado)</option><option value="serial">ESC/POS serial compatível (experimental)</option></select></label></p><p><label>Perfil da balança <select name="scaleProfile"><option value="generic">Serial numérico genérico</option><option value="urano-pop-s">Urano POP-S (requer homologação)</option></select></label></p><p><label>Velocidade serial <input name="scaleBaud" type="number" min="300" max="115200"></label></p><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-device="scale">Conectar balança</button><button type="button" data-device="printer">Conectar impressora serial</button><button type="button" data-device="drawer">Conectar gaveta</button><button type="button" id="pdv-test-printer">Imprimir teste</button><button type="button" id="pdv-test-drawer">Abrir gaveta</button></div><p role="status" id="pdv-peripherals-status" aria-live="polite"></p><div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" id="pdv-peripherals-save">Salvar</button><button value="cancel">Fechar</button></div></form>';
+    dialog.innerHTML='<form method="dialog" id="pdv-peripherals-form"><h2>Dispositivos locais</h2><p>Configuração deste navegador. Não altera vendas nem dados do servidor.</p><label>Papel <select name="paperMm"><option value="58">58 mm</option><option value="80">80 mm</option></select></label><p><label>Impressora <select name="printerMode"><option value="browser">Diálogo do sistema (recomendado)</option><option value="serial">ESC/POS serial compatível (experimental)</option></select></label></p><p><label>Perfil da balança <select name="scaleProfile"><option value="generic">Serial numérico genérico</option><option value="urano-pop-s">Urano POP-S (requer homologação)</option></select></label></p><p><label>Velocidade serial <input name="scaleBaud" type="number" min="300" max="115200"></label></p><p><label>Comando de leitura Urano <select name="uranoCommand"><option value="0x04">0x04 (padrão)</option><option value="0x05">0x05</option></select></label></p><p><label>Velocidade da impressora serial <input name="printerBaud" type="number" min="300" max="115200"></label></p><p><label>Velocidade da gaveta serial <input name="drawerBaud" type="number" min="300" max="115200"></label></p><p><label><input name="cut" type="checkbox"> Acionar corte ESC/POS (somente quando compatível)</label></p><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-device="scale">Conectar balança</button><button type="button" data-device="printer">Conectar impressora serial</button><button type="button" data-device="drawer">Conectar gaveta</button><button type="button" id="pdv-test-printer">Imprimir teste</button><button type="button" id="pdv-test-drawer">Abrir gaveta</button></div><p role="status" id="pdv-peripherals-status" aria-live="polite"></p><div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" id="pdv-peripherals-save">Salvar</button><button value="cancel">Fechar</button></div></form>';
     root.document.body.append(dialog);
     const form=dialog.querySelector('form');
     const saved=settings();
-    for(const key of ['paperMm','printerMode','scaleProfile','scaleBaud'])form.elements.namedItem(key).value=String(saved[key]);
+    for(const key of ['paperMm','printerMode','scaleProfile','scaleBaud','uranoCommand','printerBaud','drawerBaud'])form.elements.namedItem(key).value=String(saved[key]);
+    form.elements.namedItem('cut').checked=saved.cut;
     const status=dialog.querySelector('#pdv-peripherals-status');
     dialog.addEventListener('click',async e=>{
       const kind=e.target?.dataset?.device;
       try{
         if(kind){await connect(kind);status.textContent='Dispositivo conectado: '+kind+'.';}
         if(e.target?.id==='pdv-test-printer'){
-          saveSettings({...settings(),...Object.fromEntries(new FormData(form))});
+          saveSettings({...settings(),...Object.fromEntries(new FormData(form)),cut:form.elements.namedItem('cut').checked});
           await printTest();
           status.textContent='Diálogo aberto ou comando enviado. Confirme o resultado no equipamento.';
         }
         if(e.target?.id==='pdv-test-drawer'){await openDrawer();status.textContent='Pulso enviado; verifique a gaveta.';}
         if(e.target?.id==='pdv-peripherals-save'){
-          saveSettings({...settings(),...Object.fromEntries(new FormData(form))});
+          saveSettings({...settings(),...Object.fromEntries(new FormData(form)),cut:form.elements.namedItem('cut').checked});
           status.textContent='Preferências deste navegador salvas.';
         }
       }catch(error){status.textContent=error?.message||'Falha ao acessar dispositivo.';}
