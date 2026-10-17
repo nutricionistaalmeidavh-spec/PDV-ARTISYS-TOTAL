@@ -115,7 +115,8 @@ try{
   await page.locator('[data-web-settle]').first().click();
   await page.locator('.ux-dialog [name=amount]').fill('5,00');
   await page.locator('.ux-dialog__confirm').click();
-  await page.getByText('Energia QA P4').waitFor();
+  await page.locator('.ux-dialog').waitFor({state:'detached',timeout:12000});
+  await page.getByText('Energia QA P4',{exact:true}).first().waitFor();
   assert.match(await page.locator('#route-content').innerText(),/7,00/);
   await page.screenshot({path:'qa-artifacts/pdv-finance-mobile.png',fullPage:true});
 
