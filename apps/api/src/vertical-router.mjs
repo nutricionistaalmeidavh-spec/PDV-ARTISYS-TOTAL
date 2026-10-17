@@ -87,6 +87,10 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
      }
      if(parts.length===1&&method==='GET'){permission(member,user,'finance.view');return json({balances:await svc.commissions(tenantId,branch)});}
    }
+   if(feature==='credit'&&parts[1]&&parts.length===3&&parts[2]==='payments'&&method==='POST'){
+     permission(member,user,'finance.manage');
+     return json({receipt:await svc.payCredit(tenantId,branch,user,parts[1],body,key)},201);
+   }
    if(feature==='credit'&&parts[1]&&parts.length===2&&method==='GET'){
      permission(member,user,'customers.view');
      return json({credit:await svc.credit(tenantId,branch,parts[1])});
