@@ -63,6 +63,17 @@ try{
   await page.locator('#web-stock-qty').fill('2');
   await page.locator('#web-stock-form button[type=submit]').click();
   await page.locator('.web-product-row').filter({hasText:sku}).getByText('2',{exact:true}).waitFor();
+  // Parity: signed stock adjustment and immutable movement audit in the SAME products UI.
+  await row.locator('[data-web-adjust]').click();
+  await page.locator('#web-adjust-qty').fill('-0.5');
+  await page.locator('#web-adjust-reason').fill('Contagem física QA no balcão');
+  await page.locator('#web-adjust-form button[type=submit]').click();
+  await page.locator('#web-adjust-form').waitFor({state:'detached',timeout:12000});
+  await row.locator('[data-web-moves]').click();
+  await page.getByText('Contagem física QA no balcão').waitFor({timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-parity-stock-history.png',fullPage:true});
+  await page.locator('.web-stock-history [data-close-modal]').click();
+
   await page.locator('#app-sidebar [data-route=checkout]').click();
   const product=page.locator('[data-add-product]').filter({hasText:'Produto Web QA'});
   await product.waitFor({timeout:12000});
@@ -71,6 +82,14 @@ try{
   const cart=page.locator('.cart-line').filter({hasText:'Produto Web QA'});
   await cart.waitFor({timeout:12000});
   assert.equal(await page.locator('#product-search').inputValue(),'Web QA','search query survives cart mutation');
+  // Parity: manager price override keeps the original catalog price and reason.
+  await cart.locator('[data-price-item]').click();
+  await page.locator('#price-override-form [name=unitPrice]').fill('11,90');
+  await page.locator('#price-override-form [name=reason]').fill('Autorizado pelo gerente no teste de paridade');
+  await page.locator('#price-override-form button[type=submit]').click();
+  await page.locator('#price-override-form').waitFor({state:'detached',timeout:12000});
+  assert.match(await cart.innerText(),/11,90/);
+
   await page.locator('#finalize-sale').click();
   const cashButton=page.locator('#confirm-open-cash'),paymentButton=page.locator('#confirm-payment');
   await cashButton.or(paymentButton).first().waitFor({timeout:12000});
@@ -86,6 +105,18 @@ try{
   await page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
   await page.waitForFunction(()=>document.querySelectorAll('.cart-line').length===0,null,{timeout:12000});
   assert.equal(await page.locator('.cart-line').count(),0,'completed sale clears the cart once');
+  // Parity: the original sales-history route now offers server-side search and paging.
+  await page.locator('#app-sidebar [data-route=sales]').click();
+  await page.locator('#web-sales-filter').waitFor({timeout:12000});
+  const saleNumber=await page.locator('#ops-sales-body tr').first().locator('td').first().innerText();
+  await page.locator('#web-sales-filter [name=query]').fill(saleNumber.trim());
+  await page.locator('#web-sales-filter button[type=submit]').click();
+  await page.locator('#ops-sales-body tr[data-search]').first().waitFor({timeout:12000});
+  assert.equal(await page.locator('#ops-sales-body tr[data-search]').count(),1);
+  await page.locator('[data-sale-details]').first().click();
+  await page.getByText('Autorizado pelo gerente no teste de paridade').waitFor({timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-parity-sales-history.png',fullPage:true});
+
   mkdirSync('qa-artifacts',{recursive:true});
   await page.screenshot({path:'qa-artifacts/pdv-web-desktop.png',fullPage:true});
   await page.setViewportSize({width:390,height:844});
