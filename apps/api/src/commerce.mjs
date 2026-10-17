@@ -1016,6 +1016,23 @@ export function createCommerceService(db,{now=nowISO}={}){
       ]);
       return snapshot(tenant,branch,id);
     },
+    async changeConfiguredItemQuantity(tenant,branch,id,itemId,quantity){
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+      const milli=quantityMilli(quantity);
+      if(!milli)throw error(400,'Quantidade inválida.');
+      const result=await run(`UPDATE sale_items SET quantity_milli=?
+        WHERE sale_id=? AND tenant_id=? AND branch_id=? AND id=?
+          AND configuration_json IS NOT NULL`,milli,id,tenant,branch,itemId);
+      if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
+      return snapshot(tenant,branch,id);
+    },
+    async removeConfiguredItem(tenant,branch,id,itemId){
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+      const result=await run(`DELETE FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=?
+        AND id=? AND configuration_json IS NOT NULL`,id,tenant,branch,itemId);
+      if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
+      return snapshot(tenant,branch,id);
+    },
     async changeItemNote(tenant,branch,id,itemId,user,body,header){
       const key=requiredMutation(body,header),scope='sale.item-note:'+branch+':'+id+':'+itemId;
       const prior=await applied(tenant,scope,key);
