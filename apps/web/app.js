@@ -962,7 +962,7 @@
     content.innerHTML=`<section class="page web-products-page"><header class="page-head">
       <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
       <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
-      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button><button id="web-new-category" class="secondary-button" type="button">+ Categoria</button>':''}
+      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button><button id="web-new-category" class="secondary-button" type="button">+ Categoria</button><button id="web-import-csv" class="secondary-button" type="button">Importar CSV</button>':''}
       ${canStock?'<button id="web-purchase-orders" class="secondary-button" type="button">Pedidos de compra</button>':''}
       ${canManage?`<button id="web-toggle-inactive" class="secondary-button" type="button">${showInactiveWebProducts?'Ocultar inativos':'Mostrar inativos'}</button>`:''}</header>
       <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
@@ -983,6 +983,7 @@
       </div></section>`;
     content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
     content.querySelector('#web-new-category')?.addEventListener('click',openWebCategoryForm);
+    content.querySelector('#web-import-csv')?.addEventListener('click',()=>void openWebCsvImport());
     content.querySelector('#web-purchase-orders')?.addEventListener('click',()=>void openWebPurchaseOrders());
     content.querySelector('#web-toggle-inactive')?.addEventListener('click',async event=>{
       const button=event.currentTarget;button.disabled=true;
@@ -1026,6 +1027,57 @@
       finally{button.disabled=false;}
     }));
     routeRegistry.updated('products',{surface:'products'});
+  }
+
+  async function openWebCsvImport(){
+    openModal('Importar produtos por CSV',`<section class="web-stock-history">
+      <p>O arquivo será validado antes da gravação. Todos os preços devem estar em centavos inteiros,
+        sem símbolo de moeda ou vírgula decimal. A importação cria produtos; não modifica os existentes.</p>
+      <div class="field"><label>Arquivo CSV (até 13,5 KB)
+        <input type="file" id="web-import-file" accept=".csv,text/csv" /></label></div>
+      <p>Colunas obrigatórias: <code>sku;name;salePriceCents</code>.
+        Opcionais: <code>unit;barcode;brand;trackStock;categoryId</code>.</p>
+      <p>Exemplo: <code>REF-001;Produto de exemplo;1290</code> (R$ 12,90).</p>
+      <div id="web-import-preview"><p>Escolha um arquivo para verificar erros e duplicidades.</p></div>
+      <p class="web-form-feedback" role="status" aria-live="polite"></p>
+      <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Fechar</button>
+        <button type="button" class="primary-button" id="web-import-confirm" disabled>Importar produtos validados</button></div>
+    </section>`,{wide:true,onMount(root){
+      const input=root.querySelector('#web-import-file'),host=root.querySelector('#web-import-preview'),
+        confirm=root.querySelector('#web-import-confirm'),feedback=root.querySelector('[role=status]');
+      let loadedCsv='',mutationId='';
+      input.addEventListener('change',async()=>{
+        confirm.disabled=true;loadedCsv='';mutationId='';feedback.textContent='';
+        const file=input.files?.[0];if(!file)return;
+        if(file.size>13500){feedback.textContent='Arquivo acima de 13,5 KB. Divida o catálogo em lotes menores.';return;}
+        try{
+          const csv=await file.text();
+          const result=await api.previewCatalogCsv(csv);
+          host.innerHTML=`<p><strong>${result.validRows}</strong> válidos de
+            ${result.totalRows} itens; <strong>${result.invalidRows}</strong> com erros.</p>
+            <div class="ops-table-wrap"><table class="ops-table"><thead>
+              <tr><th>Linha</th><th>SKU</th><th>Produto</th><th>Preço</th><th>Situação</th></tr></thead>
+              <tbody>${result.rows.map(row=>`<tr>
+                <td>${row.line}</td><td>${escapeHtml(row.sku)}</td><td>${escapeHtml(row.name)}</td>
+                <td>${Number.isFinite(row.salePriceCents)?ui.formatCents(row.salePriceCents):'—'}</td>
+                <td>${row.valid?'Válido':escapeHtml(row.errors.join(' · '))}</td>
+              </tr>`).join('')}</tbody></table></div>`;
+          if(result.invalidRows){feedback.textContent='Corrija o CSV e selecione o arquivo novamente para prosseguir.';return;}
+          loadedCsv=csv;confirm.disabled=false;
+        }catch(e){host.textContent='Não foi possível validar o CSV.';feedback.textContent=e.message;}
+      });
+      confirm.addEventListener('click',async()=>{
+        if(!loadedCsv||confirm.disabled)return;
+        confirm.disabled=true;feedback.textContent='';
+        try{
+          if(!mutationId)mutationId=api.mutationId();
+          const result=await api.commitCatalogCsv(loadedCsv,mutationId);
+          state.products=await api.products();
+          closeModal();renderWebProducts();
+          showToast(result.createdCount+' produtos importados com sucesso.','success');
+        }catch(e){feedback.textContent=e.message;confirm.disabled=false;}
+      });
+    }});
   }
 
   async function openWebPurchaseOrders(){
