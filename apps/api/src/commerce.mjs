@@ -122,7 +122,13 @@ export function createCommerceService(db,{now=nowISO}={}){
     const adjustments=await all(`SELECT id,'CASH' AS paymentMethod,amount_cents AS amountCents,
       created_at AS createdAt,type, NULL AS saleId,note FROM cash_adjustments
       WHERE tenant_id=? AND branch_id=? AND cash_session_id=? ORDER BY created_at,id`,tenant,branch,id);
-    return [...sales,...adjustments].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id)));
+    // Credit repayments are receivable settlements, not second sales.
+    // CASH repayments must still enter the real cash drawer reconciliation.
+    const credits=await all(`SELECT id,method AS paymentMethod,amount_cents AS amountCents,
+      received_at AS createdAt,'SALE' AS type,NULL AS saleId,customer_id AS customerId
+      FROM customer_credit_receipts WHERE tenant_id=? AND branch_id=? AND cash_session_id=?
+      ORDER BY received_at,id`,tenant,branch,id);
+    return [...sales,...adjustments,...credits].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id)));
   };
   const cashClosing=async(tenant,branch,session,countedCashCents=0)=>{
     const lines=await cashLines(tenant,branch,session.id);
