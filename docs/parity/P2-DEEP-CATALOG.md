@@ -11,7 +11,7 @@
 
 ## Fora desta entrega — não alegar paridade integral P2
 
-Compras com pedido de fornecedor, recebimento parcial e contas a pagar automáticas, custo médio ponderado e ajustes por lote, imagens em R2, impressão de etiquetas, importação com prévia CSV/XLSX, inventário físico multiauditoria, múltiplas localizações internas, reservas vinculadas automaticamente a pedidos/atacado e homologação física de leitores de código de barras continuam pendentes. A migração 0009 não substitui serviços de compras completos.
+**Já entregues posteriormente:** pedidos de fornecedor/recebimentos parciais e custo médio de aquisição em P2.1 (`P2-PURCHASING.md`); importação CSV com prévia e commit atômico em P2.2 (`P2-CSV-IMPORT.md`). **Ainda pendentes:** contas a pagar automáticas, custo médio móvel do estoque e ajustes por lote, fotos R2, impressão de etiquetas, XLSX, inventário multiauditoria, localizações internas, reservas vinculadas automaticamente a pedidos/atacado e homologação física dos leitores. Estas entregas adicionais não certificam paridade integral com o desktop. A migração 0009 não substitui serviços de compras completos.
 
 A partir desta entrega, testar também retornos de kits, concorrência de duas operações distintas, colisão de código de barras e isolamento entre empresas. Um CI verde comprova apenas cenários executados; não equivale a homologação com todos os subfluxos do desktop.
 
