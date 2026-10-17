@@ -148,7 +148,7 @@
             "checkout-005"
           ],
           "acceptance": "Desconto de venda com permissão. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
-          "reviewNote": "P3: desconto autorizado por sales.discount; servidor calcula MIN(desconto solicitado, subtotal atual), em concordância com o desktop fixado, e persiste o valor efetivamente aplicado. Regressão SQLite com isolamento de empresas e perfil somente leitura. Ainda parcial: equivalência de recálculo após todas as mutações de itens, auditoria operacional completa e E2E de perfis/checkout."
+          "reviewNote": "P3: desconto autorizado por sales.discount; mesma regra canônica do desktop fixado (limitar ao subtotal), com valor aplicado persistido e recálculo após alteração de quantidade, remoção, adição ou mudança de preço. Regressão SQLite cobre desconto integral, limites, mutações posteriores, perfil somente leitura e isolamento de empresas. Ainda parcial: homologação funcional E2E com perfis, rastreabilidade de auditoria e equivalência de todos os fluxos desktop."
         },
         {
           "id": "checkout-008",
