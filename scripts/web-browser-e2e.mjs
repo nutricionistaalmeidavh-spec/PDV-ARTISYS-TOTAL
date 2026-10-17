@@ -150,9 +150,16 @@ try{
   // ready only guarantees an active registration; wait for this page to be
   // actually controlled before testing offline navigation via the shell.
   await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller),null,{timeout:12000});
+  // Chromium's Playwright network emulation can abort top-level navigations
+  // before the Service Worker handles them. Verify the already-installed
+  // public shell exists, then simulate offline API failure on the same page.
+  const publicShell=await page.evaluate(async()=>{
+    const found=await caches.match('/index.html');
+    return Boolean(found?.ok&&(await found.text()).includes('PDV Total'));
+  });
+  assert.equal(publicShell,true,'public offline shell missing from versioned SW cache');
   await context.setOffline(true);
-  await page.goto(origin+'/',{waitUntil:'domcontentloaded'});
-  await page.locator('#web-offline-alert').waitFor({state:'visible'});
+  await page.locator('#web-offline-alert').waitFor({state:'visible',timeout:8000});
   const apiOffline=await page.evaluate(()=>fetch('/api/v1/auth/session')
     .then(()=>false,()=>true));
   assert.equal(apiOffline,true,'offline API fetch must fail, never serve cached private JSON');
