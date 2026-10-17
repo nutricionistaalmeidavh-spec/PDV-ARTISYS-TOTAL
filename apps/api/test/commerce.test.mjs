@@ -9,14 +9,15 @@ const origin='https://pdv-total.test';
 const identity=readFileSync(new URL('../migrations/0001_identity.sql',import.meta.url),'utf8');
 const commerce=readFileSync(new URL('../migrations/0002_commerce.sql',import.meta.url),'utf8');
 const finance=readFileSync(new URL('../migrations/0003_cash_finance.sql',import.meta.url),'utf8');
-const parity=readFileSync(new URL('../migrations/0004_desktop_parity.sql',import.meta.url),'utf8');
+const vertical=readFileSync(new URL('../migrations/0005_vertical_parity.sql',import.meta.url),'utf8');
+const parity=readFileSync(new URL('../migrations/0006_desktop_parity.sql',import.meta.url),'utf8');
 const NOW=Date.parse('2026-10-17T14:00:00Z');
 const date='2026-10-17T14:00:00.000Z';
 const password='SafeTestPasswordForPdv2026!';
 let num=0;
 const next=()=>('mutation-'+(++num)+'-long');
 async function setup(){
-  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(parity);
+  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);
   const pass=await hashPassword(password);
   for(const [id,email] of [['owner','owner@test.com'],['other','other@test.com'],['viewer','viewer@test.com']])
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')

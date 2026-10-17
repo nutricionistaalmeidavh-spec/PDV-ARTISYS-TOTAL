@@ -1,5 +1,7 @@
 import { sha256, verifyPassword, newSessionToken } from './password.mjs';
 import {commerceRoute} from './commerce-router.mjs';
+import {advancedFinanceRoute} from './advanced-finance-router.mjs';
+import {verticalRoute} from './vertical-router.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import legacyProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
 import legacyPrincipals from '../../../packages/core/js/core/auth/principal-resolver.js';
@@ -169,8 +171,12 @@ export function createApi(env,{now=()=>Date.now()}={}){
         const tenantId=decodeURIComponent(commerceMatch[1]);
         const membership=await requireMembership(db,session.userId,tenantId);
         if(!membership)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
+        const advanced=await advancedFinanceRoute(request,db,session,membership,tenantId,commerceMatch[2]);
+        if(advanced)return advanced;
         const commerce=await commerceRoute(request,db,session,membership,tenantId,commerceMatch[2]);
         if(commerce)return commerce;
+        const vertical=await verticalRoute(request,db,session,membership,tenantId,commerceMatch[2]);
+        if(vertical)return vertical;
       }
       return failure(404,'Rota não disponível neste estágio da migração.');
     }catch(error){
