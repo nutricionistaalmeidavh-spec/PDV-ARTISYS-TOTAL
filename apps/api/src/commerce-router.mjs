@@ -347,6 +347,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
       if(parts[2]==='weight-items'&&parts.length===4&&method==='DELETE')
         return json({sale:await service.removeWeightedItem(tenant,branch,id,parts[3])});
       if(parts[2]==='items'){
+        if(parts.length===5&&parts[4]==='configured'){
+          if(method==='PUT')return json({sale:await service.changeConfiguredItemQuantity(tenant,branch,id,parts[3],body.quantity)});
+          if(method==='DELETE')return json({sale:await service.removeConfiguredItem(tenant,branch,id,parts[3])});
+        }
         if(parts.length===5&&parts[4]==='note'&&method==='PUT'){
           return json({sale:await service.changeItemNote(tenant,branch,id,decodeURIComponent(parts[3]),user,body,key)});
         }
