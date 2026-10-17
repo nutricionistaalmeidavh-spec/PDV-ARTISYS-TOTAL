@@ -59,6 +59,11 @@ try{
   await page.locator('#web-product-form button[type=submit]').click();
   await page.locator('.web-product-row').filter({hasText:sku}).waitFor();
   const row=page.locator('.web-product-row').filter({hasText:sku});
+  await row.locator('[data-web-edit]').click();
+  await page.locator('#web-edit-product-form').waitFor({timeout:12000});
+  await page.locator('#web-edit-product-name').fill('Produto Web QA');
+  await page.locator('#web-edit-product-form button[type=submit]').click();
+  await page.locator('#web-edit-product-form').waitFor({state:'detached',timeout:12000});
   await row.locator('[data-web-stock]').click();
   await page.locator('#web-stock-qty').fill('2');
   await page.locator('#web-stock-form button[type=submit]').click();
