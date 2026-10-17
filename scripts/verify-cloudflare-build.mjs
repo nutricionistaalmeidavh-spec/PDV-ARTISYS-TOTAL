@@ -13,6 +13,7 @@ must(config.d1_databases[0].database_name==='pdv-artisys-total','cannot share de
 must(!config.d1_databases[0].database_id||config.d1_databases[0].database_id!=='00000000-0000-0000-0000-000000000000','placeholder D1 ID forbidden');
 must(config.r2_buckets?.length===1&&config.r2_buckets[0].binding==='FILES','R2 binding must be explicit');
 must(existsSync(resolve(root,'apps/api/migrations/0001_identity.sql')),'identity schema missing');
+must(existsSync(resolve(root,'apps/api/migrations/0002_commerce.sql')),'commerce schema missing');
 must(existsSync(resolve(root,'packages/core/js/domains/sales/sale-service.js')),'canonical sales core missing');
 must(existsSync(resolve(root,'packages/core/js/domains/inventory/inventory-service.js')),'canonical inventory core missing');
 must(existsSync(resolve(root,'packages/core/js/domains/cash/cash-service.js')),'canonical cash core missing');
