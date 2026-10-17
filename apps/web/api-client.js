@@ -51,6 +51,7 @@
       if(!direct.includes(original)&&!original.startsWith('/api/v1/tenants/')){
         if(!this.tenantId||!this.branchId)throw new Error('Escolha o estabelecimento e a filial antes de continuar.');
         if(original==='/api/v1/products')operation='products';
+        else if(original.startsWith('/api/v1/products/'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/inventory')operation='inventory';
         else if(original==='/api/v1/inventory/movements')operation=method==='GET'?'inventory/movements':'inventory/receipts';
         else if(original==='/api/v1/inventory/adjustments')operation='inventory/adjustments';
@@ -94,6 +95,7 @@
       }
       if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
+      if(operation.startsWith('products/'))return value.product;
       if(operation==='customers')return method==='GET'?value.customers:value.customer;
       if(operation==='suppliers')return method==='GET'?value.suppliers:value.supplier;
       if(operation==='sellers')return value.sellers;
@@ -159,6 +161,7 @@
     saveCategory(body) { return this.request('/api/v1/categories', { method: 'POST', body }); }
     products(includeInactive = false) { return this.request(`/api/v1/products${includeInactive ? '?includeInactive=true' : ''}`); }
     saveProduct(body,mutationId) { return this.request('/api/v1/products', { method: 'POST', body,mutationId }); }
+    updateProduct(id,body,mutationId) { return this.request(`/api/v1/products/${encodeURIComponent(id)}`, { method:'PATCH', body,mutationId }); }
     removeProduct(productId) { return this.request(`/api/v1/products/${encodeURIComponent(productId)}`, { method: 'DELETE' }); }
     recipe(productId) { return this.request(`/api/v1/vertical/recipes/${encodeURIComponent(productId)}`); }
     saveRecipe(productId, body) { return this.request(`/api/v1/vertical/recipes/${encodeURIComponent(productId)}`, { method: 'PUT', body }); }
