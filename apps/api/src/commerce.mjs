@@ -109,10 +109,14 @@ export function createCommerceService(db,{now=nowISO}={}){
     }
     return view;
   };
-  const listing=async(tenant,branch,limit=25)=>{
+  const listing=async(tenant,branch,limit=25,status=null)=>{
     await branchExists(tenant,branch);
     const n=Number.isInteger(limit)?Math.min(50,Math.max(1,limit)):25;
-    const rows=await all('SELECT * FROM sales WHERE tenant_id=? AND branch_id=? ORDER BY created_at DESC,id DESC LIMIT ?',tenant,branch,n);
+    const allowed=['OPEN','SUSPENDED','COMPLETED','CANCELLED'];
+    if(status&& !allowed.includes(status))throw error(400,'Estado da venda inválido.');
+    const rows=status
+      ?await all('SELECT id FROM sales WHERE tenant_id=? AND branch_id=? AND status=? ORDER BY created_at DESC,id DESC LIMIT ?',tenant,branch,status,n)
+      :await all('SELECT id FROM sales WHERE tenant_id=? AND branch_id=? ORDER BY created_at DESC,id DESC LIMIT ?',tenant,branch,n);
     return Promise.all(rows.map(row=>snapshot(tenant,branch,row.id)));
   };
   return {
@@ -306,8 +310,11 @@ export function createCommerceService(db,{now=nowISO}={}){
       for(const p of groupedPayments){
         statements.push(q('INSERT INTO sale_payments(id,tenant_id,branch_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?)',
           randomId(),tenant,branch,id,p.method,p.amountCents,completedAt));
-        statements.push(q('INSERT INTO cash_movements(id,tenant_id,branch_id,cash_session_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?,?)',
-          randomId(),tenant,branch,cash.id,id,p.method,p.amountCents,completedAt));
+        // The tendered cash and change are reported separately; only net cash
+        // enters the drawer. A zero net amount must not generate a movement.
+        const drawerCents=p.method==='CASH'?p.amountCents-payment.changeDueCents:p.amountCents;
+        if(drawerCents>0)statements.push(q('INSERT INTO cash_movements(id,tenant_id,branch_id,cash_session_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?,?)',
+          randomId(),tenant,branch,cash.id,id,p.method,drawerCents,completedAt));
       }
       // Stock is decremented only in the same D1 batch; no secondary EventBus
       // inventory subscriber is registered, therefore one sale has one effect.
