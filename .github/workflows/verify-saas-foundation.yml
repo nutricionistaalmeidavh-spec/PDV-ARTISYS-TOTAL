@@ -29,6 +29,18 @@ jobs:
       - name: Test real SQLite isolation and canonical identity
         working-directory: apps/api
         run: npm test
+      - name: Smoke test offline self-hosted provisioning
+        working-directory: apps/api
+        env:
+          PDV_OWNER_EMAIL: owner@example.test
+          PDV_OWNER_NAME: Local Owner
+          PDV_TENANT_SLUG: smoke-store
+          PDV_TENANT_NAME: Smoke Store
+          PDV_OWNER_PASSWORD: DummyStrongPassOnlyForCI2026
+          LOCAL_DB_PATH: .local/smoke.sqlite
+        run: |
+          node --experimental-sqlite src/provision.mjs --local
+          node --experimental-sqlite --input-type=module -e "import {openLocalDatabase} from './src/local-db.mjs'; const d=openLocalDatabase('.local/smoke.sqlite'); const r=await d.prepare('SELECT COUNT(*) AS c FROM tenant_memberships').bind().first(); if(r.c!==1)process.exit(1); d.close();"
       - name: Cloudflare Worker dry run (never deploy)
         working-directory: apps/api
         run: npx --yes wrangler@4.137.0 deploy --dry-run --outdir dist-check
