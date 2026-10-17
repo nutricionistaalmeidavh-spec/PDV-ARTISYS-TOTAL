@@ -1,5 +1,6 @@
 import { sha256, verifyPassword, newSessionToken } from './password.mjs';
 import {commerceRoute} from './commerce-router.mjs';
+import {productMediaRoute} from './product-media.mjs';
 import {advancedFinanceRoute} from './advanced-finance-router.mjs';
 import {verticalRoute} from './vertical-router.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
@@ -171,6 +172,8 @@ export function createApi(env,{now=()=>Date.now()}={}){
         const tenantId=decodeURIComponent(commerceMatch[1]);
         const membership=await requireMembership(db,session.userId,tenantId);
         if(!membership)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
+        const media=await productMediaRoute(request,db,env.FILES,env.LOCAL_MEDIA_ENABLED==='true',session,membership,tenantId,commerceMatch[2]);
+        if(media)return media;
         const advanced=await advancedFinanceRoute(request,db,session,membership,tenantId,commerceMatch[2]);
         if(advanced)return advanced;
         const commerce=await commerceRoute(request,db,session,membership,tenantId,commerceMatch[2]);
