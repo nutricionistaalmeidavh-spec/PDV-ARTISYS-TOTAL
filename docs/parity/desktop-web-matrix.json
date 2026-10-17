@@ -808,11 +808,11 @@
           "acceptance": "Estorno/retorno de vendas em sessões encerradas. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
           "webEvidence": {
             "file": "apps/api/src/sale-reversals.mjs",
-            "contains": "getCash(tenant,branch)",
+            "contains": "getCash(tenant,branch,body?.terminalId||sale.terminal_id||'DEFAULT')",
             "testFile": "apps/api/test/p1-reversals.test.mjs",
             "testContains": "P1: completed sale cancellation"
           },
-          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
+          "reviewNote": "Reembolso por terminal operacional explícito com vínculo ao caixa original, mantendo as compensações imutáveis. Sem homologação física multicaixa."
         },
         {
           "id": "cash-046",
