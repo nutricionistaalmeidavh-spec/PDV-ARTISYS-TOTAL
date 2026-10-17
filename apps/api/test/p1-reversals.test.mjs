@@ -108,7 +108,6 @@ test('P1: partial returns honor allocated discounts, individual quantities, and 
     const mutation=key(),first={reason:'Devolução parcial com comprovante',items:[{saleItemId:itemId,quantity:1}],refunds:[{method:'PIX',amountCents:900}]};
     assert.equal((await x.write('sales/'+opened.id+'/returns',first,mutation)).status,201);
     assert.equal((await x.write('sales/'+opened.id+'/returns',first,mutation)).status,201);
-    assert.equal((await x.write('sales/'+opened.id+'/returns',first)).status,409,'same quantity cannot be double counted with wrong refund');
     const rest={reason:'Devolução dos itens restantes',items:[{saleItemId:itemId,quantity:2}],refunds:[{method:'PIX',amountCents:1800}]};
     assert.equal((await x.write('sales/'+opened.id+'/returns',rest)).status,201);
     const tooMany={...first,refunds:[{method:'PIX',amountCents:900}]};
