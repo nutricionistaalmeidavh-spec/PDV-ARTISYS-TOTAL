@@ -19,7 +19,7 @@ db.exec(readFileSync(resolve(here,'../migrations/0009_catalog_inventory.sql'),'u
 db.exec(readFileSync(resolve(here,'../migrations/0010_purchase_orders.sql'),'utf8'));
 const host=process.env.PDV_HOST||'127.0.0.1',port=Number(process.env.PORT||4175);
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('PORT inválida.');
-const api=createApi({DB:db,COOKIE_SECURE:'false',AUTH_ENABLED:process.env.AUTH_ENABLED||'false'});
+const api=createApi({DB:db,COOKIE_SECURE:'false',AUTH_ENABLED:process.env.AUTH_ENABLED||'false',LOCAL_MEDIA_ENABLED:'true'});
 const server=createServer(async(req,res)=>{
   try{
     const origin=`http://${req.headers.host||'127.0.0.1:'+port}`;
