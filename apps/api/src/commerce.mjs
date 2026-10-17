@@ -94,7 +94,9 @@ export function createCommerceService(db,{now=nowISO}={}){
     const payments=await all('SELECT * FROM sale_payments WHERE sale_id=? ORDER BY created_at,id',sale.id);
     // A store-credit tender belongs to the credit ledger, not to cash or card payments.
     const credit=await all("SELECT id,'STORE_CREDIT' AS method,amount_cents AS amount_cents FROM customer_credit_ledger WHERE tenant_id=? AND branch_id=? AND sale_id=? AND type='CHARGE'",sale.tenant_id,sale.branch_id,sale.id);
-    return formatSale(sale,items,[...payments,...credit]);
+    const returns=await first('SELECT COALESCE(SUM(amount_cents),0) AS refundedCents FROM sale_returns WHERE tenant_id=? AND branch_id=? AND sale_id=?',sale.tenant_id,sale.branch_id,sale.id);
+    const original=formatSale(sale,items,[...payments,...credit]);
+    return {...original,refundedCents:returns.refundedCents,netTotalCents:original.totalCents-returns.refundedCents};
   };
   const requireOpen=sale=>{if(sale.status!=='OPEN')throw error(409,'Esta venda não está aberta. Atualize e continue.');};
   const branchExists=async(tenant,branch)=>{
@@ -634,37 +636,77 @@ export function createCommerceService(db,{now=nowISO}={}){
     async reports(tenant,branch,{from,to}={}){
       await branchExists(tenant,branch);
       const {a,b}=period({from,to});
-      const sales=await first(`SELECT COUNT(*) AS count,COALESCE(SUM(total_cents),0) AS totalCents,
-        COALESCE(SUM(discount_cents),0) AS discountsCents FROM sales
-        WHERE tenant_id=? AND branch_id=? AND status='COMPLETED' AND completed_at>=? AND completed_at<=?`,
-        tenant,branch,a,b);
-      const payments=await all(`SELECT p.method,COALESCE(SUM(CASE WHEN p.method='CASH'
-        THEN p.amount_cents-s.change_cents ELSE p.amount_cents END),0) AS amountCents
-        FROM sale_payments p JOIN sales s ON s.id=p.sale_id
-        WHERE s.tenant_id=? AND s.branch_id=? AND s.status='COMPLETED' AND s.completed_at>=? AND s.completed_at<=?
-        GROUP BY p.method ORDER BY p.method`,tenant,branch,a,b);
-      const products=await all(`SELECT si.product_id AS productId,si.product_name AS name,
-        SUM(si.quantity_milli)/1000.0 AS quantity,COUNT(DISTINCT si.sale_id) AS salesCount,
-        SUM(si.quantity_milli*si.unit_price_cents)/1000 AS grossCents
-        FROM sale_items si JOIN sales s ON s.id=si.sale_id
-        WHERE s.tenant_id=? AND s.branch_id=? AND s.status='COMPLETED' AND s.completed_at>=? AND s.completed_at<=?
-        GROUP BY si.product_id,si.product_name ORDER BY grossCents DESC LIMIT 50`,tenant,branch,a,b);
+      // Never remove a completed sale from history after refund; recognize its
+      // original amount on the completion date and the negative on the return date.
+      const gross=await first("SELECT COUNT(*) AS count,COALESCE(SUM(total_cents),0) AS grossCents,COALESCE(SUM(discount_cents),0) AS discountsCents FROM sales WHERE tenant_id=? AND branch_id=? AND completed_at BETWEEN ? AND ? AND status IN('COMPLETED','CANCELLED')",tenant,branch,a,b);
+      const refunds=await first("SELECT COUNT(*) AS count,COALESCE(SUM(amount_cents),0) AS totalCents FROM sale_returns WHERE tenant_id=? AND branch_id=? AND created_at BETWEEN ? AND ?",tenant,branch,a,b);
+      const sales={count:gross.count,totalCents:gross.grossCents-refunds.totalCents,
+        grossCents:gross.grossCents,refundedCents:refunds.totalCents,refundCount:refunds.count,
+        discountsCents:gross.discountsCents};
+      const originals=await all(`SELECT p.method,SUM(CASE WHEN p.method='CASH'
+        THEN p.amount_cents-s.change_cents ELSE p.amount_cents END) AS amountCents
+        FROM sale_payments p JOIN sales s ON s.id=p.sale_id AND s.tenant_id=p.tenant_id AND s.branch_id=p.branch_id
+        WHERE s.tenant_id=? AND s.branch_id=? AND s.status IN('COMPLETED','CANCELLED')
+          AND s.completed_at BETWEEN ? AND ?
+        GROUP BY p.method`,tenant,branch,a,b);
+      const refundsByMethod=await all(`SELECT method,SUM(amount_cents) AS amountCents FROM sale_refund_movements
+        WHERE tenant_id=? AND branch_id=? AND created_at BETWEEN ? AND ? AND method<>'STORE_CREDIT'
+        GROUP BY method`,tenant,branch,a,b);
+      const methods=new Map();
+      for(const row of originals)methods.set(row.method,(methods.get(row.method)||0)+row.amountCents);
+      for(const row of refundsByMethod)methods.set(row.method,(methods.get(row.method)||0)-row.amountCents);
+      const payments=[...methods].map(([method,amountCents])=>({method,amountCents}))
+        .sort((x,y)=>x.method.localeCompare(y.method));
+      const originalsByProduct=await all(`SELECT i.product_id AS productId,MAX(i.product_name) AS name,
+        SUM(i.quantity_milli) AS milli,COUNT(DISTINCT i.sale_id) AS salesCount,
+        SUM(i.quantity_milli*i.unit_price_cents)/1000 AS grossCents
+        FROM sale_items i JOIN sales s ON s.id=i.sale_id AND s.tenant_id=i.tenant_id AND s.branch_id=i.branch_id
+        WHERE i.tenant_id=? AND i.branch_id=? AND s.status IN('COMPLETED','CANCELLED')
+          AND s.completed_at BETWEEN ? AND ?
+        GROUP BY i.product_id`,tenant,branch,a,b);
+      const refundedByProduct=await all(`SELECT i.product_id AS productId,MAX(i.product_name) AS name,
+        SUM(ri.quantity_milli) AS milli,SUM(ri.net_cents) AS returnedCents
+        FROM sale_return_items ri JOIN sale_returns r ON r.id=ri.return_id AND r.tenant_id=ri.tenant_id
+           AND r.branch_id=ri.branch_id
+        JOIN sale_items i ON i.id=ri.sale_item_id AND i.tenant_id=ri.tenant_id AND i.branch_id=ri.branch_id
+        WHERE r.tenant_id=? AND r.branch_id=? AND r.created_at BETWEEN ? AND ?
+        GROUP BY i.product_id`,tenant,branch,a,b);
+      const products=new Map();
+      for(const item of originalsByProduct)products.set(item.productId,{
+        productId:item.productId,name:item.name,quantity:item.milli/1000,
+        grossCents:item.grossCents,refundedCents:0,salesCount:item.salesCount
+      });
+      for(const item of refundedByProduct){
+        const old=products.get(item.productId)||{
+          productId:item.productId,name:item.name,quantity:0,grossCents:0,
+          refundedCents:0,salesCount:0};
+        old.quantity-=item.milli/1000;
+        old.refundedCents+=item.returnedCents;
+        products.set(item.productId,old);
+      }
       const inventory=await this.stock(tenant,branch,100);
       const cash=await this.cashSessions(tenant,branch,{limit:50});
       const finance=await this.financeSummary(tenant,branch);
       return {period:{from:from||null,to:to||null},sales,methodTotals:payments,
-        products,inventory,cash,finance};
+        products:[...products.values()].sort((x,y)=>y.grossCents-x.grossCents).slice(0,50),
+        inventory,cash,finance};
     },
     async salesCsv(tenant,branch,{from,to}={}){
       const {a,b}=period({from,to});
       await branchExists(tenant,branch);
-      const rows=await all(`SELECT sale_number AS saleNumber,completed_at AS completedAt,
-        total_cents AS totalCents,discount_cents AS discountCents,operator_id AS operatorId
-        FROM sales WHERE tenant_id=? AND branch_id=? AND status='COMPLETED'
-        AND completed_at>=? AND completed_at<=? ORDER BY completed_at,id LIMIT 3000`,tenant,branch,a,b);
-      const cell=v=>'"'+String(v??'').replace(/"/g,'""').replace(/^[=+@-]/,'\u0027')+'"';
-      return '\uFEFF'+'Venda;Data;Total (R$);Desconto (R$);Operador\r\n'+
-        rows.map(x=>[x.saleNumber,x.completedAt,(x.totalCents/100).toFixed(2).replace('.',','),(x.discountCents/100).toFixed(2).replace('.',','),x.operatorId]
+      // Append refund and status columns without removing legacy export columns.
+      // netCents is a cumulative position as of export time, not a second sale.
+      const rows=await all(`SELECT s.sale_number AS saleNumber,s.completed_at AS completedAt,
+        s.total_cents AS totalCents,s.discount_cents AS discountCents,s.operator_id AS operatorId,
+        s.status,COALESCE((SELECT SUM(r.amount_cents) FROM sale_returns r
+          WHERE r.tenant_id=s.tenant_id AND r.branch_id=s.branch_id AND r.sale_id=s.id),0) AS refundedCents
+        FROM sales s WHERE s.tenant_id=? AND s.branch_id=? AND s.status IN('COMPLETED','CANCELLED')
+        AND s.completed_at BETWEEN ? AND ? ORDER BY s.completed_at,s.id LIMIT 3000`,tenant,branch,a,b);
+      const cell=value=>'"'+String(value??'').replace(/"/g,'""').replace(/^[=+@-]/,"'")+'"';
+      return '\uFEFF'+'Venda;Data;Total (R$);Desconto (R$);Operador;Status;Reembolsado (R$);Liquido acumulado (R$)\r\n'+
+        rows.map(x=>[x.saleNumber,x.completedAt,(x.totalCents/100).toFixed(2).replace('.',','),
+          (x.discountCents/100).toFixed(2).replace('.',','),x.operatorId,x.status,
+          (x.refundedCents/100).toFixed(2).replace('.',','),((x.totalCents-x.refundedCents)/100).toFixed(2).replace('.',',')]
           .map(cell).join(';')).join('\r\n');
     },
     async openSale(tenant,branch,user,body,header){
