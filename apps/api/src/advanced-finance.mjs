@@ -213,11 +213,11 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
    const groups=await many('SELECT COALESCE(g.id,CASE WHEN e.kind=\'RECEIVABLE\' THEN \'other-income\' ELSE \'other-expense\' END) AS id, '+
     'COALESCE(g.name,CASE WHEN e.kind=\'RECEIVABLE\' THEN \'Outras receitas\' ELSE \'Despesas sem classificação\' END) AS name, '+
     'COALESCE(g.nature,CASE WHEN e.kind=\'RECEIVABLE\' THEN \'REVENUE\' ELSE \'EXPENSE\' END) AS nature, '+
-    'COALESCE(d.cost_center_id,\'\') AS costCenterId,SUM('+col+') AS amountCents FROM finance_entries e '+join+
+    'COALESCE(d.cost_center_id,\'\') AS costCenterId,SUM(CASE WHEN g.nature=\'OTHER\' AND e.kind=\'PAYABLE\' THEN -('+col+') ELSE '+col+' END) AS amountCents FROM finance_entries e '+join+
     'LEFT JOIN finance_entry_dimensions d ON d.tenant_id=e.tenant_id AND d.branch_id=e.branch_id AND d.entry_id=e.id '+
     'LEFT JOIN finance_dre_groups g ON g.tenant_id=e.tenant_id AND g.branch_id=e.branch_id AND g.id=d.dre_group_id '+
     'WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL AND '+dateCol+' BETWEEN ? AND ? '+
-    'GROUP BY id,name,nature,costCenterId ORDER BY nature,name,costCenterId',t,b,from,to);
+    'GROUP BY 1,2,3,4 ORDER BY nature,name,costCenterId',t,b,from,to);
    if(sales.n)groups.unshift({id:'pdv-sales',name:'Vendas do PDV',nature:'REVENUE',costCenterId:'',amountCents:sales.n});
    const totals={revenueCents:0,costCents:0,expenseCents:0,otherCents:0};
    for(const x of groups){const k={REVENUE:'revenueCents',COST:'costCents',EXPENSE:'expenseCents',OTHER:'otherCents'}[x.nature];totals[k]+=x.amountCents;}
