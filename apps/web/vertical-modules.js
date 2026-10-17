@@ -142,6 +142,7 @@
   }
 
   async function renderModuleRoute(id){
+    if(api.webMode)return root.PdvWebParityUi?.show(id);
     if(!modules.length)await loadModules();
     const module=moduleForRoute(id);
     if(!moduleAllowed(module)){
