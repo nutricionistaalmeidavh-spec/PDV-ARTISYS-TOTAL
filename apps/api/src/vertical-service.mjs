@@ -93,7 +93,8 @@ export function createVerticalService(db){
    async upsertContact(t,b,kind,body,key){
      await branchExists(t,b);
      const name=clean(body.name,120);if(name.length<2)throw err(400,'Informe nome com pelo menos 2 caracteres.');
-     const id=clean(body.id,100)||uuid(),scope=kind+'.upsert:'+id;
+     const requestedId=clean(body.id,100);
+     const id=requestedId||uuid(),scope=requestedId?kind+'.update:'+requestedId:kind+'.create';
      const prev=body.id?await contact(t,kind,id):null;
      const doc=clean(body.document,32)||null,email=clean(body.email,120)||null;
      const phone=clean(body.phone,40)||null,address=clean(body.address,300)||null;
