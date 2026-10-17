@@ -224,15 +224,19 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
   async cashflow(t,b,{from,to}={}){
    await branch(t,b);period({from,to});
    const settlements=await one("SELECT COALESCE(SUM(CASE WHEN e.kind='RECEIVABLE' THEN s.amount_cents-COALESCE(r.amount_cents,0) ELSE 0 END),0) AS received,COALESCE(SUM(CASE WHEN e.kind='PAYABLE' THEN s.amount_cents-COALESCE(r.amount_cents,0) ELSE 0 END),0) AS paid FROM finance_settlements s LEFT JOIN finance_settlement_reversals r ON r.settlement_id=s.id JOIN finance_entries e ON e.id=s.entry_id AND e.tenant_id=s.tenant_id AND e.branch_id=s.branch_id WHERE e.tenant_id=? AND e.branch_id=? AND substr(s.occurred_at,1,10) BETWEEN ? AND ?",t,b,from,to);
-   const sales=await one("SELECT COALESCE(SUM(p.amount_cents-CASE WHEN p.method='CASH' THEN s.change_cents ELSE 0 END),0) AS amount FROM sale_payments p JOIN sales s ON s.id=p.sale_id AND s.tenant_id=p.tenant_id AND s.branch_id=p.branch_id WHERE s.tenant_id=? AND s.branch_id=? AND s.status='COMPLETED' AND substr(p.created_at,1,10) BETWEEN ? AND ?",t,b,from,to);
+   const sales=await one("SELECT COALESCE(SUM(p.amount_cents-CASE WHEN p.method='CASH' THEN s.change_cents ELSE 0 END),0) AS amount FROM sale_payments p JOIN sales s ON s.id=p.sale_id AND s.tenant_id=p.tenant_id AND s.branch_id=p.branch_id WHERE s.tenant_id=? AND s.branch_id=? AND s.status IN ('COMPLETED','CANCELLED') AND substr(p.created_at,1,10) BETWEEN ? AND ?",t,b,from,to);
+   const refunds=await one("SELECT COALESCE(SUM(amount_cents),0) AS amount FROM sale_refund_movements WHERE tenant_id=? AND branch_id=? AND method<>'STORE_CREDIT' AND substr(created_at,1,10) BETWEEN ? AND ?",t,b,from,to);
    const future=await one("SELECT COALESCE(SUM(CASE WHEN e.kind='RECEIVABLE' THEN e.amount_cents-COALESCE(x.paid,0) ELSE 0 END),0) AS incoming,COALESCE(SUM(CASE WHEN e.kind='PAYABLE' THEN e.amount_cents-COALESCE(x.paid,0) ELSE 0 END),0) AS outgoing FROM finance_entries e LEFT JOIN (SELECT f.entry_id,SUM(f.amount_cents-COALESCE(r.amount_cents,0)) AS paid FROM finance_settlements f LEFT JOIN finance_settlement_reversals r ON r.settlement_id=f.id GROUP BY f.entry_id) x ON x.entry_id=e.id WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL AND e.due_date BETWEEN ? AND ?",t,b,from,to);
-   return {from,to,realizedInflowCents:settlements.received+sales.amount,realizedOutflowCents:settlements.paid,projectedReceivableCents:future.incoming,projectedPayableCents:future.outgoing,projectedClosingDeltaCents:settlements.received+sales.amount-settlements.paid+future.incoming-future.outgoing};
+   return {from,to,realizedInflowCents:settlements.received+sales.amount-refunds.amount,realizedOutflowCents:settlements.paid,projectedReceivableCents:future.incoming,projectedPayableCents:future.outgoing,projectedClosingDeltaCents:settlements.received+sales.amount-refunds.amount-settlements.paid+future.incoming-future.outgoing};
   },
   async dre(t,b,filters){
    await branch(t,b);const {from,to,basis}=period(filters);
    const sales=basis==='accrual'
-    ?await one("SELECT COALESCE(SUM(total_cents),0) AS n FROM sales WHERE tenant_id=? AND branch_id=? AND status='COMPLETED' AND substr(completed_at,1,10) BETWEEN ? AND ?",t,b,from,to)
-    :await one("SELECT COALESCE(SUM(p.amount_cents-CASE WHEN p.method='CASH' THEN s.change_cents ELSE 0 END),0) AS n FROM sale_payments p JOIN sales s ON s.id=p.sale_id AND s.tenant_id=p.tenant_id AND s.branch_id=p.branch_id WHERE s.tenant_id=? AND s.branch_id=? AND s.status='COMPLETED' AND substr(p.created_at,1,10) BETWEEN ? AND ?",t,b,from,to);
+    ?await one("SELECT COALESCE(SUM(total_cents),0) AS n FROM sales WHERE tenant_id=? AND branch_id=? AND status IN ('COMPLETED','CANCELLED') AND substr(completed_at,1,10) BETWEEN ? AND ?",t,b,from,to)
+    :await one("SELECT COALESCE(SUM(p.amount_cents-CASE WHEN p.method='CASH' THEN s.change_cents ELSE 0 END),0) AS n FROM sale_payments p JOIN sales s ON s.id=p.sale_id AND s.tenant_id=p.tenant_id AND s.branch_id=p.branch_id WHERE s.tenant_id=? AND s.branch_id=? AND s.status IN ('COMPLETED','CANCELLED') AND substr(p.created_at,1,10) BETWEEN ? AND ?",t,b,from,to);
+   const returns=await one(basis==='accrual'?
+    "SELECT COALESCE(SUM(amount_cents),0) AS n FROM sale_returns WHERE tenant_id=? AND branch_id=? AND substr(created_at,1,10) BETWEEN ? AND ?":
+    "SELECT COALESCE(SUM(amount_cents),0) AS n FROM sale_refund_movements WHERE tenant_id=? AND branch_id=? AND method<>'STORE_CREDIT' AND substr(created_at,1,10) BETWEEN ? AND ?",t,b,from,to);
    const col=basis==='cash'?'(f.amount_cents-COALESCE(r.amount_cents,0))':'e.amount_cents';
    const dateCol=basis==='cash'?'substr(f.occurred_at,1,10)':'COALESCE(e.competence_date,e.due_date)';
    const join=basis==='cash'?' JOIN finance_settlements f ON f.entry_id=e.id AND f.tenant_id=e.tenant_id AND f.branch_id=e.branch_id LEFT JOIN finance_settlement_reversals r ON r.settlement_id=f.id ':' ';
@@ -244,7 +248,7 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
     'LEFT JOIN finance_dre_groups g ON g.tenant_id=e.tenant_id AND g.branch_id=e.branch_id AND g.id=d.dre_group_id '+
     'WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL AND '+dateCol+' BETWEEN ? AND ? '+
     'GROUP BY 1,2,3,4 ORDER BY nature,name,costCenterId',t,b,from,to);
-   if(sales.n)groups.unshift({id:'pdv-sales',name:'Vendas do PDV',nature:'REVENUE',costCenterId:'',amountCents:sales.n});
+   if(sales.n||returns.n)groups.unshift({id:'pdv-sales',name:'Vendas do PDV (líquido de devoluções)',nature:'REVENUE',costCenterId:'',amountCents:sales.n-returns.n});
    const totals={revenueCents:0,costCents:0,expenseCents:0,otherCents:0};
    for(const x of groups){const k={REVENUE:'revenueCents',COST:'costCents',EXPENSE:'expenseCents',OTHER:'otherCents'}[x.nature];totals[k]+=x.amountCents;}
    const resultCents=totals.revenueCents-totals.costCents-totals.expenseCents+totals.otherCents;
@@ -252,7 +256,11 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
   },
   async dreDetails(t,b,{from,to,basis='accrual',groupId}){
    period({from,to,basis});await branch(t,b);
-   if(groupId==='pdv-sales')return many("SELECT id,completed_at AS date,sale_number AS description,total_cents AS amountCents FROM sales WHERE tenant_id=? AND branch_id=? AND status='COMPLETED' AND substr(completed_at,1,10) BETWEEN ? AND ? ORDER BY completed_at DESC LIMIT 200",t,b,from,to);
+   if(groupId==='pdv-sales')return many(
+      basis==='accrual'?
+      "SELECT id,completed_at AS date,sale_number AS description,total_cents AS amountCents FROM sales WHERE tenant_id=? AND branch_id=? AND status IN ('COMPLETED','CANCELLED') AND substr(completed_at,1,10) BETWEEN ? AND ? UNION ALL SELECT r.id,r.created_at AS date,'Devolução '||s.sale_number AS description,-r.amount_cents AS amountCents FROM sale_returns r JOIN sales s ON s.id=r.sale_id WHERE r.tenant_id=? AND r.branch_id=? AND substr(r.created_at,1,10) BETWEEN ? AND ? ORDER BY date DESC LIMIT 200":
+      "SELECT p.id,p.created_at AS date,s.sale_number AS description,p.amount_cents-CASE WHEN p.method='CASH' THEN s.change_cents ELSE 0 END AS amountCents FROM sale_payments p JOIN sales s ON s.id=p.sale_id WHERE s.tenant_id=? AND s.branch_id=? AND s.status IN ('COMPLETED','CANCELLED') AND substr(p.created_at,1,10) BETWEEN ? AND ? UNION ALL SELECT r.id,r.created_at AS date,'Reembolso '||s.sale_number AS description,-r.amount_cents AS amountCents FROM sale_refund_movements r JOIN sales s ON s.id=r.sale_id WHERE r.tenant_id=? AND r.branch_id=? AND r.method<>'STORE_CREDIT' AND substr(r.created_at,1,10) BETWEEN ? AND ? ORDER BY date DESC LIMIT 200",
+      t,b,from,to,t,b,from,to);
    const dt=basis==='cash'?'substr(f.occurred_at,1,10)':'COALESCE(e.competence_date,e.due_date)';
    const join=basis==='cash'?' JOIN finance_settlements f ON f.entry_id=e.id AND f.tenant_id=e.tenant_id AND f.branch_id=e.branch_id LEFT JOIN finance_settlement_reversals r ON r.settlement_id=f.id ':' ';
    const amt=basis==='cash'?'(f.amount_cents-COALESCE(r.amount_cents,0))':'e.amount_cents';
