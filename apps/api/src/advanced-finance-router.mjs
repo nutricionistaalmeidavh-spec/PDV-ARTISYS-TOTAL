@@ -36,8 +36,10 @@ export async function advancedFinanceRoute(request,db,session,member,tenant,path
    if(feature[0]==='suggestions'&&feature.length===2)return json({suggestions:await svc.suggestions(tenant,branch,feature[1])});
    if(f==='recurrences')return json({recurrences:await svc.recurrences(tenant,branch)});
    if(f==='dre')return json({dre:await svc.dre(tenant,branch,filters())});
+   if(f==='dre/cashflow')return json({cashflow:await svc.cashflow(tenant,branch,filters())});
    if(f==='dre/details')return json({details:await svc.dreDetails(tenant,branch,{...filters(),groupId:query('groupId')})});
    if(f==='dre/groups')return json({groups:await svc.groups(tenant,branch)});
+   if(f==='dre/categories')return json({categories:await svc.categories(tenant,branch)});
    if(f==='dre/cost-centers')return json({costCenters:await svc.costCenters(tenant,branch)});
   }
   if(method==='POST'){
@@ -50,6 +52,7 @@ export async function advancedFinanceRoute(request,db,session,member,tenant,path
    if(f==='recurrences')return json({recurrence:await svc.createRecurrence(tenant,branch,user,input)},201);
    if(f==='recurrences/generate')return json({result:await svc.generate(tenant,branch,user,input)});
    if(f==='dre/groups')return json({group:await svc.createGroup(tenant,branch,input)},201);
+   if(f==='dre/categories')return json({category:await svc.createCategory(tenant,branch,input)},201);
    if(f==='dre/cost-centers')return json({costCenter:await svc.createCostCenter(tenant,branch,input)},201);
    if(feature[0]==='dre'&&feature[1]==='classify'&&feature.length===3)return json({classification:await svc.classify(tenant,branch,feature[2],input)});
   }
