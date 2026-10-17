@@ -454,18 +454,40 @@ export function createCommerceService(db,{now=nowISO}={}){
       await branchExists(tenant,branch);
       const key=requiredMutation(body,header),scope='sale.open:'+branch;
       const prior=await applied(tenant,scope,key);if(prior)return prior;
-      const id=randomId(),created=stamp();
-      const saleNumber='W-'+id.slice(0,8).toUpperCase();
+      const id=randomId(),created=stamp(),saleNumber='W-'+id.slice(0,8).toUpperCase();
       const sellerId=body?.sellerId||user;
-       const seller=await first('SELECT user_id FROM tenant_memberships WHERE tenant_id=? AND user_id=? AND active=1',tenant,sellerId);
-       if(!seller)throw error(404,'Vendedor não encontrado neste estabelecimento.');
-       const result={id,tenantId:tenant,branchId:branch,saleNumber,operatorId:user,sellerId,customerId:null,status:'OPEN',
-        items:[],payments:[],subtotalCents:0,discountCents:0,totalCents:0,changeCents:0,completedAt:null};
-      await batch([
-        q('INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,sale_number,status,created_at) VALUES(?,?,?,?,?,?,?,?)',
-          id,tenant,branch,user,sellerId,saleNumber,'OPEN',created),
-        audit(tenant,scope,key,result)
-      ]);
+      const seller=await first('SELECT user_id FROM tenant_memberships WHERE tenant_id=? AND user_id=? AND active=1',tenant,sellerId);
+      if(!seller)throw error(404,'Vendedor não encontrado neste estabelecimento.');
+      const wholesaleId=body?.wholesaleOrderId||null;
+      let order=null,quoted=[];
+      if(wholesaleId){
+        order=await first('SELECT id,customer_id,status,sale_id FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND id=?',tenant,branch,wholesaleId);
+        if(!order)throw error(404,'Cotação não encontrada.');
+        if(order.status!=='CONFIRMED'||order.sale_id)throw error(409,'Cotação já vinculada a uma venda ou não confirmada.');
+        quoted=await all(`SELECT w.product_id AS productId,w.quantity_milli AS milli,w.unit_price_cents AS unitPriceCents,
+          p.name,p.sku FROM wholesale_order_items w JOIN products p ON p.tenant_id=w.tenant_id AND p.id=w.product_id
+          WHERE w.tenant_id=? AND w.branch_id=? AND w.order_id=? ORDER BY w.rowid`,tenant,branch,wholesaleId);
+        if(!quoted.length)throw error(409,'Cotação sem itens.');
+      }
+      const quotedTotals=calculateSaleTotals({items:quoted.map(x=>({unitPriceCents:x.unitPriceCents,quantity:x.milli/1000}))});
+      const result={id,tenantId:tenant,branchId:branch,saleNumber,operatorId:user,sellerId,customerId:order?.customer_id||null,status:'OPEN',
+        items:quoted.map(x=>({productId:x.productId,productName:x.name,sku:x.sku,quantity:x.milli/1000,unitPriceCents:x.unitPriceCents,totalCents:Math.round(x.unitPriceCents*x.milli/1000)})),
+        payments:[],subtotalCents:quotedTotals.subtotalCents,discountCents:0,totalCents:quotedTotals.totalCents,changeCents:0,completedAt:null};
+      // One sale authority: a quote is a price snapshot, not a second sale.
+      // INSERT..SELECT prevents concurrent checkouts from claiming the same quote twice.
+      const statements=[wholesaleId
+        ?q(`INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,customer_id,sale_number,status,created_at)
+          SELECT ?,tenant_id,branch_id,?,?,customer_id,?,'OPEN',?
+          FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND id=? AND status='CONFIRMED' AND sale_id IS NULL`,
+          id,user,sellerId,saleNumber,created,tenant,branch,wholesaleId)
+        :q('INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,sale_number,status,created_at) VALUES(?,?,?,?,?,?,?,?)',
+          id,tenant,branch,user,sellerId,saleNumber,'OPEN',created)];
+      for(const line of quoted)statements.push(q(`INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,id,line.productId,line.name,line.sku,line.milli,line.unitPriceCents,created));
+      if(wholesaleId)statements.push(q('UPDATE wholesale_orders SET sale_id=?,updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND sale_id IS NULL',
+        id,created,tenant,branch,wholesaleId));
+      statements.push(audit(tenant,scope,key,result));
+      await batch(statements);
       return result;
     },
     sale: snapshot,
@@ -625,6 +647,8 @@ export function createCommerceService(db,{now=nowISO}={}){
         if(commissionCents>0)statements.push(q(`INSERT INTO seller_commission_ledger(id,tenant_id,branch_id,seller_id,sale_id,sale_item_id,kind,amount_cents,reference_key,occurred_at)
           VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,sellerId,id,line.id,'EARNED',commissionCents,'sale:'+id+':item:'+line.id,completedAt));
       }
+      const wholesaleOrder=await first('SELECT id FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND sale_id=? AND status=?',tenant,branch,id,'CONFIRMED');
+      if(wholesaleOrder)statements.push(q("UPDATE wholesale_orders SET status='FULFILLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND status='CONFIRMED'",completedAt,tenant,branch,id));
       // Stock is decremented only in the same D1 batch; no secondary EventBus
       // inventory subscriber is registered, therefore one sale has one effect.
       statements.push(q('INSERT INTO domain_events(id,tenant_id,branch_id,aggregate_type,aggregate_id,type,payload_json,mutation_id,occurred_at) VALUES(?,?,?,?,?,?,?,?,?)',
