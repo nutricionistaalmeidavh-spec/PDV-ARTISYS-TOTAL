@@ -63,6 +63,7 @@ function formatSale(sale,items=[],payments=[]){
       unitPriceCents:row.unit_price_cents,
       catalogUnitPriceCents:row.catalog_unit_price_cents??row.unit_price_cents,
       priceOverrideReason:row.price_override_reason||null,
+      note:row.note||'',
       totalCents:Math.round((row.quantity_milli/1000)*row.unit_price_cents)
     })),
     payments:payments.map(row=>({id:row.id,method:row.method,amountCents:row.amount_cents}))
@@ -938,6 +939,26 @@ export function createCommerceService(db,{now=nowISO}={}){
           ON CONFLICT(sale_id,product_id) DO UPDATE SET quantity_milli=sale_items.quantity_milli+excluded.quantity_milli`,
           itemId,tenant,branch,id,row.id,row.name,row.sku,milli,row.sale_price_cents,stamp(),row.sale_price_cents),
         audit(tenant,scope,key,safe)
+      ]);
+      return snapshot(tenant,branch,id);
+    },
+    async changeItemNote(tenant,branch,id,itemId,user,body,header){
+      const key=requiredMutation(body,header),scope='sale.item-note:'+branch+':'+id+':'+itemId;
+      const prior=await applied(tenant,scope,key);
+      if(prior)return snapshot(tenant,branch,id);
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+      const note=body?.note;
+      if(typeof note!=='string'||note.length>240||
+         /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(note))
+        throw error(400,'Observação inválida: use até 240 caracteres.');
+      const item=await first('SELECT id FROM sale_items WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
+        tenant,branch,id,itemId);
+      if(!item)throw error(404,'Item não encontrado nesta venda.');
+      const cleaned=note.trim();
+      await batch([
+        q('UPDATE sale_items SET note=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
+          cleaned,tenant,branch,id,itemId),
+        audit(tenant,scope,key,{saleId:id,itemId,note:cleaned,operatorId:user})
       ]);
       return snapshot(tenant,branch,id);
     },
