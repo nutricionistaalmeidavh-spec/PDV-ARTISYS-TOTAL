@@ -220,3 +220,67 @@ test('P1 rejects finance compensation linked to a prior bank reconciliation',asy
    assert.equal((await x.read('finance/summary')).body.summary.payableOpenCents,0);
  }finally{x.close();}
 });
+
+
+test('P1 regression: cancelled sale remains in audit while reports, CSV and DRE reflect net refunded revenue',async()=>{
+ const x=await setup();try{
+  const p=await x.item('P1-NET',1000,10);
+  await x.write('cash/open',{openingCents:5000});
+  const saleId=await x.sale(p,2,[{method:'CASH',amountCents:2000}]);
+  const cancelled=await x.write('sales/'+saleId+'/cancel',{reason:'Venda de treinamento cancelada',refunds:[{method:'CASH',amountCents:2000}]});
+  assert.equal(cancelled.status,200,JSON.stringify(cancelled.body));
+  const report=await x.read('reports/summary');
+  assert.equal(report.status,200);
+  assert.equal(report.body.report.sales.totalCents,0,'net sales must not count cancelled income');
+  assert.equal(report.body.report.sales.refundedCents,2000,'returns must remain auditable as a separate total');
+  assert.equal(report.body.report.methodTotals.find(p=>p.method==='CASH')?.amountCents,0);
+  const csv=await x.read('reports/sales.csv');
+  assert.equal(csv.status,200);
+  assert.match(csv.body.csv,/CANCELLED/,'CSV must preserve original sale and cancellation status');
+  assert.match(csv.body.csv,/0,00/,'CSV must show net income rather than original paid amount only');
+  const history=await x.read('sales/'+saleId);
+  assert.equal(history.body.sale.status,'CANCELLED');
+  assert.equal(history.body.sale.refundedCents,2000);
+  assert.equal(history.body.sale.netTotalCents,0);
+  for(const basis of ['accrual','cash']){
+   const dre=await x.call(x.manager,'a','finance-advanced/dre?branchId=branch-a&from=2026-10-01&to=2026-10-31&basis='+basis);
+   assert.equal(dre.status,200,JSON.stringify(dre.body));
+   assert.equal(dre.body.dre.revenueCents,0,basis+' DRE must net sale with refunds');
+  }
+ }finally{x.close();}
+});
+
+test('P1 regression: partial refund reduces report revenue, method mix and net product quantities, without hiding sale',async()=>{
+ const x=await setup();try{
+  const p=await x.item('P1-PARTIAL-NET',1000,10);
+  await x.write('cash/open',{openingCents:0});
+  const saleId=await x.sale(p,3,[{method:'PIX',amountCents:3000}]);
+  const old=(await x.read('sales/'+saleId)).body.sale;
+  const returned=await x.write('sales/'+saleId+'/returns',{reason:'Cliente devolveu uma unidade',items:[{saleItemId:old.items[0].id,quantity:1}],refunds:[{method:'PIX',amountCents:1000}]});
+  assert.equal(returned.status,201,JSON.stringify(returned.body));
+  const report=(await x.read('reports/summary')).body.report;
+  assert.equal(report.sales.totalCents,2000);
+  assert.equal(report.sales.refundedCents,1000);
+  assert.equal(report.methodTotals.find(x=>x.method==='PIX')?.amountCents,2000);
+  assert.equal(report.products.find(x=>x.productId===p)?.quantity,2);
+  const history=(await x.read('sales/'+saleId)).body.sale;
+  assert.equal(history.status,'COMPLETED');
+  assert.equal(history.refundedCents,1000);
+  assert.equal(history.netTotalCents,2000);
+ }finally{x.close();}
+});
+
+test('P1 regression: two terminals cannot reverse the same item twice, even with distinct mutation ids',async()=>{
+ const x=await setup();try{
+  const p=await x.item('P1-RACE',1000,10);
+  await x.write('cash/open',{openingCents:0});
+  const saleId=await x.sale(p,1,[{method:'PIX',amountCents:1000}]);
+  const original=(await x.read('sales/'+saleId)).body.sale;
+  const body={reason:'Devolução simultânea entre terminais',items:[{saleItemId:original.items[0].id,quantity:1}],refunds:[{method:'PIX',amountCents:1000}]};
+  const result=await Promise.all([x.write('sales/'+saleId+'/returns',body),x.write('sales/'+saleId+'/returns',body)]);
+  assert.deepEqual(result.map(x=>x.status).sort(),[201,409]);
+  assert.equal(await scalar(x.db,'SELECT COUNT(*) AS n FROM sale_returns WHERE sale_id=?',saleId),1);
+  assert.equal(await scalar(x.db,"SELECT SUM(delta_milli) AS n FROM inventory_movements WHERE type='return' AND product_id=?",p),1000);
+  assert.equal(await scalar(x.db,'SELECT SUM(amount_cents) AS n FROM sale_refund_movements WHERE sale_id=?',saleId),1000);
+ }finally{x.close();}
+});
