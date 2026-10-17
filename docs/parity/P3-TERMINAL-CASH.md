@@ -23,3 +23,7 @@ Testes integrados em SQLite e D1 validam **dois caixas abertos na mesma filial**
 **Estado da paridade**: `cash-046` passa de gap a parcial; homologação real de múltiplos terminais, impressão, gavetas e demais critérios do desktop permanece. Não implica 68/68 contratos cobertos.
 
 Sem alteração no desktop original, credenciais, liberação comercial ou deploy remoto.
+
+## Regressão real com dois navegadores (PR #30)
+
+O gate `scripts/web-browser-e2e.mjs` executa duas sessões autenticadas em contextos Chromium independentes e confirma: identidades WEB diferentes, duas sessões de caixa distintas na mesma filial, vendas suspensas visíveis **somente no terminal de origem**, fechamento de B sem encerrar A e ausência de erros de navegador. A verificação RED demonstrou duas suspensas indevidamente exibidas em B antes da correção. O fluxo agora filtra as suspensas na restauração e após uma nova suspensão no balcão web. O desktop original continua com seu comportamento próprio.
