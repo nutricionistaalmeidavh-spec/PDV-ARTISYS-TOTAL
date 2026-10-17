@@ -139,6 +139,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
         requireAccess(member,'finance.manage',user);
         return json({entry:await service.createFinanceEntry(tenant,branch,user,body,key)},201);
       }
+      if(parts.length===6&&parts[1]==='entries'&&parts[3]==='settlements'&&parts[5]==='reverse'&&method==='POST'){
+        requireAccess(member,'finance.manage',user);
+        return json({result:await service.reverseFinanceSettlement(tenant,branch,parts[2],parts[4],user,body,key)});
+      }
       if(parts.length===4&&parts[1]==='entries'&&parts[2].length<=128&&method==='POST'){
         requireAccess(member,'finance.manage',user);
         if(parts[3]==='settle')
@@ -185,6 +189,14 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
         requireAccess(member,'sales.view',user);
         return json({sale:await service.sale(tenant,branch,id)});
       }
+      if(parts.length===3&&parts[2]==='returns'&&method==='GET'){
+        requireAccess(member,'sales.view',user);
+        return json({returns:await service.saleReturns(tenant,branch,id)});
+      }
+      if(parts.length===3&&parts[2]==='returns'&&method==='POST'){
+        requireAccess(member,'sales.cancel',user);
+        return json({result:await service.returnSale(tenant,branch,id,user,body,key)},201);
+      }
       requireAccess(member,'sales.create',user);
       if(parts.length===3&&parts[2]==='customer'&&method==='POST')
         return json({sale:await service.assignSaleCustomer(tenant,branch,id,body.customerId)});
@@ -216,6 +228,11 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
         return json({sale:await service.transition(tenant,branch,id,'OPEN')});
       if(parts.length===3&&parts[2]==='cancel'&&method==='POST'){
         requireAccess(member,'sales.cancel',user);
+        const sale=await service.sale(tenant,branch,id);
+        if(sale.status==='COMPLETED'){
+          const result=await service.cancelCompletedSale(tenant,branch,id,user,body,key);
+          return json({sale:{...sale,status:'CANCELLED'},result});
+        }
         return json({sale:await service.transition(tenant,branch,id,'CANCELLED')});
       }
       if(parts.length===3&&parts[2]==='complete'&&method==='POST')
