@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {setTimeout as sleep} from 'node:timers/promises';
 
 const origin='http://127.0.0.1:8788';
-const child=spawn('npx',['--yes','wrangler@4.137.0','dev','--local','--ip','127.0.0.1','--port','8788'],{
+const child=spawn('npx',['--yes','wrangler@4.137.0','dev','--local','--ip','127.0.0.1','--port','8788','--var','AUTH_ENABLED:true'],{
   stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32',env:{...process.env,CI:'true'}
 });
 let stderr='',stdout='';
