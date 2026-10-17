@@ -103,6 +103,7 @@ export function createSaleReturnAdapter(helpers){
         items:computed.map(x=>({saleItemId:x.saleItemId,quantity:x.quantityMilli/1000,netCents:x.netCents})),
         refunds:grouped,status:mode==='CANCEL'?'CANCELLED':'COMPLETED',createdAt
       };
+      const stockRestores=new Map();
       const statements=[
         q(`INSERT INTO sale_returns(id,tenant_id,branch_id,sale_id,kind,reason,amount_cents,
           original_cash_session_id,operator_id,mutation_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
@@ -111,10 +112,21 @@ export function createSaleReturnAdapter(helpers){
       for(const line of computed){
         statements.push(q(`INSERT INTO sale_return_items(id,tenant_id,branch_id,return_id,sale_id,sale_item_id,quantity_milli,net_cents)
           VALUES(?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,returnId,id,line.saleItemId,line.quantityMilli,line.netCents));
-        const stockMovement=await first("SELECT id FROM inventory_movements WHERE tenant_id=? AND branch_id=? AND sale_id=? AND product_id=? AND type='sale'",tenant,branch,id,line.source.product_id);
-        if(stockMovement)statements.push(q(`INSERT INTO inventory_movements(id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at,reason)
-          VALUES(?,?,?,?,?,'return',NULL,?,?,?)`,randomId(),tenant,branch,line.source.product_id,line.quantityMilli,
-          key,createdAt,'Devolução '+returnId+': '+reason));
+        const allocated=await all(`SELECT component_product_id AS productId,quantity_milli AS originalMilli
+          FROM sale_stock_allocations WHERE tenant_id=? AND branch_id=? AND sale_id=? AND sale_item_id=?`,
+          tenant,branch,id,line.saleItemId);
+        if(allocated.length){
+          for(const component of allocated){
+            const prev=returned.get(line.saleItemId)||0,denominator=line.source.quantity_milli;
+            const delta=Math.round(component.originalMilli*(prev+line.quantityMilli)/denominator)
+              -Math.round(component.originalMilli*prev/denominator);
+            if(delta>0)stockRestores.set(component.productId,(stockRestores.get(component.productId)||0)+delta);
+          }
+        }else{
+          // Backwards compatibility for completed sales preceding migration 0009.
+          const direct=await first("SELECT id FROM inventory_movements WHERE tenant_id=? AND branch_id=? AND sale_id=? AND product_id=? AND type='sale'",tenant,branch,id,line.source.product_id);
+          if(direct)stockRestores.set(line.source.product_id,(stockRestores.get(line.source.product_id)||0)+line.quantityMilli);
+        }
         const earned=await first(`SELECT COALESCE(SUM(amount_cents),0) AS cents,MAX(seller_id) AS sellerId
           FROM seller_commission_ledger WHERE tenant_id=? AND branch_id=? AND sale_id=? AND sale_item_id=? AND kind='EARNED'`,
           tenant,branch,id,line.saleItemId);
@@ -127,6 +139,11 @@ export function createSaleReturnAdapter(helpers){
             VALUES(?,?,?,?,?,?,'REVERSED',?,?,?)`,randomId(),tenant,branch,earned.sellerId,id,line.saleItemId,-reverse,
             'return:'+returnId+':item:'+line.saleItemId,createdAt));
         }
+      }
+      for(const [productId,quantityMilli] of stockRestores){
+        statements.push(q(`INSERT INTO inventory_movements(id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at,reason)
+          VALUES(?,?,?,?,?,'return',NULL,?,?,?)`,randomId(),tenant,branch,productId,quantityMilli,
+          key,createdAt,'Devolução '+returnId+': '+reason));
       }
       for(const p of grouped){
         const refundId=randomId();
