@@ -973,7 +973,7 @@
           <div><small>Preço</small><strong>${ui.formatCents(p.salePriceCents)}</strong></div>
           <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.balance):'Livre'}</strong></div>
           ${canManage?`<button type="button" class="secondary-button" data-web-edit="${escapeHtml(p.id)}">Editar</button>`:''}
-          ${canStock&&p.trackStock?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
+          ${canStock&&p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
           <button type="button" class="secondary-button" data-web-adjust="${escapeHtml(p.id)}">Ajustar saldo</button>
           <button type="button" class="secondary-button" data-web-transfer="${escapeHtml(p.id)}">Transferir</button>`:''}
           ${p.trackStock?`<button type="button" class="secondary-button" data-web-moves="${escapeHtml(p.id)}">Movimentações</button>`:''}
@@ -1134,6 +1134,40 @@
             }});
           state.products=await api.products();
           closeModal();renderWebProducts();showToast('Ajuste registrado no histórico de estoque.','success');
+        }catch(error){feedback.textContent=error.message;}
+        finally{button.disabled=false;form.dataset.pending='false';}
+      });
+    }});
+  }
+
+
+  async function openWebStockTransfer(product){
+    const data=await api.tenantBranches();
+    const targets=(data.branches||[]).filter(branch=>branch.id!==api.branchId&&branch.active!==false);
+    if(!targets.length){showToast('Cadastre uma segunda filial ativa antes de transferir estoque.','error');return;}
+    openModal('Transferir estoque entre filiais',`<form id="web-stock-transfer-form">
+      <p>Origem: <strong>${escapeHtml(product.name)}</strong> · Disponível: ${quantityLabel(product.balance)}</p>
+      <div class="field"><label for="web-transfer-to">Filial de destino</label>
+      <select id="web-transfer-to" name="toBranchId" required>${targets.map(branch=>`<option value="${escapeHtml(branch.id)}">${escapeHtml(branch.name||branch.code||branch.id)}</option>`).join('')}</select></div>
+      <div class="field"><label for="web-transfer-qty">Quantidade</label><input id="web-transfer-qty" name="quantity" type="number" min="0.001" max="${Number(product.balance)}" step="0.001" required></div>
+      <div class="field"><label for="web-transfer-reason">Justificativa</label><textarea id="web-transfer-reason" name="reason" rows="3" minlength="3" maxlength="240" required></textarea></div>
+      <p class="web-form-feedback" role="status" aria-live="polite"></p>
+      <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" type="submit">Confirmar transferência</button></div>
+    </form>`,{onMount(root){
+      const form=root.querySelector('#web-stock-transfer-form');
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();if(form.dataset.pending==='true')return;
+        const button=form.querySelector('[type=submit]'),feedback=form.querySelector('[role=status]');
+        button.disabled=true;form.dataset.pending='true';
+        try{
+          if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
+          await api.transferStock({
+            productId:product.id,toBranchId:form.elements.toBranchId.value,
+            quantity:Number(form.elements.quantity.value),reason:form.elements.reason.value.trim()
+          },form.dataset.operationKey);
+          state.products=await api.products();
+          closeModal();renderWebProducts();
+          showToast('Transferência registrada em ambas as filiais.','success');
         }catch(error){feedback.textContent=error.message;}
         finally{button.disabled=false;form.dataset.pending='false';}
       });
