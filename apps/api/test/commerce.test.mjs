@@ -455,3 +455,35 @@ test('product editing and deactivation retain canonical sale snapshots, enforce 
     assert.equal((await x.get('a','products?branchId=branch-a')).body.products[0].sku,'NEW1');
   }finally{x.close();}
 });
+
+test('inventory transfer moves one immutable stock quantity across two tenant branches atomically',async()=>{
+  const x=await setup();try{
+    await x.db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)')
+      .bind('branch-a-2','a','ALT','Filial 2',date).run();
+    const pid=await x.id('Caixa de materiais','TRANSFER1',3.125);
+    const path='inventory/transfers';
+    const body={branchId:'branch-a',toBranchId:'branch-a-2',productId:pid,quantity:1.125,reason:'Reposição entre filiais'};
+    assert.equal((await x.write('a',path,body,{who:x.viewer})).status,403);
+    assert.equal((await x.write('a',path,{...body,toBranchId:'branch-b'})).status,404);
+    assert.equal((await x.write('a',path,{...body,toBranchId:'branch-a'})).status,400);
+    assert.equal((await x.write('a',path,{...body,quantity:0})).status,400);
+    const key=next();
+    const first=await x.write('a',path,body,{key});
+    assert.equal(first.status,201,JSON.stringify(first.body));
+    const again=await x.write('a',path,body,{key});
+    assert.deepEqual(again.body,first.body);
+    const src=await x.get('a','inventory?branchId=branch-a');
+    const dst=await x.get('a','inventory?branchId=branch-a-2');
+    assert.equal(src.body.stock[0].quantity,2);
+    assert.equal(dst.body.stock[0].quantity,1.125);
+    assert.equal((await x.write('a',path,{...body,quantity:5})).status,409);
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock[0].quantity,2);
+    assert.equal((await x.get('a','inventory?branchId=branch-a-2')).body.stock[0].quantity,1.125);
+    const history=await x.get('a','inventory/transfers?branchId=branch-a-2');
+    assert.equal(history.status,200,JSON.stringify(history.body));
+    assert.equal(history.body.transfers.length,1);
+    const records=await x.db.prepare('SELECT count(*) AS n FROM inventory_transfers WHERE tenant_id=?').bind('a').first();
+    assert.equal(records.n,1);
+    await assert.rejects(x.db.prepare('DELETE FROM inventory_transfers').bind().run(),/IMMUTABLE/);
+  }finally{x.close();}
+});
