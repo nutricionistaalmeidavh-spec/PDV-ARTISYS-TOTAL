@@ -1,6 +1,0 @@
-ArtiSys PDV Windows release trigger
-requested_for=restaurant-customer-qa-four-scenarios
-source_pr=180,181
-source_merge_commit=2b3694963cd63a8fece316576a80e4f7ae0b43ab
-reason=fix-mobile-cart-duplicates-zero-price-configured-items-and-nonfiscal-receipt-variations
-requires=verify-release-packaged-windows-smoke-updater-metadata-and-preserve-store-data

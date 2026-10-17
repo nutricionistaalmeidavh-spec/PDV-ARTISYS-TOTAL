@@ -1,7 +1,7 @@
 import { sha256, verifyPassword, newSessionToken } from './password.mjs';
-import legacyAuthorization from '../../../legacy/pdv-artisys/js/core/auth/authorization-service.js';
-import legacyProfiles from '../../../legacy/pdv-artisys/js/core/auth/default-profiles.js';
-import legacyPrincipals from '../../../legacy/pdv-artisys/js/core/auth/principal-resolver.js';
+import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
+import legacyProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
+import legacyPrincipals from '../../../packages/core/js/core/auth/principal-resolver.js';
 
 const {createAuthorizationService} = legacyAuthorization;
 const {DEFAULT_PROFILE_PERMISSIONS} = legacyProfiles;

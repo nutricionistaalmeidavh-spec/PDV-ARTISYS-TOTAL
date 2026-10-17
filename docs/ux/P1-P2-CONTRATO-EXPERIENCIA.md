@@ -1,6 +1,6 @@
 # P1/P2 — contrato de experiência e canonicidade
 
-**Modo:** desenho preventivo de fluxo, com base na estrutura e contratos existentes do PDV desktop. Não é uma auditoria visual de telas em execução. Nenhum renderer foi criado ou modificado.
+**Modo:** desenho preventivo de fluxo, com base na estrutura e contratos existentes do PDV desktop. Não é uma auditoria visual de telas em execução. Nenhum renderer paralelo foi criado; o renderer original foi transferido para `apps/web/` e está em adaptação.
 
 ## Usuários e tarefas
 
@@ -22,7 +22,7 @@
 
 ## Caminho proposto (sem inventar uma segunda UI)
 
-1. **Entrar:** aproveitar o overlay de autenticação que já existe em `legacy/pdv-artisys/desktop/renderer/index.html`, em etapa futura de adaptação web. Não adicioná-lo de novo.
+1. **Entrar:** aproveitar o overlay de autenticação que já existe em `apps/web/index.html`, em etapa futura de adaptação web. Não adicioná-lo de novo.
 2. **Reconhecer empresa:** a API fornece empresas acessíveis; caso haja mais de uma, a mesma topbar canônica deve permitir a escolha, exibindo nome e identidade da empresa.
 3. **Reconhecer filial:** quando o fluxo exigir filial, selecionar apenas entre as disponibilizadas pela API para aquela empresa. A escolha de filial não autoriza outras empresas.
 4. **Acessar o trabalho:** primeiro um gate de sessão/vínculo ativo; depois o serviço de autorização original; depois os serviços de negócio existentes. Nenhum segundo `SaleService` e nenhuma gravação direta pela UI.
@@ -43,7 +43,7 @@
 
 ## Regras de integração do renderer existente
 
-- Preservar o registro de rotas, a camada de APIs e a evolução de `desktop/renderer`, mas substituir dependências Electron/IPC **mediante contratos adaptadores explícitos**, nunca copiando/reescrevendo um segundo renderer.
+- Preservar o registro de rotas, a camada de APIs e a evolução de `apps/web`, mas substituir dependências Electron/IPC **mediante contratos adaptadores explícitos**, nunca copiando/reescrevendo um segundo renderer.
 - Não hospedar o HTML Electron integral em produção sem revisar preload, CSP, estado de rede, impressão e tratamento de perda de conexão.
 - Mudar rótulos de `servidor local`, `rede LAN` e `terminal` somente quando a superfície web corresponder à experiência real.
 - Não inserir menus técnicos de `tenant_id`, D1, binding ou schema para operadores.

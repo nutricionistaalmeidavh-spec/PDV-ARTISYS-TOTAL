@@ -4,7 +4,7 @@ Este diretório contém **somente a nova borda de identidade** do SaaS. Não há
 
 ## Contrato canônico preservado
 
-O Worker importa diretamente do snapshot os módulos:
+O Worker importa diretamente do **único core mantido em `packages/core/`** os módulos:
 - `js/core/auth/principal-resolver.js`;
 - `js/core/auth/authorization-service.js`;
 - `js/core/auth/default-profiles.js`, que lê `permission-registry.js`.
@@ -54,7 +54,7 @@ Não há endpoints novos de criação/edição de produtos, vendas, estoque, cai
 
 ## Limites intencionais antes de produção
 
-- Não há UI web funcionando: o renderer Electron permanece no snapshot, sem duplicá-lo.
+- A UI original está sendo adaptada **em `apps/web/`**, como única interface do produto; ainda não está disponível na versão SaaS. Não existe árvore `legacy/` paralela.
 - Não há onboarding self-service, redefinição de senha, MFA ou painel superadmin.
 - Não há cobrança de assinatura, serviço fiscal ou integração de hardware.
 - Não há API de negócio: bloquear as operações evita dupla fonte de verdade.

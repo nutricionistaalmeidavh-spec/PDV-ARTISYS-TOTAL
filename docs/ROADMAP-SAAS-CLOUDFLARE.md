@@ -2,7 +2,7 @@
 
 **Status:** planejamento técnico e importação da base; não é aplicação SaaS pronta.
 **Origem imutável:** `nutricionistaalmeidavh-spec/PDV-ARTISYS` — commit `7efea9c61f75be1536a1e516e917218f2b8bf2bf`, correspondente à [release oficial v2.0.10 publicada em 15/10/2026](https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS/releases/tag/v2.0.10). O `README.md` e `package.json` da árvore de origem ainda mencionam `2.0.1`, pois o workflow de Windows calcula a nova versão e executa `npm version` no runner durante o empacotamento, sem atualizar automaticamente a branch `main`.
-**Destino:** `PDV-ARTISYS-TOTAL`. A cópia versionada ficará em `legacy/pdv-artisys/` para não disparar inadvertidamente workflows de releases Windows/macOS ou deploy do Worker comercial do produto desktop.
+**Destino:** `PDV-ARTISYS-TOTAL`. O código reaproveitável foi movido para `packages/core/` e a única interface para `apps/web/`. A importação íntegra inicial permanece **somente no histórico Git**; não existe aplicação desktop legada paralela na árvore ativa.
 **Regra:** NÃO alterar `PDV-ARTISYS`, seu Worker `pdv-artisys`, suas licenças, sua base de clientes ou seus instaladores. Cloudflare SaaS nova, bancos novos, segredos novos e deploy separado.
 
 ## Objetivo e limites de custo
@@ -28,13 +28,13 @@ Browser / PWA responsiva (caixa, produtos, estoque, relatórios, admin)
 
 **Um backend autoritativo por operação**: não gravar SQLite do cliente/navegador como fonte da verdade. **Tenant sempre derivado da sessão no servidor**, nunca confiado em `tenant_id` enviado pelo cliente. Terminais acessam a mesma API. Frontend web não pode importar `electron`, `node:fs`, `better-sqlite3` ou IPC.
 
-Separar `apps/web`, `apps/api`, `packages/domain`, `packages/contracts`, `packages/db`, `packages/auth`, `packages/billing`; manter `legacy/pdv-artisys` como snapshot de consulta até a extração ser comprovada.
+Estrutura canônica atual: `apps/web` (UI única em adaptação), `apps/api` (API Workers/D1), `packages/core` (serviços, contratos originais, estado e testes canônicos). Evoluir os adaptadores de banco, autenticação, assinatura e contratos nessa estrutura **sem duplicar o núcleo ou criar segundo renderer**. Eliminar os trechos Node/IPC conforme a paridade web for provada.
 
 ## Fases de execução e critérios de aceite
 
 | Fase | Prioridade | Entrega | Gate de conclusão |
 |---|---|---|---|
-| **P0 — Snapshot e inventário** | Imediata | Importar origem em `legacy/pdv-artisys` sem alterar fonte; mapear acoplamento entre Electron, LAN, SQLite e módulos compartilháveis | Hash e quantidade de arquivos conferidos com commit fixado; documento de paridade |
+| **P0 — Importação e limpeza estrutural** | Concluída | Importação íntegra verificada de 900 arquivos, depois extração única do núcleo e da interface para `packages/core` e `apps/web`; remoção de Electron/instaladores/arquivos exclusivos | Proveniência preservada no Git; fonte original inalterada; regressões do núcleo e build do Worker aprovados |
 | **P1 — Fundação web** | Alta | Monorepo mínimo, Worker Hono `/api/health`, web SPA/PWA, dev local, DB abstraído, migrations, GitHub Actions de testes | Roda em dev local grátis, deploy de preview isolado; não alcança serviço desktop |
 | **P2 — Contas e empresas** | Alta | `tenants`, `users`, `memberships`, `branches`, `roles`, sessões seguras, onboarding, recuperação e superadmin separados | Testes de isolamento A/B, RBAC por rota, CSRF, rate limit, auditoria, logout/revogação |
 | **P3 — Núcleo transacional** | Crítica | Extrair contratos/serviços de catálogo, venda, pagamento registrado, estoque ledger, caixa, devolução, compras e pedidos; SQL adaptado ao D1 | Testes de paridade com dados fixos; venda idempotente; sem saldo negativo ou caixa duplo por retry |

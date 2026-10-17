@@ -1,0 +1,7 @@
+{
+  "name": "@artisys/pdv-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Canonical PDV domain and existing shared operations, under web migration; never copied at runtime."
+}
