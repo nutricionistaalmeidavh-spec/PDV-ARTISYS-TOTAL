@@ -6,7 +6,7 @@
   const { ApiClient } = window.PdvApiClient;
   const api = new ApiClient();
   const routeRegistry = window.PdvRouteRegistry;
-  const WEB_ROUTES=new Set(['home','checkout','products','sales','cash','finance','reports']);
+  const WEB_ROUTES=new Set(['home','checkout','products','sales','cash','finance','finance-banks','finance-recurrences','management','reports']);
   if (!routeRegistry) throw new Error('PdvRouteRegistry must load before app.js.');
 
   const ROUTES = {
@@ -200,7 +200,7 @@
   function renderSidebar() {
     const nav = document.getElementById('sidebar-nav');
     const accessPolicy = window.PdvAccessPolicy;
-    const items = api.webMode ? ['home','checkout','products','sales','cash','finance','reports'].filter(route=>canAccessRoute(route))
+    const items = api.webMode ? ['home','checkout','products','sales','cash','finance','finance-banks','finance-recurrences','management','reports'].filter(route=>canAccessRoute(route))
       : (accessPolicy?.routesForUser(state.user, moduleAccessOptions()) || ['home']).filter(route=>route!=='settings');
     const parentRoute = {
       finance:'financial-management',
@@ -1541,7 +1541,7 @@ function openCategoryForm() {
       sellers: () => renderSellers(),
       management: () => {
         if (!window.PdvAccessPolicy?.hasCapability(state.user,'management.view')) return renderPermissionDenied('Gestão');
-        return window.PdvErpFinanceUi?.renderManagement?.() || renderPlaceholder('management');
+        return (api.webMode?window.PdvAdvancedFinanceWeb?.renderDre?.():window.PdvErpFinanceUi?.renderManagement?.()) || renderPlaceholder('management');
       },
       products: () => renderProducts(),
       catalog: () => renderFlowHub('Cadastros','Clientes, produtos, estoque e equipe.',[
