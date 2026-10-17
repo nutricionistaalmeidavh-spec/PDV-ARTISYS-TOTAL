@@ -115,6 +115,8 @@ try{
   await page.locator('#confirm-payment').click();
   const completedPayload=await (await completionResponse).json();
   const completedSaleNumber=completedPayload.sale?.saleNumber;
+  const expectedTerminalId=await page.evaluate(()=>localStorage.getItem('artisys.pdv.webTerminalId.v1'));
+  assert.equal(completedPayload.sale?.terminalId,expectedTerminalId,'browser must never silently complete a draft inherited from another terminal');
   assert.ok(completedSaleNumber,'completion response must identify the exact sale for parity follow-up');
   await page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
   await page.waitForFunction(()=>document.querySelectorAll('.cart-line').length===0,null,{timeout:12000});
