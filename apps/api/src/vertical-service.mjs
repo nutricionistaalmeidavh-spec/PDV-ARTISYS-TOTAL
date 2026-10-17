@@ -255,6 +255,30 @@ export function createVerticalService(db){
      });
    },
    async commissions(t,b){await branchExists(t,b);return all(`SELECT l.seller_id AS sellerId,u.display_name AS sellerName,COALESCE(SUM(l.amount_cents),0) AS balanceCents FROM seller_commission_ledger l JOIN users u ON u.id=l.seller_id WHERE l.tenant_id=? AND l.branch_id=? GROUP BY l.seller_id,u.display_name ORDER BY sellerName`,t,b);},
+   async payCredit(t,b,user,customerId,body,key){
+     await branchExists(t,b);const c=await customer(t,customerId);
+     if(!c.active)throw err(409,'Cliente inativo.');
+     const amount=cents(body.amountCents,'Pagamento');
+     if(amount<=0)throw err(400,'Informe valor positivo.');
+     const method=body.method;
+     isSafeStatus(method,['CASH','PIX','BANK_TRANSFER']);
+     const amountOutstanding=await first('SELECT COALESCE(SUM(amount_cents),0) AS total FROM customer_credit_ledger WHERE tenant_id=? AND customer_id=?',t,customerId);
+     if(amount>amountOutstanding.total)throw err(409,'Pagamento excede o débito disponível.');
+     let cashSession=null;
+     if(method==='CASH'){
+       cashSession=await first("SELECT id FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND status='OPEN'",t,b);
+       if(!cashSession)throw err(409,'Abra o caixa para receber dinheiro.');
+     }
+     return mutate(t,'credit.payment:'+customerId,key,async()=>{
+       const id=uuid(),stamp=now(),result={id,customerId,amountCents:amount,method,receivedAt:stamp};
+       return {statements:[
+         q('INSERT INTO customer_credit_receipts(id,tenant_id,branch_id,customer_id,cash_session_id,method,amount_cents,received_by,received_at) VALUES(?,?,?,?,?,?,?,?,?)',
+           id,t,b,customerId,cashSession?.id||null,method,amount,user,stamp),
+         q('INSERT INTO customer_credit_ledger(id,tenant_id,branch_id,customer_id,sale_id,type,amount_cents,reference_key,occurred_at) VALUES(?,?,?,?,?,?,?,?,?)',
+           uuid(),t,b,customerId,null,'PAYMENT',-amount,'credit-payment:'+id,stamp)
+       ],result};
+     });
+   },
    async credit(t,b,customerId){await branchExists(t,b);const c=await customer(t,customerId);
      const ledger=await all('SELECT id,type,amount_cents AS amountCents,sale_id AS saleId,occurred_at AS occurredAt FROM customer_credit_ledger WHERE tenant_id=? AND branch_id=? AND customer_id=? ORDER BY occurred_at DESC LIMIT 100',t,b,customerId);
      const total=await first('SELECT COALESCE(SUM(amount_cents),0) AS total FROM customer_credit_ledger WHERE tenant_id=? AND customer_id=?',t,customerId);
