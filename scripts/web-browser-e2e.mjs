@@ -398,6 +398,14 @@ try{
   await page.locator('[data-report-web=finance]').click();
   await page.getByText('A pagar').first().waitFor();
   await page.screenshot({path:'qa-artifacts/pdv-reports-mobile.png',fullPage:true});
+  await page.locator('[data-report-web=targets]').click();
+  await page.locator('#web-seller-target-form').waitFor({timeout:12000});
+  await page.locator('#web-seller-target-form [name=target]').fill('9.000,00');
+  await page.locator('#web-seller-target-form button[type=submit]').click();
+  await page.waitForFunction(()=>document.querySelector('#report-v2-body')?.textContent.includes('9.000,00'),
+    null,{timeout:12000});
+  assert.match(await page.locator('#report-v2-body').innerText(),/Metas e vendas líquidas|Metas e ranking|Meta mensal/);
+  await page.screenshot({path:'qa-artifacts/pdv-seller-targets.png',fullPage:true});
   await page.locator('[data-report-web=overview]').click();
   const downloadEvent=page.waitForEvent('download');
   await page.locator('#web-report-export').click();
