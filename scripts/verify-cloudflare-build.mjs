@@ -15,6 +15,7 @@ must(config.r2_buckets?.length===1&&config.r2_buckets[0].binding==='FILES','R2 b
 must(existsSync(resolve(root,'apps/api/migrations/0001_identity.sql')),'identity schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0002_commerce.sql')),'commerce schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0003_cash_finance.sql')),'cash/finance schema missing');
+must(existsSync(resolve(root,'apps/api/migrations/0004_advanced_finance.sql')),'advanced finance schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0002_commerce.sql')),'commerce schema missing');
 must(existsSync(resolve(root,'packages/core/js/domains/sales/sale-service.js')),'canonical sales core missing');
 must(existsSync(resolve(root,'packages/core/js/domains/inventory/inventory-service.js')),'canonical inventory core missing');
