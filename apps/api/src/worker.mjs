@@ -6,7 +6,9 @@ import legacyPrincipals from '../../../legacy/pdv-artisys/js/core/auth/principal
 const {createAuthorizationService} = legacyAuthorization;
 const {DEFAULT_PROFILE_PERMISSIONS} = legacyProfiles;
 const {principalFromSession} = legacyPrincipals;
-const COOKIE='__Host-pdvtotal_session';
+const HOST_COOKIE='__Host-pdvtotal_session';
+const LOCAL_COOKIE='pdvtotal_local_session';
+function cookieName(env) { return env.COOKIE_SECURE==='false'?LOCAL_COOKIE:HOST_COOKIE; }
 const MAX_SESSION_MS=12*60*60*1000;
 
 function response(body,status=200,extra={}) {
@@ -15,16 +17,17 @@ function response(body,status=200,extra={}) {
     'x-content-type-options':'nosniff','referrer-policy':'no-referrer',...extra}});
 }
 function failure(status,message){return response({error:message},status);}
-function findCookie(request){
+function findCookie(request,env){
   const value=request.headers.get('cookie')||'';
-  const match=value.split(';').map(p=>p.trim()).find(p=>p.startsWith(COOKIE+'='));
-  return match?match.slice(COOKIE.length+1):null;
+  const name=cookieName(env);
+  const match=value.split(';').map(p=>p.trim()).find(p=>p.startsWith(name+'='));
+  return match?match.slice(name.length+1):null;
 }
 function cookieHeader(token,request,env,maxAge=43200){
   const secure=env.COOKIE_SECURE!=='false';
   if(!secure&&!['localhost','127.0.0.1'].includes(new URL(request.url).hostname))
     throw new Error('Cookies inseguros só são permitidos no localhost.');
-  return `${COOKIE}=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${maxAge}${secure?'; Secure':''}`;
+  return `${cookieName(env)}=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${maxAge}${secure?'; Secure':''}`;
 }
 function safeEmail(input){return String(input||'').trim().toLowerCase();}
 function authzFor(profileKey){
@@ -32,8 +35,8 @@ function authzFor(profileKey){
   const permissions=DEFAULT_PROFILE_PERMISSIONS[profile]||[];
   return createAuthorizationService({resolvePermissions:()=>permissions});
 }
-async function sessionFor(request,db,now){
-  const raw=findCookie(request);
+async function sessionFor(request,db,now,env){
+  const raw=findCookie(request,env);
   if(!raw||!/^[a-f0-9]{64}$/.test(raw))return null;
   const tokenHash=await sha256(raw);
   const entry=await db.prepare(`SELECT s.user_id AS userId,s.expires_at AS expiresAt,
@@ -119,7 +122,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
       if(!['GET','HEAD'].includes(method)&&!originAllowed(request))return failure(403,'Origem da solicitação inválida.');
       if(method==='POST'&&path==='/api/v1/auth/login')return await login(request,env,db,now());
-      const session=await sessionFor(request,db,now());
+      const session=await sessionFor(request,db,now(),env);
       if(!session)return failure(401,'Sessão inválida ou expirada.');
       if(method==='DELETE'&&path==='/api/v1/auth/session'){
         await db.prepare('DELETE FROM auth_sessions WHERE token_hash=? AND user_id=?').bind(session.tokenHash,session.userId).run();
