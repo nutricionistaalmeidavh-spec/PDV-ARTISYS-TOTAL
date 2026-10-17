@@ -150,6 +150,8 @@
       if(operation==='finance/entries')return method==='GET'?value.entries:value.entry;
       if(operation.startsWith('finance/entries/'))return value.settlement||value.result||value.entry;
       if(operation==='reports/summary')return value.report;
+      if(operation==='reports/commission-ranking')return value.ranking;
+      if(operation==='reports/commission-targets')return value.target;
       if(operation==='reports/compare')return value.comparison;
       if(operation==='reports/margins')return value.margin;
       if(operation==='reports/details')return value.details;
@@ -315,6 +317,8 @@
     sales(status = '', limit = 50) { return this.request(`/api/v1/sales${this.params({status,limit})}`); }
     salesHistory(filters = {}) { return this.request(`/api/v1/sales/history${this.params(filters)}`); }
     compareSalesPeriods(filters = {}) { return this.request(`/api/v1/reports/compare${this.params(filters)}`); }
+    sellerSalesRanking(filters={}){return this.request('/api/v1/reports/commission-ranking'+this.params(filters));}
+    saveSellerSalesTarget(body,mutationId){return this.request('/api/v1/reports/commission-targets',{method:'PUT',body,mutationId});}
     historicalMarginReport(filters = {}) { return this.request(`/api/v1/reports/margins${this.params(filters)}`); }
     reportSalesDetailsCanonical(filters={}){return this.request('/api/v1/reports/details'+this.params(filters));}
     exportSalesDetailCsvCanonical(filters={}){return this.request('/api/v1/reports/details.csv'+this.params(filters));}
