@@ -6,6 +6,7 @@
   const { ApiClient } = window.PdvApiClient;
   const api = new ApiClient();
   const routeRegistry = window.PdvRouteRegistry;
+  const WEB_ROUTES=new Set(['home','checkout','products','sales']);
   if (!routeRegistry) throw new Error('PdvRouteRegistry must load before app.js.');
 
   const ROUTES = {
@@ -124,7 +125,7 @@
     footer?.classList.toggle('offline', !state.online);
     if (status) {
       const mode=state.config?.dataServer?.mode;
-      const connectedLabel=mode==='local'?'Neste computador':mode==='lan-host'?'PC principal':'Servidor conectado';
+      const connectedLabel=mode==='cloud'?'Cloudflare · online':mode==='local'?'Neste computador':mode==='lan-host'?'PC principal':'Servidor conectado';
       status.querySelector('span').textContent = state.online ? connectedLabel : 'Servidor indisponível';
     }
   }
@@ -191,13 +192,14 @@
   }
 
   function canAccessRoute(route) {
+    if(api.webMode&&!WEB_ROUTES.has(route))return false;
     return Boolean(window.PdvAccessPolicy?.canAccessRoute(state.user, route, moduleAccessOptions()));
   }
 
   function renderSidebar() {
     const nav = document.getElementById('sidebar-nav');
     const accessPolicy = window.PdvAccessPolicy;
-    const items = (accessPolicy?.routesForUser(state.user, moduleAccessOptions()) || ['home']).filter(route=>route!=='settings');
+    const items = (accessPolicy?.routesForUser(state.user, moduleAccessOptions()) || ['home']).filter(route=>route!=='settings'&&(!api.webMode||WEB_ROUTES.has(route)));
     const parentRoute = {
       finance:'financial-management',
       'finance-banks':'financial-management',
@@ -240,6 +242,14 @@
   }
 
   async function loadCommonData() {
+    if(api.webMode){
+      state.products=await api.products();
+      state.categories=[];state.customers=[];state.users=[];
+      state.sellers=[{id:state.user.id,name:state.user.name}];
+      state.selectedSellerId=state.user.id;
+      state.cashSession=await api.openCash(state.config.terminalId).catch(()=>null);
+      return;
+    }
     const plan=window.PdvAccessPolicy?.commonDataLoadPlan?.(state.user)||{
       categories:false,products:false,productPhotos:false,customers:false,sellers:false,users:false,cash:false
     };
@@ -264,6 +274,13 @@
   }
 
   async function restoreCheckoutState() {
+    if(api.webMode){
+      const [open,suspended]=await Promise.all([api.sales('OPEN',25),api.sales('SUSPENDED',25)]);
+      state.suspendedSales=suspended;
+      if(!state.sale||state.sale.status!=='OPEN')state.sale=open.find(sale=>sale.operatorId===state.user?.id)||null;
+      state.discountPercent=state.sale?.subtotalCents?Number((state.sale.discountCents/state.sale.subtotalCents*100).toFixed(2)):0;
+      return;
+    }
     const [openSales,suspended,documents]=await Promise.all([
       api.sales('OPEN',20),
       api.sales('SUSPENDED',30),
@@ -363,11 +380,32 @@
 
   function renderCheckout() {
     if (!isRouteActive('checkout')) return;
+    const focusId=document.activeElement?.id;
+    const oldSearch=document.getElementById('product-search');
+    const oldStart=oldSearch?.selectionStart,oldEnd=oldSearch?.selectionEnd;
+    const oldList=content.querySelector('.cart-list')?.scrollTop||0;
     const customer = selectedCustomer(); const sale = state.sale;
     content.innerHTML = `<section class="checkout-layout"><div class="checkout-main"><div class="checkout-hero"><div><h1>Balcão</h1><p>Venda rápida e prática para o seu cliente</p></div><em>Agilidade no atendimento,<br>mais vendas todos os dias.</em></div><div class="checkout-tools"><label class="search-field" for="product-search">${icon('document')}<input id="product-search" aria-label="Buscar produto por nome, código ou código de barras" autocomplete="off" placeholder="Buscar produto por nome, código ou código de barras..." value="${escapeHtml(state.productQuery)}"><span>▥</span></label><button id="scan-focus" class="scan-button" type="button">▥ &nbsp; Ler código (F2)</button><button id="checkout-documents" class="scan-button" type="button">${icon('history',18)} &nbsp; Comandas e pedidos</button></div><div class="category-chips"><button class="category-chip ${!state.categoryId ? 'active' : ''}" data-category="">Todos</button>${state.categories.map((category) => `<button class="category-chip ${state.categoryId === category.id ? 'active' : ''}" data-category="${category.id}">${escapeHtml(category.name)}</button>`).join('')}</div><div class="product-grid">${checkoutProductGridHtml()}</div><div class="checkout-actions"><h3>Ações da venda</h3><div class="action-grid"><button class="action-button" id="new-sale" type="button">▶ &nbsp; Iniciar venda <small>F1</small></button><button class="action-button orange" id="remove-item" type="button">⌫ &nbsp; Cancelar item <small>F3</small></button><button class="action-button red" id="cancel-sale" type="button">⊗ &nbsp; Cancelar venda <small>F4</small></button><button class="action-button blue" id="suspend-sale" type="button">Ⅱ &nbsp; Suspender <small>F6</small></button></div></div></div><aside class="sale-panel">${checkoutDocumentContextMarkup()}<div class="customer-block"><h3>Cliente <small class="optional-label">(opcional)</small></h3><label class="search-field" for="customer-search">⌕<input id="customer-search" aria-label="Buscar cliente" autocomplete="off" placeholder="Buscar cliente..." value="${escapeHtml(state.customerQuery)}"></label><div id="customer-suggestions"></div>${customer ? `<div class="customer-selected"><span class="avatar">${escapeHtml(initials(customer.name))}</span><div><strong>${escapeHtml(customer.name)}</strong><small>${escapeHtml(customer.document || 'Sem documento')}</small></div><button id="remove-customer" type="button" aria-label="Remover cliente">×</button></div>` : ''}</div><div class="cart-head"><h3>Itens da venda (${sale?.items?.length || 0})</h3><button id="clear-cart" class="secondary-button" type="button">Limpar carrinho</button></div><div class="cart-list">${sale?.items?.map((item) => cartLine(item)).join('') || '<div class="empty-state">Nenhum item na venda.</div>'}</div><div class="totals"><div class="total-row"><span>Subtotal</span><strong>${ui.formatCents(sale?.subtotalCents || 0)}</strong></div><div class="total-row"><span>Desconto</span><div class="discount-control"><span>%</span><input id="discount-percent" type="number" aria-label="Percentual de desconto" min="0" max="100" step="0.01" value="${state.discountPercent || 0}"><strong>${ui.formatCents(sale?.discountCents || 0)}</strong></div></div><div class="total-row grand-total"><span>Total da venda</span><strong>${ui.formatCents(sale?.totalCents || 0)}</strong></div></div><div class="payment-strip"><button class="pay-button" data-pay="cash">Dinheiro</button><button class="pay-button card" data-pay="card">Cartão</button><button class="pay-button pix" data-pay="pix">PIX</button></div><button class="finalize-button" id="finalize-sale" type="button">Finalizar venda (F12) &nbsp; ›</button></aside></section>`;
     content.querySelector('.sale-panel')?.insertAdjacentHTML('afterbegin', `<div class="customer-block"><label class="checkout-context-label" for="seller-select">Vendedor / Garçom</label><select id="seller-select" class="secondary-button checkout-seller-select">${state.sellers.map((seller) => `<option value="${seller.id}" ${seller.id === (sale?.sellerId || state.selectedSellerId) ? 'selected' : ''}>${escapeHtml(seller.name)}</option>`).join('')}</select></div>`);
+    if(api.webMode){
+      content.querySelector('#checkout-documents')?.remove();
+      content.querySelector('.customer-block')?.remove();
+      content.querySelector('.checkout-seller-select')?.closest('.customer-block')?.remove();
+      content.querySelector('#scan-focus')?.setAttribute('title','Digite ou use um leitor USB como teclado');
+      content.querySelector('#clear-cart')?.setAttribute('title','Remove itens desta venda, sem apagá-la');
+      content.querySelector('#discount-percent')?.toggleAttribute('disabled',!window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount'));
+      content.querySelectorAll('[data-category]').forEach(node=>node.hidden=Boolean(node.dataset.category));
+    }
     hydrateProductPhotos();
     bindCheckoutEvents();
+    if(api.webMode){
+      const oldScroll=content.querySelector('.cart-list');if(oldScroll)oldScroll.scrollTop=oldList;
+      if(focusId){
+        const focusTarget=document.getElementById(focusId);
+        if(focusTarget){focusTarget.focus({preventScroll:true});
+          if(focusId==='product-search'&&oldStart!=null&&oldEnd!=null)focusTarget.setSelectionRange(oldStart,oldEnd);}
+      }
+    }
     routeRegistry.updated('checkout', { surface:'checkout' });
   }
 
@@ -535,6 +573,13 @@
     if(!product)return showToast('Produto não encontrado.','error');
     if(['KG','G'].includes(String(product.unit||'').toUpperCase()))return openWeightedProduct(product);
     try {
+      if(api.webMode){
+        const sale=await ensureSale();
+        state.sale=await api.addSaleItem(sale.id,productId,1);
+        state.selectedProductId=productId;
+        renderCheckout();
+        return;
+      }
       const configuration=await api.productConfiguration(productId);
       if(window.PdvOrderComposer?.hasConfiguration?.(configuration)){
         await window.PdvRestaurantOrderComposerUi.configure({
@@ -653,6 +698,7 @@
   function allowedPaymentMethodsForCurrentSale() {
     const policy=(state.sale?.items||[]).map(item=>item.configuration?.commercialPolicySnapshot).find(Boolean);
     const values=Array.isArray(policy?.allowedPaymentMethods)?policy.allowedPaymentMethods:null;
+    if(api.webMode)return ['CASH','PIX','DEBIT_CARD','CREDIT_CARD'];
     return values&&values.length?values:['CASH','PIX','DEBIT_CARD','CREDIT_CARD','STORE_CREDIT'];
   }
 
@@ -1234,7 +1280,7 @@ function openCategoryForm() {
     }
   }
 
-  function logout() { api.logout(); state.user = null; window.PdvCurrentAccess=null; state.sale = null; clearCheckoutDocumentContext(); updateTopbar(); showLogin(); }
+  function logout() { void api.logout(); state.user = null; window.PdvCurrentAccess=null; state.sale = null; clearCheckoutDocumentContext(); updateTopbar(); showLogin(); }
 
   async function executeShortcut(action) {
     if (!action || !state.user) return;
@@ -1248,6 +1294,7 @@ function openCategoryForm() {
   }
 
   function bindGlobalEvents() {
+    if(api.webMode){document.querySelector('.window-controls')?.remove();}
     document.querySelectorAll('[data-window]').forEach((button) => button.addEventListener('click', () => window.artisysDesktop.window[button.dataset.window]?.()));
     document.getElementById('operator-button').addEventListener('click', () => { if (!state.user) return; openModal('Operador', `<div class="operator-modal-content"><div class="auth-logo operator-modal-avatar">${escapeHtml(initials(state.user.name))}</div><h3>${escapeHtml(state.user.name)}</h3><p>${escapeHtml(state.user.profile?.name||'Equipe')}</p><button id="logout-button" class="danger-button">Sair desta sessão</button></div>`, { onMount(root) { root.querySelector('#logout-button').addEventListener('click', () => { closeModal(); logout(); }); } }); });
     document.addEventListener('keydown', (event) => { if (!/^F\d+$/.test(event.key)) return; const action = ui.resolveShortcut(event.key, document.body.dataset.activeRoute || state.route); if (action) { event.preventDefault(); void executeShortcut(action); } });
@@ -1278,8 +1325,83 @@ function openCategoryForm() {
     showLogin(!dataServer.selected&&dataServer.setupIntent==='new-installation'?'Entre como administrador para concluir a configuração deste computador.':'');
   }
 
+
+  // This is the original renderer's browser boot path. No second app or state tree.
+  function showWebLogin(message=''){
+    authOverlay.classList.remove('hidden');
+    authOverlay.innerHTML=`<section class="auth-card web-login-card"><div class="auth-logo">A</div>
+      <div class="web-login-eyebrow">ARTISYS / PDV TOTAL</div>
+      <h1>Entre na sua loja</h1><p>Suas vendas, seu caixa e seu estoque em um só lugar.</p>
+      <form id="web-login-form">
+        <div class="field"><label for="web-email">E-mail</label><input id="web-email" name="email" type="email" autocomplete="username" required autofocus></div>
+        <div class="field"><label for="web-password">Senha</label><input id="web-password" name="password" type="password" autocomplete="current-password" required></div>
+        <p class="web-login-feedback" id="web-login-feedback" role="status" aria-live="polite">${escapeHtml(message)}</p>
+        <button class="primary-button" type="submit">Entrar no PDV</button>
+      </form><small>O acesso depende da liberação do estabelecimento pela ArtiSys.</small></section>`;
+    const form=authOverlay.querySelector('#web-login-form');
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      if(form.dataset.pending==='true')return;
+      const button=form.querySelector('button[type=submit]'),feedback=form.querySelector('#web-login-feedback');
+      const email=String(form.elements.email.value||'').trim();
+      const password=String(form.elements.password.value||'');
+      form.dataset.pending='true';button.disabled=true;button.textContent='Entrando…';
+      try{
+        const session=await api.login({email,password});
+        await activateWebSession(session);
+      }catch(error){
+        feedback.textContent=error.status===503?'O acesso online ainda não foi liberado. Seus dados estão preservados.':error.message;
+        form.elements.password.focus({preventScroll:true});
+      }finally{form.dataset.pending='false';button.disabled=false;button.textContent='Entrar no PDV';}
+    });
+    window.PdvUiLifecycle?.emit('auth:rendered',{surface:'login'});
+  }
+
+  async function activateWebSession(session){
+    const membership=session?.memberships?.[0];
+    if(!membership)throw new Error('Você não possui estabelecimento ativo.');
+    const {branch,context}=await api.chooseWebTenant(membership);
+    state.config={...state.config,
+      storeName:context.name||membership.name,
+      terminalName:branch.name,
+      terminalId:branch.id,
+      dataServer:{mode:'cloud',selected:true}
+    };
+    state.user={
+      id:session.user.id,name:session.user.displayName,
+      permissions:context.capabilities||[],profileId:'profile-'+String(context.profileKey||'operator').toLowerCase(),
+      profile:{name:String(context.profileKey||'Equipe'),permissions:context.capabilities||[]}
+    };
+    updateTopbar();
+    setOnline(true);
+    await loadCommonData();
+    renderSidebar();
+    authOverlay.classList.add('hidden');authOverlay.innerHTML='';
+    await navigate('checkout');
+    window.PdvUiLifecycle?.emit('auth:hidden',{reason:'authenticated'});
+  }
+
+  async function bootWeb(){
+    document.body.dataset.runtime='web';
+    state.config=await api.initialize();
+    document.body.dataset.activeRoute='home';
+    renderSidebar();
+    updateTopbar();
+    try{
+      const health=await api.health();
+      if(!health.ok)throw new Error('Serviço indisponível.');
+      const session=await api.currentSession();
+      await activateWebSession(session);
+    }catch(error){
+      setOnline(false);
+      renderHome();
+      showWebLogin(error.status===503?'O acesso online ainda não foi liberado.':'');
+    }
+  }
+
   async function boot() {
     hydrateStaticIcons(); bindGlobalEvents(); updateClock(); setInterval(updateClock, 30000);
+    if(api.webMode){await bootWeb();return;}
     try {
       state.config = await api.initialize();
       updateTopbar();
