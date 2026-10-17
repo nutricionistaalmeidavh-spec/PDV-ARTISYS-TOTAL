@@ -38,8 +38,8 @@
     try{
       const sale=await api.sale(currentSale.id);
       if(sale?.status!=='COMPLETED')throw new Error('Venda não concluída ou indisponível.');
-      await root.PdvWebHardware.printSale(sale,{popup,forceBrowser:pdf});
-      notice(pdf?'No diálogo, escolha Salvar como PDF.':'Diálogo de impressão aberto ou comando enviado. Confirme o resultado na impressora.');
+      const result=await root.PdvWebHardware.printSale(sale,{popup,forceBrowser:pdf});
+      notice(pdf?'No diálogo, escolha Salvar como PDF.':result?.queued?'Enviado ao spooler local. Confira a impressão no equipamento.':'Diálogo aberto ou comando enviado; confirme a impressão.');
     }catch(error){
       try{popup?.close();}catch{}
       notice(error?.message||'Falha ao emitir comprovante.',true);
@@ -55,6 +55,8 @@
     host.querySelector('#post-sale-save-pdf').addEventListener('click',e=>{void doPrint(e.currentTarget,true);});
     host.querySelector('#post-sale-close').addEventListener('click',closePostSaleModal);
     host.querySelector('#post-sale-new-sale').addEventListener('click',closePostSaleModal);
+    const prefs=root.PdvWebHardware.settings();
+    if(prefs.printerMode==='bridge'&&prefs.autoPrint)void doPrint(host.querySelector('#post-sale-print'));
   }
   if(!Client.prototype.__artisysWebReceiptPatched){
     const original=Client.prototype.completeSale;
