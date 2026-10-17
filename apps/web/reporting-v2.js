@@ -352,9 +352,15 @@
     const query=new URLSearchParams({from:fromDate,to:toDate});
     const available=['overview','products','payments','inventory','cash','finance'];
     if(!available.includes(state.view))state.view='overview';
-    let report;
+    let report,comparison=null;
     try{
-      report=await api.request('/api/v1/reports/summary?'+query.toString());
+      const previous=root.PdvBusinessDate.equivalentPreviousPeriod(fromDate,toDate);
+      [report,comparison]=await Promise.all([
+        api.request('/api/v1/reports/summary?'+query.toString()),
+        state.view==='overview'?api.compareSalesPeriods({
+          from:fromDate,to:toDate,compareFrom:previous.previousFrom,compareTo:previous.previousTo
+        }).catch(()=>null):Promise.resolve(null)
+      ]);
     }catch(error){
       if(routeActive())content.innerHTML=`<section class="ops-page report-v2-page">
         <header class="ops-head"><div><h1>Relatórios</h1><p>Não foi possível consultar os dados.</p></div></header>
@@ -389,10 +395,14 @@
       ${metric('Pago',value(finance.payableSettledCents))}
       ${metric('Recebido',value(finance.receivableSettledCents))}
       </div><p class="ops-muted">Estes valores vêm de contas manuais. Vendas do balcão aparecem separadas no resumo comercial.</p>`;
+    const comparisonHint=comparison?.delta?.percentage==null
+      ?'Sem base comparativa no período anterior'
+      :(comparison.delta.percentage>=0?'+':'')+comparison.delta.percentage.toLocaleString('pt-BR')+'% em relação ao período anterior';
     const overview=`<div class="ops-metrics">
-      ${metric('Faturamento registrado',value(total))}
+      ${metric('Receita líquida',value(total),comparison?comparisonHint:'')}
       ${metric('Vendas concluídas',String(count))}
       ${metric('Ticket médio',value(count?Math.round(total/count):0))}
+      ${metric('Devoluções',value(sale.refundedCents||0))}
       ${metric('Descontos',value(sale.discountsCents))}
       </div><div class="ops-grid two">
       <section class="ops-card"><h2>Meios de pagamento</h2>${paymentsTable()}</section>
