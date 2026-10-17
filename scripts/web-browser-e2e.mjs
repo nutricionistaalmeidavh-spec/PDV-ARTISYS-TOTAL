@@ -118,7 +118,8 @@ try{
   const saleNumber=await page.locator('#ops-sales-body tr').first().locator('td').first().innerText();
   await page.locator('#web-sales-filter [name=query]').fill(saleNumber.trim());
   await page.locator('#web-sales-filter button[type=submit]').click();
-  await page.locator('#ops-sales-body tr[data-search]').first().waitFor({timeout:12000});
+  await page.waitForFunction(()=>document.querySelectorAll('#ops-sales-body tr[data-search]').length===1,
+    null,{timeout:12000});
   assert.equal(await page.locator('#ops-sales-body tr[data-search]').count(),1);
   await page.locator('[data-sale-details]').first().click();
   await page.getByText('Autorizado pelo gerente no teste de paridade').waitFor({timeout:12000});
