@@ -123,7 +123,13 @@
         {
           "id": "checkout-010",
           "name": "Alteração autorizada do preço de item com motivo e auditoria",
-          "status": "gap"
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async overrideItemPrice(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "Desktop parity: price override"
+          }
         },
         {
           "id": "checkout-011",
@@ -241,12 +247,22 @@
         {
           "id": "products-027",
           "name": "Histórico e filtro de movimentações de estoque",
-          "status": "gap"
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async inventoryMovements(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "Desktop parity: stock adjustment"
+          }
         },
         {
           "id": "products-028",
           "name": "Inventário contado, ajustes positivos e negativos",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async adjustStock("
+          }
         },
         {
           "id": "products-029",
@@ -302,12 +318,22 @@
         {
           "id": "history-035",
           "name": "Filtro por período, operador, cliente, vendedor, status e pesquisa",
-          "status": "gap"
+          "status": "partial",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async salesHistory("
+          }
         },
         {
           "id": "history-036",
           "name": "Paginação por offset/cursor para histórico extenso",
-          "status": "gap"
+          "status": "covered",
+          "webEvidence": {
+            "file": "apps/api/src/commerce.mjs",
+            "contains": "async salesHistory(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "Desktop parity: paginated sale history"
+          }
         },
         {
           "id": "history-037",
