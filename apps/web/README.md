@@ -11,7 +11,7 @@ Esta pasta contém **a interface original do PDV ArtiSys**, migrada para `apps/w
 
 ## Conversão em progresso / recursos desabilitados
 
-Fiscal (NFC-e), impressão local silenciosa, crédito da loja, meios de pagamento eletrônicos capturados, compras avançadas, receitas, delivery, comandas, hardware, importação em lote, gestão de equipe e demais rotas do desktop ainda não possuem paridade online. Não exibi-las como disponíveis no menu nem acionar os endpoints desktop. Não usar dados falsos para parecer que estão prontas.
+Fiscal (NFC-e), impressão local silenciosa, crédito da loja, meios de pagamento eletrônicos capturados, compras avançadas, receitas, delivery, comandas, integração silenciosa e completa com hardware físico, importação em lote, gestão de equipe e demais rotas do desktop ainda não possuem paridade online. Não exibi-las como disponíveis no menu nem acionar os endpoints desktop. Não usar dados falsos para parecer que estão prontas.
 
 O Worker implantado com `AUTH_ENABLED=false` **permanece bloqueado para login e mutações comerciais**, mesmo que o HTML da interface seja servido publicamente. Não liberar até aplicar migrations, provisionar tenant real, verificar ambiente remoto e fechar critérios de segurança.
 
@@ -22,3 +22,7 @@ O Worker implantado com `AUTH_ENABLED=false` **permanece bloqueado para login e 
 Verificações: `npm run check:web`, `npm run test:core`, `npm run test:api` e CI com Workerd/D1 e Chromium. Consulte `DESIGN.md` e `UX-CONTRACT.md` na raiz.
 
 Repositório fonte do PDV Artisys desktop original: **não modificar**.
+
+## Periféricos web
+
+O Balcão incorpora **Dispositivos locais** para impressão via navegador/PDF, Web Serial genérico com consentimento e comandos ESC/POS experimentais. O fluxo pós-venda consulta a venda canônica antes de imprimir. Veja [limites e homologação](../../docs/WEB-PERIPHERALS.md). Não anunciar paridade completa de hardware, homologação física Urano ou impressão silenciosa antes da entrega do agente opcional e dos testes físicos.
