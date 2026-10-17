@@ -137,13 +137,18 @@
           "status": "partial",
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
-            "contains": "async discount("
+            "contains": "async discount(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 discount matches desktop clamping",
+            "testAssertionContains": "assert.equal(stored.discountCents,1000,'Never retain unapplied discount that could leak into subsequent items');",
+            "testRunner": "node-test"
           },
           "owner": "sales",
           "dependsOn": [
             "checkout-005"
           ],
-          "acceptance": "Desconto de venda com permissão. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Desconto de venda com permissão. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "reviewNote": "P3: desconto autorizado por sales.discount; servidor calcula MIN(desconto solicitado, subtotal atual), em concordância com o desktop fixado, e persiste o valor efetivamente aplicado. Regressão SQLite com isolamento de empresas e perfil somente leitura. Ainda parcial: equivalência de recálculo após todas as mutações de itens, auditoria operacional completa e E2E de perfis/checkout."
         },
         {
           "id": "checkout-008",
