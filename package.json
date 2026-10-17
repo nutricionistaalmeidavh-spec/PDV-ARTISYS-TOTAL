@@ -8,12 +8,13 @@
   },
   "scripts": {
     "build": "node scripts/verify-cloudflare-build.mjs && node scripts/build-web.mjs",
-    "test": "npm run test:core && npm run test:api && npm run check:web",
+    "test": "npm run test:core && npm run test:api && npm run check:web && npm run test:parity",
     "deploy": "wrangler deploy",
     "preview": "wrangler preview",
     "test:api": "cd apps/api && npm test",
     "test:core": "node --experimental-sqlite --test packages/core/test/*.test.js",
-    "check:web": "node --check apps/web/api-client.js && node --check apps/web/app.js && node --check apps/web/peripherals-web.js && node --check apps/web/post-sale-receipt-ui.js && node --check scripts/build-web.mjs"
+    "check:web": "node --check apps/web/api-client.js && node --check apps/web/app.js && node --check apps/web/peripherals-web.js && node --check apps/web/post-sale-receipt-ui.js && node --check scripts/build-web.mjs",
+    "test:parity": "node scripts/check-desktop-parity.mjs"
   },
   "devDependencies": {
     "wrangler": "4.137.0"
