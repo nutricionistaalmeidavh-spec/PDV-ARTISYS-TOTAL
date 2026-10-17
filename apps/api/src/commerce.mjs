@@ -384,7 +384,8 @@ export function createCommerceService(db,{now=nowISO}={}){
         COALESCE((SELECT SUM(r.quantity_milli) FROM inventory_reservations r
           WHERE r.tenant_id=p.tenant_id AND r.branch_id=? AND r.product_id=p.id
           AND r.status='ACTIVE'),0) AS reservedMilli,p.brand,p.barcode,p.category_id,
-          p.parent_product_id,p.variant_label,p.last_cost_cents
+          p.parent_product_id,p.variant_label,p.last_cost_cents,
+          EXISTS(SELECT 1 FROM product_media pm WHERE pm.tenant_id=p.tenant_id AND pm.product_id=p.id) AS hasPhoto
         FROM products p LEFT JOIN stock_positions s ON s.tenant_id=p.tenant_id
         AND s.product_id=p.id AND s.branch_id=?
         WHERE p.tenant_id=? AND (?=1 OR p.active=1)
@@ -394,7 +395,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         available:(x.balanceMilli-x.reservedMilli)/1000,menuEnabled:true,
         brand:x.brand||'',barcode:x.barcode||x.sku,categoryId:x.category_id||null,
         parentProductId:x.parent_product_id||null,variantLabel:x.variant_label||null,
-        lastCostCents:x.last_cost_cents||0}));
+        lastCostCents:x.last_cost_cents||0,photo:Boolean(x.hasPhoto)}));
     },
     async createProduct(tenant,user,body,header){
       const key=requiredMutation(body,header),scope='product.create';
