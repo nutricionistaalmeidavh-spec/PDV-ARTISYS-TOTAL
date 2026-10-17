@@ -418,14 +418,19 @@ test('Desktop parity: paginated sale history scopes status, date, operator, sear
 
 test('product editing and deactivation retain canonical sale snapshots, enforce tenant RBAC and idempotency',async()=>{
   const x=await setup();try{
-    const created=await x.write('a','products',{branchId:'branch-a',name:'Produto Original',sku:'ORIG1',salePriceCents:1000,unit:'UN'});
+    const created=await x.write('a','products',{branchId:'branch-a',name:'Produto Original',sku:'ORIG1',salePriceCents:1000,unit:'UN',trackStock:false});
     assert.equal(created.status,201,created.body.error);
     const id=created.body.product.id;
     const open=await x.write('a','sales',{branchId:'branch-a'});
     assert.equal(open.status,201,open.body.error);
     await x.write('a',`sales/${open.body.sale.id}/items`,{branchId:'branch-a',productId:id,quantity:1});
-    const body={branchId:'branch-a',name:'Produto Atualizado',sku:'NEW1',salePriceCents:2400,unit:'KG',active:false};
+    const body={branchId:'branch-a',name:'Produto Atualizado',sku:'NEW1',salePriceCents:2400,unit:'UN',active:false};
     const path=`products/${id}`,key=next();
+    assert.equal((await x.write('a',path,body,{method:'PATCH'})).status,409,'Open sales must block deactivation');
+    await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+    const done=await x.write('a',`sales/${open.body.sale.id}/complete`,{branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]});
+    assert.equal(done.status,200,JSON.stringify(done.body));
+    assert.equal((await x.write('a',path,{branchId:'branch-a',unit:'KG'},{method:'PATCH'})).status,409,'Historic unit must not be silently converted');
     assert.equal((await x.write('a',path,body,{who:x.viewer,method:'PATCH'})).status,403);
     assert.equal((await x.write('b',path,{...body,branchId:'branch-b'},{who:x.other,method:'PATCH'})).status,404);
     assert.equal((await x.write('a',path,{...body,name:'A'},{method:'PATCH'})).status,400);
