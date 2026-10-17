@@ -32,6 +32,9 @@ jobs:
       - name: Cloudflare Worker dry run (never deploy)
         working-directory: apps/api
         run: npx --yes wrangler@4.137.0 deploy --dry-run --outdir dist-check
+      - name: Test isolated D1 schema in Wrangler local emulator
+        working-directory: apps/api
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file migrations/0001_identity.sql
       - name: Verify snapshot remains unchanged
         shell: bash
         run: |
