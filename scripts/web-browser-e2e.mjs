@@ -167,6 +167,8 @@ try{
     console.error('HISTORY_PRICE_OVERRIDE_DIAGNOSTIC',JSON.stringify(debug));
     throw error;
   }
+  // Sale history must expose a receipt reprint after the canonical sale loads.
+  await page.locator('#ops-sale-detail [data-history-print-sale]').waitFor({state:'visible',timeout:12000});
   await page.screenshot({path:'qa-artifacts/pdv-parity-sales-history.png',fullPage:true});
 
   mkdirSync('qa-artifacts',{recursive:true});
