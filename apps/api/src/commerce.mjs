@@ -6,6 +6,7 @@ import inventoryRules from '../../../packages/core/js/domains/inventory/inventor
 import cashRules from '../../../packages/core/js/domains/cash/cash-rules.js';
 import {createSaleReturnAdapter} from './sale-reversals.mjs';
 import {createCatalogDepthService} from './catalog-depth.mjs';
+import {createPurchasingService} from './purchasing.mjs';
 
 const {calculateSaleTotals,allocateSaleDiscount}=salePricing;
 const {resolvePayment,normalizeMethod}=paymentRules;
@@ -199,6 +200,22 @@ export function createCommerceService(db,{now=nowISO}={}){
       :await all('SELECT id FROM sales WHERE tenant_id=? AND branch_id=? ORDER BY created_at DESC,id DESC LIMIT ?',tenant,branch,n);
     return Promise.all(rows.map(row=>snapshot(tenant,branch,row.id)));
   };
+  // One inventory/cost posting implementation for both direct receipts and
+  // ordered receiving. Every caller includes all statements in one D1 batch.
+  const ledgerReceipt=(tenant,branch,user,productId,milli,cost,supplierId,key,at,movementId,kind='purchase')=>{
+    const statements=[q(`INSERT INTO inventory_movements
+      (id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at)
+      VALUES(?,?,?,?,?,?,NULL,?,?)`,movementId,tenant,branch,productId,milli,kind,key,at)];
+    if(cost!=null){
+      statements.push(q(`INSERT INTO purchase_cost_history
+        (id,tenant_id,branch_id,product_id,movement_id,supplier_id,unit_cost_cents,quantity_milli,operator_id,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,productId,movementId,supplierId,cost,milli,user,at));
+      statements.push(q('UPDATE products SET last_cost_cents=?,updated_at=? WHERE tenant_id=? AND id=?',cost,at,tenant,productId));
+    }
+    return statements;
+  };
+  const purchasing=createPurchasingService({q,first,all,batch,applied,audit,stamp,branchExists,
+    requiredMutation,quantityMilli,error,text,randomId,ledgerReceipt});
   const catalogDepth=createCatalogDepthService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,
     quantityMilli,error,text,randomId});
   const saleReversals=createSaleReturnAdapter({
@@ -212,6 +229,12 @@ export function createCommerceService(db,{now=nowISO}={}){
     }
   });
   return {
+    createPurchaseOrder:(t,b,u,body,key)=>purchasing.createPurchaseOrder(t,b,u,body,key),
+    purchaseOrders:(t,b)=>purchasing.purchaseOrders(t,b),
+    purchaseOrder:(t,b,id)=>purchasing.purchaseOrder(t,b,id),
+    receivePurchaseOrder:(t,b,id,u,body,key)=>purchasing.receivePurchaseOrder(t,b,id,u,body,key),
+    cancelPurchaseOrder:(t,b,id,u,body,key)=>purchasing.cancelPurchaseOrder(t,b,id,u,body,key),
+    purchaseCostSummary:(t,b,filters)=>purchasing.purchaseCostSummary(t,b,filters),
     categories:(t,b)=>catalogDepth.categories(t,b),
     createCategory:(t,b,u,body,key)=>catalogDepth.createCategory(t,b,u,body,key),
     productBundle:(t,b,id)=>catalogDepth.bundle(t,b,id),
@@ -471,17 +494,7 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(supplierId&&!hasCost)throw error(400,'Compra com fornecedor exige custo unitário.');
       const at=stamp(),result={movementId:randomId(),productId:row.id,branchId:branch,
         quantity:milli/1000,type:kind,...(hasCost?{unitCostCents:cost,supplierId}:{})};
-      const statements=[
-        q('INSERT INTO inventory_movements(id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at) VALUES(?,?,?,?,?,?,?,?,?)',
-          result.movementId,tenant,branch,row.id,milli,kind,null,key,at)
-      ];
-      if(hasCost){
-        statements.push(q(`INSERT INTO purchase_cost_history
-          (id,tenant_id,branch_id,product_id,movement_id,supplier_id,unit_cost_cents,quantity_milli,operator_id,created_at)
-          VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,row.id,result.movementId,supplierId,cost,milli,user,at));
-        statements.push(q('UPDATE products SET last_cost_cents=?,updated_at=? WHERE tenant_id=? AND id=?',
-          cost,at,tenant,row.id));
-      }
+      const statements=ledgerReceipt(tenant,branch,user,row.id,milli,cost,supplierId,key,at,result.movementId,kind);
       statements.push(audit(tenant,scope,key,result));
       await batch(statements);
       return result;
