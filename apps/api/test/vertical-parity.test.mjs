@@ -116,3 +116,46 @@ test('P7 crediário and commissions are posted once in canonical sale completion
    assert.equal((await x.request('a',`sales/${second.id}/complete`,'POST',{branchId:'filial-a',payments:[{method:'STORE_CREDIT',amountCents:3000}]})).status,409);
  }finally{x.close();}
 });
+
+test('P7 credit repayment reduces receivable and counts cash exactly once',async()=>{
+ const x=await setup();try{
+   const c=(await x.request('a','customers','POST',{branchId:'filial-a',name:'Cliente C',creditLimitCents:10000})).body.customer;
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'RECEIVE1',name:'Produto pago depois',salePriceCents:4000,trackStock:false})).body.product;
+   await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:1000});
+   const sale=(await x.request('a','sales','POST',{branchId:'filial-a'})).body.sale;
+   await x.request('a',`sales/${sale.id}/customer`,'POST',{branchId:'filial-a',customerId:c.id});
+   await x.request('a',`sales/${sale.id}/items`,'POST',{branchId:'filial-a',productId:p.id,quantity:1});
+   assert.equal((await x.request('a',`sales/${sale.id}/complete`,'POST',{branchId:'filial-a',payments:[{method:'STORE_CREDIT',amountCents:4000}]})).status,200);
+   const key=crypto.randomUUID();
+   const first=await x.request('a',`credit/${c.id}/payments`,'POST',{branchId:'filial-a',amountCents:1500,method:'CASH'},{key});
+   assert.equal(first.status,201,JSON.stringify(first.body));
+   const retry=await x.request('a',`credit/${c.id}/payments`,'POST',{branchId:'filial-a',amountCents:1500,method:'CASH'},{key});
+   assert.equal(retry.body.receipt.id,first.body.receipt.id);
+   const summary=await x.request('a',`credit/${c.id}?branchId=filial-a`);
+   assert.equal(summary.body.credit.balanceCents,2500);
+   assert.equal((await x.request('a',`credit/${c.id}/payments`,'POST',{branchId:'filial-a',amountCents:5000,method:'CASH'})).status,409);
+   const cash=await x.request('a','cash?branchId=filial-a');
+   assert.equal(cash.status,200,JSON.stringify(cash.body));
+   const receiptCount=await x.db.prepare('SELECT count(*) AS n FROM customer_credit_receipts WHERE tenant_id=?').bind('a').first();
+   assert.equal(receiptCount.n,1);
+   const view=await x.request('a','cash/sessions?branchId=filial-a');
+   assert.equal(view.status,200);
+ }finally{x.close();}
+});
+
+test('P7 restaurant: kitchen must be ready before delivery and table closure',async()=>{
+ const x=await setup();try{
+   const t=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Mesa 12',seats:4})).body.table;
+   const session=(await x.request('a',`restaurant/tables/${t.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'FOOD1',name:'Bebida',salePriceCents:500,trackStock:false})).body.product;
+   const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:session.id,items:[{productId:p.id,quantity:1}]})).body.order;
+   assert.equal((await x.request('a',`restaurant/sessions/${session.id}/close`,'POST',{branchId:'filial-a'})).status,409);
+   assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,409);
+   const tickets=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets;
+   const tid=tickets[0].id;
+   assert.equal((await x.request('a',`restaurant/kitchen/${tid}`,'PATCH',{branchId:'filial-a',status:'PREPARING'})).status,200);
+   assert.equal((await x.request('a',`restaurant/kitchen/${tid}`,'PATCH',{branchId:'filial-a',status:'READY'})).status,200);
+   assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+   assert.equal((await x.request('a',`restaurant/sessions/${session.id}/close`,'POST',{branchId:'filial-a'})).status,200);
+ }finally{x.close();}
+});
