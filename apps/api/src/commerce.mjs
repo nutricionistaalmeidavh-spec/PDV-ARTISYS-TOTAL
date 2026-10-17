@@ -10,6 +10,7 @@ import {createPurchasingService} from './purchasing.mjs';
 import {createCatalogImportService} from './catalog-import.mjs';
 import {createHistoricalMarginService} from './historical-margin.mjs';
 import {createReportDepthService} from './report-depth.mjs';
+import {createCheckoutConfigurationService} from './checkout-configuration.mjs';
 
 const {calculateSaleTotals,allocateSaleDiscount}=salePricing;
 const {resolvePayment,normalizeMethod}=paymentRules;
@@ -69,6 +70,7 @@ function formatSale(sale,items=[],payments=[]){
       catalogUnitPriceCents:row.catalog_unit_price_cents??row.unit_price_cents,
       priceOverrideReason:row.price_override_reason||null,
       note:row.note||'',
+      configuration:row.configuration_json?JSON.parse(row.configuration_json):null,
       totalCents:Math.round((row.quantity_milli/1000)*row.unit_price_cents)
     })),
     payments:payments.map(row=>({id:row.id,method:row.method,amountCents:row.amount_cents}))
@@ -228,6 +230,7 @@ export function createCommerceService(db,{now=nowISO}={}){
   const catalogImporter=createCatalogImportService({q,first,batch,applied,audit,stamp,branchExists,requiredMutation,error,text,randomId});
   const historicalMargin=createHistoricalMarginService({all,branchExists,period,allocateSaleDiscount,error});
   const reportDepth=(salesHistory)=>createReportDepthService({all,branchExists,period,stamp,error,salesHistory});
+  const checkoutConfig=createCheckoutConfigurationService({q,first,batch,applied,audit,stamp,branchExists,product,requiredMutation,error});
   const catalogDepth=createCatalogDepthService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,
     quantityMilli,error,text,randomId});
   const saleReversals=createSaleReturnAdapter({
@@ -241,6 +244,9 @@ export function createCommerceService(db,{now=nowISO}={}){
     }
   });
   return {
+    checkoutProductConfiguration:(t,b,id)=>checkoutConfig.configuration(t,b,id),
+    saveCheckoutProductConfiguration:(t,b,id,body,key)=>checkoutConfig.save(t,b,id,body,key),
+    priceCheckoutProductConfiguration:(t,b,id,body)=>checkoutConfig.quote(t,b,id,body),
     marginReport:(t,b,filters)=>historicalMargin.margin(t,b,filters),
     reportDetails(tenant,branch,filters){return reportDepth((...args)=>this.salesHistory(...args)).details(tenant,branch,filters);},
     reportDetailsCsv(tenant,branch,filters){return reportDepth((...args)=>this.salesHistory(...args)).detailedCsv(tenant,branch,filters);},
@@ -952,7 +958,8 @@ export function createCommerceService(db,{now=nowISO}={}){
       const row=await product(tenant,body?.productId);
       const milli=quantityMilli(body?.quantity??1);
       if(!milli)throw error(400,'Quantidade inválida: até três casas decimais.');
-      const existing=await first('SELECT id,quantity_milli AS milli FROM sale_items WHERE sale_id=? AND product_id=?',id,row.id);
+      const existing=await first('SELECT id,quantity_milli AS milli,configuration_json AS configurationJson FROM sale_items WHERE sale_id=? AND product_id=?',id,row.id);
+      if(existing?.configurationJson)throw error(409,'Item possui configuração específica; adicione pela escolha de variações e adicionais.');
       if(!existing&&(await all('SELECT id FROM sale_items WHERE sale_id=?',id)).length>=MAX_LINES)
         throw error(400,'Máximo de 80 produtos por venda.');
       const itemId=existing?.id||randomId();
@@ -967,6 +974,63 @@ export function createCommerceService(db,{now=nowISO}={}){
           itemId,tenant,branch,id,row.id,row.name,row.sku,milli,row.sale_price_cents,stamp(),row.sale_price_cents),
         audit(tenant,scope,key,safe)
       ]);
+      return snapshot(tenant,branch,id);
+    },
+    async addConfiguredItem(tenant,branch,id,body,header){
+      const key=requiredMutation(body,header),scope='sale.add-configured:'+id;
+      const prior=await applied(tenant,scope,key);
+      if(prior)return snapshot(tenant,branch,id);
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+      const p=await product(tenant,body?.productId);
+      const milli=quantityMilli(body?.quantity??1);
+      if(!milli)throw error(400,'Quantidade inválida.');
+      const note=body?.note??'';
+      if(typeof note!=='string'||note.length>240||
+         /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(note))
+        throw error(400,'Observação inválida.');
+      const quote=await checkoutConfig.quote(tenant,branch,p.id,body);
+      const configurationJSON=JSON.stringify(quote.configurationSnapshot);
+      const itemId=randomId();
+      const existing=await first('SELECT id FROM sale_items WHERE tenant_id=? AND branch_id=? AND sale_id=? AND product_id=?',
+        tenant,branch,id,p.id);
+      if(!existing&&(await all('SELECT id FROM sale_items WHERE sale_id=?',id)).length>=MAX_LINES)
+        throw error(400,'Máximo de 80 produtos por venda.');
+      // A configuration belongs to the SAME canonical sale_item. The primary
+      // uniqueness constraint permits one configuration per SKU in this phase.
+      // An incompatible choice or altered price must fail atomically rather
+      // than silently merging two different items into a single stock line.
+      await batch([
+        q(`INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,
+          product_name,sku,quantity_milli,unit_price_cents,created_at,
+          catalog_unit_price_cents,note,configuration_json)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+          ON CONFLICT(sale_id,product_id) DO UPDATE SET quantity_milli=
+            CASE WHEN sale_items.configuration_json=excluded.configuration_json
+              AND sale_items.unit_price_cents=excluded.unit_price_cents
+              AND sale_items.note=excluded.note
+            THEN sale_items.quantity_milli+excluded.quantity_milli ELSE 0 END`,
+          itemId,tenant,branch,id,p.id,p.name,p.sku,milli,quote.unitPriceCents,
+          stamp(),p.sale_price_cents,note.trim(),configurationJSON),
+        audit(tenant,scope,key,{saleId:id,productId:p.id,quantity:milli/1000,
+          priceCents:quote.unitPriceCents,configuration:quote.configurationSnapshot})
+      ]);
+      return snapshot(tenant,branch,id);
+    },
+    async changeConfiguredItemQuantity(tenant,branch,id,itemId,quantity){
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+      const milli=quantityMilli(quantity);
+      if(!milli)throw error(400,'Quantidade inválida.');
+      const result=await run(`UPDATE sale_items SET quantity_milli=?
+        WHERE sale_id=? AND tenant_id=? AND branch_id=? AND id=?
+          AND configuration_json IS NOT NULL`,milli,id,tenant,branch,itemId);
+      if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
+      return snapshot(tenant,branch,id);
+    },
+    async removeConfiguredItem(tenant,branch,id,itemId){
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+      const result=await run(`DELETE FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=?
+        AND id=? AND configuration_json IS NOT NULL`,id,tenant,branch,itemId);
+      if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
       return snapshot(tenant,branch,id);
     },
     async changeItemNote(tenant,branch,id,itemId,user,body,header){

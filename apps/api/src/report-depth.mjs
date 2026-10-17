@@ -1,6 +1,8 @@
 // Read-only P4 report facets built from the original commerce authorities.
 // Neither sales nor stock is copied into report storage.
 const MAX_EXPORT_SALES=2000;
+const configurationText=item=>[item.configuration?.variant?.name,
+  ...(item.configuration?.options||[]).map(option=>option.groupName+': '+option.name)].filter(Boolean).join(' · ');
 const csvCell=value=>'"'+String(value??'')
   .replace(/"/g,'""').replace(/^[\t\r\n ]*[=+@\-\uFF1D\uFF0B\uFF0D\uFF20]/u,"'$&")+'"';
 export function createReportDepthService(h){
@@ -23,7 +25,7 @@ export function createReportDepthService(h){
    }
    let rows=0;
    const lines=[['Venda','Data','Estado','Operador','Vendedor','Cliente ID',
-    'SKU','Produto','Quantidade','Preço unitário (R$)','Bruto do item (R$)',
+    'SKU','Produto','Configuração vendida','Observação','Quantidade','Preço unitário (R$)','Bruto do item (R$)',
     'Desconto da venda (R$)','Reembolso da venda (R$)','Pagamentos'].map(csvCell).join(';')];
    for(const sale of sales){
     for(const item of sale.items||[]){
@@ -31,7 +33,7 @@ export function createReportDepthService(h){
      if(rows>10000)throw error(413,'Mais de 10 mil itens. Divida o período para exportar sem truncamento.');
      lines.push([sale.saleNumber,sale.completedAt||'',sale.status,
        sale.operatorId,sale.sellerId,sale.customerId||'',item.sku,item.productName,
-       String(item.quantity).replace('.',','),currency(item.unitPriceCents),
+       configurationText(item),item.note||'',String(item.quantity).replace('.',','),currency(item.unitPriceCents),
        currency(item.totalCents),currency(sale.discountCents),
        currency(sale.refundedCents),
        (sale.payments||[]).map(p=>p.method).join(' + ')].map(csvCell).join(';'));

@@ -647,6 +647,25 @@
     if(['KG','G'].includes(String(product.unit||'').toUpperCase()))return openWeightedProduct(product);
     try {
       if(api.webMode){
+        const catalogue=await api.productConfiguration(productId);
+        if(catalogue.variants?.length||catalogue.groups?.length){
+          await window.PdvRestaurantOrderComposerUi.configure({
+            api,modalRoot,product,
+            onAdd:async line=>{
+              const sale=await ensureSale();
+              state.sale=await api.addConfiguredSaleItem(sale.id,{
+                productId:line.productId,quantity:line.quantity,
+                variantId:line.configuration?.variantId||undefined,
+                selections:line.configuration?.selections||[],
+                comboSelections:line.configuration?.comboSelections||[],
+                note:line.note||''
+              });
+              state.selectedProductId=productId;
+              renderCheckout();
+            }
+          });
+          return;
+        }
         const sale=await ensureSale();
         state.sale=await api.addSaleItem(sale.id,productId,1);
         state.selectedProductId=productId;
@@ -1037,6 +1056,7 @@
           <div><small>Preço</small><strong>${ui.formatCents(p.salePriceCents)}</strong></div>
           <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.available??p.balance):'Por componentes'}</strong></div>
           ${canManage?`<button type="button" class="secondary-button" data-web-edit="${escapeHtml(p.id)}">Editar</button>`:''}
+          ${canManage&&p.active!==false?`<button type="button" class="secondary-button" data-web-customize="${escapeHtml(p.id)}">Variações e adicionais</button>`:''}
           ${canManage?`<button type="button" class="secondary-button" data-web-photo="${escapeHtml(p.id)}">${p.photo?'Trocar foto':'Adicionar foto'}</button>`:''}
           ${canManage&&p.photo?`<button type="button" class="secondary-button" data-web-photo-remove="${escapeHtml(p.id)}">Remover foto</button>`:''}
           ${canManage&&!p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-kit="${escapeHtml(p.id)}">Componentes do kit</button>`:''}
@@ -1090,6 +1110,10 @@
         renderWebProducts();showToast('Foto removida.','success');
       }catch(error){showToast(error.message,'error');button.disabled=false;}
     }));
+    content.querySelectorAll('[data-web-customize]').forEach(button=>button.addEventListener('click',()=>{
+      const p=catalogItems.find(p=>p.id===button.dataset.webCustomize);
+      if(p)void openWebProductCustomization(p);
+    }));
     content.querySelectorAll('[data-web-edit]').forEach(button=>button.addEventListener('click',()=>{
       const item=catalogItems.find(product=>product.id===button.dataset.webEdit);
       if(item)openWebEditProductForm(item);
@@ -1125,6 +1149,108 @@
       finally{button.disabled=false;}
     }));
     routeRegistry.updated('products',{surface:'products'});
+  }
+
+  async function openWebProductCustomization(product){
+    try{
+      const current=await api.productConfiguration(product.id);
+      const esc=escapeHtml,makeId=()=>api.mutationId();
+      const variantRow=v=>`<div class="field-grid" data-variant-row data-row-id="${esc(v.id||makeId())}">
+        <label>Nome da variação<input name="variantName" value="${esc(v.name||'')}" required maxlength="120"
+          placeholder="Ex.: Grande"></label>
+        <label>Acréscimo (R$)<input name="variantPrice" value="${(Number(v.priceDeltaCents||0)/100).toFixed(2).replace('.',',')}" required inputmode="decimal"></label>
+        <button type="button" class="secondary-button" data-remove-variant>Excluir</button></div>`;
+      const optionRow=o=>`<div class="field-grid" data-option-row data-row-id="${esc(o.id||makeId())}">
+        <label>Adicional<input name="optionName" value="${esc(o.name||'')}" maxlength="120" required placeholder="Ex.: Queijo"></label>
+        <label>Acréscimo (R$)<input name="optionPrice" value="${(Number(o.priceDeltaCents||0)/100).toFixed(2).replace('.',',')}" inputmode="decimal" required></label>
+        <button type="button" class="secondary-button" data-remove-option>Excluir</button></div>`;
+      const groupRow=g=>`<fieldset data-group-row data-row-id="${esc(g.id||makeId())}">
+        <legend>Grupo de adicionais</legend>
+        <div class="field"><label>Nome do grupo<input name="groupName" required maxlength="120"
+          value="${esc(g.name||'')}" placeholder="Ex.: Ingredientes extras"></label></div>
+        <div class="field-grid">
+          <label>Tipo<select name="selectionType"><option value="MULTIPLE" ${g.selectionType!=='SINGLE'?'selected':''}>Múltiplas opções</option>
+            <option value="SINGLE" ${g.selectionType==='SINGLE'?'selected':''}>Apenas uma opção</option></select></label>
+          <label>Mínimo<input type="number" min="0" max="20" name="minSelections" value="${Number(g.minSelections||0)}" required></label>
+          <label>Máximo<input type="number" min="1" max="20" name="maxSelections" value="${Number(g.maxSelections||1)}" required></label>
+        </div>
+        <div data-options>${(g.options||[]).map(optionRow).join('')}</div>
+        <button type="button" class="secondary-button" data-add-option>+ Adicional</button>
+        <button type="button" class="secondary-button" data-remove-group>Remover grupo</button>
+      </fieldset>`;
+      openModal('Variações e adicionais · '+product.name,`<form id="web-config-product-form">
+        <p>Os acréscimos são somados ao preço do produto. O servidor recalcula o total e congela a configuração na venda. Não alteram o estoque dos ingredientes.</p>
+        <h3>Variações</h3>
+        <div data-variant-list>${(current.variants||[]).map(variantRow).join('')}</div>
+        <button type="button" class="secondary-button" data-add-variant>+ Variação</button>
+        <h3>Grupos e adicionais</h3>
+        <div data-group-list>${(current.groups||[]).map(groupRow).join('')}</div>
+        <button type="button" class="secondary-button" data-add-group>+ Grupo</button>
+        <p class="web-form-feedback" role="status"></p>
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" data-close-modal>Cancelar</button>
+          <button class="primary-button" type="submit">Salvar configuração</button>
+        </div></form>`,{wide:true,onMount(root){
+        const form=root.querySelector('#web-config-product-form');
+        const variantList=form.querySelector('[data-variant-list]');
+        const groupList=form.querySelector('[data-group-list]');
+        form.querySelector('[data-add-variant]').addEventListener('click',()=>{
+          if(variantList.querySelectorAll('[data-variant-row]').length<20)
+            variantList.insertAdjacentHTML('beforeend',variantRow({}));
+        });
+        form.querySelector('[data-add-group]').addEventListener('click',()=>{
+          if(groupList.querySelectorAll('[data-group-row]').length<12)
+            groupList.insertAdjacentHTML('beforeend',groupRow({}));
+        });
+        form.addEventListener('click',event=>{
+          const target=event.target;
+          if(target.closest('[data-remove-variant]'))target.closest('[data-variant-row]').remove();
+          if(target.closest('[data-remove-group]'))target.closest('[data-group-row]').remove();
+          if(target.closest('[data-remove-option]'))target.closest('[data-option-row]').remove();
+          if(target.closest('[data-add-option]')){
+            const holder=target.closest('[data-group-row]').querySelector('[data-options]');
+            if(holder.querySelectorAll('[data-option-row]').length<25)
+              holder.insertAdjacentHTML('beforeend',optionRow({}));
+          }
+        });
+        form.addEventListener('submit',async event=>{
+          event.preventDefault();if(form.dataset.pending)return;
+          const variants=[...variantList.querySelectorAll('[data-variant-row]')].map(row=>({
+            id:row.dataset.rowId,name:row.querySelector('[name=variantName]').value.trim(),
+            priceDeltaCents:centsFromInput(row.querySelector('[name=variantPrice]').value)
+          }));
+          const groups=[...groupList.querySelectorAll('[data-group-row]')].map(row=>({
+            id:row.dataset.rowId,name:row.querySelector('[name=groupName]').value.trim(),
+            selectionType:row.querySelector('[name=selectionType]').value,
+            minSelections:Number(row.querySelector('[name=minSelections]').value),
+            maxSelections:Number(row.querySelector('[name=maxSelections]').value),
+            options:[...row.querySelectorAll('[data-option-row]')].map(o=>({
+              id:o.dataset.rowId,name:o.querySelector('[name=optionName]').value.trim(),
+              priceDeltaCents:centsFromInput(o.querySelector('[name=optionPrice]').value)
+            }))
+          }));
+          const feedback=form.querySelector('[role=status]');
+          if([...variants,...groups,...groups.flatMap(g=>g.options)].some(x=>!x.name||!Number.isSafeInteger(x.priceDeltaCents??0))){
+            feedback.textContent='Revise os nomes e acréscimos.';return;
+          }
+          for(const group of groups){
+            if(group.minSelections>group.maxSelections||group.maxSelections>group.options.length||
+              (group.selectionType==='SINGLE'&&group.maxSelections!==1)){
+              feedback.textContent='Revise o mínimo e máximo de cada grupo.';return;
+            }
+          }
+          const button=form.querySelector('[type=submit]');button.disabled=true;form.dataset.pending='1';
+          try{
+            if(!form.dataset.mutationKey)form.dataset.mutationKey=api.mutationId();
+            await api.request('/api/v1/products/'+encodeURIComponent(product.id)+'/configuration',{
+              method:'PUT',body:{variants,groups},mutationId:form.dataset.mutationKey
+            });
+            closeModal();showToast('Variações e adicionais salvos.','success');
+          }catch(error){feedback.textContent=error.message;}
+          finally{form.dataset.pending='';button.disabled=false;}
+        });
+      }});
+    }catch(error){showToast(error.message,'error');}
   }
 
   async function openWebCsvImport(){

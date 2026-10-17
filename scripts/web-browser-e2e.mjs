@@ -187,6 +187,51 @@ try{
   assert.equal(firstStillOpen,firstCash,'closing terminal B cannot close terminal A');
   await secondContext.close();
 
+  // P3 configured catalogue E2E: edit a real product's options in the existing
+  // product screen, select variant+required addition in the original composer,
+  // and verify the configured snapshot is present in the canonical sale row.
+  await page.locator('#app-sidebar [data-route=products]').click();
+  const configuredProductRow=page.locator('.web-product-row').filter({hasText:'Produto Web QA'});
+  await configuredProductRow.locator('[data-web-customize]').click();
+  await page.locator('#web-config-product-form [data-add-variant]').click();
+  const variantRow=page.locator('#web-config-product-form [data-variant-row]').first();
+  await variantRow.locator('[name=variantName]').fill('Família');
+  await variantRow.locator('[name=variantPrice]').fill('2,50');
+  await page.locator('#web-config-product-form [data-add-group]').click();
+  const group=page.locator('#web-config-product-form [data-group-row]').first();
+  await group.locator('[name=groupName]').fill('Adicionais');
+  await group.locator('[name=minSelections]').fill('1');
+  await group.locator('[name=maxSelections]').fill('1');
+  await group.locator('[data-add-option]').click();
+  const option=group.locator('[data-option-row]').first();
+  await option.locator('[name=optionName]').fill('Queijo extra');
+  await option.locator('[name=optionPrice]').fill('1,20');
+  await page.locator('#web-config-product-form button[type=submit]').click();
+  await page.locator('#web-config-product-form').waitFor({state:'detached',timeout:12000});
+
+  await page.locator('#app-sidebar [data-route=checkout]').click();
+  await page.locator('[data-add-product]').filter({hasText:'Produto Web QA'}).click();
+  await page.locator('#restaurant-config-product-form').waitFor({timeout:12000});
+  await page.locator('#restaurant-config-product-form input[name=variantId]').first().check();
+  await page.locator('#restaurant-config-product-form [data-option]').first().check();
+  await page.locator('#restaurant-config-product-form textarea[name=note]').fill('Adicionar queijo à parte');
+  await page.locator('#restaurant-config-product-form button[type=submit]').click();
+  await page.locator('#restaurant-config-product-form').waitFor({state:'detached',timeout:12000});
+  const configuredCart=page.locator('.cart-line').filter({hasText:'Produto Web QA'});
+  await configuredCart.waitFor({timeout:12000});
+  assert.match(await configuredCart.innerText(),/Queijo extra|Família/);
+  const snap=await page.evaluate(async()=>{
+    const client=new window.PdvApiClient.ApiClient();
+    const opened=await client.sales('OPEN',25);
+    const terminal=localStorage.getItem('artisys.pdv.webTerminalId.v1');
+    return opened.find(s=>s.terminalId===terminal)?.items?.find(item=>item.configuration?.variant);
+  });
+  assert.equal(snap?.configuration?.variant?.name,'Família');
+  assert.equal(snap?.configuration?.options?.[0]?.name,'Queijo extra');
+  await page.locator('#cancel-sale').click();
+  await page.locator('#confirm-cancel').click();
+  await page.locator('#confirm-cancel').waitFor({state:'detached',timeout:12000});
+
   // Parity: the original sales-history route now offers server-side search and paging.
   await page.locator('#app-sidebar [data-route=sales]').click();
   await page.locator('#web-sales-filter').waitFor({timeout:12000});

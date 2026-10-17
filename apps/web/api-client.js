@@ -118,6 +118,8 @@
       if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
       if(operation==='products/categories')return method==='GET'?value.categories:value.category;
+      if(/^products\/[^/]+\/configuration$/.test(operation))return value.configuration;
+      if(/^products\/[^/]+\/configuration\/price$/.test(operation))return value.quote;
       if(operation==='products/import/preview')return value.preview;
       if(operation==='products/import/commit')return value.result;
       if(/^products\/[^/]+\/bundle$/.test(operation))return method==='GET'?value.components:value.bundle;
@@ -143,6 +145,7 @@
       if(operation==='cash/sessions/search')return value.history;
       if(operation.startsWith('cash/sessions/'))return operation.endsWith('/movements')?value.movements:value.result;
       if(/^sales\/[^/]+\/(customer|seller)$/.test(operation))return value.sale;
+      if(/^sales\/[^/]+\/items\/configured$/.test(operation))return value.sale;
       if(operation==='finance/summary')return value.summary;
       if(operation==='finance/entries')return method==='GET'?value.entries:value.entry;
       if(operation.startsWith('finance/entries/'))return value.settlement||value.result||value.entry;
