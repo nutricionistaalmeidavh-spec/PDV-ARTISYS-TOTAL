@@ -39,6 +39,13 @@ jobs:
           git mv legacy/pdv-artisys/shared packages/core/shared
           git mv legacy/pdv-artisys/vendor/erp-modules packages/core/vendor/erp-modules
           git mv legacy/pdv-artisys/vendor/artisys-finance-domain packages/core/vendor/artisys-finance-domain
+          # Retain exactly the original pure receipt formatters; discard native printer drivers.
+          mkdir -p packages/core/vendor/printing/src/renderers
+          git mv legacy/pdv-artisys/vendor/artisys-printing/src/errors.js packages/core/vendor/printing/src/errors.js
+          git mv legacy/pdv-artisys/vendor/artisys-printing/src/receipt-document.js packages/core/vendor/printing/src/receipt-document.js
+          git mv legacy/pdv-artisys/vendor/artisys-printing/src/renderers/plain-text.js packages/core/vendor/printing/src/renderers/plain-text.js
+          printf "%s\\n" "'use strict';" "module.exports={...require('./src/receipt-document'),...require('./src/renderers/plain-text')};" > packages/core/vendor/printing/index.js
+          sed -i "s@require('@artisys/printing')@require('../../../vendor/printing')@g" packages/core/js/domains/printing/receipt-renderer.js
           git mv legacy/pdv-artisys/desktop/renderer/* apps/web/
           for file in \
             authorization-service.test.js \
