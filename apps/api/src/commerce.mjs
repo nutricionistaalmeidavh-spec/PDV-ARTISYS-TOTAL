@@ -268,6 +268,57 @@ export function createCommerceService(db,{now=nowISO}={}){
       ]);
       return result;
     },
+    async transferStock(tenant,branch,user,body,header){
+      await branchExists(tenant,branch);
+      const target=String(body?.toBranchId||'').trim();
+      if(!target||target===branch)throw error(400,'Selecione uma filial de destino diferente da origem.');
+      await branchExists(tenant,target);
+      const key=requiredMutation(body,header),scope='inventory.transfer:'+branch;
+      const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const item=await product(tenant,body?.productId);
+      if(!item.track_stock)throw error(409,'Produto não controla estoque físico.');
+      const milli=quantityMilli(body?.quantity);
+      if(!milli)throw error(400,'Informe quantidade positiva com até três casas decimais.');
+      const reason=text(body?.reason,240);
+      if(reason.length<3)throw error(400,'Transferência exige justificativa.');
+      const stock=await first('SELECT balance_milli FROM stock_positions WHERE tenant_id=? AND branch_id=? AND product_id=?',
+        tenant,branch,item.id);
+      if((stock?.balance_milli||0)<milli)throw error(409,'Estoque insuficiente na filial de origem.');
+      const id=randomId(),sourceMovementId=randomId(),destinationMovementId=randomId(),at=stamp();
+      const result={id,fromBranchId:branch,toBranchId:target,productId:item.id,
+        quantity:milli/1000,reason,sourceMovementId,destinationMovementId,createdAt:at};
+      // The stock projection is updated solely by immutable ledger triggers.
+      // The two legs, transfer linkage and idempotency proof commit together.
+      await batch([
+        q(`INSERT INTO inventory_movements
+          (id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at,reason)
+          VALUES(?,?,?,?,?,?,?,?,?,?)`,
+          sourceMovementId,tenant,branch,item.id,-milli,'adjustment',null,key,at,
+          'Transferência '+id+' para '+target+': '+reason),
+        q(`INSERT INTO inventory_movements
+          (id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at,reason)
+          VALUES(?,?,?,?,?,?,?,?,?,?)`,
+          destinationMovementId,tenant,target,item.id,milli,'adjustment',null,key,at,
+          'Transferência '+id+' de '+branch+': '+reason),
+        q(`INSERT INTO inventory_transfers
+          (id,tenant_id,from_branch_id,to_branch_id,product_id,quantity_milli,reason,
+           source_movement_id,destination_movement_id,operator_id,mutation_id,created_at)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+          id,tenant,branch,target,item.id,milli,reason,sourceMovementId,destinationMovementId,user,key,at),
+        audit(tenant,scope,key,result)
+      ]);
+      return result;
+    },
+    async stockTransfers(tenant,branch,{limit=50}={}){
+      await branchExists(tenant,branch);
+      const cap=Math.min(100,Math.max(1,Math.trunc(Number(limit)||50)));
+      return all(`SELECT id,from_branch_id AS fromBranchId,to_branch_id AS toBranchId,
+        product_id AS productId,quantity_milli/1000.0 AS quantity,reason,
+        operator_id AS operatorId,created_at AS createdAt
+        FROM inventory_transfers WHERE tenant_id=?
+          AND (from_branch_id=? OR to_branch_id=?)
+        ORDER BY created_at DESC,id DESC LIMIT ?`,tenant,branch,branch,cap);
+    },
     async products(tenant,branch,{includeInactive=false,limit=100}={}){
       await branchExists(tenant,branch);
       const cap=Math.min(100,Math.max(1,Math.trunc(Number(limit)||100)));
