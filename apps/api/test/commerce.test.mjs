@@ -159,6 +159,20 @@ test('P3 discount matches desktop clamping, persists the applied cents and enfor
     const full=await x.write('a',path,{branchId:'branch-a',discountCents:2000});
     assert.equal(full.status,200,full.body.error);
     assert.equal(full.body.sale.totalCents,0,'A 100% discount remains valid when authorized');
+    const reduced=await x.write('a',`sales/${sid}/items/${pid}`,{branchId:'branch-a',quantity:1},{method:'PUT'});
+    assert.equal(reduced.status,200,reduced.body.error);
+    assert.equal(reduced.body.sale.discountCents,1000);
+    assert.equal((await x.db.prepare('SELECT discount_cents AS v FROM sales WHERE id=?').bind(sid).first()).v,1000,
+      'A reduced line must persist the new cap, just like desktop recalculate()');
+    const readded=await x.write('a',`sales/${sid}/items`,{branchId:'branch-a',productId:pid,quantity:1});
+    assert.equal(readded.body.sale.discountCents,1000,'Adding items again must not resurrect the old excess');
+    assert.equal(readded.body.sale.totalCents,1000);
+    const removed=await x.write('a',`sales/${sid}/items/${pid}`,{branchId:'branch-a'},{method:'DELETE'});
+    assert.equal(removed.status,200,removed.body.error);
+    assert.equal(removed.body.sale.discountCents,0,'Empty cart resets applied discount');
+    assert.equal((await x.db.prepare('SELECT discount_cents AS v FROM sales WHERE id=?').bind(sid).first()).v,0);
+    const newItem=await x.write('a',`sales/${sid}/items`,{branchId:'branch-a',productId:pid,quantity:1});
+    assert.equal(newItem.body.sale.totalCents,1000,'Discount does not reappear on the next cart');
   }finally{x.close();}
 });
 
