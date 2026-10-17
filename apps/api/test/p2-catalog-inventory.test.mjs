@@ -17,6 +17,7 @@ async function setup(){
     await db.prepare('INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)').bind(t,'shop-'+t,t,now).run();
     await db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)').bind(b,t,'MAIN','Principal',now).run();
   }
+  await db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)').bind('a','u','OWNER',now).run();
   const service=createCommerceService(db,{now:()=>now});
   async function create(sku,price=1000,trackStock=true,extra={}){
     return service.createProduct('a','u',{name:'Produto '+sku,sku,salePriceCents:price,trackStock,...extra},key());
