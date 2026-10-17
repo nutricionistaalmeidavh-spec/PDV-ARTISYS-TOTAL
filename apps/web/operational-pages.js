@@ -197,6 +197,8 @@
     await ready();
     const historyFilter={status:filters.status??'COMPLETED',
       from:filters.from||'',to:filters.to||'',query:filters.query||'',
+      customerId:filters.customerId||'',sellerId:filters.sellerId||'',operatorId:filters.operatorId||'',
+      productId:filters.productId||'',paymentMethod:filters.paymentMethod||'',
       limit:25,offset:Number(filters.offset)||0};
     const history=api.webMode?await api.salesHistory(historyFilter):null;
     const sales=api.webMode?history.items:await api.salesHistory({limit:200});
@@ -207,6 +209,17 @@
       <label>Situação<select class="ops-input" name="status">
         ${[['COMPLETED','Concluídas'],['OPEN','Abertas'],['SUSPENDED','Suspensas'],['CANCELLED','Canceladas'],['','Todas']].map(([key,label])=>`<option value="${key}" ${historyFilter.status===key?'selected':''}>${label}</option>`).join('')}
         </select></label>
+      <details class="ops-advanced-filters"><summary>Filtros avançados</summary>
+        <div class="ops-grid two">
+          <label>Vendedor (ID)<input class="ops-input" name="sellerId" value="${escapeHtml(historyFilter.sellerId)}"></label>
+          <label>Operador (ID)<input class="ops-input" name="operatorId" value="${escapeHtml(historyFilter.operatorId)}"></label>
+          <label>Cliente (ID)<input class="ops-input" name="customerId" value="${escapeHtml(historyFilter.customerId)}"></label>
+          <label>Produto (ID)<input class="ops-input" name="productId" value="${escapeHtml(historyFilter.productId)}"></label>
+          <label>Pagamento<select class="ops-input" name="paymentMethod">
+            ${[['','Todos'],['CASH','Dinheiro'],['PIX','PIX'],['DEBIT_CARD','Débito'],['CREDIT_CARD','Crédito'],['STORE_CREDIT','Crediário'],['OTHER','Outros']].map(([value,label])=>`<option value="${value}" ${historyFilter.paymentMethod===value?'selected':''}>${label}</option>`).join('')}
+          </select></label>
+        </div>
+      </details>
       <button class="ops-primary" type="submit">Filtrar vendas</button></form>
       <p class="ops-muted">Encontradas ${history.total} vendas · página ${Math.floor(history.offset/history.limit)+1}</p>
       </section>`:'';
@@ -228,7 +241,10 @@
       const pendingButtons=[...content.querySelectorAll('[data-sale-details], [data-history-page]')];
       pendingButtons.forEach(button=>{button.disabled=true;button.setAttribute('aria-busy','true');});
       void renderSalesHistory({from:form.elements.from.value,to:form.elements.to.value,
-        status:form.elements.status.value,query:form.elements.query.value,offset:0})
+        status:form.elements.status.value,query:form.elements.query.value,
+        sellerId:form.elements.sellerId.value,operatorId:form.elements.operatorId.value,
+        customerId:form.elements.customerId.value,productId:form.elements.productId.value,
+        paymentMethod:form.elements.paymentMethod.value,offset:0})
         .catch(error=>{showToast(error.message,'error');})
         .finally(()=>pendingButtons.forEach(button=>{button.disabled=false;button.removeAttribute('aria-busy');}));
     });
