@@ -137,7 +137,18 @@ try{
       results:await page.locator('#ops-sales-body').innerText(),
       details:await page.locator('#ops-sale-detail').innerText(),
       route:await page.locator('body').getAttribute('data-active-route'),
-      notices:await page.locator('[role="alert"]').allTextContents()
+      notices:await page.locator('[role="alert"],.toast,[role="status"]').allTextContents(),
+      apiSale:await page.evaluate(async()=>{
+        const id=document.querySelector('[data-sale-details]')?.dataset.saleDetails;
+        try{
+          const client=new window.PdvApiClient.ApiClient();
+          const sale=await client.sale(id);
+          return {id,number:sale?.saleNumber,items:sale?.items?.map(i=>({
+            productName:i.productName,unitPriceCents:i.unitPriceCents,
+            catalogUnitPriceCents:i.catalogUnitPriceCents,priceOverrideReason:i.priceOverrideReason
+          }))};
+        }catch(e){return {id,error:e.message,status:e.status};}
+      })
     };
     console.error('HISTORY_PRICE_OVERRIDE_DIAGNOSTIC',JSON.stringify(debug));
     throw error;
