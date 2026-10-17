@@ -1136,6 +1136,12 @@
       <div class="field"><label for="web-product-name">Nome do produto</label><input id="web-product-name" name="name" required minlength="2" maxlength="120" autocomplete="off" placeholder="Ex.: Café tradicional"></div>
       <div class="field-grid"><div class="field"><label for="web-product-sku">SKU / código</label><input id="web-product-sku" name="sku" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]*" placeholder="Ex.: CAFE-001"></div>
       <div class="field"><label for="web-product-price">Preço de venda (R$)</label><input id="web-product-price" name="price" inputmode="decimal" required placeholder="0,00"></div></div>
+      <div class="field"><label>Marca<input name="brand" maxlength="100" placeholder="Ex.: Marca própria"></label></div>
+      <div class="field"><label>Código de barras<input name="barcode" maxlength="80" placeholder="Opcional, independente do SKU"></label></div>
+      <div class="field"><label>Categoria<select name="categoryId"><option value="">Sem categoria</option>${state.categories.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('')}</select></label></div>
+      <div class="field"><label>Produto pai<select name="parentProductId"><option value="">Produto independente</option>${state.products.filter(p=>!p.parentProductId).map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('')}</select></label></div>
+      <div class="field"><label>Nome da variação<input name="variantLabel" maxlength="80" placeholder="Ex.: Azul / G"></label></div>
+      <div class="field"><label>Unidade<select name="unit">${['UN','KG','G','L','M','M2','M3','CX','PCT'].map(unit=>`<option value="${unit}">${unit}</option>`).join('')}</select></label></div>
       <label class="web-checkbox"><input name="track" type="checkbox" checked> Controlar saldo no estoque</label>
       <p class="web-form-feedback" role="status" aria-live="polite"></p>
       <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button>
@@ -1149,7 +1155,10 @@
         try{
           if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
           const product=await api.saveProduct({name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
-            salePriceCents:centsFromInput(form.elements.price.value),trackStock:form.elements.track.checked},form.dataset.operationKey);
+            salePriceCents:centsFromInput(form.elements.price.value),trackStock:form.elements.track.checked,
+            brand:form.elements.brand.value.trim(),barcode:form.elements.barcode.value.trim(),
+            categoryId:form.elements.categoryId.value||null,parentProductId:form.elements.parentProductId.value||null,
+            variantLabel:form.elements.variantLabel.value.trim()||null,unit:form.elements.unit.value},form.dataset.operationKey);
           state.products=await api.products();
           closeModal();renderWebProducts();showToast('Produto '+product.name+' cadastrado.','success');
         }catch(error){status.textContent=error.message;}
@@ -1167,6 +1176,11 @@
       <div class="field-grid"><div class="field"><label for="web-edit-product-sku">SKU</label><input id="web-edit-product-sku" name="sku" required maxlength="64" value="${escapeHtml(product.sku)}"></div>
       <div class="field"><label for="web-edit-product-price">Preço de venda (R$)</label><input id="web-edit-product-price" name="price" required inputmode="decimal" value="${escapeHtml(price)}"></div></div>
       <div class="field"><label for="web-edit-product-unit">Unidade</label><select id="web-edit-product-unit" name="unit">${unitOptions.map(unit=>`<option value="${unit}" ${unit===product.unit?'selected':''}>${unit}</option>`).join('')}</select></div>
+      <div class="field"><label>Marca<input name="brand" maxlength="100" value="${escapeHtml(product.brand||'')}"></label></div>
+      <div class="field"><label>Código de barras<input name="barcode" maxlength="80" value="${escapeHtml(product.barcode&&product.barcode!==product.sku?product.barcode:'')}"></label></div>
+      <div class="field"><label>Categoria<select name="categoryId"><option value="">Sem categoria</option>${state.categories.map(c=>`<option value="${escapeHtml(c.id)}" ${c.id===product.categoryId?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}</select></label></div>
+      <div class="field"><label>Produto pai<select name="parentProductId"><option value="">Produto independente</option>${state.products.filter(p=>p.id!==product.id&&!p.parentProductId).map(p=>`<option value="${escapeHtml(p.id)}" ${p.id===product.parentProductId?'selected':''}>${escapeHtml(p.name)}</option>`).join('')}</select></label></div>
+      <div class="field"><label>Variação<input name="variantLabel" maxlength="80" value="${escapeHtml(product.variantLabel||'')}"></label></div>
       <label class="web-checkbox"><input type="checkbox" name="active" ${product.active!==false?'checked':''}> Produto ativo (desativar preserva vendas e estoque histórico)</label>
       <p class="web-form-feedback" role="status" aria-live="polite"></p>
       <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" type="submit">Salvar alterações</button></div>
@@ -1181,7 +1195,10 @@
           const result=await api.updateProduct(product.id,{
             name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
             salePriceCents:centsFromInput(form.elements.price.value),unit:form.elements.unit.value,
-            active:form.elements.active.checked
+            active:form.elements.active.checked,brand:form.elements.brand.value.trim(),
+            barcode:form.elements.barcode.value.trim(),categoryId:form.elements.categoryId.value||null,
+            parentProductId:form.elements.parentProductId.value||null,
+            variantLabel:form.elements.variantLabel.value.trim()||null
           },form.dataset.operationKey);
           state.products=await api.products();
           if(showInactiveWebProducts){const all=await api.products(true);inactiveWebProducts=all.filter(item=>item.active===false);}
@@ -1198,6 +1215,7 @@
       <p>Produto: <strong>${escapeHtml(product.name)}</strong> · Saldo atual: ${quantityLabel(product.balance)}</p>
       <div class="field"><label for="web-stock-qty">Quantidade recebida</label>
       <input id="web-stock-qty" name="quantity" type="number" min="0.001" step="0.001" required placeholder="0"></div>
+      <div class="field"><label>Custo unitário de compra (R$)<input name="unitCost" inputmode="decimal" placeholder="Opcional"></label></div>
       <p class="web-form-feedback" role="status" aria-live="polite"></p>
       <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button>
       <button class="primary-button" type="submit">Registrar entrada</button></div></form>`,{onMount(root){
@@ -1208,9 +1226,11 @@
         form.dataset.pending='true';button.disabled=true;button.textContent='Registrando…';
         try{
           if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
-          await api.request('/api/v1/inventory/movements',{method:'POST',mutationId:form.dataset.operationKey,body:{
-            productId:product.id,quantity:Number(form.elements.quantity.value),type:'purchase'
-          }});
+          const cost=String(form.elements.unitCost.value||'').trim();
+          await api.purchaseReceipt({
+            productId:product.id,quantity:Number(form.elements.quantity.value),type:'purchase',
+            ...(cost?{unitCostCents:centsFromInput(cost)}:{})
+          },form.dataset.operationKey);
           state.products=await api.products();
           closeModal();renderWebProducts();showToast('Entrada de estoque registrada para '+product.name+'.','success');
         }catch(error){status.textContent=error.message;}
@@ -1255,10 +1275,10 @@
     const targets=(data.branches||[]).filter(branch=>branch.id!==api.branchId&&branch.active!==false);
     if(!targets.length){showToast('Cadastre uma segunda filial ativa antes de transferir estoque.','error');return;}
     openModal('Transferir estoque entre filiais',`<form id="web-stock-transfer-form">
-      <p>Origem: <strong>${escapeHtml(product.name)}</strong> · Disponível: ${quantityLabel(product.balance)}</p>
+      <p>Origem: <strong>${escapeHtml(product.name)}</strong> · Disponível: ${quantityLabel(product.available??product.balance)}</p>
       <div class="field"><label for="web-transfer-to">Filial de destino</label>
       <select id="web-transfer-to" name="toBranchId" required>${targets.map(branch=>`<option value="${escapeHtml(branch.id)}">${escapeHtml(branch.name||branch.code||branch.id)}</option>`).join('')}</select></div>
-      <div class="field"><label for="web-transfer-qty">Quantidade</label><input id="web-transfer-qty" name="quantity" type="number" min="0.001" max="${Number(product.balance)}" step="0.001" required></div>
+      <div class="field"><label for="web-transfer-qty">Quantidade</label><input id="web-transfer-qty" name="quantity" type="number" min="0.001" max="${Number(product.available??product.balance)}" step="0.001" required></div>
       <div class="field"><label for="web-transfer-reason">Justificativa</label><textarea id="web-transfer-reason" name="reason" rows="3" minlength="3" maxlength="240" required></textarea></div>
       <p class="web-form-feedback" role="status" aria-live="polite"></p>
       <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" type="submit">Confirmar transferência</button></div>
