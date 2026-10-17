@@ -48,6 +48,7 @@ try{
   await page.locator('#web-password').fill('DummyStrongPassOnlyForCI2026');
   await page.locator('#web-login-form button[type=submit]').click();
   await page.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
+  await page.locator('#product-search').waitFor({state:'visible',timeout:12000});
   assert.equal(await page.locator('#product-search').count(),1,'only the canonical checkout renderer should exist');
   await page.locator('#app-sidebar [data-route=products]').click();
   await page.locator('#web-new-product').click();
