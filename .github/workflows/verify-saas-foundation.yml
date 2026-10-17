@@ -51,6 +51,17 @@ jobs:
         run: npx --yes wrangler@4.137.0 deploy --dry-run --outdir dist-check
       - name: Test isolated D1 schema in Wrangler local emulator
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0001_identity.sql
+      - name: Smoke real Cloudflare Workerd with local D1 and 100k PBKDF2
+        env:
+          PDV_OWNER_EMAIL: owner@example.test
+          PDV_OWNER_NAME: Local Owner
+          PDV_TENANT_SLUG: workerd-test
+          PDV_TENANT_NAME: Workerd Test
+          PDV_OWNER_PASSWORD: DummyStrongPassOnlyForCI2026
+        run: |
+          node --experimental-sqlite apps/api/src/provision.mjs
+          npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/.local/provision.seed.sql
+          node scripts/smoke-workerd.mjs
       - name: Verify snapshot remains unchanged
         shell: bash
         run: |
