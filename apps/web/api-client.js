@@ -68,7 +68,7 @@
       if(!['GET','HEAD'].includes(method)){
         if(operation)payload.branchId=this.branchId;
         let key=mutationId;
-        const completion=/^sales\\/[^/]+\\/complete$/.test(operation);
+        const completion=/^sales\/[^/]+\/complete$/.test(operation);
         if(completion){
           key=this.completionKeys.get(operation)||key||this.mutationId();
           this.completionKeys.set(operation,key);
@@ -86,7 +86,7 @@
         e.status=response.status;
         throw e;
       }
-      if(/^sales\\/[^/]+\\/complete$/.test(operation))this.completionKeys.delete(operation);
+      if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
       if(operation==='inventory')return value.stock;
       if(operation==='inventory/receipts')return value.movement;
