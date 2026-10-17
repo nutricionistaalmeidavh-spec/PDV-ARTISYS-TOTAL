@@ -121,3 +121,25 @@ test('login is origin-gated, generic on credentials, throttled, and logout revok
     assert.equal((await x.request('/api/v1/auth/session','GET',null,bob)).status,401);
   }finally{x.close();}
 });
+
+
+test('localhost HTTP session cookie uses its own non-Host prefix without weakening production cookies',async()=>{
+  const x=await fixture();
+  try {
+    const local='http://localhost:4175';
+    const api=createApi({DB:x.db,COOKIE_SECURE:'false'},{now:()=>NOW});
+    const login=await api.fetch(new Request(local+'/api/v1/auth/login',{
+      method:'POST',headers:{origin:local,'content-type':'application/json'},
+      body:JSON.stringify({email:'alice@example.com',password:'Teste-Seguro-Longo-2026!'})
+    }));
+    assert.equal(login.status,200);
+    const cookie=login.headers.get('set-cookie');
+    assert.match(cookie,/^pdvtotal_local_session=/);
+    assert.doesNotMatch(cookie,/__Host-/);
+    assert.doesNotMatch(cookie,/; Secure/);
+    const current=await api.fetch(new Request(local+'/api/v1/auth/session',{
+      headers:{cookie:cookie.split(';')[0]}
+    }));
+    assert.equal(current.status,200);
+  }finally{x.close();}
+});
