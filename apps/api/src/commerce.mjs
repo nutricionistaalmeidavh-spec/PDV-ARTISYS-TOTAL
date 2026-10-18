@@ -1443,13 +1443,24 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(result.meta?.changes!==1)throw error(409,'A venda mudou de estado. Atualize antes de aplicar o desconto.');
       return snapshot(tenant,branch,id);
     },
-    async transition(tenant,branch,id,to){
+    async transition(tenant,branch,id,to,header){
+      const key=requiredMutation(null,header),scope='sale.transition:'+id;
+      // Replays must never reapply an obsolete transition after a later state change.
+      if(await applied(tenant,scope,key))return snapshot(tenant,branch,id);
       const sale=await tenantSale(tenant,branch,id);
       const allowed=(sale.status==='OPEN'&&['SUSPENDED','CANCELLED'].includes(to))||(sale.status==='SUSPENDED'&&to==='OPEN');
       if(!allowed)throw error(409,'A venda mudou de estado; atualize antes de continuar.');
-      const result=await run('UPDATE sales SET status=? WHERE id=? AND tenant_id=? AND branch_id=? AND status=?',
-        to,id,tenant,branch,sale.status);
-      if(result.meta?.changes!==1)throw error(409,'A venda mudou de estado; atualize antes de continuar.');
+      // D1/SQLite batch is atomic: changes() tests the immediately preceding CAS.
+      // If a second terminal won, do NOT create a false idempotency receipt.
+      const proof={saleId:id,from:sale.status,to};
+      await batch([
+        q('UPDATE sales SET status=? WHERE id=? AND tenant_id=? AND branch_id=? AND status=?',
+          to,id,tenant,branch,sale.status),
+        q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) SELECT ?,?,?,?,? WHERE changes()=1',
+          tenant,scope,key,JSON.stringify(proof),stamp())
+      ]);
+      if(!await applied(tenant,scope,key))
+        throw error(409,'A venda mudou de estado; atualize antes de continuar.');
       return snapshot(tenant,branch,id);
     },
     async allSaleReturns(tenant,branch){
