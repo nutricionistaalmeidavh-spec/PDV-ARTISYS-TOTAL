@@ -90,3 +90,11 @@ A interface de atacado já apresentava um editor para política comercial, mas f
 **Limites:** a política é conferida com os valores vigentes ao fechar a venda, não é um snapshot imutável da data da cotação. Ainda faltam a certificação integral do manifesto desktop, testes de todos os casos de credito/estorno e revisão dos demais dependentes R1. `cap-023/024` continuam `gap` na classificação estrita de paridade e **não podem ser marcadas como completas apenas por esses cenários**.
 
 Sem migration, sem segundo caixa ou estoque, sem serviço pago obrigatório.
+
+## Fechamento R1 incremental — seleção de cliente/vendedor com CAS e reenvio idempotente
+
+Regressão reproduzível nos contratos `checkout-011` e `checkout-012`: a atribuição do cliente e do vendedor de uma venda aberta usava um UPDATE condicional sem recibo de mutação. Um reenvio atrasado da seleção anterior podia reverter o cliente e alterar o destinatário de comissões; a resposta HTTP 200 também podia mascarar mudança concorrente do estado da venda.
+
+A correção exige ID de mutação por operação, mantém o vendedor na mesma empresa e ativo e conserva a vinculação imutável de cliente de uma cotação B2B. O `UPDATE sales` condicional e o recibo em `commerce_mutations` são executados no mesmo lote; apenas uma atualização aceita gera recibo. Um replay exato apenas lê o estado atual; reuso da chave com outro valor é conflito 409. Os testes SQLite usam duas trocas de cliente, duas de vendedor, repetição de mensagens em ordem inversa, papéis sem acesso e separação por empresa. O navegador gera IDs por cada troca sem mexer nos dados históricos.
+
+**Prova de integração não é prova de todo R1**: o escopo de 21 capacidades requer os demais casos de desktop e contratos ainda parciais. Não houve migração ou armazenamento duplicado.
