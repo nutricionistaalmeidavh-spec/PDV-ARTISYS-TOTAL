@@ -49,10 +49,36 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
      if(parts[1]==='sessions'&&parts[2]){
        if(parts.length===3&&method==='GET'){permission(member,user,'restaurant.orders.view');return json({session:await svc.tableSession(tenantId,branch,parts[2])});}
        if(parts.length===4&&parts[3]==='close'&&method==='POST'){permission(member,user,'restaurant.tables.manage');return json({session:await svc.closeTable(tenantId,branch,parts[2],key)});}
+       if(parts.length===4&&parts[3]==='transfer'&&method==='POST'){
+         permission(member,user,'restaurant.orders.transfer');
+         return json({session:await svc.transferTable(tenantId,branch,parts[2],body.targetTableId,key)});
+       }
+       if(parts.length===4&&parts[3]==='requests'&&method==='POST'){
+         permission(member,user,'restaurant.service.manage');
+         return json({request:await svc.createServiceRequest(tenantId,branch,user,parts[2],body,key)},201);
+       }
+     }
+     if(parts[1]==='requests'){
+       permission(member,user,'restaurant.service.manage');
+       if(parts.length===2&&method==='GET')return json({requests:await svc.serviceRequests(tenantId,branch)});
+       if(parts.length===3&&method==='PATCH')
+         return json({request:await svc.updateServiceRequest(tenantId,branch,user,parts[2],body,key)});
+     }
+     if(parts[1]==='reports'&&parts.length===3&&method==='GET'){
+       permission(member,user,'reports.view');
+       const from=url.searchParams.get('from'),to=url.searchParams.get('to');
+       if(parts[2]==='summary')return json({report:await svc.restaurantReport(tenantId,branch,from,to)});
+       if(parts[2]==='csv')return new Response(await svc.restaurantReport(tenantId,branch,from,to,{csv:true}),{
+         status:200,headers:{'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename="restaurant-operations.csv"','cache-control':'no-store','x-content-type-options':'nosniff'}
+       });
      }
      if(parts[1]==='orders'&&parts.length===2){
        if(method==='GET'){permission(member,user,'restaurant.orders.view');return json({orders:await svc.foodOrders(tenantId,branch,url.searchParams.get('fulfillment')||'')});}
        if(method==='POST'){permission(member,user,'restaurant.orders.create');return json({order:await svc.createFoodOrder(tenantId,branch,user,body,key)},201);}
+     }
+     if(parts[1]==='orders'&&parts.length===4&&parts[3]==='cancel'&&method==='POST'){
+       permission(member,user,'restaurant.orders.transfer');
+       return json({order:await svc.cancelFoodOrder(tenantId,branch,parts[2],key)});
      }
      if(parts[1]==='orders'&&parts.length===4&&parts[3]==='deliver'&&method==='POST'){
        permission(member,user,'restaurant.orders.transfer');
