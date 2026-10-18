@@ -133,6 +133,13 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
       return null;
     }
     if(feature==='inventory'){
+      if(parts[1]==='lots'&&parts.length===2&&method==='GET'){
+        requireAccess(member,'inventory.view',user);
+        return json({lots:await service.lotReceipts(tenant,branch,{
+          productId:url.searchParams.get('productId')||'',
+          limit:url.searchParams.get('limit')||50
+        })});
+      }
       if(parts[1]==='reservations'&&parts.length===2){
         if(method==='GET'){requireAccess(member,'inventory.view',user);return json({reservations:await service.stockReservations(tenant,branch,{productId:url.searchParams.get('productId')||null})});}
         if(method==='POST'){requireAccess(member,'inventory.adjust',user);return json({reservation:await service.reserveStock(tenant,branch,user,body,key)},201);}
