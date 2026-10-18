@@ -692,3 +692,25 @@ test('R4 cap-036 desktop delta policy adds catalog price plus size, flavor and c
   assert.equal((await x.request('a','restaurant/pizzeria/products/'+p.id+'?branchId=filial-a')).body.profile.pricingMode,'DESKTOP_DELTAS');
  }finally{x.close();}
 });
+
+test('R4 cap-034/035: rerouting product never changes the items of already issued station tickets',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Hambúrguer da estação A',sku:'R4-FROZEN-KDS',salePriceCents:1500,trackStock:false})).body.product;
+   const first=(await x.request('a','restaurant/kitchen/stations','POST',{branchId:'filial-a',name:'Grelha A'})).body.station;
+   const second=(await x.request('a','restaurant/kitchen/stations','POST',{branchId:'filial-a',name:'Grelha B'})).body.station;
+   assert.equal((await x.request('a','restaurant/kitchen/routes','POST',{branchId:'filial-a',productId:p.id,mode:'PRODUCTION',stationId:first.id})).status,201);
+   const before=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:p.id,quantity:2}]})).body.order;
+   assert.equal((await x.request('a','restaurant/kitchen/routes','POST',{branchId:'filial-a',productId:p.id,mode:'PRODUCTION',stationId:second.id})).status,201);
+   const after=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:p.id,quantity:1}]})).body.order;
+   const tickets=(await x.request('a','restaurant/kitchen/station-tickets?branchId=filial-a')).body.tickets;
+   const oldTicket=tickets.find(t=>t.orderId===before.id),newTicket=tickets.find(t=>t.orderId===after.id);
+   assert.equal(oldTicket.stationId,first.id);
+   assert.equal(oldTicket.items.length,1);
+   assert.equal(oldTicket.items[0].productName,'Hambúrguer da estação A');
+   assert.equal(oldTicket.items[0].quantity,2);
+   assert.equal(newTicket.stationId,second.id);
+   assert.equal(newTicket.items.length,1);
+   assert.equal(newTicket.items[0].quantity,1);
+   assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM restaurant_orders WHERE tenant_id=?').bind('a').first()).n,2);
+ }finally{x.close();}
+});
