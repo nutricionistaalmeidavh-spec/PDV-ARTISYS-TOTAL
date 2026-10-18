@@ -1,28 +1,15 @@
 import {createServer} from 'node:http';
-import {readFileSync,existsSync} from 'node:fs';
+import {existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
 import {openLocalDatabase} from './local-db.mjs';
+import {applyLocalMigrations} from './local-migrations.mjs';
 import {createApi} from './worker.mjs';
 import {serveLocalPwa} from './local-static.mjs';
 
 const here=dirname(fileURLToPath(import.meta.url));
 const db=openLocalDatabase(process.env.LOCAL_DB_PATH || resolve(here,'../.local/pdv-total.sqlite'));
-db.exec(readFileSync(resolve(here,'../migrations/0001_identity.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0002_commerce.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0003_cash_finance.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0004_advanced_finance.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0005_vertical_parity.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0006_desktop_parity.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0007_stock_transfers.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0008_transaction_reversals.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0009_catalog_inventory.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0010_purchase_orders.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0011_product_media.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0012_sale_item_notes.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0013_cash_terminals.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0014_checkout_configurations.sql'),'utf8'));
-db.exec(readFileSync(resolve(here,'../migrations/0015_seller_sales_targets.sql'),'utf8'));
+await applyLocalMigrations(db);
 const host=process.env.PDV_HOST||'127.0.0.1',port=Number(process.env.PORT||4175);
 // Plain HTTP + insecure dev cookie must never be exposed on the local network.
 if(!['127.0.0.1','localhost'].includes(host))throw new Error('Servidor sem TLS somente em localhost.');
