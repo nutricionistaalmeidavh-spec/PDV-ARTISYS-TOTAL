@@ -1804,3 +1804,418 @@ test('checkout-006/nominal sale-items-desktop-v2 adds updates and removes with o
     assert.deepEqual(saleTotals(removed.body.sale),original.empty,'all item mutations match the desktop golden totals');
   }finally{x.close();}
 });
+
+
+// P6 certification round: independently executed 20 scenarios (5 contracts x 4).
+// Original desktop modules are byte-pinned in checkout-core-desktop-v1.json.
+const desktopStockP6=originalRequire('../../../packages/core/js/domains/inventory/inventory-rules.js');
+const desktopCashP6=originalRequire('../../../packages/core/js/domains/cash/cash-rules.js');
+function p6Fixture(id){
+  assertCheckoutDesktopSourcePinned();
+  const row=checkoutGolden(id);
+  assert.equal(row.desktopCommit,certifiedCheckoutFixture.desktop.commit);
+  return row;
+}
+function p6Policy(capability,deniedProfile='READ_ONLY'){
+  const authz=desktopAuthorization.createAuthorizationService({
+    resolvePermissions:p=>desktopProfiles.DEFAULT_PROFILE_PERMISSIONS[
+      p.id==='permitted'?'ADMINISTRATOR':deniedProfile
+    ]||[]
+  });
+  assert.equal(authz.can({principal:{kind:'human',id:'permitted'},capability}),true);
+  assert.equal(authz.can({principal:{kind:'human',id:'denied'},capability}),false);
+}
+
+test('products-020/nominal product-create-price-sku-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('product-create-price-sku-v4');
+ assert.equal(fixture.scenarioId,'products-020/nominal');
+ const x=await setup();try{
+
+ const input={branchId:'branch-a',name:'Produto Certificado',sku:'prd-case',salePriceCents:1000,unit:'UN'};
+ const result=await x.write('a','products',input);
+ assert.equal(result.status,201,result.body.error);
+ const persisted=await x.db.prepare('SELECT name,sku,sale_price_cents AS price FROM products WHERE id=? AND tenant_id=?').bind(result.body.product.id,'a').first();
+ assert.deepEqual({name:persisted.name,sku:persisted.sku,price:persisted.price},
+   {name:input.name,sku:'PRD-CASE',price:input.salePriceCents},'canonical desktop catalog values persist in one authoritative row');
+ const listed=await x.get('a','products?branchId=branch-a');
+ assert.equal(listed.body.products[0].id,result.body.product.id);
+
+ }finally{x.close();}
+});
+
+test('products-020/authorization product-create-rbac-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('product-create-rbac-v4');
+ assert.equal(fixture.scenarioId,'products-020/authorization');
+ const x=await setup();try{
+
+ p6Policy('products.manage','READ_ONLY');
+ const input={branchId:'branch-a',name:'Permission product',sku:'AUTH-P',salePriceCents:1000};
+ const denied=await x.write('a','products',input,{who:x.viewer});
+ assert.equal(denied.status,403);
+ const row=await x.db.prepare('SELECT COUNT(*) AS n FROM products WHERE tenant_id=?').bind('a').first();
+ assert.equal(row.n,0,'read-only desktop profile cannot write catalog rows');
+ const accepted=await x.write('a','products',input);
+ assert.equal(accepted.status,201,accepted.body.error);
+
+ }finally{x.close();}
+});
+
+test('products-020/tenant-isolation product-cross-tenant-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('product-cross-tenant-v4');
+ assert.equal(fixture.scenarioId,'products-020/tenant-isolation');
+ const x=await setup();try{
+
+ const input={branchId:'branch-a',name:'Hidden product',sku:'TEN-C',salePriceCents:1000};
+ const a=await x.write('a','products',input);assert.equal(a.status,201,a.body.error);
+ const hidden=await x.get('b','products?branchId=branch-b',x.other);
+ assert.equal(hidden.status,200,hidden.body.error);
+ assert.equal(hidden.body.products.some(p=>p.id===a.body.product.id),false);
+ const denied=await x.get('a','products?branchId=branch-b');
+ assert.equal(denied.status,404);
+ const sql=await x.db.prepare('SELECT tenant_id AS tenant FROM products WHERE id=?').bind(a.body.product.id).first();
+ assert.equal(sql.tenant,'a','product is owned by original tenant, never exposed across company boundary');
+
+ }finally{x.close();}
+});
+
+test('products-020/failure-recovery product-idempotent-sku-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('product-idempotent-sku-v4');
+ assert.equal(fixture.scenarioId,'products-020/failure-recovery');
+ const x=await setup();try{
+
+ const payload={branchId:'branch-a',name:'Unico SKU',sku:'UNIQUE-C',salePriceCents:1000},key=next();
+ const one=await x.write('a','products',payload,{key});assert.equal(one.status,201,one.body.error);
+ const retry=await x.write('a','products',payload,{key});
+ assert.deepEqual(retry.body,one.body,'same mutation key reuses the committed catalog result');
+ const collision=await x.write('a','products',{...payload,name:'Another product'},{key:next()});
+ assert.equal(collision.status,409);
+ const count=await x.db.prepare('SELECT COUNT(*) AS n FROM products WHERE tenant_id=? AND sku=?').bind('a','UNIQUE-C').first();
+ assert.equal(count.n,1,'retry or SKU race cannot duplicate the catalog');
+
+ }finally{x.close();}
+});
+
+test('products-021/nominal stock-ledger-quantity-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('stock-ledger-quantity-v4');
+ assert.equal(fixture.scenarioId,'products-021/nominal');
+ const x=await setup();try{
+
+ const pid=await x.id('Stock reference','STOCK-P0',2.125);
+ const expected=desktopStockP6.applyStockDelta(0,2.125);
+ assert.deepEqual(expected,{before:0,after:2.125,delta:2.125});
+ const stock=await x.get('a','inventory?branchId=branch-a');
+ assert.equal(stock.status,200,stock.body.error);
+ const actual=stock.body.stock.find(row=>row.productId===pid)?.quantity;
+ assert.equal(actual,expected.after,'stock projection equals desktop 3-decimal inventory engine');
+ const ledger=await x.db.prepare('SELECT SUM(delta_milli) AS quantityMilli FROM inventory_movements WHERE product_id=?').bind(pid).first();
+ assert.equal(ledger.quantityMilli,2125);
+
+ }finally{x.close();}
+});
+
+test('products-021/authorization stock-view-adjust-rbac-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('stock-view-adjust-rbac-v4');
+ assert.equal(fixture.scenarioId,'products-021/authorization');
+ const x=await setup();try{
+
+ p6Policy('inventory.view','KITCHEN');
+ const pid=await x.id('Readonly stock','STOCK-VIEW',2);
+ const readonly=await x.get('a','inventory?branchId=branch-a',x.viewer);
+ assert.equal(readonly.status,200,readonly.body.error);
+ const denied=await x.write('a','inventory/adjustments',{branchId:'branch-a',productId:pid,quantityDelta:-1,reason:'Not authorized'},{who:x.viewer});
+ assert.equal(denied.status,403);
+ const after=await x.get('a','inventory?branchId=branch-a');
+ assert.equal(after.body.stock.find(s=>s.productId===pid).quantity,desktopStockP6.applyStockDelta(0,2).after,
+   'view-only actor cannot modify original desktop stock projection');
+
+ }finally{x.close();}
+});
+
+test('products-021/tenant-isolation stock-tenant-branch-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('stock-tenant-branch-v4');
+ assert.equal(fixture.scenarioId,'products-021/tenant-isolation');
+ const x=await setup();try{
+
+ const pid=await x.id('Company A stock','STOCK-TENANT',2.125);
+ const own=await x.get('a','inventory?branchId=branch-a');
+ assert.equal(own.status,200);
+ const foreign=await x.get('b','inventory?branchId=branch-b',x.other);
+ assert.equal(foreign.status,200);
+ assert.equal(foreign.body.stock.some(p=>p.productId===pid),false);
+ const blocked=await x.get('a','inventory?branchId=branch-b');
+ assert.equal(blocked.status,404);
+ const sum=await x.db.prepare('SELECT SUM(delta_milli) AS milli FROM inventory_movements WHERE tenant_id=? AND product_id=?').bind('a',pid).first();
+ assert.equal(sum.milli,2125,'stock journal retains tenant-specific ownership and exact precision');
+
+ }finally{x.close();}
+});
+
+test('products-021/failure-recovery stock-idempotent-negative-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('stock-idempotent-negative-v4');
+ assert.equal(fixture.scenarioId,'products-021/failure-recovery');
+ const x=await setup();try{
+
+ const pid=await x.id('Stock retry','STOCK-RETRY',2.125);
+ const expected=desktopStockP6.applyStockDelta(2.125,-1.125);
+ assert.equal(expected.after,1);
+ const body={branchId:'branch-a',productId:pid,quantityDelta:-1.125,reason:'Valid breakage reconciliation'},key=next();
+ const first=await x.write('a','inventory/adjustments',body,{key});
+ assert.equal(first.status,201,first.body.error);
+ const retry=await x.write('a','inventory/adjustments',body,{key});
+ assert.deepEqual(retry.body,first.body);
+ assert.throws(()=>desktopStockP6.applyStockDelta(1,-2));
+ const negative=await x.write('a','inventory/adjustments',{...body,quantityDelta:-2},{key:next()});
+ assert.equal(negative.status,409);
+ const stock=await x.get('a','inventory?branchId=branch-a');
+ assert.equal(stock.body.stock.find(p=>p.productId===pid).quantity,expected.after,
+   'failed negative adjustment and retry cannot double-consume remaining stock');
+
+ }finally{x.close();}
+});
+
+test('cash-040/nominal cash-initial-balance-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('cash-initial-balance-v4');
+ assert.equal(fixture.scenarioId,'cash-040/nominal');
+ const x=await setup();try{
+
+ const vector=desktopCashP6.calculateCashClosing({initialCashCents:2000,countedByMethod:{CASH:2000}});
+ assert.equal(vector.expectedCashCents,2000);
+ assert.equal(vector.status,'balanced');
+ const opened=await x.write('a','cash/open',{branchId:'branch-a',openingCents:2000});
+ assert.equal(opened.status,201,opened.body.error);
+ const state=await x.get('a','cash?branchId=branch-a');
+ assert.equal(state.status,200,state.body.error);
+ assert.equal(state.body.session.expectedCashCents,vector.expectedCashCents);
+ const row=await x.db.prepare('SELECT opening_cents AS cents FROM cash_sessions WHERE id=?').bind(opened.body.session.id).first();
+ assert.equal(row.cents,vector.expectedCashCents,'cash opening stored at exactly the original desktop cent amount');
+
+ }finally{x.close();}
+});
+
+test('cash-040/authorization cash-open-rbac-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('cash-open-rbac-v4');
+ assert.equal(fixture.scenarioId,'cash-040/authorization');
+ const x=await setup();try{
+
+ p6Policy('cash.open','READ_ONLY');
+ const denied=await x.write('a','cash/open',{branchId:'branch-a',openingCents:2000},{who:x.viewer});
+ assert.equal(denied.status,403);
+ const before=await x.db.prepare('SELECT COUNT(*) AS n FROM cash_sessions WHERE tenant_id=?').bind('a').first();
+ assert.equal(before.n,0);
+ const accepted=await x.write('a','cash/open',{branchId:'branch-a',openingCents:2000});
+ assert.equal(accepted.status,201,accepted.body.error);
+ const after=await x.db.prepare('SELECT COUNT(*) AS n FROM cash_sessions WHERE tenant_id=?').bind('a').first();
+ assert.equal(after.n,1,'only owner with original desktop cash.open capability creates a cash session');
+
+ }finally{x.close();}
+});
+
+test('cash-040/tenant-isolation cash-cross-tenant-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('cash-cross-tenant-v4');
+ assert.equal(fixture.scenarioId,'cash-040/tenant-isolation');
+ const x=await setup();try{
+
+ const opened=await x.write('a','cash/open',{branchId:'branch-a',openingCents:2000});
+ assert.equal(opened.status,201);
+ const hidden=await x.get('b','cash?branchId=branch-b',x.other);
+ assert.equal(hidden.status,200);
+ assert.equal(hidden.body.session,null);
+ const foreign=await x.get('a','cash?branchId=branch-b');
+ assert.equal(foreign.status,404);
+ const row=await x.db.prepare('SELECT tenant_id AS tenant,opening_cents AS cents FROM cash_sessions WHERE id=?').bind(opened.body.session.id).first();
+ assert.deepEqual({tenant:row.tenant,cents:row.cents},{tenant:'a',cents:2000},
+   'the original desktop drawer amount cannot escape its tenant scope');
+
+ }finally{x.close();}
+});
+
+test('cash-040/failure-recovery cash-single-drawer-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('cash-single-drawer-v4');
+ assert.equal(fixture.scenarioId,'cash-040/failure-recovery');
+ const x=await setup();try{
+
+ const baseline=desktopCashP6.calculateCashClosing({initialCashCents:2000});
+ assert.equal(baseline.expectedCashCents,2000);
+ const body={branchId:'branch-a',openingCents:2000},key=next();
+ const open=await x.write('a','cash/open',body,{key});
+ assert.equal(open.status,201,open.body.error);
+ const replay=await x.write('a','cash/open',body,{key});
+ assert.deepEqual(replay.body,open.body);
+ const another=await x.write('a','cash/open',body,{key:next()});
+ assert.equal(another.status,409);
+ const row=await x.db.prepare("SELECT COUNT(*) AS n FROM cash_sessions WHERE tenant_id='a' AND branch_id='branch-a' AND status='OPEN'").bind().first();
+ assert.equal(row.n,1,'duplicate terminal opening cannot create two authoritative drawers');
+
+ }finally{x.close();}
+});
+
+test('history-033/nominal sale-history-status-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('sale-history-status-v4');
+ assert.equal(fixture.scenarioId,'history-033/nominal');
+ const x=await setup();try{
+
+ const a=await x.write('a','sales',{branchId:'branch-a'}),b=await x.write('a','sales',{branchId:'branch-a'});
+ assert.equal(a.status,201);
+ assert.equal(b.status,201);
+ const suspend=await x.write('a','sales/'+a.body.sale.id+'/suspend',{branchId:'branch-a'});
+ assert.equal(suspend.status,200,suspend.body.error);
+ const listed=await x.get('a','sales/history?branchId=branch-a');
+ assert.equal(listed.status,200,listed.body.error);
+ const statuses=new Set(listed.body.history.items.map(row=>row.status));
+ assert.deepEqual([...statuses].sort(),['OPEN','SUSPENDED'],
+   'desktop sale-service OPEN/SUSPENDED state persists into canonical history');
+ const original=await x.db.prepare('SELECT COUNT(*) AS n FROM sales WHERE tenant_id=?').bind('a').first();
+ assert.equal(original.n,2);
+
+ }finally{x.close();}
+});
+
+test('history-033/authorization sale-history-read-rbac-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('sale-history-read-rbac-v4');
+ assert.equal(fixture.scenarioId,'history-033/authorization');
+ const x=await setup();try{
+
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ assert.equal(opened.status,201);
+ const readOnly=await x.get('a','sales/history?branchId=branch-a',x.viewer);
+ assert.equal(readOnly.status,200,'desktop READ_ONLY profile grants sales.view');
+ p6Policy('sales.view','KITCHEN');
+ await x.db.prepare('UPDATE tenant_memberships SET profile_key=? WHERE tenant_id=? AND user_id=?').bind('KITCHEN','a','viewer').run();
+ const denied=await x.get('a','sales/history?branchId=branch-a',x.viewer);
+ assert.equal(denied.status,403);
+ const rows=await x.db.prepare('SELECT COUNT(*) AS n FROM sales WHERE tenant_id=?').bind('a').first();
+ assert.equal(rows.n,1,'read access policy cannot mutate the desktop sale history');
+
+ }finally{x.close();}
+});
+
+test('history-033/tenant-isolation sale-history-tenant-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('sale-history-tenant-v4');
+ assert.equal(fixture.scenarioId,'history-033/tenant-isolation');
+ const x=await setup();try{
+
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ assert.equal(opened.status,201);
+ const foreign=await x.get('b','sales/history?branchId=branch-b',x.other);
+ assert.equal(foreign.status,200);
+ assert.equal(foreign.body.history.total,0);
+ const wrongBranch=await x.get('a','sales/history?branchId=branch-b');
+ assert.equal(wrongBranch.status,404);
+ const correct=await x.get('a','sales/history?branchId=branch-a');
+ assert.equal(correct.body.history.total,1);
+ const persisted=await x.db.prepare('SELECT tenant_id AS tenant FROM sales WHERE id=?').bind(opened.body.sale.id).first();
+ assert.equal(persisted.tenant,'a','desktop sale journal remains on the original company');
+
+ }finally{x.close();}
+});
+
+test('history-033/failure-recovery sale-history-resume-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('sale-history-resume-v4');
+ assert.equal(fixture.scenarioId,'history-033/failure-recovery');
+ const x=await setup();try{
+
+ const mutation=next(),payload={branchId:'branch-a'};
+ const opened=await x.write('a','sales',payload,{key:mutation});
+ assert.equal(opened.status,201);
+ const replay=await x.write('a','sales',payload,{key:mutation});
+ assert.deepEqual(replay.body,opened.body);
+ const first=await x.get('a','sales/history?branchId=branch-a');
+ const second=await x.get('a','sales/history?branchId=branch-a');
+ assert.deepEqual(second.body,first.body,'history recovery after repeated read is stable and side-effect-free');
+ const count=await x.db.prepare('SELECT COUNT(*) AS n FROM sales WHERE tenant_id=?').bind('a').first();
+ assert.equal(count.n,1,'retried sale opening cannot duplicate persisted original-desktop history');
+
+ }finally{x.close();}
+});
+
+test('checkout-010/nominal price-override-recalculate-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('price-override-recalculate-v4');
+ assert.equal(fixture.scenarioId,'checkout-010/nominal');
+ const x=await setup();try{
+
+ p6Policy('sales.discount');
+ const pid=await x.id('Price override case','PRICE-NOM',5);
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ const sid=opened.body.sale.id;
+ const added=await x.write('a','sales/'+sid+'/items',{branchId:'branch-a',productId:pid,quantity:2});
+ assert.equal(added.status,200,added.body.error);
+ const itemId=added.body.sale.items[0].id;
+ const response=await x.write('a','sales/'+sid+'/items/'+itemId+'/price',
+   {branchId:'branch-a',unitPriceCents:850,reason:'Price approved for customer'},{method:'PUT'});
+ assert.equal(response.status,200,response.body.error);
+ const original=desktopPricing.calculateSaleTotals({items:[{unitPriceCents:850,quantity:2}]});
+ assert.equal(response.body.sale.totalCents,original.totalCents,'authorized price override recalculates with pinned desktop pricing.js');
+ const ledger=await x.db.prepare('SELECT old_price_cents AS before,new_price_cents AS after FROM sale_item_price_overrides WHERE sale_id=?').bind(sid).first();
+ assert.deepEqual({before:ledger.before,after:ledger.after},{before:1000,after:850});
+
+ }finally{x.close();}
+});
+
+test('checkout-010/authorization price-override-rbac-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('price-override-rbac-v4');
+ assert.equal(fixture.scenarioId,'checkout-010/authorization');
+ const x=await setup();try{
+
+ p6Policy('sales.discount','READ_ONLY');
+ const pid=await x.id('Override denied','PRICE-AUTH',3);
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ const sid=opened.body.sale.id;
+ const added=await x.write('a','sales/'+sid+'/items',{branchId:'branch-a',productId:pid,quantity:1});
+ const itemId=added.body.sale.items[0].id;
+ const payload={branchId:'branch-a',unitPriceCents:850,reason:'Authorized pricing change'};
+ const denied=await x.write('a','sales/'+sid+'/items/'+itemId+'/price',payload,{who:x.viewer,method:'PUT'});
+ assert.equal(denied.status,403);
+ const original=desktopPricing.calculateSaleTotals({items:[{unitPriceCents:1000,quantity:1}]});
+ const saved=await x.get('a','sales/'+sid+'?branchId=branch-a');
+ assert.equal(saved.body.sale.totalCents,original.totalCents,'unauthorized actor cannot change original desktop price');
+ const ledger=await x.db.prepare('SELECT COUNT(*) AS n FROM sale_item_price_overrides WHERE sale_id=?').bind(sid).first();
+ assert.equal(ledger.n,0);
+
+ }finally{x.close();}
+});
+
+test('checkout-010/tenant-isolation price-override-tenant-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('price-override-tenant-v4');
+ assert.equal(fixture.scenarioId,'checkout-010/tenant-isolation');
+ const x=await setup();try{
+
+ const pid=await x.id('Owner-only price','PRICE-TENANT',3);
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ const sid=opened.body.sale.id;
+ const added=await x.write('a','sales/'+sid+'/items',{branchId:'branch-a',productId:pid,quantity:1});
+ const itemId=added.body.sale.items[0].id;
+ const foreign=await x.write('b','sales/'+sid+'/items/'+itemId+'/price',
+   {branchId:'branch-b',unitPriceCents:850,reason:'Attempt foreign discount'},{who:x.other,method:'PUT'});
+ assert.equal(foreign.status,404);
+ const saved=await x.get('a','sales/'+sid+'?branchId=branch-a');
+ assert.equal(saved.body.sale.totalCents,desktopPricing.calculateSaleTotals({items:[{unitPriceCents:1000,quantity:1}]}).totalCents);
+ const audit=await x.db.prepare('SELECT COUNT(*) AS n FROM sale_item_price_overrides WHERE sale_id=?').bind(sid).first();
+ assert.equal(audit.n,0,'foreign tenant cannot change price or create audit entries in another company');
+
+ }finally{x.close();}
+});
+
+test('checkout-010/failure-recovery price-override-retry-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('price-override-retry-v4');
+ assert.equal(fixture.scenarioId,'checkout-010/failure-recovery');
+ const x=await setup();try{
+
+ const pid=await x.id('Audited retry pricing','PRICE-RETRY',3);
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ const sid=opened.body.sale.id;
+ const added=await x.write('a','sales/'+sid+'/items',{branchId:'branch-a',productId:pid,quantity:1});
+ const itemId=added.body.sale.items[0].id;
+ const path='sales/'+sid+'/items/'+itemId+'/price';
+ const body={branchId:'branch-a',unitPriceCents:850,reason:'Repeatable audited manager change'},key=next();
+ const first=await x.write('a',path,body,{method:'PUT',key});
+ assert.equal(first.status,200,first.body.error);
+ const again=await x.write('a',path,body,{method:'PUT',key});
+ assert.deepEqual(again.body,first.body);
+ const bad=await x.write('a',path,{...body,reason:'a'},{method:'PUT',key:next()});
+ assert.equal(bad.status,400);
+ const ledger=await x.db.prepare('SELECT COUNT(*) AS n FROM sale_item_price_overrides WHERE sale_id=?').bind(sid).first();
+ assert.equal(ledger.n,1,'replay and invalid request cannot duplicate immutable price change audit');
+ assert.equal(first.body.sale.totalCents,desktopPricing.calculateSaleTotals({items:[{unitPriceCents:850,quantity:1}]}).totalCents);
+
+ }finally{x.close();}
+});
