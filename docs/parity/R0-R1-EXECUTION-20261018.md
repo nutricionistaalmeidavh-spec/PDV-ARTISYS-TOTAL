@@ -19,7 +19,7 @@ Origem somente leitura: PDV-ARTISYS @ `7efea9c61f75be1536a1e516e917218f2b8bf2bf`
 | cap-008 | Combos promocionais | Componentes de kits/combos presentes | Falta verificar todos os fluxos editáveis do desktop |
 | cap-011 | Ledger de estoque/alertas | products-021 e products-027 cobertos | Capacidade completa, alertas e casos E2E sem certificação individual |
 | cap-012 | Checkout/múltiplos meios manuais | checkout-008 coberto; regra de preço canônica | Comparação de toda a capacidade e exceções não concluída |
-| cap-013 | Observações e impressão não fiscal | Observação de item e impressão via web/bridge | checkout-017/018 parciais; equipamento físico não homologado |
+| cap-013 | Observações e impressão não fiscal | Observação de item e impressão via web/bridge | checkout-017/018 parciais; prova automatizada de driver/protocolo ainda pendente |
 | cap-014 | Abrir, suprir, sangrar e fechar caixa | cash-040/041/042 cobertos | Revisão/certificação completa da capacidade, diferença de terminal e falhas não encerradas |
 | cap-015 | Histórico, devolução e reversão | Serviço de devoluções e compensação transacional | history-037/038 parciais |
 | cap-016 | Contas a pagar/receber | finance-047/048 cobertos | Paridade exaustiva de conta, quitação e autorizações sem certificado |
@@ -31,7 +31,7 @@ Origem somente leitura: PDV-ARTISYS @ `7efea9c61f75be1536a1e516e917218f2b8bf2bf`
 | cap-022 | Retomar pedidos/comandas sem redigitar | Abertura de vendas e vínculo com pedidos já existem | Fluxo completo entre segmentos + prova independente |
 | cap-023 | Atacado e preços por quantidade | API e UI atacado existentes | checkout-011/012 parciais; provas de cliente/vendedor |
 | cap-024 | Políticas atacado/crédito | Serviços de crédito com limite e política comercial | checkout-013 parcial, estorno e relatórios |
-| cap-040 | Varejo/variantes/código de barras | Produto variante + leitor HID simulados | products-025/031 parciais; leitor físico/estoque variável |
+| cap-040 | Varejo/variantes/código de barras | Produto variante + leitor HID simulados | products-025/031 parciais; teste de contrato do leitor HID e estoque variável |
 | cap-052 | Importação CSV/XLSX | Importação CSV com prévia, código XLSX web | products-032 parcial; paridade de importações e lotes grandes |
 
 **Leitura correta:** presença dos módulos acima é inspeção estática e testes parciais do repositório; não é afirmação de que foram copiados integralmente. O relatório R0 automatizado contém os caminhos dos testes e contratos para cada item.
@@ -51,7 +51,7 @@ Origem somente leitura: PDV-ARTISYS @ `7efea9c61f75be1536a1e516e917218f2b8bf2bf`
 1. Para cada ID listado, identificar todos os subfluxos desktop não cobertos; não repetir trabalho já executado.
 2. Corrigir os bloqueios por domínio/segmento, comprovando UI → autorização → API → SQLite/D1 → estoque/caixa/financeiro, sem dados paralelos.
 3. Executar casos nominal, autorização, isolamento de empresa e falha/recuperação no mesmo caso desktop fixado.
-4. Evidência física apenas quando o comportamento envolve equipamento real; evidências estáticas não promovem `gap` a `covered`.
+4. Em fluxos com hardware, usar dispositivos emulados e testes de falha/reconexão; testes físicos não fazem parte da conclusão de código.
 5. Atualizar `desktop-capability-inventory.json` somente após gates de certificação; passar CI por si só não justifica mudança.
 
 **Custo obrigatório:** R$ 0, open source, self-hosted (Node 22 + SQLite). Cloudflare Free é opção, serviços pagos nunca são dependência oculta.
@@ -63,7 +63,7 @@ A mesma proteção foi aplicada a **alterar quantidade de item**, **remover item
 
 Os testes usam a API real e SQLite: alteração de 1→2→3 com repetição atrasada de 2; desconto de 100→300 centavos com replay de 100; remoção/reinclusão do produto com replay da remoção. Eles também verificam as entradas de deduplicação persistidas. Nenhum segundo estado de carrinho nem migration SQL foi criado.
 
-**Limite:** replay de requisição com mesma chave está coberto, mas a certificação completa de todas as capacidades R1 continua exigindo os demais cenários do desktop, testes de dispositivo/conectividade onde pertinentes e revisão.
+**Limite:** replay de requisição com mesma chave está coberto, mas a certificação completa de todas as capacidades R1 continua exigindo os demais cenários do desktop, testes automatizados de dispositivo/conectividade onde pertinentes e revisão.
 
 
 ## Incremento R1 — importação XLSX confiável e identidade do lote (cap-052)
