@@ -85,7 +85,9 @@ export function createVerticalService(db){
  async function price(t,b,productId,quantity){
    const productRow=await product(t,productId),milli=qty(quantity);
    const tier=await first('SELECT id,min_quantity_milli,unit_price_cents FROM wholesale_tiers WHERE tenant_id=? AND branch_id=? AND product_id=? AND active=1 AND min_quantity_milli<=? ORDER BY min_quantity_milli DESC LIMIT 1',t,b,productId,milli);
-   return {productId,productName:productRow.name,quantity:milli/1000,unitPriceCents:tier?.unit_price_cents??productRow.sale_price_cents,
+   const unitPriceCents=tier?.unit_price_cents??productRow.sale_price_cents;
+   return {productId,productName:productRow.name,quantity:milli/1000,unitPriceCents,
+     totalCents:Math.round(unitPriceCents*milli/1000),
      baseUnitPriceCents:productRow.sale_price_cents,tierId:tier?.id||null,minQuantity:(tier?.min_quantity_milli||0)/1000};
  }
  return {
@@ -384,7 +386,32 @@ export function createVerticalService(db){
      });
    },
    async wholesalePrice(t,b,productId,quantity){await branchExists(t,b);return price(t,b,productId,quantity);},
-   async wholesaleOrders(t,b){await branchExists(t,b);return all('SELECT id,customer_id AS customerId,status,total_cents AS totalCents,sale_id AS saleId,created_at AS createdAt FROM wholesale_orders WHERE tenant_id=? AND branch_id=? ORDER BY created_at DESC LIMIT 100',t,b);},
+   async wholesaleOrders(t,b){
+     await branchExists(t,b);
+     const orders=await all(`SELECT o.id,o.customer_id AS customerId,c.name AS customerName,
+       o.status,o.total_cents AS totalCents,o.sale_id AS saleId,o.fulfillment AS fulfillmentType,
+       o.expected_at AS expectedAt,o.created_at AS createdAt
+       FROM wholesale_orders o JOIN customers c ON c.tenant_id=o.tenant_id AND c.id=o.customer_id
+       WHERE o.tenant_id=? AND o.branch_id=? ORDER BY o.created_at DESC,o.id DESC LIMIT 100`,t,b);
+     if(!orders.length)return [];
+     // Fetch all visible line snapshots in one query (no N+1 or independent stock).
+     const ids=orders.map(o=>o.id),placeholders=ids.map(()=>'?').join(',');
+     const lines=await all(`SELECT i.order_id AS orderId,i.product_id AS productId,
+       p.name AS productName,i.quantity_milli / 1000.0 AS quantity,
+       i.unit_price_cents AS unitPriceCents,i.tier_id AS tierId
+       FROM wholesale_order_items i JOIN products p ON p.tenant_id=i.tenant_id AND p.id=i.product_id
+       WHERE i.tenant_id=? AND i.branch_id=? AND i.order_id IN (${placeholders})
+       ORDER BY i.rowid`,t,b,...ids);
+     const byOrder=new Map(orders.map(order=>[order.id,[]]));
+     for(const line of lines)byOrder.get(line.orderId)?.push({
+       productId:line.productId,productName:line.productName,quantity:line.quantity,
+       pendingQuantity:line.quantity,unitPriceCents:line.unitPriceCents,
+       pricingSnapshot:line.tierId?{tierId:line.tierId}:null
+     });
+     return orders.map(order=>({...order,items:byOrder.get(order.id).map(item=>({
+       ...item,pendingQuantity:order.status==='FULFILLED'?0:item.quantity
+     }))}));
+   },
    wholesaleOrder:loadWholesale,
    async wholesaleQuote(t,b,user,body,key){
      await branchExists(t,b);const cust=await customer(t,body.customerId);
