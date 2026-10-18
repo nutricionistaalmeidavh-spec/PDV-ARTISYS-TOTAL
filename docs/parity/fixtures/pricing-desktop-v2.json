@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "desktop": {
+    "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+    "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+    "sourcePath": "js/domains/sales/pricing.js",
+    "sourceBlobSha": "165bfb0af4aa4764474f421cc04f0c32f1b71fb8"
+  },
+  "description": "Pinned reference behavior from the original desktop sale pricing module; exact CJS Git blob is tested.",
+  "cases": [
+    {
+      "id": "desktop-price-standard",
+      "method": "calculateSaleTotals",
+      "input": {
+        "items": [
+          {
+            "unitPriceCents": 1999,
+            "quantity": 2
+          },
+          {
+            "unitPriceCents": 500,
+            "quantity": 1
+          }
+        ],
+        "discountCents": 499
+      },
+      "expected": {
+        "subtotalCents": 4498,
+        "discountCents": 499,
+        "totalCents": 3999
+      }
+    },
+    {
+      "id": "desktop-price-clamp",
+      "method": "calculateSaleTotals",
+      "input": {
+        "items": [
+          {
+            "unitPriceCents": 1000,
+            "quantity": 1
+          }
+        ],
+        "discountCents": 1500
+      },
+      "expected": {
+        "subtotalCents": 1000,
+        "discountCents": 1000,
+        "totalCents": 0
+      }
+    },
+    {
+      "id": "desktop-price-weight",
+      "method": "calculateSaleTotals",
+      "input": {
+        "items": [
+          {
+            "unitPriceCents": 99,
+            "quantity": 1.5
+          },
+          {
+            "unitPriceCents": 1000,
+            "quantity": 0.5
+          }
+        ],
+        "discountCents": 99
+      },
+      "expected": {
+        "subtotalCents": 649,
+        "discountCents": 99,
+        "totalCents": 550
+      }
+    },
+    {
+      "id": "desktop-price-negative",
+      "method": "calculateSaleTotals",
+      "input": {
+        "items": [],
+        "discountCents": -1
+      },
+      "throws": {
+        "name": "Error",
+        "message": "Desconto nao pode ser negativo."
+      }
+    },
+    {
+      "id": "desktop-price-quantity",
+      "method": "calculateSaleTotals",
+      "input": {
+        "items": [
+          {
+            "unitPriceCents": 100,
+            "quantity": 0
+          }
+        ],
+        "discountCents": 0
+      },
+      "throws": {
+        "name": "Error",
+        "message": "Quantidade deve ser maior que zero."
+      }
+    },
+    {
+      "id": "desktop-price-allocate",
+      "method": "allocateSaleDiscount",
+      "input": {
+        "items": [
+          {
+            "unitPriceCents": 100,
+            "quantity": 1
+          },
+          {
+            "unitPriceCents": 100,
+            "quantity": 1
+          },
+          {
+            "unitPriceCents": 100,
+            "quantity": 1
+          }
+        ],
+        "discountCents": 100
+      },
+      "expectedAllocations": [
+        {
+          "grossCents": 100,
+          "allocatedDiscountCents": 33,
+          "netTotalCents": 67
+        },
+        {
+          "grossCents": 100,
+          "allocatedDiscountCents": 34,
+          "netTotalCents": 66
+        },
+        {
+          "grossCents": 100,
+          "allocatedDiscountCents": 33,
+          "netTotalCents": 67
+        }
+      ]
+    }
+  ]
+}
