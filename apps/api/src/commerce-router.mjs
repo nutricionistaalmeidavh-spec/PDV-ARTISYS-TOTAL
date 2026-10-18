@@ -420,7 +420,7 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
       }
       if(parts.length===3&&parts[2]==='discount'&&method==='POST'){
         requireAccess(member,'sales.discount',user);
-        return json({sale:await service.discount(tenant,branch,id,body.discountCents)});
+        return json({sale:await service.discount(tenant,branch,id,body.discountCents,key)});
       }
       if(parts.length===3&&parts[2]==='suspend'&&method==='POST')
         return json({sale:await service.transition(tenant,branch,id,'SUSPENDED',key)});
