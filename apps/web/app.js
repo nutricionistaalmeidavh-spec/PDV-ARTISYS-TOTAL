@@ -319,7 +319,8 @@
   }
 
   async function renderRoute() {
-    if (routeRegistry.has(state.route)) return routeRegistry.render(state.route, { state });
+    if (routeRegistry.has(state.route)) return routeRegistry.render(state.route, { state,
+      navigationScope:String(api.tenantId||'')+'|'+String(api.branchId||'')+'|'+String(state.user?.id||'') });
     return renderPlaceholder(state.route);
   }
 
