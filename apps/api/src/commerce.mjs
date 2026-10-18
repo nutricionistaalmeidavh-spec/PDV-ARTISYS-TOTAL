@@ -898,7 +898,8 @@ export function createCommerceService(db,{now=nowISO}={}){
         s.status,COALESCE((SELECT SUM(r.amount_cents) FROM sale_returns r
           WHERE r.tenant_id=s.tenant_id AND r.branch_id=s.branch_id AND r.sale_id=s.id),0) AS refundedCents
         FROM sales s WHERE s.tenant_id=? AND s.branch_id=? AND s.status IN('COMPLETED','CANCELLED')
-        AND s.completed_at BETWEEN ? AND ? ORDER BY s.completed_at,s.id LIMIT 3000`,tenant,branch,a,b);
+        AND s.completed_at BETWEEN ? AND ? ORDER BY s.completed_at,s.id LIMIT 3001`,tenant,branch,a,b);
+      if(rows.length>3000)throw error(413,'Mais de 3000 vendas. Divida o período para exportar sem truncamento.');
       const cell=value=>'"'+String(value??'').replace(/"/g,'""').replace(/^[=+@-]/,"'")+'"';
       return '\uFEFF'+'Venda;Data;Total (R$);Desconto (R$);Operador;Status;Reembolsado (R$);Liquido acumulado (R$)\r\n'+
         rows.map(x=>[x.saleNumber,x.completedAt,(x.totalCents/100).toFixed(2).replace('.',','),
