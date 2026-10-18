@@ -6,7 +6,7 @@
   const { ApiClient } = window.PdvApiClient;
   const api = new ApiClient();
   const routeRegistry = window.PdvRouteRegistry;
-  const WEB_ROUTES=new Set(['home','checkout','products','inventory','sales','cash','finance','finance-banks','finance-recurrences','management','reports','customers','suppliers','sellers','FOOD','WHOLESALE','credit','commissions']);
+  const WEB_ROUTES=new Set(['home','checkout','products','inventory','sales','cash','finance','finance-banks','finance-recurrences','management','reports','settings','customers','suppliers','sellers','FOOD','WHOLESALE','credit','commissions']);
   if (!routeRegistry) throw new Error('PdvRouteRegistry must load before app.js.');
 
   const ROUTES = {
