@@ -367,3 +367,28 @@ test('R4 cap-009: recipe versioned consumption uses canonical inventory sale led
    assert.equal(snapshot.version,2);
  }finally{x.close();}
 });
+
+test('R4 cap-037/038: counter ticket daily sequence and delivery courier events use same order',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'R4TICKET',name:'Salgado',salePriceCents:900,trackStock:false})).body.product;
+   const key=crypto.randomUUID();
+   const one=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'COUNTER',useTicket:true,items:[{productId:p.id,quantity:1}]},{key});
+   assert.equal(one.status,201,JSON.stringify(one.body));
+   assert.equal(one.body.order.ticketNumber,1);
+   assert.equal(one.body.order.serviceChannel,'COUNTER');
+   const replay=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'COUNTER',useTicket:true,items:[{productId:p.id,quantity:1}]},{key});
+   assert.equal(replay.body.order.id,one.body.order.id);
+   const two=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',useTicket:true,items:[{productId:p.id,quantity:1}]});
+   assert.equal(two.body.order.ticketNumber,2);
+   const delivery=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'DELIVERY',address:'Rua Alfa, 100',
+       items:[{productId:p.id,quantity:1}]});
+   assert.equal(delivery.status,201,JSON.stringify(delivery.body));
+   const oid=delivery.body.order.id,global=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets.find(x=>x.orderId===oid);
+   assert.equal((await x.request('a',`restaurant/kitchen/${global.id}`,'PATCH',{branchId:'filial-a',status:'PREPARING'})).status,200);
+   assert.equal((await x.request('a',`restaurant/kitchen/${global.id}`,'PATCH',{branchId:'filial-a',status:'READY'})).status,200);
+   assert.equal((await x.request('a',`restaurant/orders/${oid}/deliver`,'POST',{branchId:'filial-a'})).status,409);
+   assert.equal((await x.request('a',`restaurant/orders/${oid}/dispatch`,'POST',{branchId:'filial-a',courierName:'Entregador próprio'})).status,200);
+   assert.equal((await x.request('a',`restaurant/orders/${oid}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM restaurant_orders WHERE tenant_id=?').bind('a').first()).n,3);
+ }finally{x.close();}
+});
