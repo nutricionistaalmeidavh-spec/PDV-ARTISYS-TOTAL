@@ -5,7 +5,7 @@ import {applyLocalMigrations} from '../src/local-migrations.mjs';
 import {createApi} from '../src/worker.mjs';
 import {hashPassword} from '../src/password.mjs';
 
-test('R2: hashed one-use pairing, branch+operator scope, revocation, read-only and tenant isolation', async t=>{
+test('cap-046 R2: hashed one-use pairing, branch+operator scope, revocation, read-only and tenant isolation', async t=>{
   const db=openLocalDatabase(':memory:');
   t.after(()=>db.close());
   await applyLocalMigrations(db);
@@ -84,7 +84,7 @@ test('R2: hashed one-use pairing, branch+operator scope, revocation, read-only a
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},owner)).status,200);
 });
 
-test('R2: pilot readiness stays incomplete until explicit evidence, with isolated persisted entries',async t=>{
+test('cap-055 R2: pilot readiness stays incomplete until explicit evidence, with isolated persisted entries',async t=>{
   const db=openLocalDatabase(':memory:');
   t.after(()=>db.close());
   await applyLocalMigrations(db);
@@ -109,6 +109,11 @@ test('R2: pilot readiness stays incomplete until explicit evidence, with isolate
   const written=await r2LanRoute(mk('lan/readiness/restore-test','PATCH',{status:'READY',note:'Ensaio de recuperação em máquina isolada executado',evidenceRef:'qa/local-restore-001'}),db,owner,membership,'a','lan/readiness/restore-test');
   assert.equal(written.status,200);
   assert.equal((await written.json()).check.status,'READY');
+  const optional=await r2LanRoute(mk('lan/readiness'),db,owner,membership,'a','lan/readiness');
+  const optionalChecks=(await optional.json()).checks;
+  assert.equal(optionalChecks.find(c=>c.key==='lan-test').optional,true,
+    'physical two-machine QA cannot block code or the operational checklist');
+  assert.equal(optionalChecks.find(c=>c.key==='printer-test').optional,true);
   const other=await r2LanRoute(mk('lan/readiness'),db,owner,membership,'b','lan/readiness');
   assert.equal((await other.json()).checks.find(x=>x.key==='restore-test').status,'NOT_STARTED');
   const audit=await r2LanRoute(mk('lan/audit'),db,owner,membership,'a','lan/audit');
@@ -117,7 +122,7 @@ test('R2: pilot readiness stays incomplete until explicit evidence, with isolate
 });
 
 
-test('R2: support diagnostics ZIP contains no password, cookie, email or credentials',async t=>{
+test('cap-054 R2: support diagnostics ZIP contains no password, cookie, email or credentials',async t=>{
   const db=openLocalDatabase(':memory:');
   t.after(()=>db.close());
   await applyLocalMigrations(db);
@@ -145,7 +150,7 @@ test('R2: support diagnostics ZIP contains no password, cookie, email or credent
 });
 
 
-test('R2 optional modules: FOOD and WHOLESALE stay tenant-scoped, reversible and audited',async t=>{
+test('cap-010 R2 optional modules: FOOD and WHOLESALE stay tenant-scoped, reversible and audited',async t=>{
   const db=openLocalDatabase(':memory:');
   t.after(()=>db.close());
   await applyLocalMigrations(db);
