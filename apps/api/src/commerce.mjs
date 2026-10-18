@@ -1220,11 +1220,9 @@ export function createCommerceService(db,{now=nowISO}={}){
             const amount=Math.round(base*plan.bps/10000);
             const fee=await first("SELECT id,name,sku,track_stock AS tracked FROM products WHERE tenant_id=? AND id=? AND sku='SERVICE_CHARGE' AND active=1",tenant,plan.productId);
             if(!fee||fee.tracked||quoted.some(x=>x.productId===fee.id))throw error(409,'Produto de taxa de serviço inválido.');
-            if(amount>0)quoted.push({productId:fee.id,name:fee.name,sku:fee.sku,milli:1000,unitPriceCents:amount});
+            if(amount>0){const entry={productId:fee.id,name:fee.name,sku:fee.sku,milli:1000,unitPriceCents:amount};quoted.push(entry);restaurantChoices.push(entry);}
           }
         }
-        // Explicit service fee is also a priced child if its catalog line differs.
-        if(quoted.length>restaurantChoices.length)restaurantChoices.push(...quoted.slice(restaurantChoices.length));
         restaurantCheckout={tableSessionId:restaurantSessionId,orderId:restaurantOrderId,customerId:source.customerId||null};
       }
       const previewLines=restaurantCheckout?restaurantChoices:quoted;
@@ -1244,8 +1242,24 @@ export function createCommerceService(db,{now=nowISO}={}){
             id,tenant,branch,user,sellerId,restaurantCheckout.customerId,saleNumber,'OPEN',created,terminalId)
           :q('INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,sale_number,status,created_at,terminal_id) VALUES(?,?,?,?,?,?,?,?,?)',
             id,tenant,branch,user,sellerId,saleNumber,'OPEN',created,terminalId)];
-      for(const line of quoted)statements.push(q(`INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,id,line.productId,line.name,line.sku,line.milli,line.unitPriceCents,created));
+      for(const line of quoted){
+        const parentId=randomId();
+        statements.push(q(`INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?)`,parentId,tenant,branch,id,line.productId,line.name,line.sku,line.milli,line.unitPriceCents,created));
+        const choices=choiceGroups.get(line.productId)||[];
+        if(choices.length>1||choices.some(choice=>choice.configurationJson)){
+          if(choices.length>MAX_LINES)throw error(409,'Muitas configurações para uma única venda.');
+          const catalog=await first('SELECT sale_price_cents AS cents FROM products WHERE tenant_id=? AND id=?',tenant,line.productId);
+          for(const choice of choices){
+            const configuration=choice.configurationJson?JSON.parse(choice.configurationJson):{};
+            statements.push(q(`INSERT INTO sale_configured_lines
+              (id,tenant_id,branch_id,sale_id,sale_item_id,product_id,quantity_milli,
+               unit_price_cents,catalog_unit_price_cents,note,configuration_json,created_at)
+              VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,id,parentId,line.productId,
+              choice.milli,choice.unitPriceCents,catalog.cents,'',JSON.stringify(configuration),created));
+          }
+        }
+      }
       if(wholesaleId)statements.push(q('UPDATE wholesale_orders SET sale_id=?,updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND sale_id IS NULL',
         id,created,tenant,branch,wholesaleId));
       if(restaurantCheckout){
