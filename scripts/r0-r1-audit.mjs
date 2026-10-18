@@ -64,7 +64,7 @@ export function buildR0Audit(matrix,inventory,exists=path=>existsSync(resolve(ro
     schemaVersion:1,baseline:inventory.baseline?.commit||null,
     scope:'R0-full-inventory-and-R1-implementation-triage',
     summary:{all:tally(all),R1:tally(r1),contractsInternal:allContracts.length},
-    disclaimer:'Um arquivo existente nao prova equivalencia e um gap nao comprova ausencia de codigo. Nenhuma capacidade e promovida sem teste comparativo, revisao e homologacao.',
+    disclaimer:'Um arquivo existente nao prova equivalencia e um gap nao comprova ausencia de codigo. Nenhuma capacidade e promovida sem teste comparativo executavel e revisao de codigo; ensaio fisico nao e obrigatorio.',
     all,R1:r1
   };
 }
