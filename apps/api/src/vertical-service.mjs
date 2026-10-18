@@ -163,7 +163,7 @@ export function createVerticalService(db){
    },
    async foodOrders(t,b,fulfillment=''){await branchExists(t,b);
      const rows=await all(`SELECT * FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND (?='' OR fulfillment=?) ORDER BY created_at DESC LIMIT 100`,t,b,fulfillment,fulfillment);
-     return Promise.all(rows.map(async row=>({...row,items:await all('SELECT product_id AS productId,product_name AS name,quantity_milli / 1000.0 AS quantity,unit_price_cents AS unitPriceCents FROM restaurant_order_items WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,row.id)})));
+     return Promise.all(rows.map(async row=>({...row,items:await all('SELECT id,product_id AS productId,product_name AS name,quantity_milli / 1000.0 AS quantity,unit_price_cents AS unitPriceCents FROM restaurant_order_items WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,row.id)})));
    },
    async createFoodOrder(t,b,user,body,key){
      await branchExists(t,b);
