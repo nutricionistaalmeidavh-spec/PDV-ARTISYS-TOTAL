@@ -211,6 +211,7 @@
 
     categories(includeInactive = false) { return this.request(this.webMode?'/api/v1/products/categories':`/api/v1/categories${includeInactive ? '?includeInactive=true' : ''}`); }
     saveCategory(body) { return this.request(this.webMode?'/api/v1/products/categories':'/api/v1/categories', { method: 'POST', body }); }
+    renameCategory(id,name,mutationId){return this.request(`/api/v1/products/categories/${encodeURIComponent(id)}`,{method:'PATCH',body:{name},mutationId});}
     previewCatalogCsv(csv,mode='create'){return this.request('/api/v1/products/import/preview',{method:'POST',body:{csv,mode}});}
     commitCatalogCsv(csv,mutationId,mode='create',previewToken=null){
       return this.request('/api/v1/products/import/commit',{method:'POST',body:{csv,mode,...(previewToken?{previewToken}:{})},mutationId});
