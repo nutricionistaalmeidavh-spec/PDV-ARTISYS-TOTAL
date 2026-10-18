@@ -1177,7 +1177,7 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(!milli)throw error(400,'Quantidade inválida.');
       const note=body?.note??'';
       if(typeof note!=='string'||note.length>240||
-         /[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]/.test(note))
+         [...note].some(ch=>ch.charCodeAt(0)<32&&![9,10,13].includes(ch.charCodeAt(0))))
         throw error(400,'Observação inválida.');
       const cleaned=note.trim();
       const quote=await checkoutConfig.quote(tenant,branch,p.id,body);
