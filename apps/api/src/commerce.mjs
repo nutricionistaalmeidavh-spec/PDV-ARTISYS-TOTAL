@@ -904,6 +904,38 @@ export function createCommerceService(db,{now=nowISO}={}){
         products:[...products.values()].sort((x,y)=>y.grossCents-x.grossCents).slice(0,50),
         inventory,cash,finance};
     },
+    async dailySalesTrend(tenant,branch,{from,to}={}){
+      await branchExists(tenant,branch);
+      if(!from||!to)throw error(400,'Informe período para tendência.');
+      const {a,b}=period({from,to});
+      const start=Date.parse(from+'T00:00:00.000Z'),end=Date.parse(to+'T00:00:00.000Z');
+      const days=Math.round((end-start)/86400000)+1;
+      if(!Number.isSafeInteger(days)||days<1||days>90)
+        throw error(400,'A tendência permite de 1 a 90 dias por consulta.');
+      const [sales,returns]=await Promise.all([
+        all(`SELECT substr(completed_at,1,10) AS day,
+          COUNT(*) AS count,COALESCE(SUM(total_cents),0) AS grossCents
+          FROM sales WHERE tenant_id=? AND branch_id=? AND
+          status IN('COMPLETED','CANCELLED') AND completed_at BETWEEN ? AND ?
+          GROUP BY substr(completed_at,1,10)`,tenant,branch,a,b),
+        all(`SELECT substr(created_at,1,10) AS day,
+          COALESCE(SUM(amount_cents),0) AS refundedCents
+          FROM sale_returns WHERE tenant_id=? AND branch_id=? AND created_at BETWEEN ? AND ?
+          GROUP BY substr(created_at,1,10)`,tenant,branch,a,b)
+      ]);
+      const byDay=new Map();
+      for(const row of sales)byDay.set(row.day,{count:Number(row.count),grossCents:Number(row.grossCents),refundedCents:0});
+      for(const row of returns){
+        const record=byDay.get(row.day)||{count:0,grossCents:0,refundedCents:0};
+        record.refundedCents=Number(row.refundedCents);byDay.set(row.day,record);
+      }
+      const points=Array.from({length:days},(_,index)=>{
+        const date=new Date(start+index*86400000).toISOString().slice(0,10);
+        const value=byDay.get(date)||{count:0,grossCents:0,refundedCents:0};
+        return {date,...value,netCents:value.grossCents-value.refundedCents};
+      });
+      return {period:{from,to},source:'CANONICAL_COMPLETIONS_AND_RETURNS',points};
+    },
     async compareReports(tenant,branch,{from,to,compareFrom,compareTo}={}){
       if(!from||!to||!compareFrom||!compareTo)
         throw error(400,'Informe as duas datas inicial e final de cada período.');
