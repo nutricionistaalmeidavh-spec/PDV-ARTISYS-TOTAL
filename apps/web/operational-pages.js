@@ -72,11 +72,13 @@
       ${recent.map(m=>`<tr><td>${when(m.occurredAt||m.occurred_at)}</td><td>${escapeHtml(balances.find(p=>p.productId===(m.productId||m.product_id))?.name||m.productId||m.product_id)}</td><td>${qty(m.quantityDelta??m.delta_milli/1000)}</td><td>${escapeHtml(m.reason||'—')}</td></tr>`).join('')||'<tr><td colspan="4">Nenhuma movimentação.</td></tr>'}
       </tbody></table></div></section>
       <section class="ops-card"><h2>Recebimentos identificados por lote</h2>
-      <p>Histórico de entrada e validade. O saldo disponível continua sendo por produto;
-      ainda não existe baixa por lote ou cálculo de saldo individual.</p>
-      <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Produto</th><th>Lote</th><th>Recebido</th><th>Validade</th></tr></thead>
+      <p>O saldo físico continua sendo controlado pelo estoque canônico por produto.
+      Os lotes rastreados exibem saldo identificado após entradas, vendas, devoluções,
+      contagens e transferências. Entradas anteriores à migração continuam históricas
+      até receberem conciliação física; não são presumidas como disponíveis.</p>
+      <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Produto</th><th>Lote</th><th>Recebido</th><th>Saldo rastreado</th><th>Validade</th></tr></thead>
       <tbody>${lots.map(l=>`<tr><td>${escapeHtml(l.productName)}</td><td>${escapeHtml(l.lotCode)}</td>
-        <td>${qty(l.receivedQuantity)}</td><td>${escapeHtml(l.expiresAt||'—')}</td></tr>`).join('')||'<tr><td colspan="4">Nenhum recebimento com lote cadastrado.</td></tr>'}
+        <td>${qty(l.receivedQuantity)}</td><td>${l.tracked?qty(l.trackedBalance):'Não conciliado'}</td><td>${escapeHtml(l.expiresAt||'—')}</td></tr>`).join('')||'<tr><td colspan="5">Nenhum recebimento com lote cadastrado.</td></tr>'}
       </tbody></table></div></section>`;
     if(!routeActive('inventory'))return;
     content.innerHTML=page('Estoque','Movimentações e inventário contados no banco autoritativo.',body);
