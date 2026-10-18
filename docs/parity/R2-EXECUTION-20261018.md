@@ -19,7 +19,7 @@ a API de pareamento está indisponível fora de LAN_MODE=true.
 - Toda operação comercial em LAN exige sessão válida, credencial de
   dispositivo ativa e filial correspondente. Revogar o dispositivo
   bloqueia a próxima venda, ajuste de estoque, caixa e comando de cozinha.
-- PWA canônica: tela de rede, pareamento, QR offline gerado pelo código
+- PWA canônica: tela de rede, módulos opcionais, pareamento, QR offline gerado pelo código
   compartilhado, revogação, checklist de homologação e diagnóstico ZIP.
 - Pacote ZIP sanitizado inclui somente estatísticas, nomes de migrações
   e ações administrativas sem IP, atores, cookies, senhas ou credenciais.
@@ -35,7 +35,7 @@ a API de pareamento está indisponível fora de LAN_MODE=true.
 | cap-001 | Servidor local Node/SQLite | Instalação/serviço e falha física no Windows |
 | cap-002 | HTTPS LAN, autenticação, isolamento | Certificado confiável e dois PCs reais |
 | cap-003 | Pareamento, troca de operador e revogação efetiva | Concorrência e reinício em máquinas reais |
-| cap-010 | Registro FOOD/WHOLESALE preexistente no core | Equivalência web de habilitar/desabilitar módulos |
+| cap-010 | Registro FOOD/WHOLESALE habilitável por loja, API e UI com bloqueio servidor | Comparação independente dos subfluxos desktop e regressão física |
 | cap-042 | QR HTTPS offline, gerador compartilhado | Ensaio em smartphone real |
 | cap-044 | Pareamento WAITER e RBAC | Jornada do salão em tablet real |
 | cap-045 | Pareamento KITCHEN e RBAC | Fluxo KDS e reconexão em hardware |
