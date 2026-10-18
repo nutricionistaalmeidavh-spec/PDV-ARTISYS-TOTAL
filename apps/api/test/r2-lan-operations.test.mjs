@@ -121,7 +121,7 @@ test('cap-003 cap-044 cap-045 cap-046 R2: independently paired terminal, waiter 
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},owner)).status,200);
 });
 
-test('cap-055 R2: pilot readiness stays incomplete until explicit evidence, with isolated persisted entries',async t=>{
+test('cap-053 cap-055 R2: tenant-scoped readiness, sanitized audit and health remain private',async t=>{
   const db=openLocalDatabase(':memory:');
   t.after(()=>db.close());
   await applyLocalMigrations(db);
@@ -155,7 +155,20 @@ test('cap-055 R2: pilot readiness stays incomplete until explicit evidence, with
   assert.equal((await other.json()).checks.find(x=>x.key==='restore-test').status,'NOT_STARTED');
   const audit=await r2LanRoute(mk('lan/audit'),db,owner,membership,'a','lan/audit');
   assert.equal(audit.status,200);
-  assert.ok((await audit.json()).events.some(x=>x.action==='readiness.update'));
+  const auditBody=await audit.json();
+  assert.ok(auditBody.events.some(x=>x.action==='readiness.update'));
+  assert.equal(JSON.stringify(auditBody).includes('owner@pilot.test'),false,
+    'cap-053 sanitized audit cannot expose operator emails');
+  const deniedAudit=await r2LanRoute(mk('lan/audit'),db,cashier,memberCash,'a','lan/audit');
+  assert.equal(deniedAudit.status,403);
+  const health=await r2LanRoute(mk('lan/health'),db,owner,membership,'a','lan/health');
+  assert.equal(health.status,200);
+  const status=await health.json();
+  assert.equal(status.cloudRequired,false,'cap-053 health must not depend on SaaS');
+  assert.equal(status.pendingPairings,0);
+  const otherAudit=await r2LanRoute(mk('lan/audit'),db,owner,membership,'b','lan/audit');
+  assert.equal((await otherAudit.json()).events.length,0,
+    'cap-053 administrative audit is isolated per tenant');
 });
 
 
