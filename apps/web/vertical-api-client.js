@@ -57,7 +57,7 @@
     saveWeightProfile(body){return this.request('/api/v1/vertical/catalog/weight/profile',{method:'POST',body});},
     parseWeightBarcode(body){return this.request('/api/v1/vertical/catalog/weight/parse',{method:'POST',body});},
     addWeightedSaleItem(saleId,body){const path=this.webMode?`/api/v1/sales/${e(saleId)}/items/weighted`:`/api/v1/vertical/catalog/weight/sales/${e(saleId)}/items`;return this.request(path,{method:'POST',body,mutationId:this.mutationId()});},
-    removeWeightedSaleItem(saleId,itemId){const path=this.webMode?`/api/v1/sales/${e(saleId)}/weight-items/${e(itemId)}`:`/api/v1/vertical/catalog/weight/sales/${e(saleId)}/items/${e(itemId)}`;return this.request(path,{method:'DELETE'});},
+    removeWeightedSaleItem(saleId,itemId){const path=this.webMode?`/api/v1/sales/${e(saleId)}/weight-items/${e(itemId)}`:`/api/v1/vertical/catalog/weight/sales/${e(saleId)}/items/${e(itemId)}`;return this.request(path,{method:'DELETE',mutationId:this.mutationId()});},
     createBakeryOrder(body){return this.request('/api/v1/vertical/bakery/orders',{method:'POST',body});},
     bakeryOrder(id){return this.request(`/api/v1/vertical/bakery/orders/${e(id)}`);},
     updateBakeryOrderStatus(id,status){return this.request(`/api/v1/vertical/bakery/orders/${e(id)}/status`,{method:'PATCH',body:{status}});},
