@@ -139,6 +139,8 @@ jobs:
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0024_r4_print_outbox.sql
       - name: Test R2 LAN pairing, revocation and tenant device schema in local D1
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0025_r2_lan_devices.sql
+      - name: Test R4 frozen KDS item snapshots migration in local D1
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0026_r4_kds_ticket_snapshots.sql
       - name: Install one Chromium for all browser regression gates
         run: |
           npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0

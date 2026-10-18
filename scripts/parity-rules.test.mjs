@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {verifyClaim,verifyCapabilityInventory,verifyExecutableEvidence,DESKTOP_SHA,DESKTOP_REPO,WEB_REPO} from './parity-rules.mjs';
 
 test('parity cannot become complete by flipping a label while even one contract is partial',()=>{
@@ -74,4 +75,21 @@ test('P6 covered LAN capability depends on executable parity proof, not physical
   assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[
     {...withField,independentEvidence:{...row.independentEvidence,
       testAssertionContains:'assert.equal(result, false)'}},pending]},published,{readSource}),/assertion not attached/);
+});
+
+test('physical printer, scale, scanner or computer never gate R3/R4 software readiness',()=>{
+  const inventory=JSON.parse(readFileSync(new URL('../docs/parity/desktop-capability-inventory.json',import.meta.url),'utf8'));
+  const matrix=JSON.parse(readFileSync(new URL('../docs/parity/desktop-web-matrix.json',import.meta.url),'utf8'));
+  const roadmap=readFileSync(new URL('../docs/ROADMAP-PARIDADE-56.md',import.meta.url),'utf8');
+  const forbidden=/homologa(?:ção|cao) física|modelo físico testado|exige teste físico|depende de (?:prova|homologação) física/i;
+  const devices=new Set([9,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,41,43,48,49,50].map(n=>'cap-'+String(n).padStart(3,'0')));
+  for(const cap of inventory.contracts.filter(x=>devices.has(x.id)))
+    assert.doesNotMatch(cap.acceptance,forbidden,cap.id+' contains a physical approval gate');
+  for(const module of matrix.modules)
+    for(const contract of module.contracts)
+      assert.doesNotMatch(contract.reviewNote||'',forbidden,contract.id+' contains physical approval gate');
+  assert.match(roadmap,/O teste físico NÃO bloqueia classificação, merge nem conclusão do código/);
+  const r4=readFileSync(new URL('../docs/parity/R4-RESTAURANTE-VERTICAIS.md',import.meta.url),'utf8');
+  assert.match(r4,/Impressoras, balanças, leitores, tablets e terminais físicos não fazem parte do gate/);
+  assert.doesNotMatch(r4,/Checklist ainda bloqueado por evidência externa/);
 });

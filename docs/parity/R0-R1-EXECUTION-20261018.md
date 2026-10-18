@@ -1,5 +1,7 @@
 # R0 concluído como inventário rastreável; R1 execução incremental (18/10/2026)
 
+> **Atualização posterior:** o R1 foi aceito em software em 21/21 IDs com testes automatizados auditáveis. Consulte [R1-SOFTWARE-ACCEPTANCE-20261018.md](./R1-SOFTWARE-ACCEPTANCE-20261018.md). Os números antigos de 10 parciais/11 gaps nesta página documentam etapas anteriores, não o status após o fechamento.
+
 ## Escopo e linha de base
 
 Origem somente leitura: PDV-ARTISYS @ `7efea9c61f75be1536a1e516e917218f2b8bf2bf`. Destino exclusivo: `PDV-ARTISYS-TOTAL`. Nenhuma alteração de banco remoto, licenças, autenticação ou dados do desktop faz parte desta rodada.
