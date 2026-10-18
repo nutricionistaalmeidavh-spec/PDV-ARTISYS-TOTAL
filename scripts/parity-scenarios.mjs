@@ -64,7 +64,7 @@ export function buildScenarioCatalog(matrix,inventory){
 
 const RUNNERS={
   'node-test':/^(?:apps\/api\/test\/[^/]+\.test\.mjs|packages\/core\/test\/[^/]+\.test\.js|scripts\/[^/]+\.test\.mjs)$/,
-  playwright:/^scripts\/web-browser-e2e\.mjs$/
+  playwright:/^scripts\/(?:web-browser-e2e|r2-lan-browser-e2e)\.mjs$/
 };
 export function validateScenarioEvidence(scenarios,registry,readSource){
   requireProof(registry?.schemaVersion===1 && registry.desktopBaselineCommit===DESKTOP_SHA,
