@@ -828,6 +828,7 @@ test('P5 differential: reports-066/nominal runs exact published desktop inventor
  const blob=createHash('sha1').update('blob '+pinnedSource.length+'\0').update(pinnedSource).digest('hex');
  assert.equal(blob,fixture.desktop.sourceGitBlob,'Original desktop report source drifted from pinned published Git blob');
  const mockDb={prepare(sql){
+   if(sql==='PRAGMA table_info(sales)')return {all:()=>[{name:'seller_id'},{name:'seller_name_snapshot'}]};
    assert.match(sql,/FROM products p LEFT JOIN inventory_balances b/);
    return {all:()=>fixture.products.map((p,i)=>({
      productId:'desktop-'+i,sku:p.sku,name:p.name,unit:'UN',
