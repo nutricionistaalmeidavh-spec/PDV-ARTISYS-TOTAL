@@ -56,7 +56,24 @@ try{
   await page.locator('#web-email').fill('r2-owner@integration.test');
   await page.locator('#web-password').fill('R2-Browser-Strong-Password!2026');
   await page.locator('#web-login-form button[type=submit]').click();
-  await page.locator('body[data-active-route=checkout]').waitFor({timeout:15000});
+  const events=[];
+  page.on('pageerror',error=>events.push('pageerror '+error.message));
+  page.on('response',response=>{if(response.status()>=400)
+    events.push(response.status()+' '+new URL(response.url()).pathname);});
+  try{
+    await page.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
+  }catch(error){
+    const state=await page.evaluate(async()=>{
+      let session;
+      try{const response=await fetch('/api/v1/auth/session',{credentials:'same-origin'});
+        session={status:response.status,body:await response.text()};}
+      catch(reason){session={error:String(reason)};}
+      return {route:document.body.dataset.activeRoute||'',loginVisible:
+        !!document.querySelector('#web-login-form')?.getBoundingClientRect().height,
+        text:document.body.innerText.slice(0,1300),session};
+    });
+    throw Error('cap-047 login/bootstrap failed: '+JSON.stringify({state,events,error:error.message}));
+  }
   const state=await page.evaluate(()=>({
     width:window.innerWidth,documentWidth:document.documentElement.scrollWidth,
     settings:typeof window.PdvR2LanSettings?.render==='function',
