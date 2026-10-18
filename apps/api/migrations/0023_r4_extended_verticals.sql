@@ -56,14 +56,6 @@ ALTER TABLE restaurant_orders ADD COLUMN ticket_day TEXT;
 ALTER TABLE restaurant_orders ADD COLUMN ticket_number INTEGER;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_r4_daily_food_ticket ON restaurant_orders(tenant_id,branch_id,ticket_day,ticket_number)
  WHERE ticket_day IS NOT NULL AND ticket_number IS NOT NULL;
-CREATE TABLE IF NOT EXISTS r4_daily_tickets (
- tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,ticket_day TEXT NOT NULL,
- number INTEGER NOT NULL CHECK(number BETWEEN 1 AND 99999),
- order_id TEXT NOT NULL,
- PRIMARY KEY(tenant_id,branch_id,ticket_day,number),
- UNIQUE(tenant_id,branch_id,order_id),
- FOREIGN KEY(tenant_id,branch_id,order_id) REFERENCES restaurant_orders(tenant_id,branch_id,id)
-);
 -- Recipe version history is immutable; checkout consumes components from this canonical version.
 CREATE TABLE IF NOT EXISTS r4_recipe_versions (
  tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,product_id TEXT NOT NULL,
@@ -88,3 +80,17 @@ CREATE TRIGGER IF NOT EXISTS r4_recipe_ingredients_immutable_update BEFORE UPDAT
 BEGIN SELECT RAISE(ABORT,'RECIPE_INGREDIENT_IMMUTABLE'); END;
 CREATE TRIGGER IF NOT EXISTS r4_recipe_ingredients_immutable_delete BEFORE DELETE ON r4_recipe_ingredients
 BEGIN SELECT RAISE(ABORT,'RECIPE_INGREDIENT_IMMUTABLE'); END;
+
+CREATE TABLE IF NOT EXISTS r4_sale_recipe_versions (
+ tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,sale_id TEXT NOT NULL,
+ sale_item_id TEXT NOT NULL,product_id TEXT NOT NULL,
+ version INTEGER NOT NULL,
+ created_at TEXT NOT NULL,
+ PRIMARY KEY(tenant_id,branch_id,sale_id,product_id),
+ FOREIGN KEY(tenant_id,branch_id,sale_id) REFERENCES sales(tenant_id,branch_id,id),
+ FOREIGN KEY(tenant_id,branch_id,product_id,version) REFERENCES r4_recipe_versions(tenant_id,branch_id,product_id,version)
+);
+CREATE TRIGGER IF NOT EXISTS r4_sale_recipe_versions_no_update BEFORE UPDATE ON r4_sale_recipe_versions
+BEGIN SELECT RAISE(ABORT,'RECIPE_SALE_SNAPSHOT_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS r4_sale_recipe_versions_no_delete BEFORE DELETE ON r4_sale_recipe_versions
+BEGIN SELECT RAISE(ABORT,'RECIPE_SALE_SNAPSHOT_IMMUTABLE'); END;
