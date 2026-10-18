@@ -379,14 +379,16 @@
     const available=['overview','products','payments','inventory','cash','finance','margins','details','coverage','targets'];
     if(!available.includes(state.view))state.view='overview';
     saveWebReportView();
-    let report,comparison=null,margin=null,detail=null,coverage=null,ranking=null,sellersForGoals=[];
+    let report,comparison=null,trend=null,margin=null,detail=null,coverage=null,ranking=null,sellersForGoals=[];
     try{
       const previous=root.PdvBusinessDate.equivalentPreviousPeriod(fromDate,toDate);
-      [report,comparison,margin,detail,coverage,ranking,sellersForGoals]=await Promise.all([
+      const spanDays=Math.round((Date.parse(toDate+'T00:00:00Z')-Date.parse(fromDate+'T00:00:00Z'))/86400000)+1;
+      [report,comparison,trend,margin,detail,coverage,ranking,sellersForGoals]=await Promise.all([
         api.request('/api/v1/reports/summary?'+query.toString()),
         state.view==='overview'?api.compareSalesPeriods({
           from:fromDate,to:toDate,compareFrom:previous.previousFrom,compareTo:previous.previousTo
         }).catch(()=>null):Promise.resolve(null),
+        state.view==='overview'&&spanDays>=1&&spanDays<=90?api.dailySalesTrend({from:fromDate,to:toDate}):Promise.resolve(null),
         state.view==='margins'?api.historicalMarginReport({from:fromDate,to:toDate}):Promise.resolve(null),
         state.view==='details'?api.reportSalesDetailsCanonical({from:fromDate,to:toDate,
           sellerId:state.sellerId||'',customerId:state.customerId||'',
@@ -537,6 +539,14 @@
           <button class="ops-primary" type="submit" ${allSellers.length?'':'disabled'}>Salvar meta</button>
         </form>`;
     };
+    const trendTable=()=>{
+      if(!trend)return '<p class="ops-muted">Para consultar a evolução diária, selecione até 90 dias no período.</p>';
+      const points=trend.points||[];
+      return table(['Data','Vendas','Receita original','Devoluções','Líquido'],
+        points.map(p=>`<tr><td>${escapeHtml(p.date)}</td><td>${p.count}</td>
+          <td>${value(p.grossCents)}</td><td>${value(p.refundedCents)}</td>
+          <td>${value(p.netCents)}</td></tr>`));
+    };
     const overview=`<div class="ops-metrics">
       ${metric('Faturamento registrado (líquido)',value(total),comparison?comparisonHint:'')}
       ${metric('Vendas concluídas',String(count))}
@@ -545,7 +555,10 @@
       ${metric('Descontos',value(sale.discountsCents))}
       </div><div class="ops-grid two">
       <section class="ops-card"><h2>Meios de pagamento</h2>${paymentsTable()}</section>
-      <section class="ops-card"><h2>Mais vendidos</h2>${productsTable()}</section></div>`;
+      <section class="ops-card"><h2>Mais vendidos</h2>${productsTable()}</section></div>
+      <section class="ops-card"><h2>Evolução diária de vendas líquidas</h2>
+      <p class="ops-muted">Movimentos por data efetiva: vendas concluídas e devoluções são apresentados separadamente, sem reescrever o faturamento de períodos passados.</p>
+      ${trendTable()}</section>`;
     const views={overview,products:productsTable(),payments:paymentsTable(),inventory:inventoryTable(),
       cash:cashTable(),finance:financeTable(),margins:marginsTable(),details:detailedTable(),coverage:coverageTable(),targets:sellerTargetsView()};
 
