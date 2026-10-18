@@ -1384,55 +1384,101 @@ export function createCommerceService(db,{now=nowISO}={}){
       await batch(statements);
       return snapshotAfterCartChange(tenant,branch,id);
     },
-    async changeConfiguredItemQuantity(tenant,branch,id,itemId,quantity){
-      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+    async changeConfiguredItemQuantity(tenant,branch,id,itemId,quantity,header){
       const milli=quantityMilli(quantity);
       if(!milli)throw error(400,'Quantidade inválida.');
+      const key=requiredMutation(null,header),scope='sale.change-configured:'+id+':'+itemId;
+      const previous=await applied(tenant,scope,key);
+      if(previous){
+        if(previous.quantityMilli!==milli)
+          throw error(409,'Identificador utilizado para outra quantidade configurada.');
+        return snapshot(tenant,branch,id);
+      }
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const child=await first(`SELECT * FROM sale_configured_lines WHERE tenant_id=?
         AND branch_id=? AND sale_id=? AND id=?`,tenant,branch,id,itemId);
       if(child){
         const delta=milli-child.quantity_milli;
         await batch([
+          q(`UPDATE sale_configured_lines SET quantity_milli=? WHERE id=? AND
+            tenant_id=? AND branch_id=? AND sale_id=? AND quantity_milli=?
+            AND EXISTS(SELECT 1 FROM sales s WHERE s.id=sale_id
+              AND s.tenant_id=tenant_id AND s.branch_id=branch_id AND s.status='OPEN')`,
+            milli,itemId,tenant,branch,id,child.quantity_milli),
           q(`UPDATE sale_items SET quantity_milli=quantity_milli+?
-            WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?`,
+            WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?
+              AND changes()=1
+              AND EXISTS(SELECT 1 FROM sales s WHERE s.id=sale_items.sale_id
+                AND s.tenant_id=sale_items.tenant_id AND s.branch_id=sale_items.branch_id AND s.status='OPEN')`,
             delta,tenant,branch,id,child.sale_item_id),
-          q(`UPDATE sale_configured_lines SET quantity_milli=? WHERE id=? AND tenant_id=?
-            AND branch_id=? AND sale_id=?`,milli,itemId,tenant,branch,id)
+          q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) SELECT ?,?,?,?,? WHERE changes()=1',
+            tenant,scope,key,JSON.stringify({itemId,quantityMilli:milli}),stamp())
         ]);
-        return snapshotAfterCartChange(tenant,branch,id);
+      }else{
+        await batch([
+          q(`UPDATE sale_items SET quantity_milli=?
+            WHERE sale_id=? AND tenant_id=? AND branch_id=? AND id=?
+              AND configuration_json IS NOT NULL
+              AND NOT EXISTS(SELECT 1 FROM sale_configured_lines c WHERE c.sale_item_id=sale_items.id)
+              AND EXISTS(SELECT 1 FROM sales s WHERE s.id=sale_items.sale_id
+                AND s.tenant_id=sale_items.tenant_id AND s.branch_id=sale_items.branch_id AND s.status='OPEN')`,
+            milli,id,tenant,branch,itemId),
+          q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) SELECT ?,?,?,?,? WHERE changes()=1',
+            tenant,scope,key,JSON.stringify({itemId,quantityMilli:milli}),stamp())
+        ]);
       }
-      const result=await run(`UPDATE sale_items SET quantity_milli=?
-        WHERE sale_id=? AND tenant_id=? AND branch_id=? AND id=?
-          AND configuration_json IS NOT NULL
-          AND NOT EXISTS(SELECT 1 FROM sale_configured_lines c WHERE c.sale_item_id=sale_items.id)`,
-        milli,id,tenant,branch,itemId);
-      if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
+      if(!await applied(tenant,scope,key))
+        throw error(409,'Configuração alterada por outra operação. Atualize o carrinho.');
       return snapshotAfterCartChange(tenant,branch,id);
     },
-    async removeConfiguredItem(tenant,branch,id,itemId){
+    async removeConfiguredItem(tenant,branch,id,itemId,header){
+      const key=requiredMutation(null,header),scope='sale.remove-configured:'+id+':'+itemId;
+      if(await applied(tenant,scope,key))return snapshot(tenant,branch,id);
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const child=await first(`SELECT * FROM sale_configured_lines WHERE tenant_id=?
         AND branch_id=? AND sale_id=? AND id=?`,tenant,branch,id,itemId);
+      const receipt=q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) SELECT ?,?,?,?,? WHERE changes()=1',
+        tenant,scope,key,JSON.stringify({itemId,removed:true}),stamp());
       if(child){
         const siblings=await all(`SELECT id FROM sale_configured_lines WHERE tenant_id=?
           AND branch_id=? AND sale_id=? AND sale_item_id=?`,
           tenant,branch,id,child.sale_item_id);
-        if(siblings.length===1)await run(`DELETE FROM sale_items WHERE id=? AND
-          tenant_id=? AND branch_id=? AND sale_id=?`,child.sale_item_id,tenant,branch,id);
-        else await batch([
-          q(`DELETE FROM sale_configured_lines WHERE id=? AND tenant_id=?
-            AND branch_id=? AND sale_id=?`,itemId,tenant,branch,id),
-          q(`UPDATE sale_items SET quantity_milli=quantity_milli-?
-            WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?`,
-            child.quantity_milli,tenant,branch,id,child.sale_item_id)
+        if(siblings.length===1){
+          await batch([
+            q(`DELETE FROM sale_items WHERE id=? AND tenant_id=? AND branch_id=? AND sale_id=?
+              AND EXISTS(SELECT 1 FROM sales s WHERE s.id=sale_items.sale_id
+                AND s.tenant_id=sale_items.tenant_id AND s.branch_id=sale_items.branch_id AND s.status='OPEN')`,
+              child.sale_item_id,tenant,branch,id),
+            receipt
+          ]);
+        }else{
+          await batch([
+            q(`DELETE FROM sale_configured_lines WHERE id=? AND tenant_id=? AND
+              branch_id=? AND sale_id=? AND quantity_milli=?
+              AND EXISTS(SELECT 1 FROM sales s WHERE s.id=sale_id
+                AND s.tenant_id=tenant_id AND s.branch_id=branch_id AND s.status='OPEN')`,
+              itemId,tenant,branch,id,child.quantity_milli),
+            q(`UPDATE sale_items SET quantity_milli=quantity_milli-?
+              WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=? AND changes()=1
+              AND EXISTS(SELECT 1 FROM sales s WHERE s.id=sale_items.sale_id
+                AND s.tenant_id=sale_items.tenant_id AND s.branch_id=sale_items.branch_id AND s.status='OPEN')`,
+              child.quantity_milli,tenant,branch,id,child.sale_item_id),
+            receipt
+          ]);
+        }
+      }else{
+        await batch([
+          q(`DELETE FROM sale_items WHERE sale_id=? AND tenant_id=? AND
+            branch_id=? AND id=? AND configuration_json IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM sale_configured_lines c WHERE c.sale_item_id=sale_items.id)
+            AND EXISTS(SELECT 1 FROM sales s WHERE s.id=sale_items.sale_id
+              AND s.tenant_id=sale_items.tenant_id AND s.branch_id=sale_items.branch_id AND s.status='OPEN')`,
+            id,tenant,branch,itemId),
+          receipt
         ]);
-        return snapshotAfterCartChange(tenant,branch,id);
       }
-      const result=await run(`DELETE FROM sale_items WHERE sale_id=? AND tenant_id=?
-        AND branch_id=? AND id=? AND configuration_json IS NOT NULL
-        AND NOT EXISTS(SELECT 1 FROM sale_configured_lines c WHERE c.sale_item_id=sale_items.id)`,
-        id,tenant,branch,itemId);
-      if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
+      if(!await applied(tenant,scope,key))
+        throw error(409,'Item configurado alterado por outra operação. Atualize o carrinho.');
       return snapshotAfterCartChange(tenant,branch,id);
     },
     async changeItemNote(tenant,branch,id,itemId,user,body,header){
