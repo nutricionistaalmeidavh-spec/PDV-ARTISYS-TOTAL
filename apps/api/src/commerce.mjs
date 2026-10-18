@@ -1406,50 +1406,89 @@ export function createCommerceService(db,{now=nowISO}={}){
       ]);
       return snapshotAfterCartChange(tenant,branch,id);
     },
-    async changeItem(tenant,branch,id,productId,quantity){
-      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+    async changeItem(tenant,branch,id,productId,quantity,header){
+      const key=requiredMutation(null,header),scope='sale.change-item:'+id+':'+productId;
       const milli=quantityMilli(quantity);
       if(!milli)throw error(400,'Quantidade inválida: até três casas decimais.');
+      const previous=await applied(tenant,scope,key);
+      if(previous){
+        if(previous.quantityMilli!==milli)throw error(409,'Identificador utilizado em outra quantidade.');
+        return snapshot(tenant,branch,id);
+      }
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const parent=await first('SELECT id FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=? AND product_id=?',
         id,tenant,branch,productId);
       if(parent&&await first('SELECT 1 AS found FROM sale_configured_lines WHERE sale_item_id=? LIMIT 1',parent.id))
         throw error(409,'Altere a quantidade de cada configuração individualmente.');
-      const result=await run('UPDATE sale_items SET quantity_milli=? WHERE sale_id=? AND tenant_id=? AND branch_id=? AND product_id=?',
-        milli,id,tenant,branch,productId);
-      if(!result.meta?.changes)throw error(404,'Item não encontrado.');
+      await batch([
+        q("UPDATE sale_items SET quantity_milli=? WHERE sale_id=? AND tenant_id=? AND branch_id=? AND product_id=? AND EXISTS(SELECT 1 FROM sales WHERE sales.id=sale_items.sale_id AND sales.status='OPEN')",
+          milli,id,tenant,branch,productId),
+        q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) SELECT ?,?,?,?,? WHERE changes()=1',
+          tenant,scope,key,JSON.stringify({productId,quantityMilli:milli}),stamp())
+      ]);
+      if(!await applied(tenant,scope,key))throw error(404,'Item não encontrado ou venda alterada.');
       return snapshotAfterCartChange(tenant,branch,id);
     },
-    async removeItem(tenant,branch,id,productId){
+    async removeItem(tenant,branch,id,productId,header){
+      const key=requiredMutation(null,header),scope='sale.remove-item:'+id+':'+productId;
+      if(await applied(tenant,scope,key))return snapshot(tenant,branch,id);
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
-      const result=await run('DELETE FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=? AND product_id=?',
-        id,tenant,branch,productId);
-      if(!result.meta?.changes)throw error(404,'Item não encontrado.');
+      await batch([
+        q("DELETE FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=? AND product_id=? AND EXISTS(SELECT 1 FROM sales WHERE sales.id=sale_items.sale_id AND sales.status='OPEN')",
+          id,tenant,branch,productId),
+        q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) SELECT ?,?,?,?,? WHERE changes()=1',
+          tenant,scope,key,JSON.stringify({productId,removed:true}),stamp())
+      ]);
+      if(!await applied(tenant,scope,key))throw error(404,'Item não encontrado ou venda alterada.');
       return snapshotAfterCartChange(tenant,branch,id);
     },
-    async discount(tenant,branch,id,discountCents){
-      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+    async discount(tenant,branch,id,discountCents,header){
+      const key=requiredMutation(null,header),scope='sale.discount:'+id;
       const value=requiredNumber(discountCents,'Desconto');
+      const previous=await applied(tenant,scope,key);
+      if(previous){
+        if(previous.discountCents!==value)throw error(409,'Identificador utilizado em outro desconto.');
+        return snapshot(tenant,branch,id);
+      }
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       // The pinned desktop calculates MIN(requested discount, live subtotal).
-      // Persist the applied value, not the larger request: a later cart change
-      // must not resurrect a discount that was never authorized against its total.
-      // The subquery rounds each positive item in cents just like pricing.js.
+      // The operation receipt and the status update must commit atomically.
       const parents=await all('SELECT * FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=?',id,tenant,branch);
       const priced=await pricedSaleLines(all,tenant,branch,id,parents);
       const cap=calculateSaleTotals({items:priced.map(i=>({
         unitPriceCents:i.unit_price_cents,quantity:i.quantity_milli/1000
       })),discountCents:0}).subtotalCents;
-      const result=await run("UPDATE sales SET discount_cents=MIN(?,?) WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'",
-        value,cap,id,tenant,branch);
-      if(result.meta?.changes!==1)throw error(409,'A venda mudou de estado. Atualize antes de aplicar o desconto.');
+      await batch([
+        q("UPDATE sales SET discount_cents=MIN(?,?) WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'",
+          value,cap,id,tenant,branch),
+        q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) SELECT ?,?,?,?,? WHERE changes()=1',
+          tenant,scope,key,JSON.stringify({discountCents:value}),stamp())
+      ]);
+      if(!await applied(tenant,scope,key))throw error(409,'A venda mudou de estado. Atualize antes de aplicar o desconto.');
       return snapshot(tenant,branch,id);
     },
-    async transition(tenant,branch,id,to){
+    async transition(tenant,branch,id,to,header){
+      const key=requiredMutation(null,header),scope='sale.transition:'+id;
+      // Replays must never reapply an obsolete transition after a later state change.
+      const previous=await applied(tenant,scope,key);
+      if(previous){
+        if(previous.to!==to)throw error(409,'Identificador já utilizado em outra transição de venda.');
+        return snapshot(tenant,branch,id);
+      }
       const sale=await tenantSale(tenant,branch,id);
       const allowed=(sale.status==='OPEN'&&['SUSPENDED','CANCELLED'].includes(to))||(sale.status==='SUSPENDED'&&to==='OPEN');
       if(!allowed)throw error(409,'A venda mudou de estado; atualize antes de continuar.');
-      const result=await run('UPDATE sales SET status=? WHERE id=? AND tenant_id=? AND branch_id=? AND status=?',
-        to,id,tenant,branch,sale.status);
-      if(result.meta?.changes!==1)throw error(409,'A venda mudou de estado; atualize antes de continuar.');
+      // D1/SQLite batch is atomic: changes() tests the immediately preceding CAS.
+      // If a second terminal won, do NOT create a false idempotency receipt.
+      const proof={saleId:id,from:sale.status,to};
+      await batch([
+        q('UPDATE sales SET status=? WHERE id=? AND tenant_id=? AND branch_id=? AND status=?',
+          to,id,tenant,branch,sale.status),
+        q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) SELECT ?,?,?,?,? WHERE changes()=1',
+          tenant,scope,key,JSON.stringify(proof),stamp())
+      ]);
+      if(!await applied(tenant,scope,key))
+        throw error(409,'A venda mudou de estado; atualize antes de continuar.');
       return snapshot(tenant,branch,id);
     },
     async allSaleReturns(tenant,branch){

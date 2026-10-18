@@ -180,13 +180,18 @@
           "status": "partial",
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
-            "contains": "async transition("
+            "contains": "async transition(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "R1 checkout transition retries are keyed",
+            "testAssertionContains": "assert.equal(delayed.body.sale.status,'OPEN');",
+            "testRunner": "node-test"
           },
           "owner": "sales",
           "dependsOn": [
             "checkout-005"
           ],
-          "acceptance": "Venda suspensa e retomada. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Venda suspensa e retomada. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "reviewNote": "R1: suspensão, retomada e cancelamento de vendas abertas usam chave de mutação persistida e CAS em transação SQLite/D1; a repetição tardia da suspensão não desfaz uma retomada posterior. Cenários de RBAC, empresa A/B e histórico executados na API SQLite. Continua parcial até equivalência executável de todas as variações do desktop, interface de atendimento e homologação concorrente."
         },
         {
           "id": "checkout-010",
