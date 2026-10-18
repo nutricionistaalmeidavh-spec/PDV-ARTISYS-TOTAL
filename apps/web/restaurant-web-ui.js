@@ -131,7 +131,7 @@
  }
  async function click(el){
    const what=el.dataset.r4Action,id=el.dataset.id;
-   if(what==='back')return root.PdvAppNavigation?.navigate?.('FOOD');
+   if(what==='back')return root.PdvAppNavigation?.navigate?.('home');
    if(what==='tab'){state.section=id;state.checkout=null;return render();}
    if(what==='select'){state.selected=id;return render();}
    if(what==='refresh')return reload();
