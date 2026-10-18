@@ -101,7 +101,7 @@
        field('Endereço (obrigatório para entrega)','address','text','maxlength="300"')+
        '<div data-r4-lines>'+orderItemRow()+'</div>'+btn('Adicionar outro item','add-line')+
         '<label><input type="checkbox" name="useTicket"> Gerar senha diária para acompanhar o pedido</label>'+
-       '<button class="primary-button">Enviar pedido para cozinha</button></form></details>':'')+
+       '<button class="primary-button" type="submit">Enviar pedido para cozinha</button></form></details>':'')+
      '<div class="restaurant-list">'+state.orders.map(o=>
        '<div class="restaurant-row"><div><strong>'+esc(title(o.service_channel||o.fulfillment))+' · '+esc(o.ticket_number?'Senha '+o.ticket_number:o.id.slice(0,8))+'</strong><small>'+esc(title(o.status))+' · '+esc(orderLines(o))+'</small></div><div class="restaurant-actions">'+
        (o.status==='READY'&&o.fulfillment==='DELIVERY'?btn('Despachar','dispatch',o.id):'')+
