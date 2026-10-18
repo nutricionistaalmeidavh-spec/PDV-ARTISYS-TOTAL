@@ -10,8 +10,8 @@ test('68 of 68 covered can be certified when independent CI evidence is supplied
   const evidence={scope:'seven-screen-operations',desktopBaselineCommit:DESKTOP_SHA,webCommit:'a'.repeat(40),
     testRunUrl:'https://github.com/owner/repo/actions/runs/1234',independentReviewer:'QA independent',
     verifiedAt:'2026-10-17',testSuitePassed:true};
-  assert.equal(verifyClaim(Array.from({length:68},()=>({status:'covered'})),'complete',evidence,'seven-screen-operations'),true);
-  assert.throws(()=>verifyClaim([{status:'covered'}],'complete',null,'seven-screen-operations'),/certification/);
+  assert.equal(verifyClaim(Array.from({length:68},()=>({status:'covered'})),'complete',evidence,'seven-screen-operations',{scenarioEvidenceComplete:true}),true);
+  assert.throws(()=>verifyClaim([{status:'covered'}],'complete',null,'seven-screen-operations',{scenarioEvidenceComplete:true}),/certification/);
 });
 
 test('covered status requires an actual executable test assertion next to its scenario',()=>{
@@ -39,7 +39,6 @@ test('published desktop manifest prevents silently dropping a capability from th
   assert.throws(()=>verifyCapabilityInventory(matrix,inventory,[...published,'new-published-capability']),/missing published desktop capabilities/);
 });
 
-
 test('P6 covered LAN capability fails closed without a specific executable test and physical field report',()=>{
   const published=['desktop-windows-local-first','other-published-capability'];
   const row={id:'cap-001',capability:published[0],owner:'operations',dependsOn:[],status:'covered',
@@ -61,15 +60,15 @@ test('P6 covered LAN capability fails closed without a specific executable test 
     'apps/api/test/p6.test.mjs':"test('cap-001 local first',()=>{const result=true;assert.equal(result, true);});",
     'docs/parity/field-qa/cap-001.md':'Independent physical QA for cap-001 verified on actual LAN'};
   const readSource=path=>files[path]||'';
-  assert.throws(()=>verifyCapabilityInventory(matrix,inventory,published,readSource),/FIELD_VERIFIED/);
+  assert.throws(()=>verifyCapabilityInventory(matrix,inventory,published,{readSource}),/FIELD_VERIFIED/);
   const withField={...row,fieldVerification:{status:'FIELD_VERIFIED',platform:'Linux',
     deviceModel:'physical laptop',independentReviewer:'Independent QA',verifiedAt:'2026-10-17',
     evidenceFile:'docs/parity/field-qa/cap-001.md'}};
-  assert.equal(verifyCapabilityInventory(matrix,{...inventory,contracts:[withField,pending]},published,readSource).covered,1);
+  assert.equal(verifyCapabilityInventory(matrix,{...inventory,contracts:[withField,pending]},published,{readSource}).covered,1);
   assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[
     {...withField,independentEvidence:{...row.independentEvidence,
-      testContains:"test('unrelated'"}},pending]},published,readSource),/canonical ID/);
+      testContains:"test('unrelated'"}},pending]},published,{readSource}),/canonical ID/);
   assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[
     {...withField,independentEvidence:{...row.independentEvidence,
-      testAssertionContains:'assert.equal(result, false)'}},pending]},published,readSource),/assertion not attached/);
+      testAssertionContains:'assert.equal(result, false)'}},pending]},published,{readSource}),/assertion not attached/);
 });

@@ -20,6 +20,12 @@ on:
       - 'scripts/check-desktop-parity.mjs'
       - 'scripts/parity-rules.mjs'
       - 'scripts/parity-rules.test.mjs'
+      - 'scripts/report-xlsx.test.mjs'
+      - 'scripts/smoke-selfhosted.mjs'
+      - 'scripts/parity-scenarios.mjs'
+      - 'scripts/parity-scenarios.test.mjs'
+      - 'scripts/parity-desktop-pricing.test.mjs'
+      - 'scripts/audit-parity-evidence.mjs'
       - 'scripts/web-browser-e2e.mjs'
       - '.github/workflows/verify-saas-foundation.yml'
   workflow_dispatch:
@@ -44,10 +50,12 @@ jobs:
         run: npm run build
       - name: Audit seven-screen contracts and the pinned desktop capability manifest
         run: npm run test:parity
-      - name: Save blockers for the complete 56-capability P6 roadmap
+      - name: Generate P6 canonical 56-capability blockers artifact
         run: |
           mkdir -p qa-artifacts
           node scripts/p6-capability-report.mjs --json > qa-artifacts/p6-capabilities.json
+      - name: Test free offline SQLite backup and restore
+        run: npm run test:selfhost
       - name: Test canonical sales, inventory, cash and authorization contracts
         run: npm run test:core
       - name: Validate original renderer web syntax (no second app)
@@ -55,11 +63,11 @@ jobs:
       - name: Validate entrypoints
         working-directory: apps/api
         run: npm run check
-      - name: Test free offline SQLite backup and safe staged restore
-        run: npm run test:selfhost
       - name: Test real SQLite isolation and canonical identity
         working-directory: apps/api
         run: npm test
+      - name: Smoke real self-hosted PWA and SQLite API on one origin
+        run: node scripts/smoke-selfhosted.mjs
       - name: Smoke test offline self-hosted provisioning
         working-directory: apps/api
         env:
@@ -122,6 +130,13 @@ jobs:
           node scripts/smoke-workerd.mjs
       - name: E2E original PDV renderer in Chromium (desktop + mobile)
         run: node scripts/web-browser-e2e.mjs
+      - name: Save independently auditable P0 parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdv-total-parity-evidence
+          path: qa-artifacts/parity/
+          if-no-files-found: error
       - name: Save browser visual QA evidence
         if: always()
         uses: actions/upload-artifact@v4

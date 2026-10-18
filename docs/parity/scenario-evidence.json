@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+  "description": "Only independently verifiable executed scenarios go in results; blank deliberately means no completed cross-platform certification.",
+  "results": []
+}

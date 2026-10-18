@@ -443,11 +443,13 @@
           "acceptance": "Categorias/cadastro e filtros. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
           "webEvidence": {
             "file": "apps/api/src/catalog-depth.mjs",
-            "contains": "async createCategory(",
+            "contains": "async renameCategory(tenant,branch,user,id,body,header)",
             "testFile": "apps/api/test/p2-catalog-inventory.test.mjs",
-            "testContains": "P2 category, barcode and parent"
+            "testContains": "P1 category rename keeps the canonical ID",
+            "testAssertionContains": "assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM products WHERE category_id=?',category.id),1);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P2: comportamento de um subconjunto implementado em SQLite/D1 e API web; faltam operações e homologação exaustiva do desktop (incluindo importação, lotes, custo médio e dispositivos)."
+          "reviewNote": "P1: cadastro/listagem/renomeação de categorias canônicas com ID estável, chaves estrangeiras de produtos preservadas, conflito de nomes, isolamento de empresa, idempotência, RBAC por products.manage e filtro na UI de produtos (inclusive sem categoria). SQLite, migrações D1 e navegador sob CI. Ainda parcial: confronto exaustivo com fluxo desktop, escopo de filtros avançados e homologação independente."
         },
         {
           "id": "products-025",
@@ -579,9 +581,11 @@
             "file": "apps/api/src/catalog-import.mjs",
             "contains": "async commit(tenant,branch,user,body,header)",
             "testFile": "apps/api/test/p2-csv-import.test.mjs",
-            "testContains": "P2 CSV commit is all-or-nothing"
+            "testContains": "P1 assisted CSV upsert changes existing catalogue identity",
+            "testAssertionContains": "assert.equal(edited.balance,8);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "CSV UTF-8 com prévia e escrita atômica para SKUs novos e até 100 linhas; XLSX, importação de grandes lotes, edição assistida e confronto exaustivo desktop ainda pendentes."
+          "reviewNote": "P1: importação CSV com prévia e aplicação atômica; modo explícito criar/atualizar por SKU, ID do produto preservado, sem mexer no livro de estoque, histórico ou campos opcionais omitidos. A prévia do lote tem token SHA-256 ligado ao estado do catálogo e rejeita alterações desde a conferência. API SQLite e UI web com regressões de idempotência, conflitos de código de barras, unidade, tenant, migração de catálogo e token obsoleto. Ainda parcial: importação XLSX, grandes lotes, comparação exaustiva com desktop e homologação E2E específica."
         }
       ]
     },

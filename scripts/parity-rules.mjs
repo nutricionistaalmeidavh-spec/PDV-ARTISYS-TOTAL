@@ -5,18 +5,18 @@ export const DESKTOP_REPO='nutricionistaalmeidavh-spec/PDV-ARTISYS';
 export const WEB_REPO='nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL';
 export const MODULES=['home','checkout','products','history','cash','finance','reports'];
 export const STATUSES=['covered','partial','gap'];
-// LAN, external device and local printing flows require a human hardware/device field test.
 export const FIELD_REQUIRED_CAPS=new Set(['cap-001','cap-002','cap-003','cap-025','cap-026','cap-027','cap-028','cap-029','cap-030','cap-042','cap-043','cap-044','cap-045','cap-046','cap-047','cap-050','cap-056']);
 
 export function requireProof(value,message){
   if(!value)throw Error('[PARITY] '+message);
 }
 
-export function verifyClaim(rows,claim,certification,scope){
+export function verifyClaim(rows,claim,certification,scope,{scenarioEvidenceComplete=false}={}){
   const complete=rows.length>0 && rows.every(row=>row.status==='covered');
   requireProof(claim===(complete?'complete':'incomplete'),
     scope+': claim must correspond to all verified contracts, not to a target percentage');
   if(complete){
+    requireProof(scenarioEvidenceComplete===true,'complete requires independently verified P0 scenario evidence');
     requireProof(certification?.scope===scope,'complete requires scope-specific independent certification');
     requireProof(certification?.desktopBaselineCommit===DESKTOP_SHA,'wrong certified desktop commit');
     requireProof(/^[a-f0-9]{40}$/.test(certification?.webCommit||''),'missing certified web commit SHA');
@@ -32,7 +32,8 @@ export function verifyClaim(rows,claim,certification,scope){
   return complete;
 }
 
-export function verifyCapabilityInventory(matrix,inventory,publishedCapabilities,readSource){
+export function verifyCapabilityInventory(matrix,inventory,publishedCapabilities,options={}){
+  const readSource=options.readSource;
   requireProof(inventory?.schemaVersion===1,'unsupported published capability inventory');
   requireProof(inventory?.baseline?.repo===DESKTOP_REPO && inventory.baseline.commit===DESKTOP_SHA,
     'published capability source must stay pinned to the unmodified desktop');
@@ -68,9 +69,9 @@ export function verifyCapabilityInventory(matrix,inventory,publishedCapabilities
       requireProof(row.dependsOn.every(id=>statuses.get(id)==='covered'),
         'covered capability relies on an incomplete prerequisite: '+row.id);
       requireProof(typeof readSource==='function',
-        'covered capability requires locally checked executable evidence: '+row.id);
+        'covered capability requires checked executable proof: '+row.id);
       requireProof(row.independentEvidence?.testContains?.includes(row.id),
-        'covered capability needs a scenario specific to its canonical ID: '+row.id);
+        'covered capability requires a canonical ID-specific test: '+row.id);
       verifyExecutableEvidence({id:row.id,status:'covered',webEvidence:row.independentEvidence},readSource);
       if(FIELD_REQUIRED_CAPS.has(row.id)){
         const field=row.fieldVerification;
@@ -80,14 +81,14 @@ export function verifyCapabilityInventory(matrix,inventory,publishedCapabilities
           typeof field.independentReviewer==='string' && field.independentReviewer.length>=3 &&
           !Number.isNaN(Date.parse(field.verifiedAt||'')) &&
           typeof field.evidenceFile==='string' && field.evidenceFile.startsWith('docs/parity/field-qa/'),
-          'covered LAN/hardware capability requires independent FIELD_VERIFIED evidence: '+row.id);
+          'covered LAN/hardware capability requires FIELD_VERIFIED physical QA: '+row.id);
         requireProof(readSource(field.evidenceFile).includes(row.id),
-          'physical field QA report must name canonical capability: '+row.id);
+          'physical QA evidence must name canonical capability: '+row.id);
       }
     }
     counts[row.status]++;names.add(row.capability);ids.add(row.id);
   }
-  verifyClaim(rows,inventory.fullSystemClaim,inventory.certification||null,'full-desktop');
+  verifyClaim(rows,inventory.fullSystemClaim,inventory.certification||null,'full-desktop',options);
   return counts;
 }
 

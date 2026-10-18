@@ -8,7 +8,7 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 - `packages/core/server/`: contratos/rotas do servidor original usados **apenas como base de transição**, não publicados pela Cloudflare; rotas comerciais P3 usam a borda única `apps/api/src/commerce-router.mjs`, com idempotência e transações D1.
 - `packages/core/shared/` e `packages/core/vendor/`: componentes de domínio e bibliotecas de apoio reutilizados; nenhuma segunda cópia dos arquivos originais.
 - `apps/web/`: a **única interface de operação** transferida do renderer existente para transformação no navegador. Servida como assets do Worker na fase P3, com login web, produtos, estoque, caixa, vendas e histórico básico. Recursos restantes do Electron/IPC não são expostos no modo web.
-- `apps/api/`: borda Cloudflare Workers + D1, com opção local Node + SQLite. Já tem identidade, empresas, sessões e filiais, além do recorte P3 de produtos, estoque, caixa e vendas com D1 (`0002_commerce.sql`).
+- `apps/api/`: API autoritativa em Cloudflare Workers/D1 **ou** no Node + SQLite self-hosted; no modo local, entrega a **mesma PWA** do build sem Cloudflare. Já tem identidade, empresas, sessões e filiais, além do recorte P3 de produtos, estoque, caixa e vendas com D1 (`0002_commerce.sql`).
 - `docs/`: migração, UX, limites de segurança e implantação.
 
 **Não existe uma segunda árvore `legacy/` no código ativo**. O commit original importado e os 900 arquivos continuam auditáveis no histórico Git; instaladores, Electron, auto-update Windows/macOS, CI do desktop, licença desktop e artefatos específicos não são carregados aqui.
@@ -34,6 +34,10 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 5. **R$ 0 obrigatório para o núcleo inicial**, com Cloudflare Free e alternativa self-hosted; cobrança com Asaas é opção explícita posterior.
 6. **Reestruturação incremental comprovada:** scripts `npm run test:core`, `npm run test:api` e dry-run Wrangler passam antes de cada merge.
 
+## Execução self-hosted gratuita
+
+O núcleo pode rodar em localhost com Node 22+ e SQLite, sem Cloudflare: execute `npm run build`, depois `cd apps/api && npm run dev`, e abra http://127.0.0.1:4175/. O acesso comercial permanece desabilitado por padrão até provisionamento e QA. Consulte [instalação self-hosted](docs/SELF-HOSTED.md). Não exponha HTTP local à LAN sem TLS.
+
 ## Documentação
 
 - [Roadmap de conversão](docs/ROADMAP-SAAS-CLOUDFLARE.md)
@@ -47,13 +51,9 @@ A matriz operacional em `docs/parity/desktop-web-matrix.json` verifica 68 contra
 
 A paridade permanece **incompleta**. `npm run test:parity` executa testes de regressão do gate e valida links para as asserções dos testes Node/Chromium, a integridade de IDs, responsáveis, pré-requisitos e reivindicações; a CI executa os testes de domínio e E2E correspondentes. **Não** equiparar a existência de um arquivo a funcionalidade comprovada; teste físico de periféricos e prova independente de homologação são etapas separadas. Os estados `complete` só são aceitos com cobertura 100% do escopo e atestado rastreável de revisão/CI. Ver `docs/parity/P0-AUDIT-PLAN.md`.
 
-## P6 — 56 capacidades estendidas e self-hosted
+## Auditoria de paridade do desktop
 
-- [Plano e critérios verificáveis](docs/parity/P6-56-CAPACIDADES.md): quatro frentes de execução, exigência de testes reais e homologação física.
-- `npm run report:parity`: relatório auditável com os bloqueios de cada uma das 56 capacidades.
-- `npm run test:selfhost`: regressão offline de backup SQLite, SHA-256 e restauração não destrutiva.
-- A CLI `scripts/selfhost-backup.mjs` **não substitui** automaticamente o banco de produção; consulte o plano antes de executar a restauração.
-- **Não declarar paridade total** até 68/68 operações e 56/56 capacidades certificados; o núcleo permanece gratuito e self-hosted.
+A paridade não é declarada automaticamente com build verde. A matriz de 68 contratos das telas e o inventário de 56 capacidades são independentes. O P0 gera cenários de comparação e artefatos auditáveis, preservando o código desktop fixado somente como referência. Use `npm run test:parity` para executar as verificações ou `npm run audit:parity` para gerar os relatórios em `qa-artifacts/parity/`. Cenários sem evidência permanecem pendentes, inclusive os que possuem testes parciais de API. Consulte `docs/parity/P0-AUDIT-PLAN.md`.
 
 ### HTTPS na rede local (P6, implantação self-hosted gratuita)
 
