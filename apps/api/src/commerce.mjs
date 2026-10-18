@@ -1182,19 +1182,28 @@ export function createCommerceService(db,{now=nowISO}={}){
           if(source.status!=='DELIVERED')throw error(409,'Finalize a entrega ou retirada antes da cobrança.');
         }
         const sourceOrders=restaurantSessionId?await all("SELECT id,status FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND table_session_id=?",tenant,branch,restaurantSessionId):[source];
-        if(sourceOrders.length===0||sourceOrders.some(o=>!['DELIVERED','CANCELLED'].includes(o.status))||
-           !sourceOrders.some(o=>o.status==='DELIVERED'))
+        if(sourceOrders.some(o=>!['DELIVERED','CANCELLED'].includes(o.status)))
           throw error(409,'Todos os pedidos precisam estar entregues ou cancelados antes da cobrança.');
         const restaurantLines=restaurantSessionId
-          ?await all(`SELECT oi.product_id AS productId,oi.quantity_milli AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
+          ?await all(`SELECT oi.product_id AS productId,oi.quantity_milli-COALESCE((SELECT SUM(tr.quantity_milli) FROM r4_item_transfers tr WHERE tr.tenant_id=oi.tenant_id AND tr.branch_id=oi.branch_id AND tr.order_item_id=oi.id),0) AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
               FROM restaurant_order_items oi JOIN restaurant_orders o ON o.id=oi.order_id AND o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id
               JOIN products p ON p.id=oi.product_id AND p.tenant_id=oi.tenant_id
-              WHERE oi.tenant_id=? AND oi.branch_id=? AND o.table_session_id=? AND o.status='DELIVERED' ORDER BY oi.rowid`,tenant,branch,restaurantSessionId)
+              WHERE oi.tenant_id=? AND oi.branch_id=? AND o.table_session_id=? AND o.status='DELIVERED'
+               UNION ALL
+               SELECT oi.product_id AS productId,tr.quantity_milli AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
+               FROM r4_item_transfers tr
+               JOIN restaurant_order_items oi ON oi.id=tr.order_item_id AND oi.tenant_id=tr.tenant_id AND oi.branch_id=tr.branch_id
+               JOIN restaurant_orders o ON o.id=oi.order_id AND o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id
+               JOIN products p ON p.tenant_id=oi.tenant_id AND p.id=oi.product_id
+               WHERE tr.tenant_id=? AND tr.branch_id=? AND tr.target_session_id=? AND o.status='DELIVERED'
+              `,tenant,branch,restaurantSessionId,tenant,branch,restaurantSessionId)
           :await all(`SELECT oi.product_id AS productId,oi.quantity_milli AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
               FROM restaurant_order_items oi JOIN products p ON p.id=oi.product_id AND p.tenant_id=oi.tenant_id
               WHERE oi.tenant_id=? AND oi.branch_id=? AND oi.order_id=? ORDER BY oi.rowid`,tenant,branch,restaurantOrderId);
         const grouped=new Map();
         for(const line of restaurantLines){
+          if(line.milli<0)throw error(409,'Transferência excede o item original.');
+          if(line.milli===0)continue;
           const existing=grouped.get(line.productId);
           if(existing&&existing.unitPriceCents!==line.unitPriceCents)
             throw error(409,'O mesmo produto possui preços diferentes na comanda. Revise antes de consolidar.');
@@ -1203,6 +1212,16 @@ export function createCommerceService(db,{now=nowISO}={}){
         }
         quoted=[...grouped.values()];
         if(!quoted.length)throw error(409,'Não há itens para cobrança.');
+        if(restaurantSessionId){
+          const plan=await first('SELECT service_charge_bps AS bps,service_charge_product_id AS productId FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,restaurantSessionId);
+          if(plan?.bps){
+            const base=calculateSaleTotals({items:quoted.map(x=>({unitPriceCents:x.unitPriceCents,quantity:x.milli/1000}))}).totalCents;
+            const amount=Math.round(base*plan.bps/10000);
+            const fee=await first("SELECT id,name,sku,track_stock AS tracked FROM products WHERE tenant_id=? AND id=? AND sku='SERVICE_CHARGE' AND active=1",tenant,plan.productId);
+            if(!fee||fee.tracked||quoted.some(x=>x.productId===fee.id))throw error(409,'Produto de taxa de serviço inválido.');
+            if(amount>0)quoted.push({productId:fee.id,name:fee.name,sku:fee.sku,milli:1000,unitPriceCents:amount});
+          }
+        }
         restaurantCheckout={tableSessionId:restaurantSessionId,orderId:restaurantOrderId,customerId:source.customerId||null};
       }
       const quotedTotals=calculateSaleTotals({items:quoted.map(x=>({unitPriceCents:x.unitPriceCents,quantity:x.milli/1000}))});
@@ -1564,8 +1583,25 @@ export function createCommerceService(db,{now=nowISO}={}){
       const pricedRows=await pricedSaleLines(all,tenant,branch,id,rows);
       const mapped=pricedRows.map(row=>({unitPriceCents:row.unit_price_cents,quantity:row.quantity_milli/1000}));
       const totals=calculateSaleTotals({items:mapped,discountCents:sale.discount_cents});
-      const payments=body?.payments;
-      if(!Array.isArray(payments)||!payments.length||payments.length>6)throw error(400,'Informe a forma de pagamento.');
+      let link=null;
+      try{link=await first('SELECT table_session_id AS sessionId FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=? AND sale_id=?',tenant,branch,id);}
+      catch(e){if(!/no such table: restaurant_sale_links/i.test(String(e?.message)))throw e;}
+      const plan=link?.sessionId?await first('SELECT parts,service_charge_bps AS bps FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,link.sessionId):null;
+      let splitShares=null;
+      if(plan){
+        if(sale.discount_cents)throw error(409,'Divisão exige remoção de desconto manual antes de cobrar.');
+        if(!Array.isArray(body?.shares)||body.shares.length!==plan.parts)throw error(409,'Informe pagamento correspondente a cada parte da comanda.');
+        const per=Math.floor(totals.totalCents/plan.parts),extra=totals.totalCents%plan.parts,seen=new Set();
+        splitShares=body.shares.map(share=>{
+          const index=share?.index,amountCents=share?.amountCents;
+          if(!Number.isInteger(index)||index<1||index>plan.parts||seen.has(index)||
+             amountCents!==per+(index<=extra?1:0)||!['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(share?.method))
+            throw error(409,'Parcela divergente ou repetida. Confira a divisão antes de receber.');
+          seen.add(index);return {index,amountCents,method:share.method};
+        });
+      }else if(body?.shares)throw error(400,'Esta venda não possui divisão de conta configurada.');
+      const payments=splitShares||body?.payments;
+      if(!Array.isArray(payments)||!payments.length||payments.length>(splitShares?50:6))throw error(400,'Informe a forma de pagamento.');
       const normalized=payments.map(p=>{
         const method=normalizeMethod(p?.method);
         if(!allowedPayments.has(method)||!integer(p?.amountCents)||p.amountCents<=0)
@@ -1635,8 +1671,28 @@ export function createCommerceService(db,{now=nowISO}={}){
           p.last_cost_cents AS unitCostCents FROM product_bundle_components b
           JOIN products p ON p.id=b.component_id AND p.tenant_id=b.tenant_id
           WHERE b.tenant_id=? AND b.kit_id=? ORDER BY b.component_id`,tenant,line.product_id);
-        if(p.track_stock&&kit.length)throw error(409,'Produto com estoque próprio não pode ser kit.');
-        const allocations=kit.length?kit.map(c=>{
+        // Older test/upgrade snapshots can run without the optional R4 schema.
+        // Absence of this table means only the pre-R4 catalog composition applies.
+        let latestRecipe=null;
+        try{
+          latestRecipe=await first('SELECT MAX(version) AS version FROM r4_recipe_versions WHERE tenant_id=? AND branch_id=? AND product_id=?',
+            tenant,branch,line.product_id);
+        }catch(e){if(!/no such table: r4_recipe_versions/i.test(String(e?.message)))throw e;}
+        const recipeVersion=latestRecipe?.version||0;
+        const recipe=recipeVersion?await all(`SELECT ri.ingredient_id AS productId,ri.quantity_milli AS quantityMilli,
+           p.last_cost_cents AS unitCostCents FROM r4_recipe_ingredients ri
+           JOIN products p ON p.tenant_id=ri.tenant_id AND p.id=ri.ingredient_id
+           WHERE ri.tenant_id=? AND ri.branch_id=? AND ri.product_id=? AND ri.version=? ORDER BY ri.ingredient_id`,
+           tenant,branch,line.product_id,recipeVersion):[];
+        if(p.track_stock&&(kit.length||recipe.length))
+          throw error(409,'Produto com estoque próprio não pode conter kit ou ficha técnica de consumo.');
+        if(kit.length&&recipe.length)
+          throw error(409,'Produto com kit e ficha técnica simultâneos precisa escolher um único consumo.');
+        if(recipe.length)statements.push(q(`INSERT INTO r4_sale_recipe_versions
+          (tenant_id,branch_id,sale_id,sale_item_id,product_id,version,created_at) VALUES(?,?,?,?,?,?,?)`,
+          tenant,branch,id,line.id,line.product_id,recipeVersion,completedAt));
+        const composition=recipe.length?recipe:kit;
+        const allocations=composition.length?composition.map(c=>{
           const numerator=line.quantity_milli*c.quantityMilli;
           if(!Number.isSafeInteger(numerator)||numerator%1000!==0)
             throw error(409,'Composição do kit não suporta esta quantidade fracionada.');
@@ -1692,6 +1748,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         if(commissionCents>0)statements.push(q(`INSERT INTO seller_commission_ledger(id,tenant_id,branch_id,seller_id,sale_id,sale_item_id,kind,amount_cents,reference_key,occurred_at)
           VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,sellerId,id,line.parentItemId,'EARNED',commissionCents,'sale:'+id+':item:'+line.id,completedAt));
       }
+      if(splitShares)for(const tender of splitShares)statements.push(q('INSERT INTO r4_split_tenders(tenant_id,branch_id,sale_id,share_index,amount_cents,method,recorded_at) VALUES(?,?,?,?,?,?,?)',tenant,branch,id,tender.index,tender.amountCents,tender.method,completedAt));
       const wholesaleOrder=await first('SELECT id FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND sale_id=? AND status=?',tenant,branch,id,'CONFIRMED');
       if(wholesaleOrder)statements.push(q("UPDATE wholesale_orders SET status='FULFILLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND status='CONFIRMED'",completedAt,tenant,branch,id));
       // Stock is decremented only in the same D1 batch; no secondary EventBus

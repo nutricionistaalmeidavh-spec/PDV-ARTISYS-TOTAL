@@ -8,7 +8,7 @@ import {hashPassword} from '../src/password.mjs';
 const origin='https://pdvtotal.test';
 async function setup(){
   const db=openLocalDatabase();
-  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0021_r4_restaurant_operations.sql','0022_r4_restaurant_checkout.sql'])
+  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0021_r4_restaurant_operations.sql','0022_r4_restaurant_checkout.sql','0023_r4_extended_verticals.sql'])
     db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
   const stamp='2026-10-17T12:00:00.000Z';
   const h=await hashPassword('Senha-de-teste-123!');
@@ -285,6 +285,223 @@ test('R4 cap-033/cap-037: retirada vira exatamente uma venda com preços congela
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM cash_movements WHERE tenant_id=?').bind('a').first()).n,1);
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,1);
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM restaurant_sale_links WHERE tenant_id=?').bind('a').first()).n,1);
+ }finally{x.close();}
+});
+
+test('R4 cap-034/035: KDS routes independently to production stations; one order remains canonical',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Prato KDS',sku:'R4KDS',salePriceCents:2600,trackStock:false})).body.product;
+   const station=await x.request('a','restaurant/kitchen/stations','POST',{branchId:'filial-a',name:'Grelha',printerName:'cozinha-1',printEnabled:false});
+   assert.equal(station.status,201,JSON.stringify(station.body));
+   const sid=station.body.station.id;
+   const route=await x.request('a','restaurant/kitchen/routes','POST',{branchId:'filial-a',productId:p.id,mode:'PRODUCTION',stationId:sid});
+   assert.equal(route.status,201,JSON.stringify(route.body));
+   const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:p.id,quantity:2}]})).body.order;
+   const tickets=(await x.request('a','restaurant/kitchen/station-tickets?branchId=filial-a')).body.tickets;
+   assert.equal(tickets.length,1);assert.equal(tickets[0].stationId,sid);assert.equal(tickets[0].orderId,order.id);
+   assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,409);
+   const ticket=tickets[0].id;
+   assert.equal((await x.request('a',`restaurant/kitchen/station-tickets/${ticket}`,'PATCH',{branchId:'filial-a',status:'READY'})).status,409);
+   assert.equal((await x.request('a',`restaurant/kitchen/station-tickets/${ticket}`,'PATCH',{branchId:'filial-a',status:'PREPARING'})).status,200);
+   assert.equal((await x.request('a',`restaurant/kitchen/station-tickets/${ticket}`,'PATCH',{branchId:'filial-a',status:'READY'})).status,200);
+   assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+   assert.equal((await x.request('b','restaurant/kitchen/station-tickets?branchId=filial-b','GET',undefined,{as:'b'})).body.tickets.length,0);
+ }finally{x.close();}
+});
+
+test('R4 cap-036: pizza profiles and flavor pricing are tenant-isolated and integer cents',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Pizza',sku:'R4PIZZA',salePriceCents:2000,trackStock:false})).body.product;
+   const profile=await x.request('a','restaurant/pizzeria/profiles','POST',{branchId:'filial-a',productId:p.id,policy:'HIGHEST_FLAVOR',
+     sizes:[{code:'M',name:'Média',priceCents:3000}],
+     flavors:[{code:'MARG',name:'Marguerita',priceCents:3600},{code:'CAL',name:'Calabresa',priceCents:4200}],
+     crusts:[{code:'CAT',name:'Catupiry',priceCents:600}]});
+   assert.equal(profile.status,201,JSON.stringify(profile.body));
+   const quote=await x.request('a','restaurant/pizzeria/quote','POST',{branchId:'filial-a',productId:p.id,sizeCode:'M',flavorCodes:['MARG','CAL'],crustCode:'CAT'});
+   assert.equal(quote.status,200,JSON.stringify(quote.body));
+   assert.equal(quote.body.quote.unitPriceCents,4800);
+   assert.equal((await x.request('a','restaurant/pizzeria/quote','POST',{branchId:'filial-a',productId:p.id,sizeCode:'M',flavorCodes:['MARG','MARG']})).status,400);
+   const avg=await x.request('a','restaurant/pizzeria/profiles','POST',{branchId:'filial-a',productId:p.id,policy:'PROPORTIONAL_AVERAGE',
+     sizes:[{code:'M',name:'Média',priceCents:3000}],
+     flavors:[{code:'MARG',name:'Marguerita',priceCents:3600},{code:'CAL',name:'Calabresa',priceCents:4200}],crusts:[]});
+   assert.equal(avg.status,201,JSON.stringify(avg.body));
+   assert.equal((await x.request('a','restaurant/pizzeria/quote','POST',{branchId:'filial-a',productId:p.id,sizeCode:'M',flavorCodes:['MARG','CAL']})).body.quote.unitPriceCents,3900);
+   assert.equal((await x.request('b','restaurant/pizzeria/profiles?branchId=filial-b','GET',undefined,{as:'b'})).body.profiles.length,0);
+ }finally{x.close();}
+});
+
+test('R4 cap-039/041: peso in grams priced safely and segment recommendations do not create duplicate sales',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Pão a peso',sku:'R4PESO',salePriceCents:2999,unit:'KG',trackStock:false})).body.product;
+   const price=await x.request('a','restaurant/weight/quote','POST',{branchId:'filial-a',productId:p.id,grams:450});
+   assert.equal(price.status,200,JSON.stringify(price.body));
+   assert.equal(price.body.quote.totalCents,1350);
+   assert.equal((await x.request('a','restaurant/weight/quote','POST',{branchId:'filial-a',productId:p.id,grams:-5})).status,400);
+   const rec=await x.request('a','restaurant/segments?branchId=filial-a');
+   assert.equal(rec.status,200,JSON.stringify(rec.body));
+   assert.ok(rec.body.segments.some(s=>s.id==='RESTAURANT'));
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,0);
+ }finally{x.close();}
+});
+
+test('R4 cap-009: recipe versioned consumption uses canonical inventory sale ledger once',async()=>{
+ const x=await setup();try{
+   const flour=(await x.request('a','products','POST',{branchId:'filial-a',name:'Farinha',sku:'R4-FLOUR',salePriceCents:100,unit:'KG',trackStock:true})).body.product;
+   const bread=(await x.request('a','products','POST',{branchId:'filial-a',name:'Pão pronto',sku:'R4-BREAD',salePriceCents:1000,trackStock:false})).body.product;
+   assert.equal((await x.request('a','inventory/receipts','POST',{branchId:'filial-a',productId:flour.id,quantity:2,type:'opening'})).status,201);
+   const first=await x.request('a',`recipes/${bread.id}`,'PUT',{branchId:'filial-a',ingredients:[{ingredientId:flour.id,quantity:0.25}]});
+   assert.equal(first.status,200,JSON.stringify(first.body));assert.equal(first.body.recipe.version,1);
+   const revised=await x.request('a',`recipes/${bread.id}`,'PUT',{branchId:'filial-a',ingredients:[{ingredientId:flour.id,quantity:0.3}]});
+   assert.equal(revised.status,200);assert.equal(revised.body.recipe.version,2);
+   const rev1=await x.db.prepare('SELECT quantity_milli AS q FROM r4_recipe_ingredients WHERE tenant_id=? AND product_id=? AND version=1').bind('a',bread.id).first();
+   assert.equal(rev1.q,250);
+   const sale=(await x.request('a','sales','POST',{branchId:'filial-a'})).body.sale;
+   assert.equal((await x.request('a',`sales/${sale.id}/items`,'POST',{branchId:'filial-a',productId:bread.id,quantity:2})).status,200);
+   await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0});
+   const result=await x.request('a',`sales/${sale.id}/complete`,'POST',{branchId:'filial-a',payments:[{method:'PIX',amountCents:2000}]});
+   assert.equal(result.status,200,JSON.stringify(result.body));
+   const movement=await x.db.prepare("SELECT delta_milli AS delta FROM inventory_movements WHERE tenant_id=? AND sale_id=? AND product_id=? AND type='sale'").bind('a',sale.id,flour.id).first();
+   assert.equal(movement.delta,-600);
+   assert.equal((await x.db.prepare("SELECT count(*) AS n FROM inventory_movements WHERE tenant_id=? AND sale_id=? AND type='sale'").bind('a',sale.id).first()).n,1);
+   const snapshot=await x.db.prepare('SELECT version FROM r4_sale_recipe_versions WHERE tenant_id=? AND sale_id=? AND product_id=?').bind('a',sale.id,bread.id).first();
+   assert.equal(snapshot.version,2);
+ }finally{x.close();}
+});
+
+test('R4 cap-037/038: counter ticket daily sequence and delivery courier events use same order',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'R4TICKET',name:'Salgado',salePriceCents:900,trackStock:false})).body.product;
+   const key=crypto.randomUUID();
+   const one=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'COUNTER',useTicket:true,items:[{productId:p.id,quantity:1}]},{key});
+   assert.equal(one.status,201,JSON.stringify(one.body));
+   assert.equal(one.body.order.ticketNumber,1);
+   assert.equal(one.body.order.serviceChannel,'COUNTER');
+   const replay=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'COUNTER',useTicket:true,items:[{productId:p.id,quantity:1}]},{key});
+   assert.equal(replay.body.order.id,one.body.order.id);
+   const two=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',useTicket:true,items:[{productId:p.id,quantity:1}]});
+   assert.equal(two.body.order.ticketNumber,2);
+   const delivery=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'DELIVERY',address:'Rua Alfa, 100',
+       items:[{productId:p.id,quantity:1}]});
+   assert.equal(delivery.status,201,JSON.stringify(delivery.body));
+   const oid=delivery.body.order.id,global=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets.find(x=>x.orderId===oid);
+   assert.equal((await x.request('a',`restaurant/kitchen/${global.id}`,'PATCH',{branchId:'filial-a',status:'PREPARING'})).status,200);
+   assert.equal((await x.request('a',`restaurant/kitchen/${global.id}`,'PATCH',{branchId:'filial-a',status:'READY'})).status,200);
+   assert.equal((await x.request('a',`restaurant/orders/${oid}/deliver`,'POST',{branchId:'filial-a'})).status,409);
+   assert.equal((await x.request('a',`restaurant/orders/${oid}/dispatch`,'POST',{branchId:'filial-a',courierName:'Entregador próprio'})).status,200);
+   assert.equal((await x.request('a',`restaurant/orders/${oid}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM restaurant_orders WHERE tenant_id=?').bind('a').first()).n,3);
+ }finally{x.close();}
+});
+
+test('R4 cap-032: partial item transfer preserves quantity and two canonical table settlements',async()=>{
+ const x=await setup();try{
+   const product=(await x.request('a','products','POST',{branchId:'filial-a',sku:'TRANSFER-ITEM',name:'Prato transferível',salePriceCents:1500,trackStock:false})).body.product;
+   const ta=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Origem itens'})).body.table;
+   const tb=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Destino itens'})).body.table;
+   const a=(await x.request('a',`restaurant/tables/${ta.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+   const b=(await x.request('a',`restaurant/tables/${tb.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+   const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:a.id,items:[{productId:product.id,quantity:2}]})).body.order;
+   const kitchen=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0];
+   await x.request('a',`restaurant/kitchen/${kitchen.id}`,'PATCH',{branchId:'filial-a',status:'PREPARING'});
+   await x.request('a',`restaurant/kitchen/${kitchen.id}`,'PATCH',{branchId:'filial-a',status:'READY'});
+   await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'});
+   const item=await x.db.prepare('SELECT id FROM restaurant_order_items WHERE order_id=?').bind(order.id).first();
+   const transfer=await x.request('a',`restaurant/sessions/${a.id}/transfer-items`,'POST',
+     {branchId:'filial-a',targetSessionId:b.id,items:[{orderItemId:item.id,quantity:1}]});
+   assert.equal(transfer.status,200,JSON.stringify(transfer.body));
+   assert.equal((await x.request('a',`restaurant/sessions/${a.id}/transfer-items`,'POST',
+     {branchId:'filial-a',targetSessionId:b.id,items:[{orderItemId:item.id,quantity:2}]})).status,409);
+   const sa=await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:a.id});
+   const sb=await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:b.id});
+   assert.equal(sa.status,201,JSON.stringify(sa.body));assert.equal(sb.status,201,JSON.stringify(sb.body));
+   assert.equal(sa.body.sale.totalCents,1500);assert.equal(sb.body.sale.totalCents,1500);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM restaurant_orders').bind().first()).n,1);
+ }finally{x.close();}
+});
+
+test('R4 cap-032: equal split plus explicit service charge posts through one sale and immutable tenders',async()=>{
+ const x=await setup();try{
+   const product=(await x.request('a','products','POST',{branchId:'filial-a',sku:'SPLITBASE',name:'Refeição',salePriceCents:1000,trackStock:false})).body.product;
+   const charge=(await x.request('a','products','POST',{branchId:'filial-a',sku:'SERVICE_CHARGE',name:'Taxa de serviço',salePriceCents:0,trackStock:false})).body.product;
+   const table=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Split'})).body.table;
+   const session=(await x.request('a',`restaurant/tables/${table.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+   const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:session.id,items:[{productId:product.id,quantity:1}]})).body.order;
+   const k=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0].id;
+   await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'PREPARING'});
+   await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'READY'});
+   await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'});
+   const plan=await x.request('a',`restaurant/sessions/${session.id}/split`,'POST',
+     {branchId:'filial-a',parts:2,serviceChargeBps:1000,serviceChargeProductId:charge.id});
+   assert.equal(plan.status,200,JSON.stringify(plan.body));assert.deepEqual(plan.body.plan.shares,[550,550]);
+   const opened=await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:session.id});
+   assert.equal(opened.status,201,JSON.stringify(opened.body));assert.equal(opened.body.sale.totalCents,1100);
+   const saleId=opened.body.sale.id;
+   await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0});
+   assert.equal((await x.request('a',`sales/${saleId}/complete`,'POST',{branchId:'filial-a',payments:[{method:'PIX',amountCents:1100}]})).status,409);
+   const done=await x.request('a',`sales/${saleId}/complete`,'POST',{branchId:'filial-a',
+     shares:[{index:1,amountCents:550,method:'PIX'},{index:2,amountCents:550,method:'CASH'}]});
+   assert.equal(done.status,200,JSON.stringify(done.body));
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM r4_split_tenders WHERE sale_id=?').bind(saleId).first()).n,2);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,1);
+   assert.equal((await x.request('a',`restaurant/sessions/${session.id}/close`,'POST',{branchId:'filial-a'})).status,200);
+ }finally{x.close();}
+});
+
+test('R4 cap-036: configured pizza enters unified kitchen order with immutable priced snapshot',async()=>{
+ const x=await setup();try{
+   const pizza=(await x.request('a','products','POST',{branchId:'filial-a',sku:'PIZZACFG',name:'Pizza da casa',salePriceCents:2500,trackStock:false})).body.product;
+   const profile=await x.request('a','restaurant/pizzeria/profiles','POST',{branchId:'filial-a',productId:pizza.id,
+     policy:'HIGHEST_FLAVOR',sizes:[{code:'M',name:'Média',priceCents:3000}],
+     flavors:[{code:'C',name:'Calabresa',priceCents:4400}],crusts:[{code:'B',name:'Borda',priceCents:600}]});
+   assert.equal(profile.status,201);
+   const order=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',
+     items:[{productId:pizza.id,quantity:2,pizza:{sizeCode:'M',flavorCodes:['C'],crustCode:'B'}}]});
+   assert.equal(order.status,201,JSON.stringify(order.body));
+   assert.equal(order.body.order.totalCents,10000);
+   const item=await x.db.prepare('SELECT unit_price_cents AS price,configuration_json AS configuration FROM restaurant_order_items WHERE order_id=?').bind(order.body.order.id).first();
+   assert.equal(item.price,5000);assert.match(item.configuration,/Calabresa/);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales').bind().first()).n,0);
+   const ticket=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0].id;
+   await x.request('a',`restaurant/kitchen/${ticket}`,'PATCH',{branchId:'filial-a',status:'PREPARING'});
+   await x.request('a',`restaurant/kitchen/${ticket}`,'PATCH',{branchId:'filial-a',status:'READY'});
+   await x.request('a',`restaurant/orders/${order.body.order.id}/deliver`,'POST',{branchId:'filial-a'});
+   const sale=await x.request('a','sales','POST',{branchId:'filial-a',restaurantOrderId:order.body.order.id});
+   assert.equal(sale.status,201,JSON.stringify(sale.body));assert.equal(sale.body.sale.totalCents,10000);
+ }finally{x.close();}
+});
+
+test('R4 cap-035: direct food item bypasses production safely without duplicate KDS work',async()=>{
+ const x=await setup();try{
+   const product=(await x.request('a','products','POST',{branchId:'filial-a',sku:'DIRECT-FOOD',name:'Água mineral',salePriceCents:400,trackStock:false})).body.product;
+   assert.equal((await x.request('a','restaurant/kitchen/routes','POST',{branchId:'filial-a',productId:product.id,mode:'DIRECT'})).status,201);
+   const order=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:product.id,quantity:1}]});
+   assert.equal(order.status,201,JSON.stringify(order.body));
+   const k=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets;
+   assert.equal(k.length,1);assert.equal(k[0].status,'READY');
+   assert.equal((await x.request('a',`restaurant/orders/${order.body.order.id}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM r4_station_tickets').bind().first()).n,0);
+ }finally{x.close();}
+});
+
+test('R4 cap-039: bakery weighted order reuses KDS, ticket and exact checkout price without second sales domain',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'BAKERYKG',name:'Biscoito por quilo',unit:'KG',salePriceCents:2999,trackStock:false})).body.product;
+   const quote=(await x.request('a','restaurant/weight/quote','POST',{branchId:'filial-a',productId:p.id,grams:450})).body.quote;
+   const order=await x.request('a','restaurant/bakery/orders','POST',{branchId:'filial-a',
+     items:[{productId:p.id,quantity:quote.quantity}]});
+   assert.equal(order.status,201,JSON.stringify(order.body));
+   assert.equal(order.body.order.ticketNumber,1);
+   assert.equal(order.body.order.totalCents,quote.totalCents);
+   const listed=await x.request('a','restaurant/bakery/orders?branchId=filial-a');
+   assert.equal(listed.status,200);assert.equal(listed.body.orders.length,1);
+   const ticket=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0].id;
+   await x.request('a',`restaurant/kitchen/${ticket}`,'PATCH',{branchId:'filial-a',status:'PREPARING'});
+   await x.request('a',`restaurant/kitchen/${ticket}`,'PATCH',{branchId:'filial-a',status:'READY'});
+   await x.request('a',`restaurant/orders/${order.body.order.id}/deliver`,'POST',{branchId:'filial-a'});
+   const sale=await x.request('a','sales','POST',{branchId:'filial-a',restaurantOrderId:order.body.order.id});
+   assert.equal(sale.status,201,JSON.stringify(sale.body));
+   assert.equal(sale.body.sale.totalCents,quote.totalCents);
+   assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM restaurant_orders').bind().first()).n,1);
  }finally{x.close();}
 });
 

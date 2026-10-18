@@ -12,7 +12,7 @@
  const path='/api/v1/restaurant';
  const today=new Date().toISOString().slice(0,10);
  const monthAgo=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
- let state={tables:[],orders:[],tickets:[],requests:[],products:[],report:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
+ let state={tables:[],orders:[],tickets:[],stationTickets:[],requests:[],products:[],split:null,report:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
  const notice=(value,error=false)=>root.PdvToast?.show?.(value,error?'error':'success');
  const action=(endpoint,method='GET',body)=>api.request(path+endpoint,{method,body});
  const safe=async(fn,fallback=[])=>{try{return await fn();}catch{return fallback;}};
@@ -23,12 +23,12 @@
  function orderLines(order){return (order.items||[]).map(i=>esc(i.name||i.productName)+' × '+esc(i.quantity)).join(', ')||'Nenhum item';}
  function title(value){return ({TABLE:'Mesa',PICKUP:'Retirada',DELIVERY:'Entrega',OPEN:'Aberto',READY:'Pronto',DELIVERED:'Entregue',CANCELLED:'Cancelado',NEW:'Novo',PREPARING:'Preparando',ACKNOWLEDGED:'Em atendimento',CLOSED:'Finalizado',WAITER:'Garçom',BILL:'Conta'})[value]||value;}
  async function load(){
-   const [tables,orders,tickets,requests,products,report]=await Promise.all([
+   const [tables,orders,tickets,stationTickets,requests,products,report]=await Promise.all([
      safe(()=>action('/tables').then(v=>v.tables)),safe(()=>action('/orders').then(v=>v.orders)),
-     safe(()=>action('/kitchen').then(v=>v.tickets)),safe(()=>action('/requests').then(v=>v.requests)),
+     safe(()=>action('/kitchen').then(v=>v.tickets)),safe(()=>action('/kitchen/station-tickets').then(v=>v.tickets)),safe(()=>action('/requests').then(v=>v.requests)),
      safe(()=>api.products(false)),safe(()=>action('/reports/summary?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to)).then(v=>v.report),null)
    ]);
-   Object.assign(state,{tables,orders,tickets,requests,products,report});
+   Object.assign(state,{tables,orders,tickets,stationTickets,requests,products,report});
  }
  function tableSection(){
    if(!can('restaurant.orders.view'))return '<p class="vertical-empty">Seu perfil não possui acesso às mesas.</p>';
@@ -48,7 +48,7 @@
          orders.map(o=>'<div class="restaurant-row">'+esc(orderLines(o))+' · '+esc(title(o.status))+'</div>').join('')+
          (can('restaurant.service.manage')?btn('Chamar garçom','service-waiter',state.selected)+btn('Solicitar conta','service-bill',state.selected):'')+
          (can('restaurant.orders.transfer')&&free.length?'<form class="vertical-form" data-r4-form="transfer"><input type="hidden" name="sessionId" value="'+esc(state.selected)+'"><label class="field"><span>Mudar para mesa livre</span><select name="targetTableId">'+free.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.label)+'</option>').join('')+'</select></label><button class="secondary-button">Transferir mesa</button></form>':'')+
-         btn('Preparar cobrança','checkout-session',state.selected)+
+         btn('Dividir / transferir itens','advanced',state.selected)+btn('Preparar cobrança','checkout-session',state.selected)+
          (can('restaurant.tables.manage')?btn('Encerrar mesa','close',state.selected):'')+
          '</div>';
        })():'')+'</section>';
@@ -59,27 +59,35 @@
    const availableTables=state.tables.filter(t=>t.sessionId&&t.sessionStatus==='OPEN');
    return '<section class="data-card"><h2>Pedidos de alimentação</h2>'+
      (can('restaurant.orders.create')?'<details open><summary>Novo pedido</summary><form data-r4-form="order" class="vertical-form">'+
-       '<label class="field"><span>Canal</span><select name="fulfillment"><option value="TABLE">Mesa</option><option value="PICKUP">Retirada</option><option value="DELIVERY">Entrega</option></select></label>'+
+       '<label class="field"><span>Canal</span><select name="fulfillment"><option value="TABLE">Mesa</option><option value="COUNTER">Balcão</option><option value="PICKUP">Retirada</option><option value="DELIVERY">Entrega</option></select></label>'+
        '<label class="field"><span>Comanda (para atendimento em mesa)</span><select name="tableSessionId"><option value="">Selecione a mesa</option>'+availableTables.map(t=>'<option value="'+esc(t.sessionId)+'">'+esc(t.label)+'</option>').join('')+'</select></label>'+
        field('Endereço (obrigatório para entrega)','address','text','maxlength="300"')+
        '<label class="field"><span>Produto</span><select name="productId" required>'+products.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('')+'</select></label>'+
        field('Quantidade','quantity','number','min="0.001" step="0.001" value="1" required')+
+        '<label><input type="checkbox" name="useTicket"> Gerar senha diária para acompanhar o pedido</label>'+
        '<button class="primary-button">Enviar pedido para cozinha</button></form></details>':'')+
      '<div class="restaurant-list">'+state.orders.map(o=>
-       '<div class="restaurant-row"><div><strong>'+esc(title(o.fulfillment))+' · '+esc(o.id.slice(0,8))+'</strong><small>'+esc(title(o.status))+' · '+esc(orderLines(o))+'</small></div><div class="restaurant-actions">'+
-       (o.status==='READY'?btn('Entregue / retirado','deliver',o.id):'')+
+       '<div class="restaurant-row"><div><strong>'+esc(title(o.service_channel||o.fulfillment))+' · '+esc(o.ticket_number?'Senha '+o.ticket_number:o.id.slice(0,8))+'</strong><small>'+esc(title(o.status))+' · '+esc(orderLines(o))+'</small></div><div class="restaurant-actions">'+
+       (o.status==='READY'&&o.fulfillment==='DELIVERY'?btn('Despachar','dispatch',o.id):'')+
+        (o.status==='READY'?btn('Entregue / retirado','deliver',o.id):'')+
        (o.status==='OPEN'?btn('Cancelar','cancel',o.id):'')+
        (o.status==='DELIVERED'&&o.fulfillment!=='TABLE'?btn('Cobrar','checkout-order',o.id):'')+
        '</div></div>').join('')+'</div></section>';
  }
  function kitchenSection(){
    if(!can('kitchen.view'))return '<p class="vertical-empty">Seu perfil não possui acesso à cozinha.</p>';
-   return '<section class="data-card"><h2>KDS · Fila de produção</h2><div class="restaurant-list">'+state.tickets.map(t=>
-     '<div class="restaurant-row"><div><strong>'+esc(title(t.fulfillment))+' · '+esc(t.orderId.slice(0,8))+'</strong><small>'+esc(title(t.status))+' · '+money(t.totalCents)+'</small></div>'+
-     (can('kitchen.update_status')?'<div class="restaurant-actions">'+
-       (t.status==='NEW'?btn('Iniciar preparo','preparing',t.id):'')+
-       (t.status==='PREPARING'?btn('Marcar pronto','ready',t.id):'')+'</div>':'')+'</div>'
-   ).join('')+'</div></section>';
+   const routedIds=new Set(state.stationTickets.map(t=>t.orderId));
+   const queue=[
+     ...state.stationTickets.map(t=>({...t,stationScoped:true})),
+     ...state.tickets.filter(t=>!routedIds.has(t.orderId)).map(t=>({...t,stationScoped:false}))
+   ];
+   return '<section class="data-card"><h2>KDS · Estações e pedidos</h2><div class="restaurant-list">'+queue.map(t=>
+     '<div class="restaurant-row"><div><strong>'+esc(t.stationName||title(t.fulfillment))+' · '+esc(t.orderId.slice(0,8))+'</strong><small>'+
+     esc(title(t.status))+(t.items?.length?' · '+esc(t.items.map(x=>x.productName+' × '+x.quantity).join(', ')):' · '+money(t.totalCents))+
+     '</small></div>'+(can('kitchen.update_status')?'<div class="restaurant-actions">'+
+     (t.status==='NEW'?btn('Iniciar preparo',t.stationScoped?'preparing-station':'preparing',t.id):'')+
+     (t.status==='PREPARING'?btn('Marcar pronto',t.stationScoped?'ready-station':'ready',t.id):'')+'</div>':'')+'</div>').join('')+
+     '</div></section>';
  }
  function serviceSection(){
    if(!can('restaurant.service.manage'))return '<p class="vertical-empty">Seu perfil não tem acesso aos chamados.</p>';
@@ -101,13 +109,21 @@
  }
  function checkoutSection(){
    const c=state.checkout;if(!c)return '';
-   return '<section class="data-card"><h2>Pagamento no caixa canônico</h2><p>Venda '+esc(c.saleNumber||c.saleId.slice(0,8))+' · '+money(c.totalCents||0)+'</p>'+
-     (c.status==='COMPLETED'?'<p>Pagamento concluído.</p>':
-       '<form class="vertical-form" data-r4-form="payment">'+
-       '<label class="field"><span>Forma de pagamento</span><select name="method"><option value="PIX">PIX</option><option value="CASH">Dinheiro</option><option value="DEBIT_CARD">Débito</option><option value="CREDIT_CARD">Crédito</option></select></label>'+
-       '<input type="hidden" name="saleId" value="'+esc(c.saleId)+'">'+
-       '<input type="hidden" name="totalCents" value="'+esc(c.totalCents)+'">'+
-       '<p>Para concluir, o caixa do terminal precisa estar aberto.</p><button class="primary-button">Concluir recebimento</button></form>')+'</section>';
+   const split=state.split;
+   const methodOptions='<option value="PIX">PIX</option><option value="CASH">Dinheiro</option><option value="DEBIT_CARD">Débito</option><option value="CREDIT_CARD">Crédito</option>';
+   const tenders=split?'<fieldset><legend>Divisão por pessoa</legend>'+
+      split.shares.map((value,i)=>'<label class="field"><span>Parte '+(i+1)+' · '+money(value)+'</span>'+
+        '<select name="shareMethod'+(i+1)+'">'+methodOptions+'</select></label>').join('')+'</fieldset>':
+      '<label class="field"><span>Forma de pagamento</span><select name="method">'+methodOptions+'</select></label>';
+   return '<section class="data-card"><h2>Pagamento no caixa canônico</h2><p>Venda '+esc(c.saleNumber||c.saleId.slice(0,8))+
+      ' · '+money(c.totalCents||0)+'</p>'+
+      (split?'<p>'+split.parts+' partes · Taxa de serviço '+money(split.serviceChargeCents)+'</p>':'')+
+      (c.status==='COMPLETED'?'<p>Pagamento concluído.</p>':
+        '<form class="vertical-form" data-r4-form="payment">'+tenders+
+        '<input type="hidden" name="saleId" value="'+esc(c.saleId)+'">'+
+        '<input type="hidden" name="totalCents" value="'+esc(c.totalCents)+'">'+
+        '<p>Para concluir, o caixa do terminal precisa estar aberto.</p><button class="primary-button">Concluir recebimento</button></form>')+
+      '</section>';
  }
  function render(){
    if(!host)return;
@@ -115,7 +131,7 @@
    host.innerHTML='<section class="page vertical-page restaurant-page" data-r4-web><header class="page-head"><div><h1>Alimentação</h1><p>Mesas, comandas, preparo e recebimento no mesmo caixa.</p></div>'+back()+'</header>'+
      '<nav class="restaurant-view-switch" aria-label="Operações de alimentação">'+tabs.map(([v,n])=>
        '<button type="button" class="restaurant-btn '+(state.section===v?'':'secondary')+'" data-r4-action="tab" data-id="'+v+'">'+n+'</button>').join('')+
-       btn('Atualizar','refresh')+'</nav>'+
+       btn('Avançado / segmentos','advanced')+btn('Atualizar','refresh')+'</nav>'+
      checkoutSection()+
      ({tables:tableSection,orders:orderSection,kitchen:kitchenSection,services:serviceSection,reports:reportSection}[state.section]||tableSection)()+
      '</section>';
@@ -125,23 +141,30 @@
  async function reload(){await load();render();}
  async function show(){
    if(!api.webMode)return root.PdvRestaurantUi?.show?.();
-   state.selected='';state.checkout=null;state.section='tables';
+   state.selected='';state.checkout=null;state.split=null;state.section='tables';
    host.innerHTML='<section class="page vertical-page"><h2>Carregando alimentação…</h2></section>';
    try{await reload();}catch(e){host.textContent=e.message;notice(e.message,true);}
  }
  async function click(el){
    const what=el.dataset.r4Action,id=el.dataset.id;
    if(what==='back')return root.PdvAppNavigation?.navigate?.('home');
-   if(what==='tab'){state.section=id;state.checkout=null;return render();}
+   if(what==='tab'){state.section=id;state.checkout=null;state.split=null;return render();}
    if(what==='select'){state.selected=id;return render();}
    if(what==='refresh')return reload();
+   if(what==='advanced')return root.PdvR4AdvancedUi?.show?.({sessionId:id||state.selected});
    try{
      if(what==='open')await form('/tables/'+encodeURIComponent(id)+'/open',{partySize:1});
      if(what==='close')await form('/sessions/'+encodeURIComponent(id)+'/close',{});
      if(what==='service-waiter'||what==='service-bill')await form('/sessions/'+encodeURIComponent(id)+'/requests',{type:what==='service-waiter'?'WAITER':'BILL'});
      if(what==='cancel')await form('/orders/'+encodeURIComponent(id)+'/cancel',{});
+     if(what==='dispatch'){
+       const courier=window.prompt('Nome do entregador responsável:');
+       if(!courier)return;
+       await form('/orders/'+encodeURIComponent(id)+'/dispatch',{courierName:courier.trim()});
+     }
      if(what==='deliver')await form('/orders/'+encodeURIComponent(id)+'/deliver',{});
      if(what==='preparing'||what==='ready')await action('/kitchen/'+encodeURIComponent(id),'PATCH',{status:what==='preparing'?'PREPARING':'READY'});
+     if(what==='preparing-station'||what==='ready-station')await action('/kitchen/station-tickets/'+encodeURIComponent(id),'PATCH',{status:what==='preparing-station'?'PREPARING':'READY'});
      if(what==='ack'||what==='resolve')await action('/requests/'+encodeURIComponent(id),'PATCH',{status:what==='ack'?'ACKNOWLEDGED':'CLOSED'});
      if(what==='checkout-session'||what==='checkout-order'){
        const session=what==='checkout-session',endpoint=session?'/sessions/'+encodeURIComponent(id):'/orders/'+encodeURIComponent(id);
@@ -156,6 +179,7 @@
          }
        }
        state.checkout=linked;
+       state.split=session?(await safe(()=>action(endpoint+'/split').then(v=>v.plan),null)):null;
      }
      if(what==='csv'){
        const text=await action('/reports/csv?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to));
@@ -175,12 +199,13 @@
        if(fulfillment==='TABLE'&&!v.tableSessionId)throw new Error('Selecione uma comanda.');
        if(fulfillment==='DELIVERY'&&!String(v.address).trim())throw new Error('Informe o endereço de entrega.');
        await form('/orders',{fulfillment,tableSessionId:fulfillment==='TABLE'?v.tableSessionId:null,
-         address:fulfillment==='DELIVERY'?String(v.address).trim():'',items:[{productId:v.productId,quantity:Number(v.quantity)}]});
+         address:fulfillment==='DELIVERY'?String(v.address).trim():'',useTicket:v.useTicket==='on',items:[{productId:v.productId,quantity:Number(v.quantity)}]});
      }
      if(what==='dates'){state.from=v.from;state.to=v.to;}
      if(what==='payment'){
-       const sale=await api.request('/api/v1/sales/'+encodeURIComponent(v.saleId)+'/complete',{
-         method:'POST',body:{payments:[{method:v.method,amountCents:Number(v.totalCents)}]}});
+       const body=state.split?{shares:state.split.shares.map((amountCents,i)=>({index:i+1,amountCents,method:v['shareMethod'+(i+1)]}))}:
+         {payments:[{method:v.method,amountCents:Number(v.totalCents)}]};
+       const sale=await api.request('/api/v1/sales/'+encodeURIComponent(v.saleId)+'/complete',{method:'POST',body});
        const settled=sale.sale||sale;
        state.checkout={...state.checkout,status:settled.status};
        notice('Pagamento registrado na venda canônica.');

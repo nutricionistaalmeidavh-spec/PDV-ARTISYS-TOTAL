@@ -85,7 +85,7 @@
         else if(original.startsWith('/api/v1/reports/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/sales'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/returns')operation='returns';
-        else if(/^\/api\/v1\/(customers|suppliers|sellers|restaurant|wholesale|commissions|credit)(\/|$)/.test(original))operation=original.slice(apiRoot.length);
+        else if(/^\/api\/v1\/(customers|suppliers|sellers|restaurant|recipes|onboarding|wholesale|commissions|credit)(\/|$)/.test(original))operation=original.slice(apiRoot.length);
         else throw new Error('Este módulo ainda não está disponível na versão online.');
         targetPath=apiRoot+'tenants/'+encodeURIComponent(this.tenantId)+'/'+operation;
         if(method==='GET'||method==='DELETE')url.searchParams.set('branchId',this.branchId);
@@ -140,7 +140,7 @@
       if(operation==='wholesale/orders')return method==='GET'?value.orders:value.order;
       if(/^wholesale\/orders\/[^/]+\/(confirm|cancel)$/.test(operation))return value.order;
       if(/^wholesale\/orders\/[^/]+$/.test(operation))return value.order;
-      if(operation.startsWith('restaurant/')||operation.startsWith('wholesale/')||operation.startsWith('commissions')||operation.startsWith('credit/'))return value;
+      if(operation.startsWith('recipes/')||operation.startsWith('onboarding/')||operation.startsWith('restaurant/')||operation.startsWith('wholesale/')||operation.startsWith('commissions')||operation.startsWith('credit/'))return value;
       if(operation==='inventory')return value.stock;
       if(operation==='inventory/receipts'||operation==='inventory/adjustments')return value.movement;
       if(operation==='inventory/movements')return value.movements;
