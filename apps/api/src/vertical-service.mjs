@@ -190,7 +190,7 @@ export function createVerticalService(db){
      if(body.customerId)await customer(t,body.customerId);
      const lines=await orderItems(t,b,body.items);
      const totals=calculateSaleTotals({items:lines});
-     const routed=[],printStations=new Map();let directCount=0;
+     const routed=[],frozenStations=new Map(),printStations=new Map();let directCount=0;
      for(const line of lines){
        const route=await first('SELECT mode,station_id AS stationId FROM r4_product_kitchen_routes WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,line.productId);
        if(route?.mode==='DIRECT')directCount++;
@@ -198,6 +198,11 @@ export function createVerticalService(db){
          const station=await first('SELECT id,printer_name AS printerName,print_enabled AS printEnabled FROM r4_kitchen_stations WHERE tenant_id=? AND branch_id=? AND id=? AND active=1',t,b,route.stationId);
          if(!station)throw err(409,'Estação de produção inativa; reconfigure o destino do produto.');
          routed.push(route.stationId);
+         if(!frozenStations.has(route.stationId))frozenStations.set(route.stationId,[]);
+         frozenStations.get(route.stationId).push({
+           productId:line.productId,productName:line.name,milli:line.milli,
+           configurationJson:line.configuration?JSON.stringify(line.configuration):null
+         });
          if(station.printEnabled&&station.printerName){
            if(!printStations.has(route.stationId))printStations.set(route.stationId,{printerName:station.printerName,items:[]});
            printStations.get(route.stationId).items.push({name:line.name,quantity:line.quantity,configuration:line.configuration||null});
@@ -222,6 +227,12 @@ export function createVerticalService(db){
          statements.push(q(
            'INSERT INTO r4_station_tickets(id,tenant_id,branch_id,order_id,station_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
            ticketId,t,b,id,stationId,'NEW',stamp,stamp));
+         for(const [index,line] of (frozenStations.get(stationId)||[]).entries()){
+           statements.push(q(`INSERT INTO r4_station_ticket_items
+             (tenant_id,branch_id,station_ticket_id,item_index,product_id,product_name,quantity_milli,configuration_json,origin)
+             VALUES(?,?,?,?,?,?,?,?,?)`,
+             t,b,ticketId,index,line.productId,line.productName,line.milli,line.configurationJson,'ORDER'));
+         }
          const printer=printStations.get(stationId);
          if(printer){
            const payload=JSON.stringify({jobFormat:'R4_KITCHEN_V1',stationTicketId:ticketId,orderId:id,ticketNumber,items:printer.items,orderedAt:stamp});

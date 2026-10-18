@@ -99,11 +99,16 @@ export function createR4ExtendedService(db){
        FROM r4_station_tickets k JOIN restaurant_orders o ON o.tenant_id=k.tenant_id AND o.branch_id=k.branch_id AND o.id=k.order_id
        JOIN r4_kitchen_stations s ON s.tenant_id=k.tenant_id AND s.branch_id=k.branch_id AND s.id=k.station_id
        WHERE k.tenant_id=? AND k.branch_id=? ORDER BY k.created_at,k.id LIMIT 250`,t,b);
-     return Promise.all(rows.map(async row=>({...row,items:await all(`SELECT oi.product_id AS productId,oi.product_name AS productName,
-       oi.quantity_milli / 1000.0 AS quantity FROM restaurant_order_items oi
-       JOIN r4_product_kitchen_routes r ON r.tenant_id=oi.tenant_id AND r.branch_id=oi.branch_id
-         AND r.product_id=oi.product_id AND r.station_id=?
-       WHERE oi.tenant_id=? AND oi.branch_id=? AND oi.order_id=?`,row.stationId,t,b,row.orderId)})));
+     return Promise.all(rows.map(async row=>{
+       const items=await all(`SELECT i.product_id AS productId,i.product_name AS productName,
+          i.quantity_milli / 1000.0 AS quantity,i.configuration_json AS configurationJson,
+          i.origin FROM r4_station_ticket_items i
+          WHERE i.tenant_id=? AND i.branch_id=? AND i.station_ticket_id=?
+          ORDER BY i.item_index`,t,b,row.id);
+       return {...row,items:items.map(({configurationJson,...item})=>({
+         ...item,configuration:configurationJson?JSON.parse(configurationJson):null
+       }))};
+     }));
    },
    async updateTicket(t,b,ticketId,status,key){
      await branch(t,b);

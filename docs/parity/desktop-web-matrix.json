@@ -303,7 +303,7 @@
             "testFile": "apps/api/test/commerce.test.mjs",
             "testContains": "P6 weighted product"
           },
-          "reviewNote": "Venda por peso e protocolo web implementados; paridade com balanças físicas depende de homologação.",
+          "reviewNote": "Venda por peso e protocolo web implementados. Aceite de código: cálculo e eventos de balança simulados, rejeição de valores inválidos e comparação com desktop. Dispositivo real não bloqueia.",
           "owner": "sales",
           "dependsOn": [
             "products-020"
@@ -337,7 +337,7 @@
             "testFile": "apps/api/test/peripherals-web.test.mjs",
             "testContains": "diálogo de impressão não altera a venda"
           },
-          "reviewNote": "Diálogo browser e ESC/POS existem; reimpressão histórica e impressão física dependem de QA.",
+          "reviewNote": "Diálogo browser e ESC/POS implementados. Restam regressões automatizadas de reimpressão histórica e spool/recuperação simulados, sem exigir impressão real.",
           "owner": "sales",
           "dependsOn": [
             "checkout-008"
@@ -478,7 +478,7 @@
             "testAssertionContains": "assert.equal(await page.locator('#product-search').inputValue(),'','accepted scanner input clears for the next scan');",
             "testRunner": "playwright"
           },
-          "reviewNote": "P1: scanner USB HID no navegador (emulação de teclado: código exato + Enter), diferencia SKU de barcode, impede SKU/barcode ambíguos ou desconhecidos, evita leitura concorrente e reutiliza carrinho canônico. O teste Chromium cobre o fluxo com Workerd e D1 local. Parcial: exige homologação do leitor físico, variantes de prefixo/sufixo, múltiplos layouts/terminais e comparação executada com desktop."
+          "reviewNote": "Scanner USB HID no navegador com emulação de teclado: código exato + Enter, SKU/barcode distintos, rejeição de ambiguidades e carrinho canônico. Pendente: testes automatizados de prefixo/sufixo, layouts e terminais emulados, além de comparação com desktop. Leitor real é opcional."
         },
         {
           "id": "products-026",
@@ -530,7 +530,7 @@
             "products-027"
           ],
           "acceptance": "Inventário contado, ajustes positivos e negativos. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
-          "reviewNote": "Inventário contado web implementado com saldo esperado, CAS transacional e ajuste pelo ledger imutável, RBAC, isolamento por tenant e idempotência. Mantido parcial até QA físico de contagens simultâneas em terminais, equivalência integral com desktop e revisão independente."
+          "reviewNote": "Inventário contado web com CAS, ledger imutável, RBAC, tenant e idempotência. Parcial até concorrência automatizada entre terminais simulados, equivalência desktop e revisão independente de código; sem QA físico."
         },
         {
           "id": "products-029",
@@ -566,7 +566,7 @@
             "testFile": "apps/api/test/p2-photos.test.mjs",
             "testContains": "P2 photos: R2 stores tenant-scoped private keys"
           },
-          "reviewNote": "Fotos JPEG/PNG/WebP privadas por empresa com R2 opcional ou SQLite local; homologação física do bucket, fotos legadas e redimensionamento ainda pendentes."
+          "reviewNote": "Fotos JPEG/PNG/WebP privadas por empresa com R2 opcional ou SQLite local; pendem testes de adaptador de armazenamento, versões históricas e redimensionamento. Não há validação de dispositivo físico."
         },
         {
           "id": "products-031",
@@ -583,7 +583,7 @@
             "testFile": "apps/api/test/p2-catalog-inventory.test.mjs",
             "testContains": "P2 category, barcode and parent"
           },
-          "reviewNote": "P2: variantes/pais e agora metadados de lote por recebimento imutável, vinculados ao ledger de estoque (com testes API de idempotência, permissões e isolamento). PARCIAL: não existe saldo por lote, seleção FIFO/FEFO, baixa, devolução ou transferência rastreados por lote; ainda requer QA físico, relatórios e comparação integral com desktop."
+          "reviewNote": "Variantes/pais e metadados de lote por recebimento imutável com idempotência e isolamento. Parcial: comprovar saldo por lote, FIFO/FEFO, baixa, devolução, transferência e relatórios, comparados ao desktop em testes automatizados; sem prova de equipamento."
         },
         {
           "id": "products-032",
@@ -722,7 +722,7 @@
             "testFile": "scripts/web-browser-e2e.mjs",
             "testContains": "data-history-print-sale"
           },
-          "reviewNote": "Reimpressão de vendas concluídas implementada no histórico web com recibo canônico; exportação histórica detalhada e validação em hardware físico ainda pendentes.",
+          "reviewNote": "Reimpressão de venda concluída pelo histórico web com recibo canônico; pendem exportação histórica detalhada e testes simulados de spool/reimpressão, sem dispositivo físico.",
           "owner": "sales-history",
           "dependsOn": [
             "history-034"
@@ -838,7 +838,7 @@
             "testFile": "apps/api/test/p1-reversals.test.mjs",
             "testContains": "P1: completed sale cancellation"
           },
-          "reviewNote": "Reembolso por terminal operacional explícito com vínculo ao caixa original, mantendo as compensações imutáveis. Sem homologação física multicaixa."
+          "reviewNote": "Reembolso por terminal operacional com vínculo ao caixa original e compensações imutáveis. Aceite: cenários automatizados de sessões simultâneas e caixa fechado; terminais físicos não são gate."
         },
         {
           "id": "cash-046",
@@ -855,7 +855,7 @@
             "testFile": "apps/api/test/commerce.test.mjs",
             "testContains": "P3 independent terminal drawers link every sale"
           },
-          "reviewNote": "Sessões simultâneas por terminal (identificador persistente no navegador), abertura/fechamento e lançamento de venda com cash_session_id específico, reembolso em terminal indicado, isolamento na mesma filial e auditoria histórica. Aguardam homologação física multicaixa, identidade/cadastro de terminal gerenciado, migração de caixas legados e ensaios concorrentes em dispositivos reais."
+          "reviewNote": "Sessões e vendas associadas a terminais separados no mesmo estabelecimento, reembolso e auditoria. Pendem cadastro/identidade gerenciada, migração de caixa legado quando houver dados e concorrência/revogação simuladas. Não depende de dois computadores reais."
         }
       ]
     },
@@ -1186,7 +1186,7 @@
             "testFile": "apps/api/test/commerce.test.mjs",
             "testContains": "P4 seller monthly goals rank actual net sales"
           },
-          "reviewNote": "Meta comercial mensal por vendedor registrada com permissão e idempotência, ranking derivado de vendas líquidas (devoluções na data da restituição), comissões geradas, estornadas e pagas, sem novo livro financeiro. Homologação dos repasses físicos, diferentes bases de comissão, metas multicritério, integração contábil e comparação integral com desktop ainda pendentes.",
+          "reviewNote": "Metas e ranking por vendedor, comissões geradas, estornadas e pagas e ledger financeiro único. Restam diferenças de bases de cálculo, metas multicritério, integração contábil e comparação automatizada com desktop; pagamentos físicos não são gate.",
           "owner": "reports",
           "dependsOn": [
             "reports-058",
