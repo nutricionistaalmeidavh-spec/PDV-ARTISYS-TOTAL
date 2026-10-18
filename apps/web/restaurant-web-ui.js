@@ -59,15 +59,17 @@
    const availableTables=state.tables.filter(t=>t.sessionId&&t.sessionStatus==='OPEN');
    return '<section class="data-card"><h2>Pedidos de alimentação</h2>'+
      (can('restaurant.orders.create')?'<details open><summary>Novo pedido</summary><form data-r4-form="order" class="vertical-form">'+
-       '<label class="field"><span>Canal</span><select name="fulfillment"><option value="TABLE">Mesa</option><option value="PICKUP">Retirada</option><option value="DELIVERY">Entrega</option></select></label>'+
+       '<label class="field"><span>Canal</span><select name="fulfillment"><option value="TABLE">Mesa</option><option value="COUNTER">Balcão</option><option value="PICKUP">Retirada</option><option value="DELIVERY">Entrega</option></select></label>'+
        '<label class="field"><span>Comanda (para atendimento em mesa)</span><select name="tableSessionId"><option value="">Selecione a mesa</option>'+availableTables.map(t=>'<option value="'+esc(t.sessionId)+'">'+esc(t.label)+'</option>').join('')+'</select></label>'+
        field('Endereço (obrigatório para entrega)','address','text','maxlength="300"')+
        '<label class="field"><span>Produto</span><select name="productId" required>'+products.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('')+'</select></label>'+
        field('Quantidade','quantity','number','min="0.001" step="0.001" value="1" required')+
+        '<label><input type="checkbox" name="useTicket"> Gerar senha diária para acompanhar o pedido</label>'+
        '<button class="primary-button">Enviar pedido para cozinha</button></form></details>':'')+
      '<div class="restaurant-list">'+state.orders.map(o=>
-       '<div class="restaurant-row"><div><strong>'+esc(title(o.fulfillment))+' · '+esc(o.id.slice(0,8))+'</strong><small>'+esc(title(o.status))+' · '+esc(orderLines(o))+'</small></div><div class="restaurant-actions">'+
-       (o.status==='READY'?btn('Entregue / retirado','deliver',o.id):'')+
+       '<div class="restaurant-row"><div><strong>'+esc(title(o.service_channel||o.fulfillment))+' · '+esc(o.ticket_number?'Senha '+o.ticket_number:o.id.slice(0,8))+'</strong><small>'+esc(title(o.status))+' · '+esc(orderLines(o))+'</small></div><div class="restaurant-actions">'+
+       (o.status==='READY'&&o.fulfillment==='DELIVERY'?btn('Despachar','dispatch',o.id):'')+
+        (o.status==='READY'?btn('Entregue / retirado','deliver',o.id):'')+
        (o.status==='OPEN'?btn('Cancelar','cancel',o.id):'')+
        (o.status==='DELIVERED'&&o.fulfillment!=='TABLE'?btn('Cobrar','checkout-order',o.id):'')+
        '</div></div>').join('')+'</div></section>';
@@ -141,6 +143,11 @@
      if(what==='close')await form('/sessions/'+encodeURIComponent(id)+'/close',{});
      if(what==='service-waiter'||what==='service-bill')await form('/sessions/'+encodeURIComponent(id)+'/requests',{type:what==='service-waiter'?'WAITER':'BILL'});
      if(what==='cancel')await form('/orders/'+encodeURIComponent(id)+'/cancel',{});
+     if(what==='dispatch'){
+       const courier=window.prompt('Nome do entregador responsável:');
+       if(!courier)return;
+       await form('/orders/'+encodeURIComponent(id)+'/dispatch',{courierName:courier.trim()});
+     }
      if(what==='deliver')await form('/orders/'+encodeURIComponent(id)+'/deliver',{});
      if(what==='preparing'||what==='ready')await action('/kitchen/'+encodeURIComponent(id),'PATCH',{status:what==='preparing'?'PREPARING':'READY'});
      if(what==='ack'||what==='resolve')await action('/requests/'+encodeURIComponent(id),'PATCH',{status:what==='ack'?'ACKNOWLEDGED':'CLOSED'});
@@ -176,7 +183,7 @@
        if(fulfillment==='TABLE'&&!v.tableSessionId)throw new Error('Selecione uma comanda.');
        if(fulfillment==='DELIVERY'&&!String(v.address).trim())throw new Error('Informe o endereço de entrega.');
        await form('/orders',{fulfillment,tableSessionId:fulfillment==='TABLE'?v.tableSessionId:null,
-         address:fulfillment==='DELIVERY'?String(v.address).trim():'',items:[{productId:v.productId,quantity:Number(v.quantity)}]});
+         address:fulfillment==='DELIVERY'?String(v.address).trim():'',useTicket:v.useTicket==='on',items:[{productId:v.productId,quantity:Number(v.quantity)}]});
      }
      if(what==='dates'){state.from=v.from;state.to=v.to;}
      if(what==='payment'){
