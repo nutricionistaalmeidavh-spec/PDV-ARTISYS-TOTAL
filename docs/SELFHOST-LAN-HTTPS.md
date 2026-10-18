@@ -74,6 +74,25 @@ npm run serve:lan
 - Com o servidor indisponível não há novas operações comerciais confirmadas.
   Não presumir que a página em cache seja uma confirmação de venda.
 
+### Autorizar os primeiros terminais (obrigatório em LAN)
+
+Após provisionar e iniciar HTTPS, abra a PWA e faça login como proprietário.
+Acesse **Configurações > Rede local**. Gere um código de uso único para a
+filial e tipo **Terminal de caixa**. No dispositivo que vai operar, faça
+login com operador autorizado e preencha **Parear este aparelho**.
+O computador principal também deve ser pareado se operar vendas pela PWA.
+
+Sem dispositivo ativo para aquela filial, rotas de vendas, caixa, estoque
+e operações de módulos retornam erro de autorização: **não** há
+funcionamento comercial anônimo nem fallback para burlar o pareamento.
+O código expira em cinco minutos e só pode ser consumido uma vez.
+A revogação do dispositivo bloqueia a próxima operação comercial,
+mesmo se a sessão de operador ainda estiver válida.
+
+As áreas opcionais **Alimentação** e **Atacado** podem ser habilitadas/
+desabilitadas pelo administrador nessa mesma tela. Desabilitar não apaga
+histórico. O endereço e QR são gerados localmente, sem serviço externo.
+
 ## 4. Backup e recuperação sem sobrescrita
 
 ```bash
