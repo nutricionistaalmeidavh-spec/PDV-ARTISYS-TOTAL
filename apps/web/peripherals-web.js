@@ -159,7 +159,9 @@
   }
   async function openDrawer() {if(settings().printerMode==='bridge')return root.PdvLocalBridge.drawer();return writeSerial('drawer',escpos('',{drawer:true}),settings().drawerBaud);}
   function receiptHtml(sale,options={}) {
-    if(!sale || sale.status!=='COMPLETED' || !sale.id) throw new Error('Somente venda concluída pode ser impressa.');
+    const prebill=options.documentType==='PREBILL';
+    if(!sale?.id||(prebill?!['OPEN','SUSPENDED'].includes(sale.status):sale.status!=='COMPLETED'))
+      throw new Error(prebill?'Pré-conta exige venda em aberto.':'Somente venda concluída pode ser impressa.');
     const prefs=normalizeSettings(options);
     const branding=root.PdvReceiptBranding?.normalize(options.branding||root.PdvReceiptBranding.read())||{name:'PDV TOTAL',address:'',phone:'',logoDataUrl:null};
     const amount=n=>(Number(n||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -168,7 +170,7 @@
       '<tr><td>'+escapeHtml(item.productName||item.sku||item.productId||'Produto')+
       '</td><td>'+escapeHtml(qty(item.quantity))+'</td><td>'+escapeHtml(amount(item.totalCents??Math.round(item.quantity*item.unitPriceCents)))+'</td></tr>').join('');
     const payments=(sale.payments||[]).map(p=>'<div>'+escapeHtml(p.method)+': '+escapeHtml(amount(p.amountCents))+'</div>').join('');
-    return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Cupom não fiscal</title><style>@page{size:'+prefs.paperMm+'mm auto;margin:3mm}body{font:12px monospace;margin:0;color:#000}h1{text-align:center;font-size:15px}.receipt-logo{max-width:95%;max-height:26mm;display:block;margin:0 auto 2mm;object-fit:contain}.receipt-meta{text-align:center;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}td{border-bottom:1px dotted #aaa;padding:6px 2px}td:not(:first-child){text-align:right}strong{font-size:15px}.total{display:flex;justify-content:space-between;margin:12px 0}</style></head><body>'+(branding.logoDataUrl?'<img class="receipt-logo" src="'+escapeHtml(branding.logoDataUrl)+'" alt="Logotipo da loja">':'')+'<h1>'+escapeHtml(branding.name)+'</h1>'+(branding.address?'<p class="receipt-meta">'+escapeHtml(branding.address)+'</p>':'')+(branding.phone?'<p class="receipt-meta">Telefone: '+escapeHtml(branding.phone)+'</p>':'')+'<p>CUPOM NÃO FISCAL</p><p>Venda '+escapeHtml(sale.saleNumber||sale.id)+'</p><p>'+escapeHtml(sale.completedAt||'')+'</p><table><tbody>'+items+'</tbody></table><div class="total"><strong>TOTAL</strong><strong>'+escapeHtml(amount(sale.totalCents))+'</strong></div>'+payments+'<div>Troco: '+escapeHtml(amount(sale.changeCents))+'</div><hr><p>Obrigado pela preferência.</p></body></html>';
+    return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+(prebill?'Pré-conta':'Cupom não fiscal')+'</title><style>@page{size:'+prefs.paperMm+'mm auto;margin:3mm}body{font:12px monospace;margin:0;color:#000}h1{text-align:center;font-size:15px}.receipt-logo{max-width:95%;max-height:26mm;display:block;margin:0 auto 2mm;object-fit:contain}.receipt-meta{text-align:center;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}td{border-bottom:1px dotted #aaa;padding:6px 2px}td:not(:first-child){text-align:right}strong{font-size:15px}.total{display:flex;justify-content:space-between;margin:12px 0}</style></head><body>'+(branding.logoDataUrl?'<img class="receipt-logo" src="'+escapeHtml(branding.logoDataUrl)+'" alt="Logotipo da loja">':'')+'<h1>'+escapeHtml(branding.name)+'</h1>'+(branding.address?'<p class="receipt-meta">'+escapeHtml(branding.address)+'</p>':'')+(branding.phone?'<p class="receipt-meta">Telefone: '+escapeHtml(branding.phone)+'</p>':'')+'<p>'+(prebill?'PRÉ-CONTA · NÃO FISCAL':'CUPOM NÃO FISCAL')+'</p><p>Venda +escapeHtml(sale.saleNumber||sale.id)+'</p><p>'+escapeHtml(sale.completedAt||'')+'</p><table><tbody>'+items+'</tbody></table><div class="total"><strong>TOTAL</strong><strong>'+escapeHtml(amount(sale.totalCents))+'</strong></div>'+payments+'<div>Troco: '+escapeHtml(amount(sale.changeCents))+'</div><hr><p>Obrigado pela preferência.</p></body></html>';
   }
   function openPrintDocument(html,providedPopup) {
     const popup=providedPopup||root.open('','_blank');
@@ -186,6 +188,11 @@
     const branding=root.PdvReceiptBranding?.normalize(options.branding||root.PdvReceiptBranding.read())||{name:'PDV TOTAL',address:'',phone:''};
     const fmt=n=>(Number(n||0)/100).toFixed(2);
     return [branding.name,...(branding.address?[branding.address]:[]),...(branding.phone?['Telefone: '+branding.phone]:[]),'CUPOM NAO FISCAL','Venda '+String(sale.saleNumber||sale.id),String(sale.completedAt||''),...((sale.items||[]).map(i=>String(i.productName||i.sku||i.productId||'Produto')+'  '+String(i.quantity)+' x '+fmt(i.unitPriceCents)+' = '+fmt(i.totalCents??Math.round(i.quantity*i.unitPriceCents)))),'TOTAL: '+fmt(sale.totalCents),...((sale.payments||[]).map(p=>String(p.method)+': '+fmt(p.amountCents))),'Troco: '+fmt(sale.changeCents),'Obrigado pela preferencia.','',''].join('\n');
+  }
+  function printPrebill(document,{popup}={}) {
+    if(document?.documentType!=='PREBILL'||!document.sale||!document.branding)
+      throw new Error('Pré-conta canônica exigida.');
+    return openPrintDocument(receiptHtml(document.sale,{...settings(),branding:document.branding,documentType:'PREBILL'}),popup);
   }
   async function printSale(sale,opts={}) {
     if(!sale||sale.status!=='COMPLETED'||!sale.id)throw new Error('Venda concluída obrigatória.');
@@ -308,7 +315,7 @@
   function printTest(){
     return printSale({id:('TESTE-'+(root.crypto?.randomUUID?.()||String(Date.now())+'-'+Math.random().toString(36).slice(2))),status:'COMPLETED',saleNumber:'TESTE',completedAt:new Date().toISOString(),items:[],payments:[],totalCents:0,changeCents:0});
   }
-  root.PdvWebHardware=Object.freeze({settings,saveSettings,readWeight,connect,openDrawer,printSale,printTest,showSettings});
+  root.PdvWebHardware=Object.freeze({settings,saveSettings,readWeight,connect,openDrawer,printSale,printPrebill,printTest,showSettings});
   root.PdvWebHardwareUtils=Object.freeze({parseWeight,parseUranoWeight,normalizeSettings,receiptHtml,receiptText,escpos,escapeHtml});
   root.document?.addEventListener('click',e=>{
     if(e.target?.closest?.('#peripherals-settings'))showSettings();
