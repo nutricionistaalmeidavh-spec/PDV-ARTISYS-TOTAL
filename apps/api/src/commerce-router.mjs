@@ -414,9 +414,9 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
         if(parts.length===3&&method==='POST')
           return json({sale:await service.addItem(tenant,branch,id,body,key)});
         if(parts.length===4&&method==='PUT')
-          return json({sale:await service.changeItem(tenant,branch,id,decodeURIComponent(parts[3]),body.quantity)});
+          return json({sale:await service.changeItem(tenant,branch,id,decodeURIComponent(parts[3]),body.quantity,key)});
         if(parts.length===4&&method==='DELETE')
-          return json({sale:await service.removeItem(tenant,branch,id,decodeURIComponent(parts[3]))});
+          return json({sale:await service.removeItem(tenant,branch,id,decodeURIComponent(parts[3]),key)});
       }
       if(parts.length===3&&parts[2]==='discount'&&method==='POST'){
         requireAccess(member,'sales.discount',user);
