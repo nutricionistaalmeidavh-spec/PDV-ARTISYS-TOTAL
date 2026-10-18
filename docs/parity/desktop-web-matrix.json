@@ -7,7 +7,7 @@
   },
   "web": {
     "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL",
-    "mainAtAudit": "f082bfdd73126778f06d1d0c252704a69de6a578"
+    "mainAtAudit": "cdf0b03ba61ea7c3fc95f283890d246b8ec4fa0d"
   },
   "parityClaim": "incomplete",
   "definitions": {
@@ -1273,6 +1273,7 @@
   "deliveryAudit": {
     "reviewedAt": "2026-10-18",
     "baselineMainCommit": "f082bfdd73126778f06d1d0c252704a69de6a578",
-    "note": "68 screen contracts are separate from 56 capability code-delivery progress. R2 and R4 status changes are in the capability inventory, not additional screen contracts; no physical QA gate."
+    "note": "68 screen contracts are separate from 56 capability code-delivery progress. R2 and R4 status changes are in the capability inventory, not additional screen contracts; no physical QA gate.",
+    "reconciledMainCommit": "cdf0b03ba61ea7c3fc95f283890d246b8ec4fa0d"
   }
 }
