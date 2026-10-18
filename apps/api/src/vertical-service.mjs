@@ -144,7 +144,13 @@ export function createVerticalService(db){
      const active=await first(`SELECT COUNT(*) AS n FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND table_session_id=? AND status NOT IN('CANCELLED','DELIVERED')`,t,b,id);
      if(active.n)throw err(409,'Finalize ou cancele todos os pedidos antes de fechar a mesa.');
      const delivered=await first("SELECT COUNT(*) AS n FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND table_session_id=? AND status='DELIVERED'",t,b,id);
-     if(delivered.n){
+     const remainder=await first(`SELECT COALESCE(SUM(oi.quantity_milli-COALESCE((SELECT SUM(tr.quantity_milli)
+       FROM r4_item_transfers tr WHERE tr.tenant_id=oi.tenant_id AND tr.branch_id=oi.branch_id AND tr.order_item_id=oi.id),0)),0) AS milli
+       FROM restaurant_order_items oi JOIN restaurant_orders o ON o.id=oi.order_id AND o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id
+       WHERE o.tenant_id=? AND o.branch_id=? AND o.table_session_id=? AND o.status='DELIVERED'`,t,b,id);
+     const incoming=await first('SELECT COALESCE(SUM(quantity_milli),0) AS milli FROM r4_item_transfers WHERE tenant_id=? AND branch_id=? AND target_session_id=?',t,b,id);
+     const pendingMilli=remainder.milli+incoming.milli;
+     if(pendingMilli>0){
        const linked=await first(`SELECT sale.status FROM restaurant_sale_links link
          JOIN sales sale ON sale.tenant_id=link.tenant_id AND sale.branch_id=link.branch_id AND sale.id=link.sale_id
          WHERE link.tenant_id=? AND link.branch_id=? AND link.table_session_id=?`,t,b,id);
