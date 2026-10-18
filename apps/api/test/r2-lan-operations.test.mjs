@@ -5,13 +5,13 @@ import {applyLocalMigrations} from '../src/local-migrations.mjs';
 import {createApi} from '../src/worker.mjs';
 import {hashPassword} from '../src/password.mjs';
 
-test('cap-003 cap-046 R2: hashed one-use pairing, two terminals, revocation and tenant isolation', async t=>{
+test('cap-003 cap-044 cap-045 cap-046 R2: independently paired terminal, waiter and kitchen devices with revocation', async t=>{
   const db=openLocalDatabase(':memory:');
   t.after(()=>db.close());
   await applyLocalMigrations(db);
   const pw=await hashPassword('LocalNetworkStrongPass2026!');
   const stamp=new Date().toISOString();
-  for(const [id,email] of [['owner','owner@a.test'],['waiter','waiter@a.test'],['cashier','cashier@a.test'],['other','owner@b.test']]){
+  for(const [id,email] of [['owner','owner@a.test'],['waiter','waiter@a.test'],['cashier','cashier@a.test'],['kitchen','kitchen@a.test'],['other','owner@b.test']]){
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
       .bind(id,email,id,pw,stamp).run();
   }
@@ -21,7 +21,7 @@ test('cap-003 cap-046 R2: hashed one-use pairing, two terminals, revocation and 
     await db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)')
       .bind('branch-'+id,id,'MAIN','Branch '+id,stamp).run();
   }
-  for(const [tenant,user,role] of [['a','owner','OWNER'],['a','waiter','WAITER'],['a','cashier','CASHIER'],['b','other','OWNER']]){
+  for(const [tenant,user,role] of [['a','owner','OWNER'],['a','waiter','WAITER'],['a','cashier','CASHIER'],['a','kitchen','KITCHEN'],['b','other','OWNER']]){
     await db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)')
       .bind(tenant,user,role,stamp).run();
   }
@@ -43,7 +43,7 @@ test('cap-003 cap-046 R2: hashed one-use pairing, two terminals, revocation and 
     return res.cookie;
   }
   const owner=await login('owner@a.test'),waiter=await login('waiter@a.test');
-  const cashier=await login('cashier@a.test'),other=await login('owner@b.test');
+  const cashier=await login('cashier@a.test'),kitchen=await login('kitchen@a.test'),other=await login('owner@b.test');
   const base='/api/v1/tenants/a/lan';
   assert.equal((await call(base+'/devices','GET',null,cashier)).status,403);
   assert.equal((await call(base+'/devices','GET',null,other)).status,404);
@@ -86,12 +86,36 @@ test('cap-003 cap-046 R2: hashed one-use pairing, two terminals, revocation and 
   const secondHeaders={'x-pdv-device-id':second.data.device.id,
     'x-pdv-device-credential':second.data.credential};
   assert.equal((await call(protectedPath,'GET',null,owner,true,secondHeaders)).status,200);
+  // cap-044: a waiter can use a WAITER device for live restaurant tables,
+  // but its profile cannot enter kitchen production endpoints.
+  const waiterHeaders={'x-pdv-device-id':id,'x-pdv-device-credential':paired.data.credential};
+  assert.equal((await call('/api/v1/tenants/a/restaurant/tables?branchId=branch-a',
+    'GET',null,waiter,true,waiterHeaders)).status,200);
+  assert.equal((await call('/api/v1/tenants/a/restaurant/kitchen?branchId=branch-a',
+    'GET',null,waiter,true,waiterHeaders)).status,403);
+  // cap-045: independent kitchen device, strictly limited to KDS permissions.
+  const kitchenCode=await call(base+'/pairings','POST',{kind:'KITCHEN',branchId:'branch-a'},owner);
+  assert.equal(kitchenCode.status,201);
+  const kitchenDevice=await call(base+'/devices/pair','POST',
+    {code:kitchenCode.data.code,name:'KDS B'},kitchen);
+  assert.equal(kitchenDevice.status,201);
+  const kitchenHeaders={'x-pdv-device-id':kitchenDevice.data.device.id,
+    'x-pdv-device-credential':kitchenDevice.data.credential};
+  const kitchenFeed=await call('/api/v1/tenants/a/restaurant/kitchen?branchId=branch-a',
+    'GET',null,kitchen,true,kitchenHeaders);
+  assert.equal(kitchenFeed.status,200,JSON.stringify(kitchenFeed.data));
+  assert.ok(Array.isArray(kitchenFeed.data.tickets));
+  assert.equal((await call('/api/v1/tenants/a/restaurant/tables?branchId=branch-a',
+    'GET',null,kitchen,true,kitchenHeaders)).status,403);
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},cashier)).status,403);
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},owner)).status,200);
   assert.equal((await call(base+'/devices/check','POST',{id,credential:paired.data.credential},waiter)).status,401);
   assert.equal((await call(protectedPath,'GET',null,owner,true,deviceHeaders)).status,401,'revocation must block commercial requests');
   assert.equal((await call(protectedPath,'GET',null,owner,true,secondHeaders)).status,200,
     'revoking one device does not revoke a second independent terminal');
+  assert.equal((await call('/api/v1/tenants/a/restaurant/kitchen?branchId=branch-a',
+    'GET',null,kitchen,true,kitchenHeaders)).status,200,
+    'revoking waiter does not revoke independent kitchen session');
   assert.equal((await call(base+'/devices/'+second.data.device.id,'DELETE',{},owner)).status,200);
   assert.equal((await call(protectedPath,'GET',null,owner,true,secondHeaders)).status,401);
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},owner)).status,200);
