@@ -1,6 +1,6 @@
-# PDV Artisys Total — fundação P1/P2
+# PDV Artisys Total — API canônica local e Cloudflare
 
-Este diretório contém **somente a nova borda de identidade** do SaaS. Não há renderer paralelo, checkout paralelo, estoque paralelo, gravação de vendas ou tentativa de rodar Electron em Workers.
+Este diretório contém a API canônica de identidade e operações comerciais, usando o mesmo core compartilhado. O servidor Node local agora serve também a PWA compilada em dist/web. Não há renderer paralelo, checkout paralelo, estoque paralelo, gravação de vendas ou tentativa de rodar Electron em Workers.
 
 ## Contrato canônico preservado
 
@@ -14,6 +14,7 @@ Assim, os perfis e permissões não são reescritos com nomes concorrentes. `OWN
 ## Executar localmente (gratuito, Node 22+)
 
 ```bash
+npm run build  # executar na raiz do repositório
 cd apps/api
 npm test
 npm run dev
