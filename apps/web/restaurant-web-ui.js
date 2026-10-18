@@ -12,7 +12,7 @@
  const path='/api/v1/restaurant';
  const today=new Date().toISOString().slice(0,10);
  const monthAgo=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
- let state={tables:[],orders:[],tickets:[],requests:[],products:[],report:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
+ let state={tables:[],orders:[],tickets:[],stationTickets:[],requests:[],products:[],split:null,report:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
  const notice=(value,error=false)=>root.PdvToast?.show?.(value,error?'error':'success');
  const action=(endpoint,method='GET',body)=>api.request(path+endpoint,{method,body});
  const safe=async(fn,fallback=[])=>{try{return await fn();}catch{return fallback;}};
@@ -23,12 +23,12 @@
  function orderLines(order){return (order.items||[]).map(i=>esc(i.name||i.productName)+' × '+esc(i.quantity)).join(', ')||'Nenhum item';}
  function title(value){return ({TABLE:'Mesa',PICKUP:'Retirada',DELIVERY:'Entrega',OPEN:'Aberto',READY:'Pronto',DELIVERED:'Entregue',CANCELLED:'Cancelado',NEW:'Novo',PREPARING:'Preparando',ACKNOWLEDGED:'Em atendimento',CLOSED:'Finalizado',WAITER:'Garçom',BILL:'Conta'})[value]||value;}
  async function load(){
-   const [tables,orders,tickets,requests,products,report]=await Promise.all([
+   const [tables,orders,tickets,stationTickets,requests,products,report]=await Promise.all([
      safe(()=>action('/tables').then(v=>v.tables)),safe(()=>action('/orders').then(v=>v.orders)),
-     safe(()=>action('/kitchen').then(v=>v.tickets)),safe(()=>action('/requests').then(v=>v.requests)),
+     safe(()=>action('/kitchen').then(v=>v.tickets)),safe(()=>action('/kitchen/station-tickets').then(v=>v.tickets)),safe(()=>action('/requests').then(v=>v.requests)),
      safe(()=>api.products(false)),safe(()=>action('/reports/summary?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to)).then(v=>v.report),null)
    ]);
-   Object.assign(state,{tables,orders,tickets,requests,products,report});
+   Object.assign(state,{tables,orders,tickets,stationTickets,requests,products,report});
  }
  function tableSection(){
    if(!can('restaurant.orders.view'))return '<p class="vertical-empty">Seu perfil não possui acesso às mesas.</p>';
@@ -48,7 +48,7 @@
          orders.map(o=>'<div class="restaurant-row">'+esc(orderLines(o))+' · '+esc(title(o.status))+'</div>').join('')+
          (can('restaurant.service.manage')?btn('Chamar garçom','service-waiter',state.selected)+btn('Solicitar conta','service-bill',state.selected):'')+
          (can('restaurant.orders.transfer')&&free.length?'<form class="vertical-form" data-r4-form="transfer"><input type="hidden" name="sessionId" value="'+esc(state.selected)+'"><label class="field"><span>Mudar para mesa livre</span><select name="targetTableId">'+free.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.label)+'</option>').join('')+'</select></label><button class="secondary-button">Transferir mesa</button></form>':'')+
-         btn('Preparar cobrança','checkout-session',state.selected)+
+         btn('Dividir / transferir itens','advanced',state.selected)+btn('Preparar cobrança','checkout-session',state.selected)+
          (can('restaurant.tables.manage')?btn('Encerrar mesa','close',state.selected):'')+
          '</div>';
        })():'')+'</section>';
@@ -115,7 +115,7 @@
    host.innerHTML='<section class="page vertical-page restaurant-page" data-r4-web><header class="page-head"><div><h1>Alimentação</h1><p>Mesas, comandas, preparo e recebimento no mesmo caixa.</p></div>'+back()+'</header>'+
      '<nav class="restaurant-view-switch" aria-label="Operações de alimentação">'+tabs.map(([v,n])=>
        '<button type="button" class="restaurant-btn '+(state.section===v?'':'secondary')+'" data-r4-action="tab" data-id="'+v+'">'+n+'</button>').join('')+
-       btn('Atualizar','refresh')+'</nav>'+
+       btn('Avançado / segmentos','advanced')+btn('Atualizar','refresh')+'</nav>'+
      checkoutSection()+
      ({tables:tableSection,orders:orderSection,kitchen:kitchenSection,services:serviceSection,reports:reportSection}[state.section]||tableSection)()+
      '</section>';
@@ -135,6 +135,7 @@
    if(what==='tab'){state.section=id;state.checkout=null;return render();}
    if(what==='select'){state.selected=id;return render();}
    if(what==='refresh')return reload();
+   if(what==='advanced')return root.PdvR4AdvancedUi?.show?.({sessionId:id||state.selected});
    try{
      if(what==='open')await form('/tables/'+encodeURIComponent(id)+'/open',{partySize:1});
      if(what==='close')await form('/sessions/'+encodeURIComponent(id)+'/close',{});
