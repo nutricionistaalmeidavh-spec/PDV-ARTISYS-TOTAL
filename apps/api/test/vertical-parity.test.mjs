@@ -8,7 +8,7 @@ import {hashPassword} from '../src/password.mjs';
 const origin='https://pdvtotal.test';
 async function setup(){
   const db=openLocalDatabase();
-  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0021_r4_restaurant_operations.sql'])
+  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0021_r4_restaurant_operations.sql','0022_r4_restaurant_checkout.sql'])
     db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
   const stamp='2026-10-17T12:00:00.000Z';
   const h=await hashPassword('Senha-de-teste-123!');
@@ -156,7 +156,17 @@ test('P7 restaurant: kitchen must be ready before delivery and table closure',as
    assert.equal((await x.request('a',`restaurant/kitchen/${tid}`,'PATCH',{branchId:'filial-a',status:'PREPARING'})).status,200);
    assert.equal((await x.request('a',`restaurant/kitchen/${tid}`,'PATCH',{branchId:'filial-a',status:'READY'})).status,200);
    assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+   assert.equal((await x.request('a',`restaurant/sessions/${session.id}/close`,'POST',{branchId:'filial-a'})).status,409);
+   const sale=await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:session.id});
+   assert.equal(sale.status,201,JSON.stringify(sale.body));
+   assert.equal(sale.body.sale.totalCents,500);
+   assert.equal((await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:session.id})).status,409);
+   assert.equal((await x.request('a',`sales/${sale.body.sale.id}/items`,'POST',{branchId:'filial-a',productId:p.id,quantity:1})).status,409);
+   assert.equal((await x.request('a',`restaurant/sessions/${session.id}/close`,'POST',{branchId:'filial-a'})).status,409);
+   assert.equal((await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:1000})).status,200);
+   assert.equal((await x.request('a',`sales/${sale.body.sale.id}/complete`,'POST',{branchId:'filial-a',payments:[{method:'PIX',amountCents:500}]})).status,200);
    assert.equal((await x.request('a',`restaurant/sessions/${session.id}/close`,'POST',{branchId:'filial-a'})).status,200);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,1);
  }finally{x.close();}
 });
 
@@ -252,5 +262,28 @@ test('R4 cap-038 e cap-049: cancelamento antes do KDS, relatório separado de ve
    assert.equal(csv.status,200);assert.match(csv.body,/PICKUP/);assert.match(csv.body,/DELIVERY/);
    assert.equal((await x.request('a','restaurant/reports/summary?branchId=filial-a&from=sem-data&to=2026-12-31')).status,400);
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,0);
+ }finally{x.close();}
+});
+
+test('R4 cap-033/cap-037: retirada vira exatamente uma venda com preços congelados e estoque só no checkout',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'R4RET',name:'Retirada',salePriceCents:1750,trackStock:false})).body.product;
+   const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:p.id,quantity:2}]})).body.order;
+   const orderId=order.id;
+   assert.equal((await x.request('a','sales','POST',{branchId:'filial-a',restaurantOrderId:orderId})).status,409);
+   const k=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0].id;
+   assert.equal((await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'PREPARING'})).status,200);
+   assert.equal((await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'READY'})).status,200);
+   assert.equal((await x.request('a',`restaurant/orders/${orderId}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+   const sale=await x.request('a','sales','POST',{branchId:'filial-a',restaurantOrderId:orderId});
+   assert.equal(sale.status,201,JSON.stringify(sale.body));
+   assert.equal(sale.body.sale.totalCents,3500);
+   assert.equal((await x.request('a','sales','POST',{branchId:'filial-a',restaurantOrderId:orderId})).status,409);
+   await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0});
+   assert.equal((await x.request('a',`sales/${sale.body.sale.id}/complete`,'POST',{branchId:'filial-a',payments:[{method:'PIX',amountCents:3500}]})).status,200);
+   const money=(await x.request('a','cash?branchId=filial-a')).body;
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM cash_movements WHERE tenant_id=?').bind('a').first()).n,1);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,1);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM restaurant_sale_links WHERE tenant_id=?').bind('a').first()).n,1);
  }finally{x.close();}
 });
