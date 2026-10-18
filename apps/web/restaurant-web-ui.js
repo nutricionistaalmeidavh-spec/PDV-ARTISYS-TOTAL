@@ -99,8 +99,7 @@
        '<label class="field"><span>Canal</span><select name="fulfillment"><option value="TABLE">Mesa</option><option value="COUNTER">Balcão</option><option value="PICKUP">Retirada</option><option value="DELIVERY">Entrega</option></select></label>'+
        '<label class="field"><span>Comanda (para atendimento em mesa)</span><select name="tableSessionId"><option value="">Selecione a mesa</option>'+availableTables.map(t=>'<option value="'+esc(t.sessionId)+'">'+esc(t.label)+'</option>').join('')+'</select></label>'+
        field('Endereço (obrigatório para entrega)','address','text','maxlength="300"')+
-       '<label class="field"><span>Produto</span><select name="productId" required>'+products.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('')+'</select></label>'+
-       field('Quantidade','quantity','number','min="0.001" step="0.001" value="1" required')+
+       '<div data-r4-lines>'+orderItemRow()+'</div>'+btn('Adicionar outro item','add-line')+
         '<label><input type="checkbox" name="useTicket"> Gerar senha diária para acompanhar o pedido</label>'+
        '<button class="primary-button">Enviar pedido para cozinha</button></form></details>':'')+
      '<div class="restaurant-list">'+state.orders.map(o=>
@@ -174,6 +173,7 @@
      '</section>';
    host.querySelectorAll('[data-r4-action]').forEach(el=>el.addEventListener('click',()=>void click(el)));
    host.querySelectorAll('[data-r4-form]').forEach(el=>el.addEventListener('submit',e=>{e.preventDefault();void submit(el);}));
+   host.querySelectorAll('[data-r4-order-item]').forEach(bindOrderRow);
  }
  async function reload(){await load();render();}
  async function show(){
@@ -189,6 +189,14 @@
    if(what==='select'){state.selected=id;return render();}
    if(what==='refresh')return reload();
    if(what==='advanced')return root.PdvR4AdvancedUi?.show?.({sessionId:id||state.selected});
+   if(what==='add-line'){
+     const formEl=el.closest('form'),rows=formEl?.querySelector('[data-r4-lines]');
+     if(!rows)return;
+     if(rows.querySelectorAll('[data-r4-order-item]').length>=80)return notice('Máximo de 80 itens por pedido.',true);
+     rows.insertAdjacentHTML('beforeend',orderItemRow());
+     bindOrderRow(rows.lastElementChild);
+     return;
+   }
    try{
      if(what==='open')await form('/tables/'+encodeURIComponent(id)+'/open',{partySize:1});
      if(what==='close')await form('/sessions/'+encodeURIComponent(id)+'/close',{});
@@ -235,8 +243,22 @@
        const fulfillment=v.fulfillment;
        if(fulfillment==='TABLE'&&!v.tableSessionId)throw new Error('Selecione uma comanda.');
        if(fulfillment==='DELIVERY'&&!String(v.address).trim())throw new Error('Informe o endereço de entrega.');
+       const items=[...formEl.querySelectorAll('[data-r4-order-item]')].map(row=>{
+         const productId=row.querySelector('[name="productId"]').value,quantity=Number(row.querySelector('[name="quantity"]').value);
+         const status=row.dataset.r4PizzaState;
+         if(status==='loading'||status==='error')throw new Error('Confira as opções dos produtos antes de enviar.');
+         if(!Number.isFinite(quantity)||quantity<=0||quantity>100000)throw new Error('Quantidade inválida.');
+         const item={productId,quantity};
+         if(status==='configured'){
+           const selected=[...row.querySelectorAll('[name="flavorCodes"]:checked')].map(input=>input.value);
+           if(!selected.length||selected.length>Number(row.dataset.r4MaxFlavors))throw new Error('Escolha os sabores da pizza.');
+           item.pizza={sizeCode:row.querySelector('[name="sizeCode"]').value,
+             flavorCodes:selected,crustCode:row.querySelector('[name="crustCode"]').value||null};
+         }
+         return item;
+       });
        await form('/orders',{fulfillment,tableSessionId:fulfillment==='TABLE'?v.tableSessionId:null,
-         address:fulfillment==='DELIVERY'?String(v.address).trim():'',useTicket:v.useTicket==='on',items:[{productId:v.productId,quantity:Number(v.quantity)}]});
+         address:fulfillment==='DELIVERY'?String(v.address).trim():'',useTicket:v.useTicket==='on',items});
      }
      if(what==='dates'){state.from=v.from;state.to=v.to;}
      if(what==='payment'){
