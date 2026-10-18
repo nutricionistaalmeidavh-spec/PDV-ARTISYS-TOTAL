@@ -2,12 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {createRequire} from 'node:module';
+import {runInNewContext} from 'node:vm';
 
-const require=createRequire(import.meta.url);
-const policy=require('../../web/access-policy.js');
-const ui=require('../../web/ui-model.js');
-const {homeForUser}=require('../../web/home-role-model.js');
+// The published desktop scripts use CommonJS. This repository is ESM, so
+// execute the byte-identical published source with an isolated CommonJS module
+// object rather than changing its extension, rewriting it or altering its hash.
+function loadPinnedDesktopCommonJs(relativePath,dependencies={}){
+ const module={exports:{}};
+ runInNewContext(readFileSync(new URL(relativePath,import.meta.url),'utf8'),{
+   module,require(name){
+     if(!Object.hasOwn(dependencies,name))throw Error('Unexpected legacy import '+name);
+     return dependencies[name];
+   }
+ },{filename:relativePath,timeout:500});
+ return module.exports;
+}
+const policy=loadPinnedDesktopCommonJs('../../web/access-policy.js');
+const ui=loadPinnedDesktopCommonJs('../../web/ui-model.js');
+const {homeForUser}=loadPinnedDesktopCommonJs('../../web/home-role-model.js',{
+ './access-policy':policy
+});
 const fixture=JSON.parse(readFileSync(new URL('../../../docs/parity/fixtures/p5-home-roles-desktop-pinned.json',import.meta.url)));
 function gitBlobSha(file){
  const body=readFileSync(new URL(file,import.meta.url));
@@ -16,7 +30,7 @@ function gitBlobSha(file){
 function user(entry,tenant='tenant-a'){
  return {tenantId:tenant,profile:{id:tenant+':'+entry.label,name:entry.label},permissions:[...entry.permissions]};
 }
-function tiles(u){return homeForUser(u,ui.HOME_TILES).sections.flatMap(s=>s.tiles.map(t=>t.route));}
+function tiles(u){return Array.from(homeForUser(u,ui.HOME_TILES).sections,s=>Array.from(s.tiles,t=>t.route)).flat();}
 function expected(label){const row=fixture.profiles.find(p=>p.label===label);assert.ok(row);return row;}
 
 test('home-002/nominal p5-home-roles-desktop-pinned-v1 executable original desktop role vectors',()=>{
