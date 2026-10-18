@@ -147,7 +147,7 @@ try{
   await page.locator('#web-storage-location-create [name=name]').fill('Prateleira de testes');
   await page.locator('#web-storage-location-create button[type=submit]').click();
   await page.locator('#web-storage-location-assign select[name=locationId] option')
-    .filter({hasText:'SHELF-QA-01'}).waitFor({timeout:12000});
+    .filter({hasText:'SHELF-QA-01'}).waitFor({state:'attached',timeout:12000});
   await page.locator('#web-storage-location-assign select[name=productId]').selectOption(productChoice);
   const locationId=await page.locator('#web-storage-location-assign select[name=locationId] option')
     .filter({hasText:'SHELF-QA-01'}).getAttribute('value');
