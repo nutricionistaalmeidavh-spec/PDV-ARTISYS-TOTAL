@@ -1182,8 +1182,7 @@ export function createCommerceService(db,{now=nowISO}={}){
           if(source.status!=='DELIVERED')throw error(409,'Finalize a entrega ou retirada antes da cobrança.');
         }
         const sourceOrders=restaurantSessionId?await all("SELECT id,status FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND table_session_id=?",tenant,branch,restaurantSessionId):[source];
-        if(sourceOrders.length===0||sourceOrders.some(o=>!['DELIVERED','CANCELLED'].includes(o.status))||
-           !sourceOrders.some(o=>o.status==='DELIVERED'))
+        if(sourceOrders.some(o=>!['DELIVERED','CANCELLED'].includes(o.status)))
           throw error(409,'Todos os pedidos precisam estar entregues ou cancelados antes da cobrança.');
         const restaurantLines=restaurantSessionId
           ?await all(`SELECT oi.product_id AS productId,oi.quantity_milli AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
