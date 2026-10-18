@@ -316,6 +316,8 @@
       try { await restoreCheckoutState(); } catch (error) { showToast(error.message, 'error'); }
     }
     await renderRoute(); content.focus({ preventScroll: true });
+    window.PdvUiLifecycle?.emit('route:focus-ready',{route,
+      scope:String(api.tenantId||'')+'|'+String(api.branchId||'')+'|'+String(state.user?.id||'')});
   }
 
   async function renderRoute() {
