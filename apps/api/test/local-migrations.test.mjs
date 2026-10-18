@@ -11,7 +11,7 @@ test('selfhost canonical migrations run once; restart neither repeats ALTERs nor
   const db=openLocalDatabase();
   try{
     const first=await applyLocalMigrations(db);
-    assert.equal(first.applied,26);
+    assert.equal(first.applied,27);
     assert.equal(first.total,26);
     await db.prepare("INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)").bind('a','site-a','First shop',new Date().toISOString()).run();
     const second=await applyLocalMigrations(db);
