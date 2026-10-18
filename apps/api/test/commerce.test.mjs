@@ -714,6 +714,31 @@ test('P4 stock coverage derives reserved availability and demand from immutable 
  }finally{x.close();}
 });
 
+test('P5 daily trend is zero-filled, uses canonical completed sales, validates period and isolates tenants',async()=>{
+ const x=await setup();try{
+  const p=await x.id('Tendência comprovada','P5-TREND',2);
+  await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+  const s=(await x.write('a','sales',{branchId:'branch-a'})).body.sale;
+  await x.write('a','sales/'+s.id+'/items',{branchId:'branch-a',productId:p,quantity:1});
+  const paid=await x.write('a','sales/'+s.id+'/complete',
+    {branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]});
+  assert.equal(paid.status,200,paid.body.error);
+  const url='reports/daily-trend?branchId=branch-a&from=2026-10-16&to=2026-10-18';
+  const response=await x.get('a',url);
+  assert.equal(response.status,200,JSON.stringify(response.body));
+  assert.deepEqual(response.body.trend.points.map(p=>p.date),['2026-10-16','2026-10-17','2026-10-18']);
+  assert.deepEqual(response.body.trend.points.map(p=>p.netCents),[0,1000,0]);
+  assert.equal(response.body.trend.points[1].count,1);
+  const other=await x.get('b','reports/daily-trend?branchId=branch-b&from=2026-10-16&to=2026-10-18',x.other);
+  assert.equal(other.status,200);
+  assert.equal(other.body.trend.points.reduce((n,p)=>n+p.netCents,0),0);
+  assert.equal((await x.get('a','reports/daily-trend?branchId=branch-b&from=2026-10-16&to=2026-10-18')).status,404);
+  assert.equal((await x.get('a','reports/daily-trend?branchId=branch-a&from=2026-01-01&to=2026-10-18')).status,400);
+  assert.equal((await x.get('a','reports/daily-trend?branchId=branch-a&from=2026-10-18&to=2026-10-17')).status,400);
+  assert.equal((await x.get('a','reports/daily-trend?branchId=branch-a&from=2026-02-30&to=2026-03-01')).status,400);
+ }finally{x.close();}
+});
+
 test('P5 minimum stock settings are validated, atomic, idempotent and tenant/branch/RBAC isolated',async()=>{
  const x=await setup();try{
   const p=await x.id('Item com mínimo','P5-MIN',5);
