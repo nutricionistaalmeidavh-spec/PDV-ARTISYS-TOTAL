@@ -390,8 +390,12 @@ try{
   assert.match(await page.locator('#route-content').innerText(),/7,00/);
   await page.screenshot({path:'qa-artifacts/pdv-finance-mobile.png',fullPage:true});
 
+  // P5: authorized home indicators are scoped and link back to the one report route.
+  await page.locator('#app-sidebar [data-route=home]').click();
+  await page.locator('#web-home-live [data-home-open-report]').waitFor({timeout:12000});
+  assert.match(await page.locator('#web-home-live').innerText(),/Terminais com caixa aberto/);
+  await page.locator('#web-home-live [data-home-open-report]').click();
   // P4: Shared ReportsV2 owner, no duplicate report rendering pipeline.
-  await page.locator('#app-sidebar [data-route=reports]').click();
   await page.getByRole('heading',{name:'Relatórios comerciais'}).waitFor({timeout:12000});
   const report=await page.locator('#route-content').innerText();
   assert.match(report,/Faturamento registrado/i);
