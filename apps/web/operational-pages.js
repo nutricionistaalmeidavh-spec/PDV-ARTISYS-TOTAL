@@ -42,7 +42,59 @@
   function canAccess(route){return root.PdvAccessPolicy?.canAccessRoute(root.PdvCurrentAccess,route)===true;}
   function markActive(route){document.body.dataset.activeRoute=route;document.body.classList.remove('theme-home');document.querySelectorAll('[data-route]').forEach(node=>node.classList.toggle('active',node.dataset.route===route));}
 
+  // Same canonical inventory route: web mode reads and writes only via the
+  // authoritative tenant/branch API. No parallel inventory state or IPC fallback.
+  async function renderWebInventory(){
+    await ready();
+    const [positions,movementResult]=await Promise.all([
+      api.inventoryBalances(),api.inventoryMovements({limit:30})
+    ]);
+    const balances=Array.isArray(positions)?positions:positions?.stock||[];
+    const recent=Array.isArray(movementResult)?movementResult:
+      movementResult?.movements?.items||movementResult?.movements||[];
+    const body=`<section class="ops-card"><h2>Saldos por filial</h2>
+      <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Produto</th><th>SKU</th><th>Saldo atual</th></tr></thead>
+      <tbody>${balances.map(item=>`<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.sku)}</td><td>${qty(item.quantity)}</td></tr>`).join('')||'<tr><td colspan="3">Nenhum item com controle de estoque.</td></tr>'}</tbody></table></div></section>
+      <section class="ops-card"><h2>Registrar contagem ou movimentação</h2>
+      <p>A contagem substitui o saldo disponível somente após confirmar que ele não mudou. Se outro terminal movimentou o estoque, atualize e confira novamente.</p>
+      <form id="web-stock-count" class="ops-form">
+        <label>Produto<select class="ops-input" name="productId" required>${balances.map(item=>`<option value="${escapeHtml(item.productId)}">${escapeHtml(item.name)} · ${escapeHtml(item.sku)} (${qty(item.quantity)})</option>`).join('')}</select></label>
+        <label>Operação<select class="ops-input" name="operation"><option value="count">Inventário contado</option><option value="purchase">Recebimento</option><option value="increase">Ajuste de entrada</option><option value="decrease">Ajuste de saída</option></select></label>
+        <label>Quantidade <input class="ops-input" name="quantity" type="number" min="0" max="100000" step="0.001" required placeholder="0"></label>
+        <label>Motivo <input class="ops-input" name="reason" maxlength="240" minlength="3" required placeholder="Explique a conferência ou o ajuste"></label>
+        <button class="ops-primary" type="submit" ${balances.length?'':'disabled'}>Confirmar operação</button>
+      </form></section>
+      <section class="ops-card"><h2>Últimas movimentações registradas</h2>
+      <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Data</th><th>Produto</th><th>Movimento</th><th>Motivo</th></tr></thead><tbody>
+      ${recent.map(m=>`<tr><td>${when(m.occurredAt||m.occurred_at)}</td><td>${escapeHtml(balances.find(p=>p.productId===(m.productId||m.product_id))?.name||m.productId||m.product_id)}</td><td>${qty(m.quantityDelta??m.delta_milli/1000)}</td><td>${escapeHtml(m.reason||'—')}</td></tr>`).join('')||'<tr><td colspan="4">Nenhuma movimentação.</td></tr>'}
+      </tbody></table></div></section>`;
+    if(!routeActive('inventory'))return;
+    content.innerHTML=page('Estoque','Movimentações e inventário contados no banco autoritativo.',body);
+    document.getElementById('web-stock-count')?.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const form=event.currentTarget,button=form.querySelector('button[type="submit"]');
+      const values=new FormData(form),id=String(values.get('productId')),operation=String(values.get('operation'));
+      const quantity=Number(values.get('quantity')),reason=String(values.get('reason')||'').trim();
+      const current=balances.find(item=>item.productId===id);
+      if(!current||!Number.isFinite(quantity)||quantity<0||quantity>100000||reason.length<3){
+        showToast('Confira o produto, a quantidade e a justificativa.','error');return;
+      }
+      button.disabled=true;
+      try{
+        if(operation==='count')await api.inventoryCount({
+          productId:id,expectedQuantity:Number(current.quantity),countedQuantity:quantity,reason
+        });
+        else if(operation==='purchase')await api.inventoryReceipt({productId:id,quantity,type:'purchase'});
+        else await api.inventoryAdjust({productId:id,quantityDelta:operation==='decrease'?-quantity:quantity,reason});
+        showToast('Operação registrada no estoque.','success');
+        await renderWebInventory();
+      }catch(e){showToast(e.message,'error');button.disabled=false;}
+    });
+    routeRegistry.updated('inventory',{surface:'inventory'});
+  }
+
   async function renderInventory(){
+    if(api.webMode)return renderWebInventory();
     await ready();
     const [balances,low,movements,products]=await Promise.all([api.inventoryBalances(),api.inventoryLowStock(),api.inventoryMovements(),api.products(true)]);
     const totalCost=balances.reduce((sum,item)=>sum+Math.round(Number(item.costCents||0)*Number(item.quantity||0)),0);
