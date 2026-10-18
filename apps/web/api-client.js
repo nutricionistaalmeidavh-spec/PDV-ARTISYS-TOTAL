@@ -133,6 +133,8 @@
       if(operation==='inventory')return value.stock;
       if(operation==='inventory/receipts'||operation==='inventory/adjustments')return value.movement;
       if(operation==='inventory/movements')return value.movements;
+      if(operation==='inventory/counts')return value.count;
+      if(operation==='inventory/lots')return value.lots;
       if(operation==='inventory/transfers')return method==='GET'?value.transfers:value.transfer;
       if(operation==='inventory/reservations')return method==='GET'?value.reservations:value.reservation;
       if(/^inventory\/reservations\/[^/]+\/release$/.test(operation))return value.reservation;
