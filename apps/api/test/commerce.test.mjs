@@ -89,6 +89,84 @@ test('P3 commerce: tenant isolation, canonical permissions, unique SKU and no am
   }finally{x.close();}
 });
 
+test('P2 FEFO lot balances follow a sold item and its partial refund without duplicate stock',async()=>{
+  const x=await setup();try{
+    const product=(await x.write('a','products',{branchId:'branch-a',name:'Iogurte por lotes',
+      sku:'BATCH-FEFO',salePriceCents:1000,trackStock:true}));
+    assert.equal(product.status,201,product.body.error);
+    const productId=product.body.product.id;
+    const receipt=async(lotCode,quantity,expiresAt)=>x.write('a','inventory/receipts',{
+      branchId:'branch-a',productId,quantity,lotCode,expiresAt,type:'purchase'});
+    assert.equal((await receipt('LOTE-PRIMEIRO',2,'2098-01-01')).status,201);
+    assert.equal((await receipt('LOTE-SEGUNDO',3,'2098-06-01')).status,201);
+    const balances=async()=>((await x.get('a','inventory/lots?branchId=branch-a')).body.lots)
+      .reduce((acc,lot)=>(acc[lot.lotCode]=lot.trackedBalance,acc),{});
+    assert.deepEqual(await balances(),{'LOTE-PRIMEIRO':2,'LOTE-SEGUNDO':3});
+    assert.equal((await x.write('a','cash/open',{branchId:'branch-a',openingCents:0})).status,201);
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(opened.status,201,opened.body.error);
+    const sid=opened.body.sale.id;
+    const add=await x.write('a','sales/'+sid+'/items',{branchId:'branch-a',productId,quantity:4});
+    assert.equal(add.status,200,add.body.error);
+    const paid=await x.write('a','sales/'+sid+'/complete',{
+      branchId:'branch-a',payments:[{method:'PIX',amountCents:4000}]});
+    assert.equal(paid.status,200,paid.body.error);
+    assert.deepEqual(await balances(),{'LOTE-PRIMEIRO':0,'LOTE-SEGUNDO':1});
+    const stored=await x.db.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE type='sale' AND product_id=?")
+      .bind(productId).first();
+    assert.equal(stored.n,1,'one canonical stock movement despite two lot allocations');
+    const sale=(await x.get('a','sales/'+sid+'?branchId=branch-a')).body.sale;
+    const body={branchId:'branch-a',saleId:sid,reason:'Devolução parcial do lote',
+      items:[{saleItemId:sale.items[0].id,quantity:2}],refunds:[{method:'PIX',amountCents:2000}]};
+    const key=next();
+    const refunded=await x.write('a','returns',body,{key});
+    assert.equal(refunded.status,201,refunded.body.error);
+    assert.deepEqual(await balances(),{'LOTE-PRIMEIRO':1,'LOTE-SEGUNDO':2});
+    assert.deepEqual((await x.write('a','returns',body,{key})).body,refunded.body);
+    assert.deepEqual(await balances(),{'LOTE-PRIMEIRO':1,'LOTE-SEGUNDO':2});
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock
+      .find(p=>p.productId===productId).quantity,3);
+    const foreign=await x.get('b','inventory/lots?branchId=branch-b',x.other);
+    assert.equal(foreign.status,200,foreign.body.error);
+    assert.deepEqual(foreign.body.lots,[]);
+    await assert.rejects(x.db.prepare("DELETE FROM inventory_lot_entries WHERE tenant_id=?")
+      .bind('a').run(),/LOT_LEDGER_IMMUTABLE/);
+  }finally{x.close();}
+});
+
+test('P2 lot balances follow transfers, adjustments, counts and enforce nonnegative FEFO',async()=>{
+  const x=await setup();try{
+    await x.db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)')
+      .bind('filial-a','a','FILIAL','Filial B','2026-10-17T14:00:00.000Z').run();
+    const p=await x.write('a','products',{branchId:'branch-a',name:'Produto com validade',
+      sku:'LOTE-TRANSFER',salePriceCents:400,trackStock:true});
+    const productId=p.body.product.id;
+    const receipt=await x.write('a','inventory/receipts',{
+      branchId:'branch-a',productId,quantity:4,lotCode:'LOTE-FILIAL',expiresAt:'2099-05-01'});
+    assert.equal(receipt.status,201,receipt.body.error);
+    const transfer=await x.write('a','inventory/transfers',{
+      branchId:'branch-a',toBranchId:'filial-a',productId,quantity:2,reason:'Reposição entre unidades'});
+    assert.equal(transfer.status,201,transfer.body.error);
+    const source=(await x.get('a','inventory/lots?branchId=branch-a')).body.lots;
+    const target=(await x.get('a','inventory/lots?branchId=filial-a')).body.lots;
+    assert.equal(source[0].trackedBalance,2);
+    assert.equal(target[0].trackedBalance,2);
+    const adjustment=await x.write('a','inventory/adjustments',{
+      branchId:'filial-a',productId,quantityDelta:-1,reason:'Avaria documentada'});
+    assert.equal(adjustment.status,201,adjustment.body.error);
+    const count=await x.write('a','inventory/counts',{
+      branchId:'filial-a',productId,expectedQuantity:1,countedQuantity:0,
+      reason:'Inventário conferido na filial'});
+    assert.equal(count.status,201,count.body.error);
+    assert.equal((await x.get('a','inventory/lots?branchId=filial-a')).body.lots.length,0,
+      'a depleted transferred lot is not listed outside its receipt branch');
+    assert.equal((await x.get('a','inventory?branchId=filial-a')).body.stock.find(p=>p.productId===productId).quantity,0);
+    const replay=await x.write('a','inventory/transfers',{
+      branchId:'branch-a',toBranchId:'filial-a',productId,quantity:3,reason:'Tentativa excessiva'});
+    assert.equal(replay.status,409,'no transfer can overdraft canonical product stock');
+  }finally{x.close();}
+});
+
 test('P2 lot receipts annotate only canonical immutable movements, with idempotency and tenant isolation',async()=>{
   const x=await setup();try{
     const productId=await x.id('Leite pasteurizado','MILK-LOT',1),key=next();
