@@ -46,8 +46,9 @@
   // authoritative tenant/branch API. No parallel inventory state or IPC fallback.
   async function renderWebInventory(){
     await ready();
-    const [positions,movementResult,lots]=await Promise.all([
-      api.inventoryBalances(),api.inventoryMovements({limit:30}),api.inventoryLotReceipts({limit:30})
+    const [positions,movementResult,lots,locations,assignments]=await Promise.all([
+      api.inventoryBalances(),api.inventoryMovements({limit:30}),api.inventoryLotReceipts({limit:30}),
+      api.storageLocations(),api.storageAssignments()
     ]);
     const balances=Array.isArray(positions)?positions:positions?.stock||[];
     const recent=Array.isArray(movementResult)?movementResult:
@@ -55,6 +56,34 @@
     const body=`<section class="ops-card"><h2>Saldos por filial</h2>
       <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Produto</th><th>SKU</th><th>Saldo atual</th></tr></thead>
       <tbody>${balances.map(item=>`<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.sku)}</td><td>${qty(item.quantity)}</td></tr>`).join('')||'<tr><td colspan="3">Nenhum item com controle de estoque.</td></tr>'}</tbody></table></div></section>
+      <section class="ops-card" id="web-storage-locations">
+      <h2>Endereços de armazenagem</h2>
+      <p>Identifique a prateleira ou depósito padrão do produto nesta filial. Esta indicação não cria outro saldo nem movimenta estoque.</p>
+      <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Endereço</th><th>Descrição</th><th>Produtos vinculados</th></tr></thead>
+      <tbody>${locations.map(loc=>`<tr><td><strong>${escapeHtml(loc.code)}</strong></td><td>${escapeHtml(loc.name)}</td>
+        <td>${Number(loc.assignedProducts)||0}</td></tr>`).join('')||'<tr><td colspan="3">Nenhum endereço cadastrado.</td></tr>'}</tbody></table></div>
+      ${root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'inventory.adjust')?`
+      <div class="ops-grid two">
+        <form id="web-storage-location-create" class="ops-form">
+          <h3>Novo endereço</h3>
+          <label>Código<input class="ops-input" name="code" required maxlength="32" placeholder="Ex.: A-01"></label>
+          <label>Descrição<input class="ops-input" name="name" required minlength="2" maxlength="100" placeholder="Ex.: Prateleira A"></label>
+          <button type="submit" class="ops-primary">Cadastrar endereço</button>
+        </form>
+        <form id="web-storage-location-assign" class="ops-form">
+          <h3>Vincular produto ao endereço</h3>
+          <label>Produto<select name="productId" class="ops-input" required>${balances.map(item=>`<option value="${escapeHtml(item.productId)}">${escapeHtml(item.name)} · ${escapeHtml(item.sku)}</option>`).join('')}</select></label>
+          <label>Endereço<select name="locationId" class="ops-input">
+             <option value="">Sem endereço</option>
+             ${locations.map(loc=>`<option value="${escapeHtml(loc.id)}">${escapeHtml(loc.code)} — ${escapeHtml(loc.name)}</option>`).join('')}
+          </select></label>
+          <button type="submit" class="ops-primary" ${balances.length?'':'disabled'}>Salvar localização</button>
+        </form>
+      </div>`:''}
+      <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Produto</th><th>Endereço padrão</th></tr></thead>
+      <tbody>${assignments.map(a=>`<tr><td>${escapeHtml(balances.find(p=>p.productId===a.productId)?.name||a.productId)}</td>
+       <td>${escapeHtml(a.locationCode)}</td></tr>`).join('')||'<tr><td colspan="2">Produtos sem endereço definido.</td></tr>'}</tbody></table></div>
+      </section>
       <section class="ops-card"><h2>Registrar contagem ou movimentação</h2>
       <p>A contagem substitui o saldo disponível somente após confirmar que ele não mudou. Se outro terminal movimentou o estoque, atualize e confira novamente.</p>
       <form id="web-stock-count" class="ops-form">
@@ -82,6 +111,26 @@
       </tbody></table></div></section>`;
     if(!routeActive('inventory'))return;
     content.innerHTML=page('Estoque','Movimentações e inventário contados no banco autoritativo.',body);
+    for(const [selector,submit] of [
+      ['#web-storage-location-create',values=>api.createStorageLocation({
+         code:String(values.get('code')||'').trim(),name:String(values.get('name')||'').trim()
+      })],
+      ['#web-storage-location-assign',values=>api.assignStorageLocation({
+         productId:String(values.get('productId')||''),locationId:String(values.get('locationId')||'')||null
+      })]
+    ]){
+      document.querySelector(selector)?.addEventListener('submit',async event=>{
+        event.preventDefault();
+        const form=event.currentTarget,button=form.querySelector('button[type=submit]');
+        if(button.disabled)return;
+        button.disabled=true;
+        try{
+          await submit(new FormData(form));
+          showToast('Localização registrada na filial.','success');
+          await renderWebInventory();
+        }catch(e){showToast(e.message,'error');button.disabled=false;}
+      });
+    }
     document.getElementById('web-stock-count')?.addEventListener('submit',async event=>{
       event.preventDefault();
       const form=event.currentTarget,button=form.querySelector('button[type="submit"]');

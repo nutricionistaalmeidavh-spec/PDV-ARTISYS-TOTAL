@@ -29,6 +29,7 @@ const checkoutConfigurationMigration=readFileSync(new URL('../migrations/0014_ch
 const salesTargetsMigration=readFileSync(new URL('../migrations/0015_seller_sales_targets.sql',import.meta.url),'utf8');
 const lotReceiptMigration=readFileSync(new URL('../migrations/0016_inventory_lot_receipts.sql',import.meta.url),'utf8');
 const minimumMigration=readFileSync(new URL('../migrations/0017_inventory_minimum_levels.sql',import.meta.url),'utf8');
+const storageMigration=readFileSync(new URL('../migrations/0019_inventory_storage_locations.sql',import.meta.url),'utf8');
 const lotBalanceMigration=readFileSync(new URL('../migrations/0018_inventory_lot_balances.sql',import.meta.url),'utf8');
 // A fixed business date must reach the commerce adapter, not only session authentication.
 // Otherwise UTC midnight makes period-filtered reports silently disappear in CI.
@@ -38,7 +39,7 @@ const password='SafeTestPasswordForPdv2026!';
 let num=0;
 const next=()=>('mutation-'+(++num)+'-long');
 async function setup(){
-  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);db.exec(checkoutConfigurationMigration);db.exec(salesTargetsMigration);db.exec(lotReceiptMigration);db.exec(minimumMigration);db.exec(lotBalanceMigration);
+  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);db.exec(checkoutConfigurationMigration);db.exec(salesTargetsMigration);db.exec(lotReceiptMigration);db.exec(minimumMigration);db.exec(storageMigration);db.exec(lotBalanceMigration);
   const pass=await hashPassword(password);
   for(const [id,email] of [['owner','owner@test.com'],['other','other@test.com'],['viewer','viewer@test.com']])
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
@@ -1450,4 +1451,25 @@ test('checkout-008/nominal checkout-payment-desktop-nominal-v1 compares mixed te
       storedPayments:vector.expectedStoredPayments,netCashCents:vector.expectedCashMovementCents};
     assert.deepEqual(observed,expected,'API payment and persisted ledger equal the pinned desktop golden vector');
   }finally{x.close();}
+});
+
+test('P1 HTTP shelf addresses honor inventory RBAC, tenant and branch and never mutate stock',async()=>{
+ const x=await setup();try{
+   const p=await x.write('a','products',{branchId:'branch-a',name:'Produto localizável',sku:'BIN-RBAC-1',salePriceCents:1000});
+   assert.equal(p.status,201,p.body.error);
+   const id=p.body.product.id;
+   const addr='inventory/locations';
+   assert.equal((await x.write('a',addr,{branchId:'branch-a',code:'A-02',name:'Prateleira'},{who:x.viewer})).status,403);
+   const loc=await x.write('a',addr,{branchId:'branch-a',code:'A-02',name:'Prateleira'});
+   assert.equal(loc.status,201,loc.body.error);
+   const locId=loc.body.location.id;
+   assert.equal((await x.get('a',addr+'?branchId=branch-a')).body.locations[0].code,'A-02');
+   assert.equal((await x.write('a',addr+'/assign',{branchId:'branch-a',productId:id,locationId:locId},{who:x.viewer})).status,403);
+   assert.equal((await x.write('b',addr+'/assign',{branchId:'branch-b',productId:id,locationId:locId},{who:x.other})).status,404);
+   const mapped=await x.write('a',addr+'/assign',{branchId:'branch-a',productId:id,locationId:locId});
+   assert.equal(mapped.status,200,mapped.body.error);
+   assert.equal((await x.get('a',addr+'/assign?branchId=branch-a')).body.assignments[0].locationCode,'A-02');
+   assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock.find(v=>v.productId===id).quantity,0);
+   assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM inventory_movements').bind().first()).n,0);
+ }finally{x.close();}
 });

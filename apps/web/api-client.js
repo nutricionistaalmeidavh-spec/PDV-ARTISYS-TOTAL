@@ -71,6 +71,7 @@
         else if(original==='/api/v1/inventory/adjustments')operation='inventory/adjustments';
         else if(original==='/api/v1/inventory/counts')operation='inventory/counts';
         else if(original==='/api/v1/inventory/lots')operation='inventory/lots';
+        else if(original.startsWith('/api/v1/inventory/locations'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/inventory/transfers')operation='inventory/transfers';
         else if(original.startsWith('/api/v1/inventory/reservations'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/inventory/purchase-costs')operation='inventory/purchase-costs';
@@ -289,6 +290,14 @@
     receivePurchaseOrder(id,items,mutationId){return this.request('/api/v1/purchasing/orders/'+encodeURIComponent(id)+'/receive',{method:'POST',body:{items},mutationId});}
     cancelPurchaseOrder(id,reason,mutationId){return this.request('/api/v1/purchasing/orders/'+encodeURIComponent(id)+'/cancel',{method:'POST',body:{reason},mutationId});}
     purchaseCostAverages(filters={}){return this.request('/api/v1/purchasing/cost-averages'+this.params(filters));}
+    storageLocations(){return this.request('/api/v1/inventory/locations').then(result=>result.locations);}
+    storageAssignments(){return this.request('/api/v1/inventory/locations/assign').then(result=>result.assignments);}
+    createStorageLocation(body,mutationId=this.mutationId()){
+      return this.request('/api/v1/inventory/locations',{method:'POST',body,mutationId}).then(result=>result.location);
+    }
+    assignStorageLocation(body,mutationId=this.mutationId()){
+      return this.request('/api/v1/inventory/locations/assign',{method:'POST',body,mutationId}).then(result=>result.assignment);
+    }
     inventoryBalances(filters = {}) { return this.request(`/api/v1/inventory${this.params(filters)}`); }
     inventoryLowStock() { return this.request('/api/v1/inventory/low-stock'); }
     inventoryMovements(filters = {}) { return this.request(`/api/v1/inventory/movements${this.params(filters)}`); }

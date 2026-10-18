@@ -7,6 +7,7 @@ import cashRules from '../../../packages/core/js/domains/cash/cash-rules.js';
 import {createSaleReturnAdapter} from './sale-reversals.mjs';
 import {createLotLedger} from './inventory-lot-ledger.mjs';
 import {createCatalogDepthService} from './catalog-depth.mjs';
+import {createStorageLocationsService} from './storage-locations.mjs';
 import {createPurchasingService} from './purchasing.mjs';
 import {createCatalogImportService} from './catalog-import.mjs';
 import {catalogEditVersion,catalogGuard,catalogGuardArgs} from './catalog-cas.mjs';
@@ -248,6 +249,7 @@ export function createCommerceService(db,{now=nowISO}={}){
   const sellerTargets=createSellerTargetService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,error});
   const catalogDepth=createCatalogDepthService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,
     quantityMilli,error,text,randomId});
+  const storageLocations=createStorageLocationsService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,error,text,randomId});
   const saleReversals=createSaleReturnAdapter({
     q,first,all,batch,applied,audit,stamp,tenantSale,requiredMutation,quantityMilli,lotLedger,
     normalizeMethod,allocateSaleDiscount,error,text,randomId,
@@ -278,6 +280,10 @@ export function createCommerceService(db,{now=nowISO}={}){
     purchaseCostSummary:(t,b,filters)=>purchasing.purchaseCostSummary(t,b,filters),
     categories:(t,b)=>catalogDepth.categories(t,b),
     createCategory:(t,b,u,body,key)=>catalogDepth.createCategory(t,b,u,body,key),
+    storageLocations:(t,b)=>storageLocations.storageLocations(t,b),
+    storageAssignments:(t,b)=>storageLocations.storageAssignments(t,b),
+    createStorageLocation:(t,b,u,body,key)=>storageLocations.createStorageLocation(t,b,u,body,key),
+    assignStorageLocation:(t,b,u,body,key)=>storageLocations.assignStorageLocation(t,b,u,body,key),
     renameCategory:(t,b,u,id,body,key)=>catalogDepth.renameCategory(t,b,u,id,body,key),
     productBundle:(t,b,id)=>catalogDepth.bundle(t,b,id),
     setBundle:(t,b,id,u,body,key)=>catalogDepth.setBundle(t,b,id,u,body,key),
