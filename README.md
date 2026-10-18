@@ -13,15 +13,17 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 
 **Não existe uma segunda árvore `legacy/` no código ativo**. O commit original importado e os 900 arquivos continuam auditáveis no histórico Git; instaladores, Electron, auto-update Windows/macOS, CI do desktop, licença desktop e artefatos específicos não são carregados aqui.
 
-## Estado atual — P3, P4 e P5 (fluxos web)
+## Estado de implementação — panorama auditável (18/10/2026)
 
-- **P3:** balcão, produtos, estoque por ledger, venda e pagamentos registrados, abertura, suprimento, sangria e fechamento reconciliado do caixa por filial; regras de cálculos importadas do núcleo canônico.
-- **P4:** contas manuais a pagar/receber, liquidação parcial e consulta de saldo; relatórios de vendas, pagamentos, produtos, estoque, caixa e financeiro; exportação CSV, impressão/PDF no navegador. Nenhuma conta manual replica pagamentos de vendas.
-- **P5:** o **mesmo renderer** com navegação adaptativa para desktop/celular, layout mobile, manifesto instalável, ícones 192/512 e Service Worker que guarda **somente arquivos públicos**. Offline é apenas casca de interface: a API e mutações exigem internet; não há fila offline.
+- **R1 — comercial e gestão:** 21/21 capacidades classificadas como `covered` no inventário, incluindo vendas, produtos, estoque, clientes, caixa, financeiro e relatórios; isso representa aceite de código, não homologação de produção.
+- **R2 — self-hosted / LAN:** 11/14 `covered`, 3/14 `partial`. O servidor Node.js 22 + SQLite serve **a mesma PWA e API autoritativa via HTTPS na LAN**; há login, perfis, credenciais de terminais, revogação e backup/restore testados. Instalação Windows e perfis finais de servidor/terminal ainda têm lacunas de paridade (`cap-001`, `cap-056`); acesso mobile local (`cap-047`) é parcial.
+- **R3 — periféricos:** 6/8 `partial`, 2/8 `gap`. Já existem adaptadores web (impressão/serial/peso) e um **conector local opcional e gratuito** em `tools/local-hardware-bridge/`, com fila SQLite, idempotência e tratamento de resultado incerto do spooler. Não declarar impressão silenciosa universal, todos os modelos homologados ou emissão fiscal; `cap-030` e `cap-043` ainda exigem evidências.
+- **R4 — alimentação e verticais:** 1/13 `covered`, 12/13 `partial`. Já existem mesas, comandas, KDS com estações, transferência, pizzaria, retirada/delivery, pesagem e relatórios operacionais. Faltam subfluxos e provas de paridade, como split por pagador, concorrência entre operadores, protocolos e fluxos completos de entrega.
+- **PWA:** interface responsiva, manifest e cache de **assets públicos**. Em uma instalação self-hosted, **a loja pode operar sem Internet** enquanto o servidor HTTPS local estiver disponível na rede; Cloudflare não é requisito. **Não há venda offline se a API estiver inacessível**, nem fila independente de vendas no navegador.
 
-**Status comercial:** a aplicação está configurada com `AUTH_ENABLED=false` em produção; login e mutações continuam bloqueados. A aprovação dos testes em Workerd/D1 local não equivale a aprovação de onboarding, migrações remotas, segurança, cobrança ou fiscal. **Não comercializar ainda** sem os gates da [implantação](docs/DEPLOY-CLOUDFLARE.md).
+**Situação comercial:** CI aprovada não comprova implantação, fiscal, segurança de ambiente ou uso por clientes. Antes de comercializar ou habilitar autenticação em uma implantação específica, validar provisionamento, migrations, TLS, credenciais, backups e jornadas críticas. Não assumir o valor atual de `AUTH_ENABLED` em produção sem conferir a configuração implantada.
 
-**Fora do escopo concluído:** cartão/PIX são *formas informadas*, não captura pelo adquirente; emissão NFC-e/NF-e, hardware/impressão térmica silenciosa, assinaturas, importação histórica, gestão avançada de clientes/restaurante/atacado e reconciliação bancária automática ainda exigem entregas próprias.
+**Limites explícitos:** cartão/PIX podem ser formas de pagamento registradas, não adquirência/TEF automática; NFC-e/NF-e não é emitida pelo adaptador; paridade completa de periféricos, restaurante e reconciliação bancária automática não está certificada. Equipamentos reais são verificação opcional posterior, não gate de aceite do código.
 
 **Evidências exigidas para merge:** `npm run test` (núcleo + API), `npm run build` e `npm run check:web`, migrations no D1 local, dry-run Wrangler, testes Workerd e jornada Chromium incluindo caixa/financeiro/relatórios/PWA. Código do PDV Artisys original: não modificado.
 
@@ -31,12 +33,14 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 2. **Por empresa:** identidade e autorização resolvidas pelo servidor a partir da sessão, sem confiar no tenant enviado por cliente.
 3. **Sem renderização concorrente:** evoluir somente `apps/web` e preservar entradas, filtros, carrinho, scroll e estado durante efeitos assíncronos.
 4. **Cloudflare isolada:** D1 e R2 novos, sem usar Worker, banco, dados ou licenças do PDV original.
-5. **R$ 0 obrigatório para o núcleo inicial**, com Cloudflare Free e alternativa self-hosted; cobrança com Asaas é opção explícita posterior.
+5. **Core obrigatório R$ 0, open source e self-hosted** (Node.js + SQLite). Cloudflare/D1 e integrações pagas só como alternativas explícitas, sem dependências ocultas.
 6. **Reestruturação incremental comprovada:** scripts `npm run test:core`, `npm run test:api` e dry-run Wrangler passam antes de cada merge.
 
 ## Execução self-hosted gratuita
 
-O núcleo pode rodar em localhost com Node 22+ e SQLite, sem Cloudflare: execute `npm run build`, depois `cd apps/api && npm run dev`, e abra http://127.0.0.1:4175/. O acesso comercial permanece desabilitado por padrão até provisionamento e QA. Consulte [instalação self-hosted](docs/SELF-HOSTED.md). Não exponha HTTP local à LAN sem TLS.
+**Desenvolvimento local:** com Node 22+ e SQLite, execute `npm run build` e, depois, `cd apps/api && npm run dev`; abra http://127.0.0.1:4175/. Não exponha HTTP local à rede.
+
+**Operação da loja na LAN, sem Internet e sem Cloudflare:** provisione o SQLite, configure certificados TLS confiáveis, DNS local, firewall e autenticação, depois use `npm run serve:lan`. Os terminais autorizados acessam a mesma PWA em HTTPS e dependem da API local ativa para concluir vendas. Leia [o manual HTTPS LAN](docs/SELFHOST-LAN-HTTPS.md) e [o guia de periféricos locais](tools/local-hardware-bridge/README.md). Não há dependência paga no núcleo.
 
 ## Documentação
 
