@@ -281,6 +281,7 @@ export function createCommerceService(db,{now=nowISO}={}){
     categories:(t,b)=>catalogDepth.categories(t,b),
     createCategory:(t,b,u,body,key)=>catalogDepth.createCategory(t,b,u,body,key),
     storageLocations:(t,b)=>storageLocations.storageLocations(t,b),
+    storageAssignments:(t,b)=>storageLocations.storageAssignments(t,b),
     createStorageLocation:(t,b,u,body,key)=>storageLocations.createStorageLocation(t,b,u,body,key),
     assignStorageLocation:(t,b,u,body,key)=>storageLocations.assignStorageLocation(t,b,u,body,key),
     renameCategory:(t,b,u,id,body,key)=>catalogDepth.renameCategory(t,b,u,id,body,key),
@@ -499,20 +500,17 @@ export function createCommerceService(db,{now=nowISO}={}){
           WHERE r.tenant_id=p.tenant_id AND r.branch_id=? AND r.product_id=p.id
           AND r.status='ACTIVE'),0) AS reservedMilli,p.brand,p.barcode,p.category_id,
           p.parent_product_id,p.variant_label,p.last_cost_cents,p.updated_at AS updatedAt,
-          (SELECT sl.code FROM inventory_product_location_assignments la
-           JOIN inventory_storage_locations sl ON sl.id=la.location_id AND sl.tenant_id=la.tenant_id AND sl.branch_id=la.branch_id
-           WHERE la.tenant_id=p.tenant_id AND la.branch_id=? AND la.product_id=p.id LIMIT 1) AS storageLocationCode,
           EXISTS(SELECT 1 FROM product_media pm WHERE pm.tenant_id=p.tenant_id AND pm.product_id=p.id) AS hasPhoto
         FROM products p LEFT JOIN stock_positions s ON s.tenant_id=p.tenant_id
         AND s.product_id=p.id AND s.branch_id=?
         WHERE p.tenant_id=? AND (?=1 OR p.active=1)
-        ORDER BY p.name,p.id LIMIT ?`,branch,branch,branch,tenant,includeInactive?1:0,cap);
+        ORDER BY p.name,p.id LIMIT ?`,branch,branch,tenant,includeInactive?1:0,cap);
       return Promise.all(rows.map(async x=>({...x,editVersion:await catalogEditVersion(x),trackStock:Boolean(x.trackStock),active:Boolean(x.active),
         balance:x.balanceMilli/1000,reserved:x.reservedMilli/1000,
         available:(x.balanceMilli-x.reservedMilli)/1000,menuEnabled:true,
         brand:x.brand||'',barcode:x.barcode||x.sku,categoryId:x.category_id||null,
         parentProductId:x.parent_product_id||null,variantLabel:x.variant_label||null,
-        lastCostCents:x.last_cost_cents||0,storageLocationCode:x.storageLocationCode||null,photo:Boolean(x.hasPhoto)})));
+        lastCostCents:x.last_cost_cents||0,photo:Boolean(x.hasPhoto)})));
     },
     async createProduct(tenant,user,body,header){
       const key=requiredMutation(body,header),scope='product.create';
