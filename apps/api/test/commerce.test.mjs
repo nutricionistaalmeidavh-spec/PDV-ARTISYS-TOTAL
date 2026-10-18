@@ -2349,6 +2349,8 @@ test('R1 checkout transition retries are keyed: late suspend replay never re-sus
     const suspend=await x.write('a','sales/'+saleId+'/suspend',{branchId:'branch-a'},{key:suspendKey});
     assert.equal(suspend.status,200,suspend.body.error);
     assert.equal(suspend.body.sale.status,'SUSPENDED');
+    const wrongKey=await x.write('a','sales/'+saleId+'/resume',{branchId:'branch-a'},{key:suspendKey});
+    assert.equal(wrongKey.status,409,'same operation ID must not be reusable for a different transition');
     const resume=await x.write('a','sales/'+saleId+'/resume',{branchId:'branch-a'},{key:resumeKey});
     assert.equal(resume.status,200,resume.body.error);
     assert.equal(resume.body.sale.status,'OPEN');
