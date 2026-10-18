@@ -80,7 +80,7 @@
       "capability": "desktop-windows-local-first",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -89,7 +89,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "desktop windows local first: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/local-migrations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/local-db.mjs",
+        "contains": "openLocalDatabase",
+        "testFile": "apps/api/test/local-migrations.test.mjs",
+        "testContains": "test('selfhost canonical migrations run once"
+      }
     },
     {
       "id": "cap-002",
@@ -98,7 +104,7 @@
       "dependsOn": [
         "cash-046"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -107,7 +113,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "central lan server: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/https-lan-server.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/https-lan-server.mjs",
+        "contains": "createLanServer",
+        "testFile": "apps/api/test/https-lan-server.test.mjs",
+        "testContains": "test('cap-002 LAN: two authenticated HTTPS terminals"
+      }
     },
     {
       "id": "cap-003",
@@ -116,7 +128,7 @@
       "dependsOn": [
         "cash-046"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -125,7 +137,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "paired multi terminal: Comprovar escopo, revogação, permissões e dois dispositivos concorrentes autenticados.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/r2-lan-operations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "const KINDS=new Set",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('R2: hashed one-use pairing"
+      }
     },
     {
       "id": "cap-004",
@@ -285,7 +303,7 @@
         "products-031",
         "checkout-019"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -294,14 +312,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "recipe versioning and ingredient consumption: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/vertical-parity.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "createR4ExtendedService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-009: recipe versioned"
+      }
     },
     {
       "id": "cap-010",
       "capability": "optional-local-module-registry",
       "owner": "modules",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -310,7 +334,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "optional local module registry: Comprovar habilitação, autorização e desabilitação sem apagar histórico.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/r2-lan-operations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "const {MODULES,getModuleDefinition}",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('R2 optional modules:"
+      }
     },
     {
       "id": "cap-011",
@@ -842,7 +872,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -851,7 +881,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "restaurant tables tabs orders and table transfer: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/vertical-parity.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "createVerticalService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-031: transferir mesa"
+      }
     },
     {
       "id": "cap-032",
@@ -904,7 +940,7 @@
         "checkout-017",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -913,7 +949,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "kitchen kds stations product routing and printer routing: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/vertical-parity.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "createR4ExtendedService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-034/035: KDS routes"
+      }
     },
     {
       "id": "cap-035",
@@ -922,7 +964,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -931,7 +973,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared kds routing for food orders: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/vertical-parity.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "createR4ExtendedService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-034/035: KDS routes"
+      }
     },
     {
       "id": "cap-036",
@@ -940,7 +988,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -949,7 +997,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "optional pizzeria size flavors crust and pricing policy: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/vertical-parity.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "createR4ExtendedService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-036: pizza profiles"
+      }
     },
     {
       "id": "cap-037",
@@ -958,7 +1012,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -967,7 +1021,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "food delivery pickup counter workflow: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/vertical-parity.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "createVerticalService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-033/cap-037: retirada"
+      }
     },
     {
       "id": "cap-038",
@@ -977,7 +1037,7 @@
         "checkout-017",
         "history-034"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -986,7 +1046,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "food unified orders with optional daily ticket and legacy history: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/vertical-parity.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "createVerticalService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-038 e cap-049: cancelamento"
+      }
     },
     {
       "id": "cap-039",
@@ -995,7 +1061,7 @@
       "dependsOn": [
         "checkout-016"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1004,7 +1070,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "optional market bakery weighted items and orders: Comprovar precisão por peso e unidade, preço total, etiquetas por dados simulados, idempotência e checkout/estoque canônicos. Balança física não integra o gate de código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/vertical-parity.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "createVerticalService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-039: bakery weighted"
+      }
     },
     {
       "id": "cap-040",
@@ -1043,7 +1115,7 @@
       "dependsOn": [
         "home-002"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1052,7 +1124,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "first run segment onboarding and editable module recommendations: Comprovar recomendações e escolha de módulos independentes de licença desktop.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/vertical-parity.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "createR4ExtendedService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-039/041: peso"
+      }
     },
     {
       "id": "cap-042",
@@ -1098,7 +1176,7 @@
       "capability": "waiter-lan-device",
       "owner": "mobile",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1107,14 +1185,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "waiter lan device: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/r2-lan-operations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "'WAITER'",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('R2: hashed one-use pairing"
+      }
     },
     {
       "id": "cap-045",
       "capability": "kitchen-lan-device",
       "owner": "mobile",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1123,14 +1207,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "kitchen lan device: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/r2-lan-operations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "'KITCHEN'",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('R2: hashed one-use pairing"
+      }
     },
     {
       "id": "cap-046",
       "capability": "hashed-revocable-mobile-device-credentials",
       "owner": "identity",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1139,7 +1229,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "hashed revocable mobile device credentials: Comprovar escopo, revogação, permissões e dois dispositivos concorrentes autenticados.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/r2-lan-operations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "newSessionToken",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('R2: hashed one-use pairing"
+      }
     },
     {
       "id": "cap-047",
@@ -1168,7 +1264,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1177,7 +1273,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "restaurant service requests waiter and bill: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/vertical-parity.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "createR4ExtendedService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-048: chamado garçom"
+      }
     },
     {
       "id": "cap-049",
@@ -1187,7 +1289,7 @@
         "reports-062",
         "reports-068"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1196,7 +1298,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "restaurant operational reports and csv export: Conciliar dados de base com CSV e resultados por filial/período sem estimar lucro indevidamente.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/vertical-parity.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "createR4ExtendedService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-038 e cap-049: cancelamento"
+      }
     },
     {
       "id": "cap-050",
@@ -1223,7 +1331,7 @@
       "capability": "versioned-backup-validate-restore",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1232,7 +1340,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "versioned backup validate restore: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (scripts/selfhost-backup.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "scripts/selfhost-backup.mjs",
+        "contains": "createBackup",
+        "testFile": "scripts/selfhost-backup.test.mjs",
+        "testContains": "test('WAL-aware backup stays consistent"
+      }
     },
     {
       "id": "cap-052",
@@ -1267,7 +1381,7 @@
       "capability": "audit-health-sanitized-logs",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1276,14 +1390,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "audit health sanitized logs: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/r2-lan-operations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "health",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('R2: support diagnostics ZIP"
+      }
     },
     {
       "id": "cap-054",
       "capability": "diagnostic-zip",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1292,14 +1412,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "diagnostic zip: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/r2-lan-operations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r2-diagnostics-zip.mjs",
+        "contains": "const enc=new TextEncoder",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('R2: support diagnostics ZIP"
+      }
     },
     {
       "id": "cap-055",
       "capability": "persistent-pilot-readiness-checklist",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1308,7 +1434,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "persistent pilot readiness checklist: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/r2-lan-operations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "readiness",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('R2: pilot readiness stays incomplete"
+      }
     },
     {
       "id": "cap-056",
@@ -1317,7 +1449,7 @@
       "dependsOn": [
         "cash-046"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1326,8 +1458,21 @@
       },
       "testedContractRefs": [],
       "acceptance": "server terminal and terminal deployment profiles: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/r2-lan-operations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "const KINDS=new Set",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('R2: hashed one-use pairing"
+      }
     }
   ],
-  "notes": "Inventário sem duplicar serviços ou assumir paridade por mera presença de código; o manifesto cobre capacidades publicadas no desktop, não todos os subfluxos. Subfluxos serão decompostos em cenários E2E por domínio."
+  "notes": "Inventário sem duplicar serviços ou assumir paridade por mera presença de código; o manifesto cobre capacidades publicadas no desktop, não todos os subfluxos. Subfluxos serão decompostos em cenários E2E por domínio.",
+  "deliveryAudit": {
+    "reviewedAt": "2026-10-18",
+    "auditedMainCommit": "cdf0b03ba61ea7c3fc95f283890d246b8ec4fa0d",
+    "scope": "R1/R2/R4 canonical software evidence audit",
+    "validation": "CI parity, API and local SQLite regression",
+    "notes": "R1 21 covered in main via PR #69. R2/R4 previously hidden as gaps were reclassified partial when domain tests prove implemented subsets. No physical tests required for code-readiness. Covered remains strict and requires independent software evidence."
+  }
 }
