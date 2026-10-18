@@ -77,23 +77,30 @@ export function createSaleReturnAdapter(helpers){
   }
   return {
     async quote(tenant,branch,id,body,mode='RETURN'){
-      const {sale,reason,computed,totalCents}=await prepare(tenant,branch,id,body,mode);
+      const {sale,reason,details,totalCents}=await prepare(tenant,branch,id,body,mode);
       return {saleId:id,status:sale.status,reason,amountCents:totalCents,
-        items:computed.map(row=>({saleItemId:row.saleItemId,quantity:row.quantityMilli/1000,netCents:row.netCents}))};
+        items:details.map(row=>({saleItemId:row.configuredLineId||row.saleItemId,
+          parentItemId:row.saleItemId,quantity:row.quantityMilli/1000,netCents:row.netCents}))};
     },
     async list(tenant,branch,id){
       await tenantSale(tenant,branch,id);
       const rows=await all('SELECT * FROM sale_returns WHERE tenant_id=? AND branch_id=? AND sale_id=? ORDER BY created_at,id',tenant,branch,id);
       return Promise.all(rows.map(async r=>({
         id:r.id,kind:r.kind,reason:r.reason,amountCents:r.amount_cents,operatorId:r.operator_id,createdAt:r.created_at,
-        items:await all('SELECT sale_item_id AS saleItemId,quantity_milli/1000.0 AS quantity,net_cents AS netCents FROM sale_return_items WHERE return_id=? ORDER BY id',r.id),
+        items:await (async()=>{
+          const canonical=await all('SELECT sale_item_id AS saleItemId,quantity_milli/1000.0 AS quantity,net_cents AS netCents FROM sale_return_items WHERE return_id=? ORDER BY id',r.id);
+          const choices=await all('SELECT configured_line_id AS saleItemId,sale_item_id AS parentItemId,quantity_milli/1000.0 AS quantity,net_cents AS netCents FROM sale_configured_return_lines WHERE return_id=? ORDER BY id',r.id);
+          const parents=new Set(choices.map(row=>row.parentItemId));
+          return canonical.filter(row=>!parents.has(row.saleItemId)).concat(choices);
+        })(),
         refunds:await all('SELECT method,amount_cents AS amountCents,cash_session_id AS cashSessionId FROM sale_refund_movements WHERE return_id=? ORDER BY method',r.id)
       })));
     },
     async reverse(tenant,branch,id,user,body,keyHeader,mode='RETURN'){
       const key=requiredMutation(body,keyHeader),scope='sale.return:'+branch+':'+id+':'+mode;
       const prior=await applied(tenant,scope,key);if(prior)return prior;
-      const {sale,reason,original,returned,computed,totalCents}=await prepare(tenant,branch,id,body,mode);
+      const {sale,reason,original,priced,returned,computed,details,totalCents}=
+        await prepare(tenant,branch,id,body,mode);
       // Explicit refund allocation only; never generate funds to unrelated tenders.
       const refunds=body?.refunds;
       if(!Array.isArray(refunds)||refunds.length>6||(totalCents>0&&refunds.length===0))
@@ -131,7 +138,8 @@ export function createSaleReturnAdapter(helpers){
       }
       const createdAt=stamp(),returnId=randomId(),result={
         id:returnId,saleId:id,kind:mode,reason,amountCents:totalCents,
-        items:computed.map(x=>({saleItemId:x.saleItemId,quantity:x.quantityMilli/1000,netCents:x.netCents})),
+        items:details.map(x=>({saleItemId:x.configuredLineId||x.saleItemId,
+          parentItemId:x.saleItemId,quantity:x.quantityMilli/1000,netCents:x.netCents})),
         refunds:grouped,status:mode==='CANCEL'?'CANCELLED':'COMPLETED',createdAt
       };
       const stockRestores=new Map(),lotRestores=new Map();
@@ -140,6 +148,19 @@ export function createSaleReturnAdapter(helpers){
           original_cash_session_id,operator_id,mutation_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
           returnId,tenant,branch,id,mode,reason,totalCents,sale.cash_session_id,user,key,createdAt)
       ];
+      for(const detail of details){
+        if(!detail.configuredLineId)continue;
+        statements.push(q(`INSERT INTO sale_configured_return_lines
+          (id,tenant_id,branch_id,return_id,sale_id,sale_item_id,configured_line_id,
+           quantity_milli,net_cents,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+          randomId(),tenant,branch,returnId,id,detail.saleItemId,detail.configuredLineId,
+          detail.quantityMilli,detail.netCents,createdAt));
+      }
+      const pricedDiscounted=allocateSaleDiscount(priced.map(row=>({
+        id:row.id,productId:row.product_id,unitPriceCents:row.unit_price_cents,
+        quantity:row.quantity_milli/1000
+      })),sale.discount_cents);
+      const netByLine=new Map(pricedDiscounted.map(row=>[row.id,row.netTotalCents]));
       for(const line of computed){
         statements.push(q(`INSERT INTO sale_return_items(id,tenant_id,branch_id,return_id,sale_id,sale_item_id,quantity_milli,net_cents)
           VALUES(?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,returnId,id,line.saleItemId,line.quantityMilli,line.netCents));
@@ -182,8 +203,19 @@ export function createSaleReturnAdapter(helpers){
           tenant,branch,id,line.saleItemId);
         if(earned?.cents>0){
           const was=await first("SELECT COALESCE(SUM(amount_cents),0) AS cents FROM seller_commission_ledger WHERE tenant_id=? AND branch_id=? AND sale_id=? AND sale_item_id=? AND kind='REVERSED'",tenant,branch,id,line.saleItemId);
-          const already=returned.get(line.saleItemId)||0;
-          const desired=Math.round(earned.cents*(already+line.quantityMilli)/line.source.quantity_milli);
+          const configured=priced.some(row=>row.parent_item_id===line.saleItemId);
+          let desired;
+          if(configured){
+            const wholeNet=priced.filter(row=>row.parent_item_id===line.saleItemId)
+              .reduce((sum,row)=>sum+(netByLine.get(row.id)||0),0);
+            const earlier=await first(`SELECT COALESCE(SUM(net_cents),0) AS cents
+              FROM sale_return_items WHERE tenant_id=? AND branch_id=?
+                AND sale_id=? AND sale_item_id=?`,tenant,branch,id,line.saleItemId);
+            desired=wholeNet?Math.round(earned.cents*(earlier.cents+line.netCents)/wholeNet):0;
+          }else{
+            const already=returned.get(line.saleItemId)||0;
+            desired=Math.round(earned.cents*(already+line.quantityMilli)/line.source.quantity_milli);
+          }
           const reverse=Math.min(earned.cents+was.cents,desired+was.cents);
           if(reverse>0)statements.push(q(`INSERT INTO seller_commission_ledger(id,tenant_id,branch_id,seller_id,sale_id,sale_item_id,kind,amount_cents,reference_key,occurred_at)
             VALUES(?,?,?,?,?,?,'REVERSED',?,?,?)`,randomId(),tenant,branch,earned.sellerId,id,line.saleItemId,-reverse,
