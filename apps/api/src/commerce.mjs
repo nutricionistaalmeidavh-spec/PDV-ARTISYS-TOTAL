@@ -988,7 +988,11 @@ export function createCommerceService(db,{now=nowISO}={}){
         .sort((x,y)=>x.method.localeCompare(y.method));
       const originalsByProduct=await all(`SELECT i.product_id AS productId,MAX(i.product_name) AS name,
         SUM(i.quantity_milli) AS milli,COUNT(DISTINCT i.sale_id) AS salesCount,
-        SUM(i.quantity_milli*i.unit_price_cents)/1000 AS grossCents
+        SUM(CASE WHEN EXISTS(
+          SELECT 1 FROM sale_configured_lines cl WHERE cl.sale_item_id=i.id
+        ) THEN (SELECT SUM(cl.quantity_milli*cl.unit_price_cents)
+          FROM sale_configured_lines cl WHERE cl.sale_item_id=i.id)
+        ELSE i.quantity_milli*i.unit_price_cents END)/1000 AS grossCents
         FROM sale_items i JOIN sales s ON s.id=i.sale_id AND s.tenant_id=i.tenant_id AND s.branch_id=i.branch_id
         WHERE i.tenant_id=? AND i.branch_id=? AND s.status IN('COMPLETED','CANCELLED')
           AND s.completed_at BETWEEN ? AND ?
