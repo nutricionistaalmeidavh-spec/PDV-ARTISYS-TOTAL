@@ -453,6 +453,94 @@
       "testRunner": "node-test",
       "testFile": "apps/api/test/commerce.test.mjs",
       "fixtureFile": "docs/parity/fixtures/p5-report-core-desktop-pinned.json"
+    },
+    {
+      "scenarioId": "home-003/nominal",
+      "desktopFixtureId": "p5-home003-desktop-alerts-v1",
+      "testContains": "home-003/nominal p5-home003-desktop-alerts-v1",
+      "testAssertionContains": "assert.deepEqual(home.alerts.map(a=>a.title),p5Home003Fixture.expectedTitles);",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home003-desktop-alerts.json"
+    },
+    {
+      "scenarioId": "home-003/authorization",
+      "desktopFixtureId": "p5-home003-desktop-alerts-v1",
+      "testContains": "home-003/authorization p5-home003-desktop-alerts-v1",
+      "testAssertionContains": "assert.equal((await x.get('a',p5Home003Path,x.viewer)).status,200);",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home003-desktop-alerts.json"
+    },
+    {
+      "scenarioId": "home-003/tenant-isolation",
+      "desktopFixtureId": "p5-home003-desktop-alerts-v1",
+      "testContains": "home-003/tenant-isolation p5-home003-desktop-alerts-v1",
+      "testAssertionContains": "assert.deepEqual(other.body.home.alerts,[]);",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home003-desktop-alerts.json"
+    },
+    {
+      "scenarioId": "home-003/failure-recovery",
+      "desktopFixtureId": "p5-home003-desktop-alerts-v1",
+      "testContains": "home-003/failure-recovery p5-home003-desktop-alerts-v1",
+      "testAssertionContains": "assert.deepEqual(after,before,'failed edits cannot clear operational warnings');",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home003-desktop-alerts.json"
+    },
+    {
+      "scenarioId": "home-004/nominal",
+      "desktopFixtureId": "p5-home004-desktop-navigation-v1",
+      "testContains": "home-004/nominal p5-home004-desktop-navigation-v1",
+      "testAssertionContains": "assert.equal(h.content.scrollTop,fixture.restoredScroll);",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/p5-home-navigation.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home004-desktop-navigation.json"
+    },
+    {
+      "scenarioId": "home-004/authorization",
+      "desktopFixtureId": "p5-home004-desktop-navigation-v1",
+      "testContains": "home-004/authorization p5-home004-desktop-navigation-v1",
+      "testAssertionContains": "assert.equal(h.tab.focused,0,'no focus is restored from an unrelated user');",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/p5-home-navigation.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home004-desktop-navigation.json"
+    },
+    {
+      "scenarioId": "home-004/tenant-isolation",
+      "desktopFixtureId": "p5-home004-desktop-navigation-v1",
+      "testContains": "home-004/tenant-isolation p5-home004-desktop-navigation-v1",
+      "testAssertionContains": "assert.equal(h.content.scrollTop,0,'a second store cannot inherit the first store scroll');",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/p5-home-navigation.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home004-desktop-navigation.json"
+    },
+    {
+      "scenarioId": "home-004/failure-recovery",
+      "desktopFixtureId": "p5-home004-desktop-navigation-v1",
+      "testContains": "home-004/failure-recovery p5-home004-desktop-navigation-v1",
+      "testAssertionContains": "assert.equal(h.content.scrollTop,0,'stale scroll from previous context is discarded');",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/p5-home-navigation.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home004-desktop-navigation.json"
     }
   ]
 }
