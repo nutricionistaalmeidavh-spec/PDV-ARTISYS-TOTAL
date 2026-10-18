@@ -379,12 +379,25 @@
           ${data.belowMinimumCount>0?`<p role="alert">${data.belowMinimumCount}
             produto(s) abaixo do mínimo cadastrado nesta filial. Consulte Cobertura do estoque.</p>`:''}
           ${!data.cashOpen?'<p class="ops-muted">Não existe caixa aberto nesta filial.</p>':''}
+          <section class="ops-card" id="web-home-operational-alerts" aria-label="Alertas operacionais">
+            <h3>Alertas operacionais</h3>
+            ${(data.alerts||[]).length?(data.alerts||[]).map(alert=>
+              `<div class="ops-muted" role="alert" data-home-alert="${escapeHtml(alert.code)}">
+                <strong>${escapeHtml(alert.title)}</strong> · ${escapeHtml(alert.count)} ocorrência(s)
+                ${alert.code==='CASH_DIVERGENCE'?escapeHtml(' · '+ui.formatCents(alert.amountCents)) : ''}
+                ${canAccessRoute(alert.route)?`<button type="button" class="ops-secondary" data-home-alert-route="${escapeHtml(alert.route)}">Consultar</button>`:''}
+              </div>`).join(''):'<p class="ops-muted">Nenhum alerta operacional identificado para esta data.</p>'}
+          </section>
           <div class="ops-actions">
             ${canAccessRoute('reports')?'<button type="button" class="ops-secondary" data-home-open-report>Ver relatórios</button>':''}
             ${data.outOfStockCount>0&&canAccessRoute('products')?'<button type="button" class="ops-secondary" data-home-open-products>Conferir produtos sem disponibilidade</button>':''}
           </div>`;
         host.querySelector('[data-home-open-report]')?.addEventListener('click',()=>void navigate('reports'));
         host.querySelector('[data-home-open-products]')?.addEventListener('click',()=>void navigate('products'));
+        host.querySelectorAll('[data-home-alert-route]').forEach(button=>
+          button.addEventListener('click',()=>{if(canAccessRoute(button.dataset.homeAlertRoute))
+            void navigate(button.dataset.homeAlertRoute);})
+        );
       }).catch(error=>{
         if(host?.isConnected&&document.body.dataset.activeRoute==='home'&&sameHomeContext())
           host.innerHTML=`<h2>Indicadores operacionais</h2><p class="ops-muted">
