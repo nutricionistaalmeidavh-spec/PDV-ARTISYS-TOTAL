@@ -193,6 +193,13 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
    }
    if(feature==='wholesale'){
      permission(member,user,'wholesale.access');
+     if(parts[1]==='customers'&&parts.length===4&&parts[3]==='policy'){
+       if(method==='GET')return json({policy:await svc.wholesaleCustomerPolicy(tenantId,branch,parts[2])});
+       if(method==='PUT'){
+         permission(member,user,'wholesale.orders.manage');
+         return json({policy:await svc.saveWholesaleCustomerPolicy(tenantId,branch,parts[2],body,key)});
+       }
+     }
      if(parts[1]==='tiers'&&parts.length===2){
        if(method==='GET')return json({tiers:await svc.wholesaleTiers(tenantId,branch)});
        if(method==='POST'){permission(member,user,'wholesale.orders.manage');return json({tier:await svc.saveWholesaleTier(tenantId,branch,body,key)},201);}
