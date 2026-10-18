@@ -582,9 +582,11 @@
             "file": "apps/api/src/catalog-import.mjs",
             "contains": "async commit(tenant,branch,user,body,header)",
             "testFile": "apps/api/test/p2-csv-import.test.mjs",
-            "testContains": "P2 CSV commit is all-or-nothing"
+            "testContains": "P1 assisted CSV upsert changes existing catalogue identity",
+            "testAssertionContains": "assert.equal(edited.balance,8);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "CSV UTF-8 com prévia e escrita atômica para SKUs novos e até 100 linhas; XLSX, importação de grandes lotes, edição assistida e confronto exaustivo desktop ainda pendentes."
+          "reviewNote": "P1: importação CSV com prévia e aplicação atômica; modo explícito criar/atualizar por SKU, ID do produto preservado, sem mexer no livro de estoque, histórico ou campos opcionais omitidos. A prévia do lote tem token SHA-256 ligado ao estado do catálogo e rejeita alterações desde a conferência. API SQLite e UI web com regressões de idempotência, conflitos de código de barras, unidade, tenant, migração de catálogo e token obsoleto. Ainda parcial: importação XLSX, grandes lotes, comparação exaustiva com desktop e homologação E2E específica."
         }
       ]
     },
