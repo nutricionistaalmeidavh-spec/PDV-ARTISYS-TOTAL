@@ -16,7 +16,9 @@ test('all 56 P6 IDs remain visible, grouped exactly once and never overclaimed',
   assert.equal(Object.values(report.groups).flat().length,56);
   assert.equal(report.rows.find(r=>r.id==='cap-002').front,'infra-lan-selfhost');
   assert.match(report.rows.find(r=>r.id==='cap-002').blockers.join(' '),/cash-046/);
-  assert.match(report.rows.find(r=>r.id==='cap-025').blockers.join(' '),/homologacao fisica/);
+  assert.doesNotMatch(report.rows.find(r=>r.id==='cap-025').blockers.join(' '),/homologacao fisica|teste fisico|hardware real/i);
+  assert.equal(report.rows.find(r=>r.id==='cap-025').fieldValidation.requiredForCodeReady,false);
+  assert.equal(report.rows.find(r=>r.id==='cap-025').fieldValidation.status,'not-verified');
   assert.throws(()=>buildReport(matrix,{contracts:contracts.slice(1)}),/56 unique/);
 });
 
@@ -41,7 +43,7 @@ test('one visible 56-capability board summarizes four delivery states; 68 contra
   assert.match(report.progress.notes.join(' '),/gap.*nao comprova ausencia de codigo/i);
 });
 
-test('implementation awaiting homologation requires an explicit reviewed proof, never inferred from tests or dependencies',()=>{
+test('implementation awaiting code parity audit requires an explicit reviewed proof, never inferred from tests or dependencies',()=>{
   const contracts=Array.from({length:56},(_,i)=>({
     id:'cap-'+String(i+1).padStart(3,'0'),
     capability:'desktop-'+(i+1),dependsOn:[],
@@ -63,7 +65,7 @@ test('implementation awaiting homologation requires an explicit reviewed proof, 
   assert.equal(report.progress.counts.aguardando_homologacao,1);
   assert.equal(report.progress.counts.parcial,1);
   assert.equal(report.progress.counts.nao_copiado,54);
-  assert.equal(report.rows[0].blockerType,'homologacao');
+  assert.equal(report.rows[0].blockerType,'auditoria-de-codigo');
   assert.equal(report.rows[1].blockerType,'implementacao');
 });
 

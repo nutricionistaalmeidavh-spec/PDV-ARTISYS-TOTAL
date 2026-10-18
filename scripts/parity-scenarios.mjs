@@ -2,7 +2,6 @@
 import {DESKTOP_REPO,DESKTOP_SHA,WEB_REPO,requireProof} from './parity-rules.mjs';
 
 const DIMENSIONS=['nominal','authorization','tenant-isolation','failure-recovery'];
-const PHYSICAL=/printer|print|impress|thermal|peripheral|serial|balan|scale|barcode|gaveta|drawer|hardware|physical|device|lan|kds|peso|weighted|weight|terminal/i;
 
 const EXPECTATIONS={
   nominal:({name,acceptance})=>({
@@ -29,12 +28,7 @@ const EXPECTATIONS={
     then:'Sem escrita parcial, efeito duplicado, débito indevido ou perda de rastreabilidade; recuperação equivalente.',
     compare:'Comparar estado anterior e posterior, contagens de lançamento, logs sanitizados e trilha de auditoria.'
   }),
-  'physical-device':({name})=>({
-    given:'Equipamento e versões de driver/protocolo identificados para "'+name+'", com bancada documentada.',
-    when:'Executar ciclo real, desconexão/reconexão e repetição da tarefa no desktop e na ponte web.',
-    then:'Resultado equivalente no dispositivo físico e recuperação após falha, com evidência independente.',
-    compare:'Exigir modelo, firmware, OS, observação sem dados pessoais, evidência física e assinatura de homologação.'
-  })
+
 };
 
 export function buildScenarioCatalog(matrix,inventory){
@@ -54,7 +48,7 @@ export function buildScenarioCatalog(matrix,inventory){
     const name=contract.name||contract.capability;
     requireProof(typeof name==='string'&&typeof contract.acceptance==='string',
       'missing scenario subject or acceptance '+contract.id);
-    const dims=PHYSICAL.test(name)?[...DIMENSIONS,'physical-device']:DIMENSIONS;
+    const dims=DIMENSIONS; // Field inspection is a separate, optional deployment activity.
     return dims.map(dimension=>{
       const expected=EXPECTATIONS[dimension]({name,acceptance:contract.acceptance});
       return {
@@ -105,13 +99,7 @@ export function validateScenarioEvidence(scenarios,registry,readSource){
         'scenario proof missing versioned input/expected fixture '+result.scenarioId);
       requireProof(readSource(result.fixtureFile).includes(result.desktopFixtureId),
         'scenario desktop fixture missing from reference file '+result.scenarioId);
-    }else if(result.method==='physical'){
-      requireProof(scenario.dimension==='physical-device','physical evidence may only certify physical-device scenarios');
-      requireProof(typeof result.deviceModel==='string'&&result.deviceModel.length>=3&&
-        typeof result.platform==='string'&&result.platform.length>=3&&
-        typeof result.independentReviewer==='string'&&result.independentReviewer.length>=3&&
-        /^https:\/\/github\.com\/[^/]+\/[^/]+\/(?:issues|pull|actions\/runs)\/[0-9]+/.test(result.reviewUrl||''),
-        'physical scenario requires independent hardware evidence '+result.scenarioId);
+
     }else{
       requireProof(false,'unsupported P0 proof method '+result.scenarioId);
     }
