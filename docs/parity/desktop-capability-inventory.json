@@ -80,7 +80,7 @@
       "capability": "desktop-windows-local-first",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -89,7 +89,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "desktop windows local first: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Parcela funcional de software comprovada em aceites executáveis por ID (SQLite/API/Node/emulação periférica) sem alegar paridade total com desktop. Homologação física opcional, nunca bloqueio de código.",
+      "independentEvidence": {
+        "file": "apps/api/src/local-db.mjs",
+        "contains": "openLocalDatabase",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-001 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-001');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-002",
@@ -770,7 +778,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -779,7 +787,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "thermal-print-queue-and-retry: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Parcela funcional de software comprovada em aceites executáveis por ID (SQLite/API/Node/emulação periférica) sem alegar paridade total com desktop. Homologação física opcional, nunca bloqueio de código.",
+      "independentEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "createR4ExtendedService",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-025 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-025');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-026",
@@ -788,7 +804,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -797,7 +813,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared-artisys-printing-renderer-and-drivers: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Parcela funcional de software comprovada em aceites executáveis por ID (SQLite/API/Node/emulação periférica) sem alegar paridade total com desktop. Homologação física opcional, nunca bloqueio de código.",
+      "independentEvidence": {
+        "file": "scripts/r4-print-agent.mjs",
+        "contains": "spoolLocalPrinter",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-026 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-026');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-027",
@@ -806,7 +830,7 @@
       "dependsOn": [
         "checkout-016"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -815,7 +839,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared-artisys-serialport-peripheral-runtime: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Parcela funcional de software comprovada em aceites executáveis por ID (SQLite/API/Node/emulação periférica) sem alegar paridade total com desktop. Homologação física opcional, nunca bloqueio de código.",
+      "independentEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "readWeight",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-027 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-027');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-028",
@@ -825,7 +857,7 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -834,7 +866,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "hardware-protocol-simulation-ci-and-recovery-tests: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Parcela funcional de software comprovada em aceites executáveis por ID (SQLite/API/Node/emulação periférica) sem alegar paridade total com desktop. Homologação física opcional, nunca bloqueio de código.",
+      "independentEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "parseUranoWeight",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-028 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-028');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-029",
@@ -843,7 +883,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -852,7 +892,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "non-fiscal-sale-prebill-kitchen-and-cash-printing: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Parcela funcional de software comprovada em aceites executáveis por ID (SQLite/API/Node/emulação periférica) sem alegar paridade total com desktop. Homologação física opcional, nunca bloqueio de código.",
+      "independentEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "receiptHtml",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-029 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-029');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-030",
@@ -1432,7 +1480,7 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1441,7 +1489,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "barcode-scale-drawer-adapters: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Parcela funcional de software comprovada em aceites executáveis por ID (SQLite/API/Node/emulação periférica) sem alegar paridade total com desktop. Homologação física opcional, nunca bloqueio de código.",
+      "independentEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "escpos",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-050 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-050');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-051",
@@ -1574,7 +1630,7 @@
       "dependsOn": [
         "cash-046"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1583,8 +1639,22 @@
       },
       "testedContractRefs": [],
       "acceptance": "server terminal and terminal deployment profiles: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Parcela funcional de software comprovada em aceites executáveis por ID (SQLite/API/Node/emulação periférica) sem alegar paridade total com desktop. Homologação física opcional, nunca bloqueio de código.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "const KINDS=new Set",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-056 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-056');",
+        "testRunner": "node-test"
+      }
     }
   ],
-  "notes": "Inventário sem duplicar serviços ou assumir paridade por mera presença de código; o manifesto cobre capacidades publicadas no desktop, não todos os subfluxos. Subfluxos serão decompostos em cenários E2E por domínio."
+  "notes": "Inventário sem duplicar serviços ou assumir paridade por mera presença de código; o manifesto cobre capacidades publicadas no desktop, não todos os subfluxos. Subfluxos serão decompostos em cenários E2E por domínio.",
+  "deliveryAudit": {
+    "reviewedAt": "2026-10-18",
+    "mainBaselineCommit": "1d757d5dbf49f0143d5fc4e6779476de2ff428e1",
+    "scope": "R2/R3 remaining partial software evidence after R1/R4/R2 merges",
+    "note": "Does not downgrade preexisting R2/R4 covered certifications; 8 proven partial subflows promoted from gap; no physical QA gates."
+  }
 }
