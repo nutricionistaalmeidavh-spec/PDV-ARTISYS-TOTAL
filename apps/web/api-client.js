@@ -93,6 +93,17 @@
       const target=new URL(targetPath,root.location.origin);
       for(const [k,v] of url.searchParams)target.searchParams.set(k,v);
       const headers={'accept':'application/json'};
+      // In self-hosted LAN, the server enforces this device credential on
+      // every business route; a revoked terminal cannot continue selling.
+      if(this.tenantId&&target.pathname.startsWith('/api/v1/tenants/')){
+        const deviceKey='pdv-total-r2-device-'+this.tenantId;
+        const deviceId=root.localStorage?.getItem(deviceKey+'-id');
+        const credential=root.localStorage?.getItem(deviceKey+'-credential');
+        if(deviceId&&credential){
+          headers['x-pdv-device-id']=deviceId;
+          headers['x-pdv-device-credential']=credential;
+        }
+      }
       if(!['GET','HEAD'].includes(method))headers['content-type']='application/json';
       const payload=body==null?{}:{...body};
       if(!['GET','HEAD'].includes(method)){
