@@ -9,7 +9,7 @@ const key=()=> 'p1-catalog-safety-'+(++serial);
 const stamp='2026-10-17T20:00:00.000Z';
 async function fixture(){
  const db=openLocalDatabase();
- for(const file of readdirSync(new URL('../migrations/',import.meta.url)).filter(x=>/^\\d{4}_.*\\.sql$/.test(x)).sort())
+ for(const file of readdirSync(new URL('../migrations/',import.meta.url)).filter(x=>/^\d{4}_.*\.sql$/.test(x)).sort())
    db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
  await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
    .bind('operator','operator@example.test','Operator','unused',stamp).run();
