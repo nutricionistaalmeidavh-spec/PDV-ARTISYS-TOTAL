@@ -1304,9 +1304,10 @@
   "notes": "Inventário sem duplicar serviços ou assumir paridade por mera presença de código; o manifesto cobre capacidades publicadas no desktop, não todos os subfluxos. Subfluxos serão decompostos em cenários E2E por domínio.",
   "deliveryAudit": {
     "reviewedAt": "2026-10-18",
-    "baseMainCommit": "f082bfdd73126778f06d1d0c252704a69de6a578",
+    "baseMainCommit": "cdf0b03ba61ea7c3fc95f283890d246b8ec4fa0d",
     "scope": "R2/R3/R4 executable partial implementation evidence",
     "verifiedBy": "CI test:parity and API tests on resulting PR",
-    "note": "Partial means at least one implemented/tested subset, not 100% desktop parity. The remaining R3 gaps are personalized receipt branding and versioned hardware compatibility evidence. Physical hardware is optional."
+    "note": "Partial means at least one implemented/tested subset, not 100% desktop parity. The remaining R3 gaps are personalized receipt branding and versioned hardware compatibility evidence. Physical hardware is optional.",
+    "reconciledWith": "PR #69 R1 acceptance included by non-conflicting merge"
   }
 }
