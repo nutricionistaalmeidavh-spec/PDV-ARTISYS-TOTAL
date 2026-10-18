@@ -2,7 +2,7 @@
 import {backup,DatabaseSync} from 'node:sqlite';
 import {createHash,randomUUID} from 'node:crypto';
 import {createReadStream} from 'node:fs';
-import {chmod,mkdir,readFile,rename,rm,stat,writeFile} from 'node:fs/promises';
+import {chmod,link,mkdir,readFile,rm,stat,writeFile} from 'node:fs/promises';
 import {dirname,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 
@@ -53,6 +53,7 @@ export async function createBackup(sourcePath,backupPath){
   await mkdir(dirname(dest),{recursive:true,mode:0o700});
   const temp=dest+'.'+randomUUID()+'.tmp';
   const db=new DatabaseSync(source,{readOnly:true});
+  let manifestCreated=false,finalized=false;
   try{
     inspect(source);
     await backup(db,temp); // Native SQLite online backup: consistent even with WAL enabled
@@ -62,13 +63,15 @@ export async function createBackup(sourcePath,backupPath){
     const manifest={format:FORMAT,createdAt:new Date().toISOString(),bytes,sha256,
       source:'sqlite',schemaTables:REQUIRED_TABLES};
     await writeFile(manifestPath(dest),JSON.stringify(manifest,null,2)+'\n',{flag:'wx',mode:0o600});
-    await rename(temp,dest);
+    manifestCreated=true;
+    // An atomic hard link to an adjacent temp cannot overwrite concurrent files.
+    await link(temp,dest);
+    finalized=true;
     return {file:dest,manifest};
   }catch(error){
-    await rm(temp,{force:true});
-    if(!await exists(dest))await rm(manifestPath(dest),{force:true});
+    if(manifestCreated&&!finalized)await rm(manifestPath(dest),{force:true});
     throw error;
-  }finally{db.close();}
+  }finally{await rm(temp,{force:true});db.close();}
 }
 export async function stageRestore(backupPath,targetPath){
   const target=absolute(targetPath,'target');
@@ -84,8 +87,8 @@ export async function stageRestore(backupPath,targetPath){
     await chmod(temp,0o600);
     if(await sha256File(temp)!==manifest.sha256)throw Error('Cópia restaurada não corresponde ao backup.');
     inspect(temp);
-    if(await exists(target))throw Error('Destino criado por outro processo durante a restauração.');
-    await rename(temp,target);
+    // link() is atomic and fails with EEXIST even if another process races us.
+    await link(temp,target);
     return {target,sha256:manifest.sha256};
   }finally{await rm(temp,{force:true});}
 }
