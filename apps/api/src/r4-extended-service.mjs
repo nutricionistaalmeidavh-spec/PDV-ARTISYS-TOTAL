@@ -54,6 +54,7 @@ export function createR4ExtendedService(db){
      const stationId=label(body.id,100)||id(),name=label(body.name,100),printer=label(body.printerName,120)||null;
      const sort=integer(body.sortOrder??0,-10000,10000,'Ordenação'),enabled=body.printEnabled===true?1:0,active=body.active!==false?1:0;
      if(!name)throw fail(400,'Informe nome da estação.');
+     if(enabled&&!printer)throw fail(400,'Informe a fila de impressão para habilitar impressão.');
      if(!active&&(await first("SELECT id FROM r4_product_kitchen_routes WHERE tenant_id=? AND branch_id=? AND station_id=? AND mode='PRODUCTION' LIMIT 1",t,b,stationId)))
        throw fail(409,'Retire as rotas ativas antes de desativar a estação.');
      return mutation(t,'r4.station:'+b+':'+stationId,key,async()=>{
@@ -223,6 +224,66 @@ export function createR4ExtendedService(db){
            service_charge_product_id=excluded.service_charge_product_id,updated_at=excluded.updated_at`,
            t,b,sessionId,parts,bps,feeId,stamp())]};
      });
+   },
+
+   async printJobs(t,b){
+     await branch(t,b);
+     const rows=await all(`SELECT j.id,j.station_ticket_id AS stationTicketId,j.printer_name AS printerName,
+       j.status,j.attempt_count AS attempts,j.leased_until AS leasedUntil,
+       j.created_at AS createdAt,j.updated_at AS updatedAt,j.payload_json AS payload
+       FROM r4_kitchen_print_jobs j WHERE j.tenant_id=? AND j.branch_id=?
+       ORDER BY j.created_at DESC,j.id DESC LIMIT 250`,t,b);
+     return rows.map(({payload,...row})=>({...row,payload:JSON.parse(payload)}));
+   },
+   async claimPrint(t,b,jobId,key){
+     await branch(t,b);
+     if(!keyValid(key))throw fail(400,'Identificador da operação obrigatório.');
+     const scope='r4.print.claim:'+b+':'+jobId;
+     const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(prior)return JSON.parse(prior.result_json);
+     const row=await first('SELECT status,attempt_count AS attempts,leased_until AS until FROM r4_kitchen_print_jobs WHERE tenant_id=? AND branch_id=? AND id=?',t,b,jobId);
+     if(!row)throw fail(404,'Ticket de impressão não encontrado.');
+     const current=stamp();
+     if(row.attempts>=8||!(['PENDING','FAILED'].includes(row.status)||(row.status==='LEASED'&&row.until<=current)))
+       throw fail(409,'Ticket já em impressão ou finalizado.');
+     const leaseToken=id(),leasedUntil=new Date(Date.now()+120000).toISOString(),result={id:jobId,status:'LEASED',leaseToken,leasedUntil,attempts:row.attempts+1};
+     await db.batch([
+       q(`UPDATE r4_kitchen_print_jobs SET status='LEASED',lease_token=?,leased_until=?,
+           attempt_count=attempt_count+1,last_error=NULL,updated_at=?
+           WHERE tenant_id=? AND branch_id=? AND id=? AND attempt_count<8
+             AND (status IN('PENDING','FAILED') OR (status='LEASED' AND leased_until<=?))`,
+         leaseToken,leasedUntil,current,t,b,jobId,current),
+       q(`INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at)
+          SELECT ?,?,?,?,? WHERE changes()=1`,t,scope,key,JSON.stringify(result),current)
+     ]);
+     const won=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(!won)throw fail(409,'Outro terminal assumiu a impressão. Atualize o painel.');
+     return JSON.parse(won.result_json);
+   },
+   async acknowledgePrint(t,b,jobId,body,key){
+     await branch(t,b);
+     const scope='r4.print.ack:'+b+':'+jobId;
+     if(!keyValid(key))throw fail(400,'Identificador da operação obrigatório.');
+     const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(prior)return JSON.parse(prior.result_json);
+     const token=label(body.leaseToken,128),status=label(body.status).toUpperCase();
+     const lastError=status==='FAILED'?label(body.error,200)||'Falha de impressão local.':null;
+     if(!/^[a-f0-9-]{36}$/i.test(token)||!['PRINTED','FAILED'].includes(status))throw fail(400,'Confirmação de impressão inválida.');
+     const row=await first('SELECT status,lease_token AS token,leased_until AS until FROM r4_kitchen_print_jobs WHERE tenant_id=? AND branch_id=? AND id=?',t,b,jobId);
+     if(!row)throw fail(404,'Ticket de impressão não encontrado.');
+     const current=stamp();
+     if(row.status!=='LEASED'||row.token!==token||row.until<current)throw fail(409,'Reserva de impressão expirada ou inválida.');
+     const result={id:jobId,status};
+     await db.batch([
+       q(`UPDATE r4_kitchen_print_jobs SET status=?,lease_token=NULL,leased_until=NULL,last_error=?,updated_at=?
+          WHERE tenant_id=? AND branch_id=? AND id=? AND status='LEASED'
+          AND lease_token=? AND leased_until>=?`,status,lastError,current,t,b,jobId,token,current),
+       q(`INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at)
+         SELECT ?,?,?,?,? WHERE changes()=1`,t,scope,key,JSON.stringify(result),current)
+     ]);
+     const won=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(!won)throw fail(409,'O ticket foi confirmado por outro terminal.');
+     return JSON.parse(won.result_json);
    },
    async pizzaProfiles(t,b){
      await branch(t,b);
