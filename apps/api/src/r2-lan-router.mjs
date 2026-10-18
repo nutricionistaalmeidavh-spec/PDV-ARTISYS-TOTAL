@@ -12,14 +12,14 @@ const DEVICE_ROLES={
 };
 export const R2_PILOT_CHECKS=Object.freeze([
   {key:'identify-server',title:'Papel do servidor e endereço HTTPS',category:'deployment'},
-  {key:'lan-test',title:'Conexão HTTPS com certificado confiável em duas máquinas',category:'lan'},
-  {key:'terminal-register',title:'Pareamento, permissão e revogação de dois terminais',category:'lan'},
+  {key:'lan-test',title:'Inspeção opcional de HTTPS em dois equipamentos reais',category:'lan',optional:true},
+  {key:'terminal-register',title:'Validação opcional de terminais em operação no local',category:'lan',optional:true},
   {key:'waiter-kitchen',title:'Dispositivos de salão e cozinha, se utilizados',category:'lan',optional:true},
   {key:'backup-manual',title:'Backup SQLite consistente',category:'recovery'},
-  {key:'restore-test',title:'Restauração em banco isolado com serviço de produção parado',category:'recovery'},
-  {key:'offline-test',title:'Operação LAN sem acesso à Internet',category:'recovery'},
-  {key:'sale-test',title:'Venda e concorrência entre operadores',category:'operations'},
-  {key:'cash-close-test',title:'Fechamento de caixa por terminal',category:'operations'},
+  {key:'restore-test',title:'Ensaio operacional opcional de restauração em banco isolado',category:'recovery',optional:true},
+  {key:'offline-test',title:'Inspeção opcional de operação LAN sem Internet',category:'recovery',optional:true},
+  {key:'sale-test',title:'Inspeção opcional de vendas em equipamentos do local',category:'operations',optional:true},
+  {key:'cash-close-test',title:'Inspeção opcional de fechamento por terminal',category:'operations',optional:true},
   {key:'diagnostics',title:'Diagnósticos e logs sem dados sensíveis',category:'support'},
   {key:'printer-test',title:'Impressora testada fisicamente',category:'hardware',optional:true},
   {key:'scale-test',title:'Balança testada fisicamente',category:'hardware',optional:true}
@@ -54,7 +54,7 @@ function viewReadiness(rows){
     return {...item,status:saved?.status||'NOT_STARTED',note:saved?.note||'',
       evidenceRef:saved?.evidence_ref||'',updatedAt:saved?.updated_at||null};
   });
-  return {ready:checks.every(item=>item.status==='READY'||item.optional&&item.status==='NOT_APPLICABLE'),
+  return {ready:checks.every(item=>item.optional||item.status==='READY'),
     checks,readyCount:checks.filter(item=>item.status==='READY').length,total:checks.length};
 }
 

@@ -98,7 +98,7 @@
       "dependsOn": [
         "cash-046"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -107,7 +107,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "central lan server: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R2: integração funcional e controles exercitados em testes Node/SQLite reais, com dependências canônicas verificadas e cobertura identificada por cap-002. Inspeções físicas não fazem parte da certificação do código.",
+      "independentEvidence": {
+        "file": "apps/api/src/https-lan-server.mjs",
+        "contains": "export function createLanServer(",
+        "testFile": "apps/api/test/https-lan-server.test.mjs",
+        "testContains": "test('cap-002 LAN:",
+        "testAssertionContains": "assert.notEqual(ownerCookie,cashierCookie,'distinct terminals must not share sessions');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-003",
@@ -116,7 +124,7 @@
       "dependsOn": [
         "cash-046"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -125,7 +133,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "paired multi terminal: Comprovar escopo, revogação, permissões e dois dispositivos concorrentes autenticados.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R2: integração funcional e controles exercitados em testes Node/SQLite reais, com dependências canônicas verificadas e cobertura identificada por cap-003. Inspeções físicas não fazem parte da certificação do código.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "export async function authorizeLanBusinessRequest",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('cap-003 cap-044 cap-045 cap-046 R2:",
+        "testAssertionContains": "assert.notEqual(second.data.device.id,id);",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-004",
@@ -314,7 +330,7 @@
       "capability": "optional-local-module-registry",
       "owner": "modules",
       "dependsOn": [],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -323,7 +339,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "optional local module registry: Comprovar habilitação, autorização e desabilitação sem apagar histórico.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R2: integração funcional e controles exercitados em testes Node/SQLite reais, com dependências canônicas verificadas e cobertura identificada por cap-010. Inspeções físicas não fazem parte da certificação do código.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "export async function authorizeLanModule",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('cap-010 R2 optional modules:",
+        "testAssertionContains": "assert.equal((await authorizeLanModule(db,'a','restaurant/tables'))?.status,403);",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-011",
@@ -1204,7 +1228,7 @@
       "dependsOn": [
         "home-001"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1215,7 +1239,15 @@
         "home-001"
       ],
       "acceptance": "local mobile access qr material: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "R2: integração funcional e controles exercitados em testes Node/SQLite reais, com dependências canônicas verificadas e cobertura identificada por cap-042. Inspeções físicas não fazem parte da certificação do código.",
+      "independentEvidence": {
+        "file": "packages/core/js/core/mobile-access/qr-code.js",
+        "contains": "function qrSvg(",
+        "testFile": "packages/core/test/r2-lan-qr.test.js",
+        "testContains": "test('cap-042 R2 QR:",
+        "testAssertionContains": "assert.ok(svg.includes('data-qr-payload=\"https://pdv.local:8443/\"'));",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-043",
@@ -1241,7 +1273,7 @@
       "capability": "waiter-lan-device",
       "owner": "mobile",
       "dependsOn": [],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1250,14 +1282,22 @@
       },
       "testedContractRefs": [],
       "acceptance": "waiter lan device: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R2: integração funcional e controles exercitados em testes Node/SQLite reais, com dependências canônicas verificadas e cobertura identificada por cap-044. Inspeções físicas não fazem parte da certificação do código.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "WAITER:new Set(",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('cap-003 cap-044 cap-045 cap-046 R2:",
+        "testAssertionContains": "assert.equal((await call('/api/v1/tenants/a/restaurant/tables?branchId=branch-a',",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-045",
       "capability": "kitchen-lan-device",
       "owner": "mobile",
       "dependsOn": [],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1266,14 +1306,22 @@
       },
       "testedContractRefs": [],
       "acceptance": "kitchen lan device: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R2: integração funcional e controles exercitados em testes Node/SQLite reais, com dependências canônicas verificadas e cobertura identificada por cap-045. Inspeções físicas não fazem parte da certificação do código.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "KITCHEN:new Set(",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('cap-003 cap-044 cap-045 cap-046 R2:",
+        "testAssertionContains": "assert.equal(kitchenFeed.status,200,JSON.stringify(kitchenFeed.data));",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-046",
       "capability": "hashed-revocable-mobile-device-credentials",
       "owner": "identity",
       "dependsOn": [],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1282,7 +1330,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "hashed revocable mobile device credentials: Comprovar escopo, revogação, permissões e dois dispositivos concorrentes autenticados.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R2: integração funcional e controles exercitados em testes Node/SQLite reais, com dependências canônicas verificadas e cobertura identificada por cap-046. Inspeções físicas não fazem parte da certificação do código.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "credential_hash",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('cap-003 cap-044 cap-045 cap-046 R2:",
+        "testAssertionContains": "assert.match(paired.data.credential,/^[a-f0-9]{64}$/);",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-047",
@@ -1392,7 +1448,7 @@
       "capability": "versioned-backup-validate-restore",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1401,7 +1457,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "versioned backup validate restore: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R2: integração funcional e controles exercitados em testes Node/SQLite reais, com dependências canônicas verificadas e cobertura identificada por cap-051. Inspeções físicas não fazem parte da certificação do código.",
+      "independentEvidence": {
+        "file": "scripts/selfhost-backup.mjs",
+        "contains": "export async function stageRestore",
+        "testFile": "scripts/selfhost-backup.test.mjs",
+        "testContains": "test('cap-051 WAL-aware backup",
+        "testAssertionContains": "assert.equal(db.prepare('SELECT name FROM tenants').get().name,'Original');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-052",
@@ -1436,7 +1500,7 @@
       "capability": "audit-health-sanitized-logs",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1445,14 +1509,22 @@
       },
       "testedContractRefs": [],
       "acceptance": "audit health sanitized logs: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R2: integração funcional e controles exercitados em testes Node/SQLite reais, com dependências canônicas verificadas e cobertura identificada por cap-053. Inspeções físicas não fazem parte da certificação do código.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "if(path==='lan/audit'",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('cap-053 cap-055 R2:",
+        "testAssertionContains": "assert.equal(JSON.stringify(auditBody).includes('owner@pilot.test'),false,",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-054",
       "capability": "diagnostic-zip",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1461,14 +1533,22 @@
       },
       "testedContractRefs": [],
       "acceptance": "diagnostic zip: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R2: integração funcional e controles exercitados em testes Node/SQLite reais, com dependências canônicas verificadas e cobertura identificada por cap-054. Inspeções físicas não fazem parte da certificação do código.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "if(path==='lan/diagnostics.zip'",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('cap-054 R2:",
+        "testAssertionContains": "assert.ok(!raw.includes(secret),secret+' cannot be in ZIP');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-055",
       "capability": "persistent-pilot-readiness-checklist",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1477,7 +1557,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "persistent pilot readiness checklist: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R2: integração funcional e controles exercitados em testes Node/SQLite reais, com dependências canônicas verificadas e cobertura identificada por cap-055. Inspeções físicas não fazem parte da certificação do código.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "if(path==='lan/readiness'",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('cap-053 cap-055 R2:",
+        "testAssertionContains": "assert.equal((await other.json()).checks.find(x=>x.key==='restore-test').status,'NOT_STARTED');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-056",

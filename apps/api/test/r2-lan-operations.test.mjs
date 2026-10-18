@@ -5,13 +5,13 @@ import {applyLocalMigrations} from '../src/local-migrations.mjs';
 import {createApi} from '../src/worker.mjs';
 import {hashPassword} from '../src/password.mjs';
 
-test('R2: hashed one-use pairing, branch+operator scope, revocation, read-only and tenant isolation', async t=>{
+test('cap-003 cap-044 cap-045 cap-046 R2: independently paired terminal, waiter and kitchen devices with revocation', async t=>{
   const db=openLocalDatabase(':memory:');
   t.after(()=>db.close());
   await applyLocalMigrations(db);
   const pw=await hashPassword('LocalNetworkStrongPass2026!');
   const stamp=new Date().toISOString();
-  for(const [id,email] of [['owner','owner@a.test'],['waiter','waiter@a.test'],['cashier','cashier@a.test'],['other','owner@b.test']]){
+  for(const [id,email] of [['owner','owner@a.test'],['waiter','waiter@a.test'],['cashier','cashier@a.test'],['kitchen','kitchen@a.test'],['other','owner@b.test']]){
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
       .bind(id,email,id,pw,stamp).run();
   }
@@ -21,7 +21,7 @@ test('R2: hashed one-use pairing, branch+operator scope, revocation, read-only a
     await db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)')
       .bind('branch-'+id,id,'MAIN','Branch '+id,stamp).run();
   }
-  for(const [tenant,user,role] of [['a','owner','OWNER'],['a','waiter','WAITER'],['a','cashier','CASHIER'],['b','other','OWNER']]){
+  for(const [tenant,user,role] of [['a','owner','OWNER'],['a','waiter','WAITER'],['a','cashier','CASHIER'],['a','kitchen','KITCHEN'],['b','other','OWNER']]){
     await db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)')
       .bind(tenant,user,role,stamp).run();
   }
@@ -43,7 +43,7 @@ test('R2: hashed one-use pairing, branch+operator scope, revocation, read-only a
     return res.cookie;
   }
   const owner=await login('owner@a.test'),waiter=await login('waiter@a.test');
-  const cashier=await login('cashier@a.test'),other=await login('owner@b.test');
+  const cashier=await login('cashier@a.test'),kitchen=await login('kitchen@a.test'),other=await login('owner@b.test');
   const base='/api/v1/tenants/a/lan';
   assert.equal((await call(base+'/devices','GET',null,cashier)).status,403);
   assert.equal((await call(base+'/devices','GET',null,other)).status,404);
@@ -77,14 +77,80 @@ test('R2: hashed one-use pairing, branch+operator scope, revocation, read-only a
   assert.equal((await call(protectedPath,'GET',null,owner)).status,403,'LAN business route must require a paired device');
   assert.equal((await call(protectedPath,'GET',null,owner,true,{'x-pdv-device-id':id,'x-pdv-device-credential':'a'.repeat(64)})).status,401);
   assert.equal((await call(protectedPath,'GET',null,owner,true,deviceHeaders)).status,200);
+  // cap-003: two independently paired, authenticated terminals on the same LAN.
+  const secondCode=await call(base+'/pairings','POST',{kind:'TERMINAL',branchId:'branch-a'},owner);
+  assert.equal(secondCode.status,201);
+  const second=await call(base+'/devices/pair','POST',{code:secondCode.data.code,name:'Caixa B'},cashier);
+  assert.equal(second.status,201);
+  assert.notEqual(second.data.device.id,id);
+  const secondHeaders={'x-pdv-device-id':second.data.device.id,
+    'x-pdv-device-credential':second.data.credential};
+  assert.equal((await call(protectedPath,'GET',null,owner,true,secondHeaders)).status,200);
+  // cap-044: a waiter can use a WAITER device for live restaurant tables,
+  // but its profile cannot enter kitchen production endpoints.
+  const waiterHeaders={'x-pdv-device-id':id,'x-pdv-device-credential':paired.data.credential};
+  assert.equal((await call('/api/v1/tenants/a/restaurant/tables?branchId=branch-a',
+    'GET',null,waiter,true,waiterHeaders)).status,200);
+  assert.equal((await call('/api/v1/tenants/a/restaurant/kitchen?branchId=branch-a',
+    'GET',null,waiter,true,waiterHeaders)).status,403);
+  // cap-045: independent kitchen device, strictly limited to KDS permissions.
+  const kitchenCode=await call(base+'/pairings','POST',{kind:'KITCHEN',branchId:'branch-a'},owner);
+  assert.equal(kitchenCode.status,201);
+  const kitchenDevice=await call(base+'/devices/pair','POST',
+    {code:kitchenCode.data.code,name:'KDS B'},kitchen);
+  assert.equal(kitchenDevice.status,201);
+  const kitchenHeaders={'x-pdv-device-id':kitchenDevice.data.device.id,
+    'x-pdv-device-credential':kitchenDevice.data.credential};
+  const kitchenFeed=await call('/api/v1/tenants/a/restaurant/kitchen?branchId=branch-a',
+    'GET',null,kitchen,true,kitchenHeaders);
+  assert.equal(kitchenFeed.status,200,JSON.stringify(kitchenFeed.data));
+  assert.ok(Array.isArray(kitchenFeed.data.tickets));
+  assert.equal((await call('/api/v1/tenants/a/restaurant/tables?branchId=branch-a',
+    'GET',null,kitchen,true,kitchenHeaders)).status,403);
+
+  // Actual waiter-to-KDS workflow on the paired devices.
+  const mut=()=>({'x-mutation-id':crypto.randomUUID()});
+  const product=await call('/api/v1/tenants/a/products','POST',
+    {branchId:'branch-a',sku:'R2-PLATE',name:'Prato LAN',salePriceCents:1700},
+    owner,true,{...secondHeaders,...mut()});
+  assert.equal(product.status,201,JSON.stringify(product.data));
+  const table=await call('/api/v1/tenants/a/restaurant/tables','POST',
+    {branchId:'branch-a',label:'Mesa R2',seats:2},waiter,true,{...waiterHeaders,...mut()});
+  assert.equal(table.status,201,JSON.stringify(table.data));
+  const session=await call('/api/v1/tenants/a/restaurant/tables/'+table.data.table.id+'/open','POST',
+    {branchId:'branch-a',partySize:2},waiter,true,{...waiterHeaders,...mut()});
+  assert.equal(session.status,201,JSON.stringify(session.data));
+  const order=await call('/api/v1/tenants/a/restaurant/orders','POST',
+    {branchId:'branch-a',tableSessionId:session.data.session.id,
+      items:[{productId:product.data.product.id,quantity:1}]},
+    waiter,true,{...waiterHeaders,...mut()});
+  assert.equal(order.status,201,JSON.stringify(order.data));
+  const feed=await call('/api/v1/tenants/a/restaurant/kitchen?branchId=branch-a',
+    'GET',null,kitchen,true,kitchenHeaders);
+  assert.equal(feed.status,200);
+  const ticket=feed.data.tickets.find(item=>item.orderId===order.data.order.id);
+  assert.ok(ticket,'cap-044 waiter order must reach cap-045 kitchen without duplicate tickets');
+  const preparing=await call('/api/v1/tenants/a/restaurant/kitchen/'+ticket.id,'PATCH',
+    {branchId:'branch-a',status:'PREPARING'},kitchen,true,{...kitchenHeaders,...mut()});
+  assert.equal(preparing.status,200,JSON.stringify(preparing.data));
+  const ready=await call('/api/v1/tenants/a/restaurant/kitchen/'+ticket.id,'PATCH',
+    {branchId:'branch-a',status:'READY'},kitchen,true,{...kitchenHeaders,...mut()});
+  assert.equal(ready.status,200,JSON.stringify(ready.data));
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},cashier)).status,403);
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},owner)).status,200);
   assert.equal((await call(base+'/devices/check','POST',{id,credential:paired.data.credential},waiter)).status,401);
   assert.equal((await call(protectedPath,'GET',null,owner,true,deviceHeaders)).status,401,'revocation must block commercial requests');
+  assert.equal((await call(protectedPath,'GET',null,owner,true,secondHeaders)).status,200,
+    'revoking one device does not revoke a second independent terminal');
+  assert.equal((await call('/api/v1/tenants/a/restaurant/kitchen?branchId=branch-a',
+    'GET',null,kitchen,true,kitchenHeaders)).status,200,
+    'revoking waiter does not revoke independent kitchen session');
+  assert.equal((await call(base+'/devices/'+second.data.device.id,'DELETE',{},owner)).status,200);
+  assert.equal((await call(protectedPath,'GET',null,owner,true,secondHeaders)).status,401);
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},owner)).status,200);
 });
 
-test('R2: pilot readiness stays incomplete until explicit evidence, with isolated persisted entries',async t=>{
+test('cap-053 cap-055 R2: tenant-scoped readiness, sanitized audit and health remain private',async t=>{
   const db=openLocalDatabase(':memory:');
   t.after(()=>db.close());
   await applyLocalMigrations(db);
@@ -109,15 +175,33 @@ test('R2: pilot readiness stays incomplete until explicit evidence, with isolate
   const written=await r2LanRoute(mk('lan/readiness/restore-test','PATCH',{status:'READY',note:'Ensaio de recuperação em máquina isolada executado',evidenceRef:'qa/local-restore-001'}),db,owner,membership,'a','lan/readiness/restore-test');
   assert.equal(written.status,200);
   assert.equal((await written.json()).check.status,'READY');
+  const optional=await r2LanRoute(mk('lan/readiness'),db,owner,membership,'a','lan/readiness');
+  const optionalChecks=(await optional.json()).checks;
+  assert.equal(optionalChecks.find(c=>c.key==='lan-test').optional,true,
+    'physical two-machine QA cannot block code or the operational checklist');
+  assert.equal(optionalChecks.find(c=>c.key==='printer-test').optional,true);
   const other=await r2LanRoute(mk('lan/readiness'),db,owner,membership,'b','lan/readiness');
   assert.equal((await other.json()).checks.find(x=>x.key==='restore-test').status,'NOT_STARTED');
   const audit=await r2LanRoute(mk('lan/audit'),db,owner,membership,'a','lan/audit');
   assert.equal(audit.status,200);
-  assert.ok((await audit.json()).events.some(x=>x.action==='readiness.update'));
+  const auditBody=await audit.json();
+  assert.ok(auditBody.events.some(x=>x.action==='readiness.update'));
+  assert.equal(JSON.stringify(auditBody).includes('owner@pilot.test'),false,
+    'cap-053 sanitized audit cannot expose operator emails');
+  const deniedAudit=await r2LanRoute(mk('lan/audit'),db,cashier,memberCash,'a','lan/audit');
+  assert.equal(deniedAudit.status,403);
+  const health=await r2LanRoute(mk('lan/health'),db,owner,membership,'a','lan/health');
+  assert.equal(health.status,200);
+  const status=await health.json();
+  assert.equal(status.cloudRequired,false,'cap-053 health must not depend on SaaS');
+  assert.equal(status.pendingPairings,0);
+  const otherAudit=await r2LanRoute(mk('lan/audit'),db,owner,membership,'b','lan/audit');
+  assert.equal((await otherAudit.json()).events.length,0,
+    'cap-053 administrative audit is isolated per tenant');
 });
 
 
-test('R2: support diagnostics ZIP contains no password, cookie, email or credentials',async t=>{
+test('cap-054 R2: support diagnostics ZIP contains no password, cookie, email or credentials',async t=>{
   const db=openLocalDatabase(':memory:');
   t.after(()=>db.close());
   await applyLocalMigrations(db);
@@ -145,7 +229,7 @@ test('R2: support diagnostics ZIP contains no password, cookie, email or credent
 });
 
 
-test('R2 optional modules: FOOD and WHOLESALE stay tenant-scoped, reversible and audited',async t=>{
+test('cap-010 R2 optional modules: FOOD and WHOLESALE stay tenant-scoped, reversible and audited',async t=>{
   const db=openLocalDatabase(':memory:');
   t.after(()=>db.close());
   await applyLocalMigrations(db);
