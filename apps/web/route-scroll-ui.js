@@ -17,7 +17,10 @@
   lifecycle.on('route:mounted',({route})=>{
     const next=surfaceKey(route);
     if(next===surface){restoreNext=false;return;}
-    const top=restoreNext?(positions.get(next)||0):0;
+    // Reports keep the user's place after visiting other modules; other routes
+    // retain the explicit Back-only behavior to avoid surprising scroll jumps.
+    const restoreReport=route==='reports'&&positions.has(next);
+    const top=(restoreNext||restoreReport)?(positions.get(next)||0):0;
     surface=next;restoreNext=false;
     requestAnimationFrame(()=>moveTo(top));
   });
