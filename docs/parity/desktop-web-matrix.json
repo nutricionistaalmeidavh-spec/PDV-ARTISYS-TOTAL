@@ -7,7 +7,7 @@
   },
   "web": {
     "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL",
-    "mainAtAudit": "ad036a2095c863aebbdd3b3282957133466a8bd4"
+    "mainAtAudit": "cdf0b03ba61ea7c3fc95f283890d246b8ec4fa0d"
   },
   "parityClaim": "incomplete",
   "definitions": {
@@ -1291,7 +1291,14 @@
       ]
     }
   ],
-  "reviewedAt": "2026-10-17",
+  "reviewedAt": "2026-10-18",
   "scope": "seven-screen-operations",
-  "certification": null
+  "certification": null,
+  "deliveryAudit": {
+    "at": "2026-10-18",
+    "auditedMainCommit": "cdf0b03ba61ea7c3fc95f283890d246b8ec4fa0d",
+    "contractsCovered": 40,
+    "contractsPartial": 28,
+    "note": "This is a seven-screen contract reference, not the 56-capability delivery status. R1 21 capabilities covered in main, and 29 R2/R3/R4 partial capability implementations registered separately. Audit commit is a historical baseline, not a live main HEAD."
+  }
 }
