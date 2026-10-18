@@ -13,6 +13,7 @@
   let storeTimeZone = 'America/Sao_Paulo';
   let state = { view:'overview',fromDate:'',toDate:'',sellerId:'',customerId:'',productId:'',paymentMethod:'',locationId:'' };
   let webReportContextKey = '';
+  let lastWebReportRequest = 0;
   const webReportViews = new Set(['overview','products','payments','inventory','cash','finance','margins','details','coverage','targets']);
   // Keep only presentation preferences per tenant/branch in this browser tab.
   // Never persist monetary aggregates, customer IDs, or authorization data.
@@ -365,11 +366,12 @@
   // Web mode stays within the original PdvReportsV2 route owner and state.
   // Backend D1 aggregates are authoritative; no replica or browser-side ledger.
   async function renderWebReports(next={}){
+    const requestId=++lastWebReportRequest;
     await ready();
     restoreWebReportContext();
     state={...state,...next};
     markActive();
-    const date=new Date().toISOString().slice(0,10);
+    const date=businessToday();
     if(!state.fromDate)state.fromDate=date.slice(0,8)+'01';
     if(!state.toDate)state.toDate=date;
     const fromDate=state.fromDate,toDate=state.toDate;
@@ -395,12 +397,12 @@
         state.view==='targets'?api.sellers():Promise.resolve([])
       ]);
     }catch(error){
-      if(routeActive())content.innerHTML=`<section class="ops-page report-v2-page">
+      if(routeActive()&&requestId===lastWebReportRequest)content.innerHTML=`<section class="ops-page report-v2-page">
         <header class="ops-head"><div><h1>Relatórios</h1><p>Não foi possível consultar os dados.</p></div></header>
         <section class="ops-card"><div class="ops-empty">${escapeHtml(error.message)}</div></section></section>`;
       return;
     }
-    if(!routeActive())return;
+    if(!routeActive()||requestId!==lastWebReportRequest)return;
     const sale=report.sales||{},cash=report.cash||[],inventory=report.inventory||[],
       payments=report.methodTotals||[],products=report.products||[],finance=report.finance||{};
     const total=Number(sale.totalCents)||0,count=Number(sale.count)||0;
@@ -598,7 +600,21 @@
       if(form.elements.from.value>form.elements.to.value){showToast('A data inicial deve ser anterior à final.','error');return;}
       void renderWebReports({fromDate:form.elements.from.value,toDate:form.elements.to.value});
     });
-    content.querySelectorAll('[data-report-web]').forEach(button=>button.addEventListener('click',()=>void renderWebReports({view:button.dataset.reportWeb})));
+    content.querySelectorAll('[data-report-web]').forEach(button=>{
+      button.addEventListener('click',()=>{const target=button.dataset.reportWeb;
+        void renderWebReports({view:target}).then(()=>{
+          content.querySelector('[data-report-web="'+target+'"]')?.focus({preventScroll:true});
+        });});
+      button.addEventListener('keydown',event=>{
+        const tabs=[...content.querySelectorAll('[data-report-web]')];
+        const index=tabs.indexOf(button);
+        const nextIndex=event.key==='ArrowRight'?(index+1)%tabs.length:
+          event.key==='ArrowLeft'?(index-1+tabs.length)%tabs.length:
+          event.key==='Home'?0:event.key==='End'?tabs.length-1:-1;
+        if(nextIndex<0)return;
+        event.preventDefault();tabs[nextIndex].click();
+      });
+    });
     content.querySelector('#web-target-month')?.addEventListener('submit',event=>{
       event.preventDefault();void renderWebReports({goalMonth:event.currentTarget.elements.month.value});
     });
