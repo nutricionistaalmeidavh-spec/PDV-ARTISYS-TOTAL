@@ -65,6 +65,18 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
      if(parts[1]==='segments'&&parts.length===2&&method==='GET'){
        permission(member,user,'restaurant.orders.view');return json(await ext.segments(tenantId,branch));
      }
+     if(parts[1]==='bakery'&&parts[2]==='orders'&&parts.length===3){
+       if(method==='GET'){
+         permission(member,user,'restaurant.orders.view');
+         const orders=await svc.foodOrders(tenantId,branch,'PICKUP');
+         return json({orders:orders.filter(row=>row.service_channel==='COUNTER')});
+       }
+       if(method==='POST'){
+         permission(member,user,'restaurant.orders.create');
+         return json({order:await svc.createFoodOrder(tenantId,branch,user,
+           {...body,fulfillment:'COUNTER',tableSessionId:null,useTicket:body.useTicket!==false},key)},201);
+       }
+     }
      if(parts[1]==='weight'&&parts[2]==='quote'&&parts.length===3&&method==='POST'){
        permission(member,user,'products.view');return json({quote:await ext.quoteWeight(tenantId,branch,body)});
      }
