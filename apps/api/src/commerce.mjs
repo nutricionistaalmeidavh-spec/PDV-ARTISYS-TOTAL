@@ -1171,58 +1171,111 @@ export function createCommerceService(db,{now=nowISO}={}){
     },
     async addConfiguredItem(tenant,branch,id,body,header){
       const key=requiredMutation(body,header),scope='sale.add-configured:'+id;
-      const prior=await applied(tenant,scope,key);
-      if(prior)return snapshot(tenant,branch,id);
+      if(await applied(tenant,scope,key))return snapshot(tenant,branch,id);
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
-      const p=await product(tenant,body?.productId);
-      const milli=quantityMilli(body?.quantity??1);
+      const p=await product(tenant,body?.productId),milli=quantityMilli(body?.quantity??1);
       if(!milli)throw error(400,'Quantidade inválida.');
       const note=body?.note??'';
       if(typeof note!=='string'||note.length>240||
-         /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(note))
+         /[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]/.test(note))
         throw error(400,'Observação inválida.');
+      const cleaned=note.trim();
       const quote=await checkoutConfig.quote(tenant,branch,p.id,body);
-      const configurationJSON=JSON.stringify(quote.configurationSnapshot);
-      const itemId=randomId();
-      const existing=await first('SELECT id FROM sale_items WHERE tenant_id=? AND branch_id=? AND sale_id=? AND product_id=?',
-        tenant,branch,id,p.id);
-      if(!existing&&(await all('SELECT id FROM sale_items WHERE sale_id=?',id)).length>=MAX_LINES)
-        throw error(400,'Máximo de 80 produtos por venda.');
-      // A configuration belongs to the SAME canonical sale_item. The primary
-      // uniqueness constraint permits one configuration per SKU in this phase.
-      // An incompatible choice or altered price must fail atomically rather
-      // than silently merging two different items into a single stock line.
-      await batch([
-        q(`INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,
-          product_name,sku,quantity_milli,unit_price_cents,created_at,
-          catalog_unit_price_cents,note,configuration_json)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
-          ON CONFLICT(sale_id,product_id) DO UPDATE SET quantity_milli=
-            CASE WHEN sale_items.configuration_json=excluded.configuration_json
-              AND sale_items.unit_price_cents=excluded.unit_price_cents
-              AND sale_items.note=excluded.note
-            THEN sale_items.quantity_milli+excluded.quantity_milli ELSE 0 END`,
-          itemId,tenant,branch,id,p.id,p.name,p.sku,milli,quote.unitPriceCents,
-          stamp(),p.sale_price_cents,note.trim(),configurationJSON),
-        audit(tenant,scope,key,{saleId:id,productId:p.id,quantity:milli/1000,
-          priceCents:quote.unitPriceCents,configuration:quote.configurationSnapshot})
-      ]);
+      const json=JSON.stringify(quote.configurationSnapshot),at=stamp();
+      const parent=await first(`SELECT * FROM sale_items WHERE tenant_id=?
+        AND branch_id=? AND sale_id=? AND product_id=?`,tenant,branch,id,p.id);
+      const children=parent?await all(`SELECT * FROM sale_configured_lines WHERE tenant_id=?
+        AND branch_id=? AND sale_id=? AND sale_item_id=?`,
+        tenant,branch,id,parent.id):[];
+      if(parent&&!parent.configuration_json&&!children.length)
+        throw error(409,'Produto simples já está na venda. Remova antes de personalizar.');
+      const matched=children.find(c=>c.configuration_json===json&&
+        c.unit_price_cents===quote.unitPriceCents&&c.note===cleaned);
+      const original=parent&&parent.configuration_json&&!children.length;
+      const parents=await all('SELECT * FROM sale_items WHERE sale_id=?',id);
+      const priced=await pricedSaleLines(all,tenant,branch,id,parents);
+      if(!matched&&priced.length+(original?0:1)>MAX_LINES)
+        throw error(400,'Máximo de 80 linhas de venda.');
+      const parentId=parent?.id||randomId(),statements=[];
+      if(!parent)statements.push(q(`INSERT INTO sale_items
+        (id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,
+         unit_price_cents,created_at,catalog_unit_price_cents,note,configuration_json)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        parentId,tenant,branch,id,p.id,p.name,p.sku,milli,quote.unitPriceCents,
+        at,p.sale_price_cents,cleaned,json));
+      else{
+        if(original)statements.push(q(`INSERT INTO sale_configured_lines
+          (id,tenant_id,branch_id,sale_id,sale_item_id,product_id,quantity_milli,
+           unit_price_cents,catalog_unit_price_cents,note,configuration_json,created_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,id,parentId,p.id,
+          parent.quantity_milli,parent.unit_price_cents,
+          parent.catalog_unit_price_cents??parent.unit_price_cents,
+          parent.note||'',parent.configuration_json,parent.created_at));
+        statements.push(q(`UPDATE sale_items SET quantity_milli=quantity_milli+?
+          WHERE id=? AND tenant_id=? AND branch_id=? AND sale_id=?`,
+          milli,parentId,tenant,branch,id));
+      }
+      if(matched)statements.push(q(`UPDATE sale_configured_lines
+        SET quantity_milli=quantity_milli+? WHERE id=? AND tenant_id=? AND branch_id=?
+        AND sale_id=?`,milli,matched.id,tenant,branch,id));
+      else statements.push(q(`INSERT INTO sale_configured_lines
+        (id,tenant_id,branch_id,sale_id,sale_item_id,product_id,quantity_milli,
+         unit_price_cents,catalog_unit_price_cents,note,configuration_json,created_at)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,id,parentId,p.id,
+         milli,quote.unitPriceCents,p.sale_price_cents,cleaned,json,at));
+      statements.push(audit(tenant,scope,key,{saleId:id,productId:p.id,parentItemId:parentId,
+        quantity:milli/1000,priceCents:quote.unitPriceCents,configuration:quote.configurationSnapshot}));
+      await batch(statements);
       return snapshotAfterCartChange(tenant,branch,id);
     },
     async changeConfiguredItemQuantity(tenant,branch,id,itemId,quantity){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const milli=quantityMilli(quantity);
       if(!milli)throw error(400,'Quantidade inválida.');
+      const child=await first(`SELECT * FROM sale_configured_lines WHERE tenant_id=?
+        AND branch_id=? AND sale_id=? AND id=?`,tenant,branch,id,itemId);
+      if(child){
+        const delta=milli-child.quantity_milli;
+        await batch([
+          q(`UPDATE sale_items SET quantity_milli=quantity_milli+?
+            WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?`,
+            delta,tenant,branch,id,child.sale_item_id),
+          q(`UPDATE sale_configured_lines SET quantity_milli=? WHERE id=? AND tenant_id=?
+            AND branch_id=? AND sale_id=?`,milli,itemId,tenant,branch,id)
+        ]);
+        return snapshotAfterCartChange(tenant,branch,id);
+      }
       const result=await run(`UPDATE sale_items SET quantity_milli=?
         WHERE sale_id=? AND tenant_id=? AND branch_id=? AND id=?
-          AND configuration_json IS NOT NULL`,milli,id,tenant,branch,itemId);
+          AND configuration_json IS NOT NULL
+          AND NOT EXISTS(SELECT 1 FROM sale_configured_lines c WHERE c.sale_item_id=sale_items.id)`,
+        milli,id,tenant,branch,itemId);
       if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
       return snapshotAfterCartChange(tenant,branch,id);
     },
     async removeConfiguredItem(tenant,branch,id,itemId){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
-      const result=await run(`DELETE FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=?
-        AND id=? AND configuration_json IS NOT NULL`,id,tenant,branch,itemId);
+      const child=await first(`SELECT * FROM sale_configured_lines WHERE tenant_id=?
+        AND branch_id=? AND sale_id=? AND id=?`,tenant,branch,id,itemId);
+      if(child){
+        const siblings=await all(`SELECT id FROM sale_configured_lines WHERE tenant_id=?
+          AND branch_id=? AND sale_id=? AND sale_item_id=?`,
+          tenant,branch,id,child.sale_item_id);
+        if(siblings.length===1)await run(`DELETE FROM sale_items WHERE id=? AND
+          tenant_id=? AND branch_id=? AND sale_id=?`,child.sale_item_id,tenant,branch,id);
+        else await batch([
+          q(`DELETE FROM sale_configured_lines WHERE id=? AND tenant_id=?
+            AND branch_id=? AND sale_id=?`,itemId,tenant,branch,id),
+          q(`UPDATE sale_items SET quantity_milli=quantity_milli-?
+            WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?`,
+            child.quantity_milli,tenant,branch,id,child.sale_item_id)
+        ]);
+        return snapshotAfterCartChange(tenant,branch,id);
+      }
+      const result=await run(`DELETE FROM sale_items WHERE sale_id=? AND tenant_id=?
+        AND branch_id=? AND id=? AND configuration_json IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM sale_configured_lines c WHERE c.sale_item_id=sale_items.id)`,
+        id,tenant,branch,itemId);
       if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
       return snapshotAfterCartChange(tenant,branch,id);
     },
