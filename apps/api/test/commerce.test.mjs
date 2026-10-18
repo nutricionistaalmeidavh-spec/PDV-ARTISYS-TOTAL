@@ -313,6 +313,30 @@ test('P4 reports: summed sales, noncash breakdown and bounded CSV are tenant sco
   }finally{x.close();}
 });
 
+test('P5 sales CSV rejects over-limit periods without silent truncation, scoped by company',async()=>{
+  const x=await setup();try{
+    const query='INSERT INTO sales(id,tenant_id,branch_id,operator_id,sale_number,status,total_cents,created_at,completed_at) VALUES(?,?,?,?,?,?,?,?,?)';
+    for(let i=0;i<3000;i++){
+      const id='audit-'+i;
+      await x.db.prepare(query).bind(id,'a','branch-a','owner','EXPORT-'+i,'COMPLETED',100,
+        date,date).run();
+    }
+    const period='reports/sales.csv?branchId=branch-a&from=2026-10-17&to=2026-10-17';
+    const full=await x.get('a',period);
+    assert.equal(full.status,200,full.body.error);
+    assert.match(full.body.csv,/EXPORT-2999/,'all 3000 permitted records are present');
+    assert.equal((await x.get('b','reports/sales.csv?branchId=branch-b&from=2026-10-17&to=2026-10-17',x.other)).status,200);
+    await x.db.prepare(query).bind('audit-3000','a','branch-a','owner','EXPORT-3000',
+      'COMPLETED',100,date,date).run();
+    const tooMany=await x.get('a',period);
+    assert.equal(tooMany.status,413,'over-limit export must fail explicitly');
+    assert.match(tooMany.body.error,/3000 vendas/);
+    assert.equal((await x.get('a',period,x.viewer)).status,413,
+      'read-only user sees the same honest nontruncating limit');
+    assert.equal((await x.get('a','reports/sales.csv?branchId=branch-b&from=2026-10-17&to=2026-10-17')).status,404);
+  }finally{x.close();}
+});
+
 test('P6 weighted product uses canonical KG line, precise payment and stock',async()=>{
   const x=await setup();try{
     const p=await x.write('a','products',{branchId:'branch-a',name:'Queijo por peso',sku:'QUEIJO-KG',unit:'KG',salePriceCents:3990,trackStock:true});
