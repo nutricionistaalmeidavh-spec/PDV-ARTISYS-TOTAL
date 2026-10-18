@@ -560,7 +560,7 @@
         "manifestIndex": 24
       },
       "testedContractRefs": [],
-      "acceptance": "thermal print queue and retry: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "acceptance": "thermal-print-queue-and-retry: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
       "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
     },
     {
@@ -578,7 +578,7 @@
         "manifestIndex": 25
       },
       "testedContractRefs": [],
-      "acceptance": "shared artisys printing renderer and drivers: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "acceptance": "shared-artisys-printing-renderer-and-drivers: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
       "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
     },
     {
@@ -596,7 +596,7 @@
         "manifestIndex": 26
       },
       "testedContractRefs": [],
-      "acceptance": "shared artisys serialport peripheral runtime: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "acceptance": "shared-artisys-serialport-peripheral-runtime: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
       "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
     },
     {
@@ -615,7 +615,7 @@
         "manifestIndex": 27
       },
       "testedContractRefs": [],
-      "acceptance": "hardware protocol simulation ci and recovery tests: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "acceptance": "hardware-protocol-simulation-ci-and-recovery-tests: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
       "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
     },
     {
@@ -633,7 +633,7 @@
         "manifestIndex": 28
       },
       "testedContractRefs": [],
-      "acceptance": "non fiscal sale prebill kitchen and cash printing: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "acceptance": "non-fiscal-sale-prebill-kitchen-and-cash-printing: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
       "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
     },
     {
@@ -651,7 +651,7 @@
         "manifestIndex": 29
       },
       "testedContractRefs": [],
-      "acceptance": "configurable non fiscal receipt branding name address phone logo: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "acceptance": "configurable-non-fiscal-receipt-branding-name-address-phone-logo: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
       "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
     },
     {
@@ -822,7 +822,7 @@
         "manifestIndex": 38
       },
       "testedContractRefs": [],
-      "acceptance": "optional market bakery weighted items and orders: Comprovar precisão por peso, unidade e idempotência, além de modelo físico testado.",
+      "acceptance": "optional market bakery weighted items and orders: Comprovar precisão por peso e unidade, preço total, etiquetas por dados simulados, idempotência e checkout/estoque canônicos. Balança física não integra o gate de código.",
       "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
     },
     {
@@ -898,7 +898,7 @@
         "manifestIndex": 42
       },
       "testedContractRefs": [],
-      "acceptance": "versioned hardware compatibility evidence: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "acceptance": "versioned-hardware-compatibility-evidence: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
       "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
     },
     {
@@ -1023,7 +1023,7 @@
         "manifestIndex": 49
       },
       "testedContractRefs": [],
-      "acceptance": "barcode scale drawer adapters: Comprovar protocolo automatizado e homologação física por modelo/driver/SO antes de anunciar suporte.",
+      "acceptance": "barcode-scale-drawer-adapters: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
       "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
     },
     {

@@ -27,7 +27,7 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 | **R0 — Diagnóstico e gestão** | Transversal; nenhum ID adicional | Painel de 56, 68 contratos internos, rastreabilidade e estado verificável de código pronto |
 | **R1 — PDV comercial e gestão** | cap-004–008, cap-011–024, cap-040, cap-052 (**21**) | Venda, cliente, vendedor, desconto, devoluções, variações, kits, estoque, compras, caixa, financeiro, relatórios, atacado/importações. Aceite: jornada real completa na UI, resultados iguais ao desktop e lançamentos reconciliados |
 | **R2 — Self-hosted e rede local** | cap-001–003, cap-010, cap-042, cap-044–047, cap-051, cap-053–056 (**14**) | API SQLite, HTTPS LAN, terminais independentes, credenciais revogáveis, backup/restauração, diagnósticos. Aceite de código: suíte LAN automatizada com sessões simultâneas, segurança, revogação, backup/restore isolado e falhas simuladas; sem SaaS obrigatório |
-| **R3 — Periféricos físicos** | cap-025–030, cap-043, cap-050 (**8**) | Impressão, reimpressão, filas, balanças, gavetas e serial. Aceite de código: bridge local open source, drivers/protocolos com mocks e emuladores, fila, retry, reconexão simulada; impressão não determina sucesso da venda |
+| **R3 — Periféricos e protocolos (teste emulado)** | cap-025–030, cap-043, cap-050 (**8**) | Impressão, reimpressão, filas, balanças, gavetas e serial. Aceite de código: bridge local open source, drivers/protocolos com mocks e emuladores, fila, retry, reconexão simulada; impressão não determina sucesso da venda |
 | **R4 — Alimentação e verticais** | cap-009, cap-031–039, cap-041, cap-048–049 (**13**) | Mesas, comandas, atendimento, KDS, pizza, delivery/retirada, padaria e relatórios específicos. Aceite: fluxo completo por perfil e segmento sem criar outra autoridade de vendas/estoque |
 | **R5 — Certificação de código** | As mesmas 56, sem duplicação | Revisão de paridade, regressão, restore em banco temporário, segurança e E2E em Chromium responsivo; não exige equipamento físico nem piloto |
 
@@ -39,7 +39,7 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 
 **R2 em paralelo:** LAN segura, sessões de dois terminais em integração HTTPS local, credenciais, backup/restore automatizados em SQLite; manter core R$ 0.
 
-**R3 e R4 conforme dependências:** provar fluxos com testes automatizados, protocolos emulados e falhas injetadas; marcar o código como integral quando equivalência e regressão forem demonstradas.
+**R3 e R4 conforme dependências:** provar fluxos com testes automatizados, protocolos emulados e falhas injetadas; marcar o código como integral quando equivalência e regressão de **software** forem demonstradas. **Nenhum periférico físico é um gate**; verificação em campo pertence a checklist pós-entrega opcional.
 
 ### Regra definitiva de pronto
 
@@ -55,12 +55,12 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 
 ## Migrações: política para aplicativo ainda novo
 
-Existem **20 migrations SQL de desenvolvimento** de 0001 a 0020. Não são 20 versões distribuídas a clientes, nem importações de dados do desktop.
+As migrações SQL são incrementais e numeradas; a sequência vigente é de 0001 a 0026. Não são 26 versões distribuídas a clientes, nem importações de dados do desktop.
 
 - Mudança de classificação **não** deve gerar migration. Só alterações reais do banco exigem mudança de schema.
-- Não criar compatibilidade com bases de clientes antigos por padrão; importação do desktop será projeto separado, opt-in e com consentimento.
+- Não criar compatibilidade com bases de clientes antigos por padrão; como o app ainda não teve usuários, não inventar histórico a migrar. A importação de um banco desktop real seria tarefa separada, opcional e com consentimento.
 - Examinar SQLite e D1 remoto antes de consolidar: estado de schema, histórico de migrations e presença de dados de qualquer ambiente.
-- **Somente se todos os bancos-alvo forem descartáveis**, criar baseline de instalação limpa e testar bootstrap idêntico no Node/SQLite e D1. Não editar/apagar as 20 atuais sem comprovação.
+- **Somente se todos os bancos-alvo forem descartáveis**, criar baseline de instalação limpa e testar bootstrap idêntico no Node/SQLite e D1. Não editar/apagar as migrações já aplicadas sem comprovação.
 - Se houver dados a preservar, **manter migrações incrementais**, checksums e upgrade seguro; jamais recriar tabelas remotamente por suposição.
 - Paridade é de comportamento, não de quantidade de migrations.
 
