@@ -50,7 +50,7 @@
       '<p class="ops-muted">Ao perder conexão com o servidor, nenhuma venda nova deve ser considerada confirmada.</p></section>'+
       '<section class="ops-card"><h2>Estado da rede</h2><p>'+(isAdmin?('Dispositivos ativos: '+Number(health.devices.active)+' de '+Number(health.devices.total)+' · Códigos pendentes: '+Number(health.pendingPairings)):'Identifique-se como administrador para consultar todos os dispositivos.')+'</p>'+
       '<p>Checklist: '+Number(readiness.readyCount)+' / '+Number(readiness.total)+' verificados.</p>'+
-      (readiness.ready?'<p>Checklist local preenchido. Homologação física independente ainda é necessária.</p>':'<p>Não liberado como operação homologada: verifique os testes pendentes.</p>')+'</section></div>'+
+      (readiness.ready?'<p>Checklist operacional preenchido. A certificação de software é independente.</p>':'<p>Checklist operacional ainda não preenchido; isso não bloqueia código pronto.</p>')+'</section></div>'+
       (isAdmin?'<section class="ops-card"><h2>Autorizar novo dispositivo</h2><form id="r2-new-pairing" class="field-grid">'+
       '<label>Filial<select name="branchId" class="ops-input" required><option value="">Selecione…</option></select></label>'+
       '<label>Tipo<select name="kind" class="ops-input"><option value="TERMINAL">Caixa / terminal</option><option value="WAITER">Salão / garçom</option><option value="KITCHEN">Cozinha / KDS</option></select></label>'+
@@ -65,7 +65,7 @@
       '<section class="ops-card"><h2>Módulos opcionais</h2><p>Ativar ou desativar uma área não exclui vendas, estoque, pedidos ou históricos já registrados.</p><div class="ops-grid two">'+moduleCards+'</div></section>'+
       (isAdmin?'<section class="ops-card"><h2>Dispositivos registrados</h2><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Nome</th><th>Uso</th><th>Filial</th><th>Status</th><th>Ação</th></tr></thead><tbody>'+deviceRows+'</tbody></table></div></section>':'')+
       (isAdmin?'<section class="ops-card"><h2>Diagnóstico sem dados sensíveis</h2><p>Pacote ZIP com saúde, nomes das migrações e eventos administrativos sem senhas, credenciais ou banco de dados.</p><button id="r2-download-diagnostics" type="button" class="ops-secondary">Gerar ZIP de diagnóstico</button></section>':'')+
-      '<section class="ops-card"><h2>Checklist de homologação e piloto</h2><p class="ops-muted">O registro de evidências não substitui a verificação em máquinas reais, por revisor independente.</p><div class="ops-grid two" id="r2-checks">'+checks+'</div></section></section>';
+      '<section class="ops-card"><h2>Checklist opcional de implantação</h2><p class="ops-muted">Checklist para operação em campo, opcional. Não determina se o código está pronto.</p><div class="ops-grid two" id="r2-checks">'+checks+'</div></section></section>';
     const qrHost=content.querySelector('#r2-lan-qr');
     try{const svg=window.PdvLocalQr?.qrSvg(access.url,{scale:4});if(qrHost&&svg)qrHost.innerHTML=svg;}
     catch{if(qrHost)qrHost.textContent='Endereço longo demais para o QR local. Copie a URL acima.';}
