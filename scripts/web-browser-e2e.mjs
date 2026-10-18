@@ -416,8 +416,8 @@ try{
   await page.locator('#web-report-xlsx').click();
   const spreadsheet=await spreadsheetEvent;
   assert.match(spreadsheet.suggestedFilename(),/relatorio-overview-.*\.xlsx$/);
-  const spreadsheetBytes=await import('node:fs').then(fs=>fs.readFileSync(spreadsheet.path()));
-  assert.equal(spreadsheetBytes.subarray(0,4).toString(),'PK\u0003\u0004','export must be a real ZIP-based XLSX');
+  const spreadsheetBytes=await import('node:fs/promises').then(async fs=>fs.readFile(await spreadsheet.path()));
+  assert.equal(spreadsheetBytes.readUInt32LE(0),0x04034b50,'export must be a real ZIP-based XLSX');
   await page.locator('[data-report-web=finance]').click();
   await page.getByText('A pagar').first().waitFor();
   await page.locator('#app-sidebar [data-route=checkout]').click();
