@@ -864,6 +864,7 @@
 
   async function renderSettings(){
     await ready();
+    if(api.webMode)return root.PdvR2LanSettings.render(content,api);
     const [hardware,jobs]=await Promise.all([
       root.artisysDesktop.hardware.status().catch(()=>({})),
       api.printJobs().catch(()=>[])
@@ -902,7 +903,7 @@
       // The web renderer already owns the one canonical finance surface.
       if(!api.webMode)await root.PdvOperationalRouteExtensions?.mountRoute?.(route,pageRoot);
       if(route==='inventory')root.PdvEnterpriseDepthUi?.mountInventory?.(pageRoot);
-      if(route==='settings'){
+      if(route==='settings'&&!api.webMode){
         await root.PdvOperationalDetailExtensions?.mountSettings?.(pageRoot);
         root.PdvVerticalModules?.mountSettingsModules?.(pageRoot);
         root.PdvSettingsHub?.mount?.(pageRoot);
