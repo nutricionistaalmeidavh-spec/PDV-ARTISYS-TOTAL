@@ -321,6 +321,9 @@ test('R1 cap-024: customer wholesale policy is editable, tenant-scoped and enfor
   const product=(await x.request('a','products','POST',{
     branchId:'filial-a',sku:'R1-POLICY',name:'Caixa do cliente',salePriceCents:1500,trackStock:false
   })).body.product;
+  const priced=await x.request('a',`wholesale/price?branchId=filial-a&productId=${product.id}&quantity=2`);
+  assert.equal(priced.status,200);
+  assert.equal(priced.body.price.totalCents,3000,'cart preview must show actual tier-priced extended total');
   const quotePath='wholesale/orders';
   const tooSmall=await x.request('a',quotePath,'POST',{
     branchId:'filial-a',customerId,items:[{productId:product.id,quantity:1}]
@@ -331,6 +334,13 @@ test('R1 cap-024: customer wholesale policy is editable, tenant-scoped and enfor
   });
   assert.equal(quote.status,201,JSON.stringify(quote.body));
   const orderId=quote.body.order.id;
+  const quoteList=await x.request('a','wholesale/orders?branchId=filial-a');
+  assert.equal(quoteList.status,200,JSON.stringify(quoteList.body));
+  assert.equal(quoteList.body.orders.length,1);
+  assert.equal(quoteList.body.orders[0].status,'QUOTE');
+  assert.equal(quoteList.body.orders[0].customerName,'Atacado Política');
+  assert.equal(quoteList.body.orders[0].items[0].productName,'Caixa do cliente');
+  assert.equal(quoteList.body.orders[0].items[0].pendingQuantity,2);
   assert.equal((await x.request('a',`wholesale/orders/${orderId}/confirm`,'POST',{
     branchId:'filial-a'
   })).status,200);
@@ -365,5 +375,7 @@ test('R1 cap-024: customer wholesale policy is editable, tenant-scoped and enfor
   });
   assert.equal(paid.status,200,JSON.stringify(paid.body));
   assert.equal((await x.request('a',`wholesale/orders/${orderId}?branchId=filial-a`)).body.order.status,'FULFILLED');
+  const paidList=await x.request('a','wholesale/orders?branchId=filial-a');
+  assert.equal(paidList.body.orders[0].items[0].pendingQuantity,0,'settled order is no longer pending');
  }finally{x.close();}
 });
