@@ -18,7 +18,7 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 
 **Precisão obrigatória:** gap NÃO comprova ausência de código. O terceiro estado inclui casos ainda não investigados. Não promover a pronto por nome de arquivo, CI verde ou um cenário isolado. Auditoria de código exige revisão explícita e evidências executáveis. Testes em equipamento real não bloqueiam código pronto.
 
-**Fotografia em 18/10/2026:** 56 capacidades: 0 integrais, 14 parciais, 42 não demonstradas, 0 formalmente aguardando auditoria de código. Internamente, os 68 contratos estão em 23 cobertos e 45 parciais. Estes são números históricos; consultar a saída gerada para o estado atual.
+**Fotografia revisada em 18/10/2026 (base `1d757d5` + evidências desta auditoria):** 56 capacidades: **33 cobertas, 21 parciais e 2 não demonstradas**. Por onda: R1 **21 cobertas**; R2 **11 cobertas / 3 parciais**; R3 **6 parciais / 2 sem prova suficiente** (cap-030 e cap-043); R4 **1 coberta / 12 parciais**. Os 68 contratos subordinados registram **43 cobertos e 25 parciais**. Execute `npm run report:parity` para obter os valores do inventário versionado. A existência de testes de subconjunto não equivale à certificação integral; testes físicos não bloqueiam código.
 
 ## Ondas de implementação — 56 sem duplicação
 
