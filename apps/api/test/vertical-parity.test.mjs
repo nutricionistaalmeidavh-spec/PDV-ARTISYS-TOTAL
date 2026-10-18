@@ -163,7 +163,7 @@ test('P7 restaurant: kitchen must be ready before delivery and table closure',as
    assert.equal((await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:session.id})).status,409);
    assert.equal((await x.request('a',`sales/${sale.body.sale.id}/items`,'POST',{branchId:'filial-a',productId:p.id,quantity:1})).status,409);
    assert.equal((await x.request('a',`restaurant/sessions/${session.id}/close`,'POST',{branchId:'filial-a'})).status,409);
-   assert.equal((await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:1000})).status,200);
+   assert.equal((await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:1000})).status,201);
    assert.equal((await x.request('a',`sales/${sale.body.sale.id}/complete`,'POST',{branchId:'filial-a',payments:[{method:'PIX',amountCents:500}]})).status,200);
    assert.equal((await x.request('a',`restaurant/sessions/${session.id}/close`,'POST',{branchId:'filial-a'})).status,200);
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,1);
