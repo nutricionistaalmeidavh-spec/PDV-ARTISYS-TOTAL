@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {createRequire} from 'node:module';
+const requireDesktop=createRequire(import.meta.url);
+const {createReportingService:createPinnedDesktopReportingService}=
+  requireDesktop('../../../packages/core/js/domains/reports/reporting-service.js');
+const desktopStockFixture=JSON.parse(readFileSync(
+  new URL('../../../docs/parity/fixtures/p5-stock-shortage-desktop.json',import.meta.url),'utf8'));
 import {openLocalDatabase} from '../src/local-db.mjs';
 import {createApi} from '../src/worker.mjs';
 import {hashPassword} from '../src/password.mjs';
@@ -811,6 +818,72 @@ test('P4 stock coverage derives reserved availability and demand from immutable 
   assert.equal(line.minimumQuantity,null,'no invented minimum quantity for products without policy');
   assert.equal((await x.get('b','reports/stock-coverage?branchId=branch-b&asOf=2026-10-17',x.other)).body.coverage.products.length,0);
   assert.equal((await x.get('a','reports/stock-coverage?branchId=branch-a&days=0')).status,400);
+ }finally{x.close();}
+});
+
+test('P5 differential: reports-066/nominal runs exact published desktop inventory algorithm against web stock API',async()=>{
+ const fixture=desktopStockFixture;
+ assert.equal(fixture.desktop.commit,'7efea9c61f75be1536a1e516e917218f2b8bf2bf');
+ const pinnedSource=readFileSync(new URL('../../../packages/core/js/domains/reports/reporting-service.js',import.meta.url));
+ const blob=createHash('sha1').update('blob '+pinnedSource.length+'\\0').update(pinnedSource).digest('hex');
+ assert.equal(blob,fixture.desktop.sourceGitBlob,'Original desktop report source drifted from pinned published Git blob');
+ const mockDb={prepare(sql){
+   assert.match(sql,/FROM products p LEFT JOIN inventory_balances b/);
+   return {all:()=>fixture.products.map((p,i)=>({
+     productId:'desktop-'+i,sku:p.sku,name:p.name,unit:'UN',
+     quantity:p.quantity,minimumStock:p.minimumStock,costCents:p.costCents,salePriceCents:1000
+   }))};
+ }};
+ const desktop=createPinnedDesktopReportingService({db:mockDb}).buildInventorySummary();
+ for(const metric of ['lowStockCount','belowMinimumCount','zeroStockCount','suggestedPurchaseCostCents'])
+   assert.equal(desktop[metric],fixture.expected[metric],'pinned desktop fixture mismatch: '+metric);
+ assert.deepEqual(desktop.purchaseList.map(p=>({
+   sku:p.sku,quantity:p.quantity,minimumStock:p.minimumStock,
+   shortageToMinimum:p.shortageToMinimum,suggestedPurchaseCostCents:p.suggestedPurchaseCostCents
+ })),fixture.expected.purchaseList);
+ const x=await setup();try{
+   for(const product of fixture.products){
+     const productId=await x.id(product.name,product.sku,product.quantity);
+     await x.db.prepare('UPDATE products SET last_cost_cents=? WHERE tenant_id=? AND id=?')
+       .bind(product.costCents,'a',productId).run();
+     const result=await x.write('a','reports/stock-minimum',{
+       branchId:'branch-a',productId,minimumQuantity:product.minimumStock
+     },{method:'PUT'});
+     assert.equal(result.status,200,JSON.stringify(result.body));
+   }
+   const response=await x.get('a','reports/stock-coverage?branchId=branch-a&asOf=2026-10-17&days=30');
+   assert.equal(response.status,200,JSON.stringify(response.body));
+   const web=response.body.coverage;
+   for(const metric of ['lowStockCount','belowMinimum','suggestedPurchaseCostCents']){
+     const desktopKey=metric==='belowMinimum'?'belowMinimumCount':metric;
+     assert.equal(web[metric],desktop[desktopKey],'desktop-versus-web metric '+metric);
+   }
+   const webShortages=web.products.filter(p=>p.minimumStatus!=='ABOVE_MINIMUM').map(p=>({
+     sku:p.sku,quantity:p.quantity,minimumStock:p.minimumQuantity,
+     shortageToMinimum:p.shortageToMinimum,suggestedPurchaseCostCents:p.suggestedPurchaseCostCents
+   }));
+   assert.deepEqual(webShortages,fixture.expected.purchaseList);
+   const other=await x.get('b','reports/stock-coverage?branchId=branch-b',x.other);
+   assert.equal(other.status,200);
+   assert.equal(other.body.coverage.suggestedPurchaseCostCents,0);
+   assert.equal(other.body.coverage.products.length,0);
+ }finally{x.close();}
+});
+
+test('P5 replenishment does not pretend an unknown cost is a reliable quote',async()=>{
+ const x=await setup();try{
+   const productId=await x.id('Item sem aquisição','P5-UNKNOWN-PRICE',1);
+   const saved=await x.write('a','reports/stock-minimum',
+     {branchId:'branch-a',productId,minimumQuantity:4},{method:'PUT'});
+   assert.equal(saved.status,200,saved.body.error);
+   const report=await x.get('a','reports/stock-coverage?branchId=branch-a&asOf=2026-10-17');
+   assert.equal(report.status,200,JSON.stringify(report.body));
+   const item=report.body.coverage.products.find(p=>p.productId===productId);
+   assert.equal(item.shortageToMinimum,3);
+   assert.equal(item.suggestedPurchaseCostCents,null);
+   assert.equal(item.purchaseCostBasis,'NO_RECORDED_COST');
+   assert.equal(report.body.coverage.suggestedPurchaseCostCents,null);
+   assert.equal(report.body.coverage.unpricedShortages,1);
  }finally{x.close();}
 });
 
