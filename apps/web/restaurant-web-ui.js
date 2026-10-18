@@ -76,12 +76,18 @@
  }
  function kitchenSection(){
    if(!can('kitchen.view'))return '<p class="vertical-empty">Seu perfil não possui acesso à cozinha.</p>';
-   return '<section class="data-card"><h2>KDS · Fila de produção</h2><div class="restaurant-list">'+state.tickets.map(t=>
-     '<div class="restaurant-row"><div><strong>'+esc(title(t.fulfillment))+' · '+esc(t.orderId.slice(0,8))+'</strong><small>'+esc(title(t.status))+' · '+money(t.totalCents)+'</small></div>'+
-     (can('kitchen.update_status')?'<div class="restaurant-actions">'+
-       (t.status==='NEW'?btn('Iniciar preparo','preparing',t.id):'')+
-       (t.status==='PREPARING'?btn('Marcar pronto','ready',t.id):'')+'</div>':'')+'</div>'
-   ).join('')+'</div></section>';
+   const routedIds=new Set(state.stationTickets.map(t=>t.orderId));
+   const queue=[
+     ...state.stationTickets.map(t=>({...t,stationScoped:true})),
+     ...state.tickets.filter(t=>!routedIds.has(t.orderId)).map(t=>({...t,stationScoped:false}))
+   ];
+   return '<section class="data-card"><h2>KDS · Estações e pedidos</h2><div class="restaurant-list">'+queue.map(t=>
+     '<div class="restaurant-row"><div><strong>'+esc(t.stationName||title(t.fulfillment))+' · '+esc(t.orderId.slice(0,8))+'</strong><small>'+
+     esc(title(t.status))+(t.items?.length?' · '+esc(t.items.map(x=>x.productName+' × '+x.quantity).join(', ')):' · '+money(t.totalCents))+
+     '</small></div>'+(can('kitchen.update_status')?'<div class="restaurant-actions">'+
+     (t.status==='NEW'?btn('Iniciar preparo',t.stationScoped?'preparing-station':'preparing',t.id):'')+
+     (t.status==='PREPARING'?btn('Marcar pronto',t.stationScoped?'ready-station':'ready',t.id):'')+'</div>':'')+'</div>').join('')+
+     '</div></section>';
  }
  function serviceSection(){
    if(!can('restaurant.service.manage'))return '<p class="vertical-empty">Seu perfil não tem acesso aos chamados.</p>';
