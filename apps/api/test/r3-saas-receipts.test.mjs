@@ -55,7 +55,7 @@ test('cap-030 immutable SaaS sale receipt keeps branding snapshot after store se
   q=await x.call(apiPath('a','branch-a','sales/sale-a/receipt'),{cookie:x.owner});
   assert.equal(q.body.branding.name,'Loja Original');
   assert.equal(q.body.branding.logoDataUrl,PNG);
-  const stored=await x.db.prepare("SELECT branding_json FROM r3_sale_branding_snapshots WHERE sale_id='sale-a'").first();
+  const stored=await x.db.prepare("SELECT branding_json FROM r3_sale_branding_snapshots WHERE sale_id='sale-a'").bind().first();
   assert.equal(JSON.parse(stored.branding_json).name,'Loja Original');
   await assert.rejects(x.db.prepare("DELETE FROM r3_sale_branding_snapshots WHERE sale_id='sale-a'").run(),/IMMUTABLE/);
  }finally{x.close();}
