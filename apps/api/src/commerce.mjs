@@ -1256,23 +1256,48 @@ export function createCommerceService(db,{now=nowISO}={}){
     },
     sale: snapshot,
     listSales:listing,
-    async assignSaleCustomer(tenant,branch,id,customerId){
+    async assignSaleCustomer(tenant,branch,id,customerId,header){
+      const key=requiredMutation(null,header),scope='sale.customer:'+id;
+      const target=customerId||null;
+      const previous=await applied(tenant,scope,key);
+      if(previous){
+        if(previous.customerId!==target)throw error(409,'Identificador utilizado para outro cliente.');
+        return snapshot(tenant,branch,id);
+      }
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const wholesale=await first('SELECT customer_id AS customerId FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND sale_id=?',tenant,branch,id);
-      if(wholesale&&customerId!==wholesale.customerId)
+      if(wholesale&&target!==wholesale.customerId)
         throw error(409,'O cliente do pedido de atacado está vinculado à cotação e não pode ser alterado no caixa.');
-      if(customerId){
-        const customer=await first('SELECT id FROM customers WHERE tenant_id=? AND id=? AND active=1',tenant,customerId);
+      if(target){
+        const customer=await first('SELECT id FROM customers WHERE tenant_id=? AND id=? AND active=1',tenant,target);
         if(!customer)throw error(404,'Cliente não encontrado neste estabelecimento.');
       }
-      await run("UPDATE sales SET customer_id=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN'",customerId||null,tenant,branch,id);
+      await batch([
+        q("UPDATE sales SET customer_id=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN' AND NOT EXISTS (SELECT 1 FROM wholesale_orders w WHERE w.tenant_id=sales.tenant_id AND w.branch_id=sales.branch_id AND w.sale_id=sales.id AND w.customer_id IS NOT ?)",
+          target,tenant,branch,id,target),
+        q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) SELECT ?,?,?,?,? WHERE changes()=1',
+          tenant,scope,key,JSON.stringify({customerId:target}),stamp())
+      ]);
+      if(!await applied(tenant,scope,key))throw error(409,'Venda mudou de estado ou cliente vinculado; atualize o checkout.');
       return snapshot(tenant,branch,id);
     },
-    async assignSaleSeller(tenant,branch,id,sellerId){
+    async assignSaleSeller(tenant,branch,id,sellerId,header){
+      const key=requiredMutation(null,header),scope='sale.seller:'+id;
+      const previous=await applied(tenant,scope,key);
+      if(previous){
+        if(previous.sellerId!==sellerId)throw error(409,'Identificador utilizado para outro vendedor.');
+        return snapshot(tenant,branch,id);
+      }
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const seller=await first('SELECT user_id FROM tenant_memberships WHERE tenant_id=? AND user_id=? AND active=1',tenant,sellerId);
       if(!seller)throw error(404,'Vendedor não encontrado neste estabelecimento.');
-      await run("UPDATE sales SET seller_id=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN'",sellerId,tenant,branch,id);
+      await batch([
+        q("UPDATE sales SET seller_id=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN' AND EXISTS (SELECT 1 FROM tenant_memberships m WHERE m.tenant_id=sales.tenant_id AND m.user_id=? AND m.active=1)",
+          sellerId,tenant,branch,id,sellerId),
+        q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) SELECT ?,?,?,?,? WHERE changes()=1',
+          tenant,scope,key,JSON.stringify({sellerId}),stamp())
+      ]);
+      if(!await applied(tenant,scope,key))throw error(409,'Venda ou perfil do vendedor mudou de estado; atualize o checkout.');
       return snapshot(tenant,branch,id);
     },
     async addItem(tenant,branch,id,body,header){
