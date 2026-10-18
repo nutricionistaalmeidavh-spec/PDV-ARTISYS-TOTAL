@@ -61,7 +61,7 @@ try{
   page.on('response',response=>{if(response.status()>=400)
     events.push(response.status()+' '+new URL(response.url()).pathname);});
   try{
-    await page.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
+    await page.locator('body[data-active-route=settings]').waitFor({timeout:12000});
   }catch(error){
     const state=await page.evaluate(async()=>{
       let session;
@@ -85,6 +85,8 @@ try{
   assert.ok(state.documentWidth<=state.width+12,
     'cap-047 mobile PWA must avoid horizontal overflow: '+JSON.stringify(state));
   assert.ok(state.manifest?.includes('manifest.webmanifest'));
+  assert.equal(await page.locator('#r2-settings').count(),1,
+    'cap-047 first LAN login must open pairing UI before blocked business requests');
   const live=await page.evaluate(async()=>{
     const base='/api/v1/tenants/a/lan';
     const req=async(url,method='GET',data)=>{
