@@ -38,3 +38,34 @@ test('published desktop manifest prevents silently dropping a capability from th
   assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[]},published),/every published capability/);
   assert.throws(()=>verifyCapabilityInventory(matrix,inventory,[...published,'new-published-capability']),/missing published desktop capabilities/);
 });
+
+
+test('P6 covered LAN capability fails closed without a specific executable test and physical field report',()=>{
+  const published=['desktop-windows-local-first'];
+  const row={id:'cap-001',capability:published[0],owner:'operations',dependsOn:[],status:'covered',
+    testedContractRefs:[],sourceEvidence:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
+      file:'release/capabilities.json',manifestIndex:0},
+    acceptance:'Offline storage, multi-device access, restoration and local service isolation are verified',
+    independentEvidence:{file:'apps/api/src/p6.mjs',contains:'localFirst',
+      testFile:'apps/api/test/p6.test.mjs',testContains:"test('cap-001 local first'",
+      testAssertionContains:'assert.equal(result, true)',testRunner:'node-test'}};
+  const inventory={schemaVersion:1,baseline:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
+      manifest:'release/capabilities.json',publishedCapabilities:published,sourceManifestCount:1},
+    web:{repo:WEB_REPO},contracts:[row],fullSystemClaim:'incomplete'};
+  const matrix={modules:[]};
+  const files={'apps/api/src/p6.mjs':'export const localFirst = true;',
+    'apps/api/test/p6.test.mjs':"test('cap-001 local first',()=>{const result=true;assert.equal(result, true);});",
+    'docs/parity/field-qa/cap-001.md':'Independent physical QA for cap-001 verified on actual LAN'};
+  const readSource=path=>files[path]||'';
+  assert.throws(()=>verifyCapabilityInventory(matrix,inventory,published,readSource),/FIELD_VERIFIED/);
+  const withField={...row,fieldVerification:{status:'FIELD_VERIFIED',platform:'Linux',
+    deviceModel:'physical laptop',independentReviewer:'Independent QA',verifiedAt:'2026-10-17',
+    evidenceFile:'docs/parity/field-qa/cap-001.md'}};
+  assert.equal(verifyCapabilityInventory(matrix,{...inventory,contracts:[withField]},published,readSource).covered,1);
+  assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[
+    {...withField,independentEvidence:{...row.independentEvidence,
+      testContains:"test('unrelated'"}}]},published,readSource),/canonical ID/);
+  assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[
+    {...withField,independentEvidence:{...row.independentEvidence,
+      testAssertionContains:'assert.equal(result, false)'}}]},published,readSource),/assertion not attached/);
+});
