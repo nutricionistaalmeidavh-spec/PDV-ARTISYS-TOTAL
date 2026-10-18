@@ -179,7 +179,16 @@
       }
       if(kind==='weight'){
         const quote=await r4('/weight/quote','POST',{productId:v.productId,grams:Number(v.grams)});
-        const output=node.querySelector('[data-r4-result]');if(output)output.textContent='Preço calculado: '+money(quote.quote.totalCents);return;
+        const output=node.querySelector('[data-r4-result]');
+        if(output){
+          output.innerHTML='<p>Preço calculado: '+money(quote.quote.totalCents)+'</p><button type="button" class="primary-button" data-r4-bakery-order>Gerar pedido de balcão</button>';
+          output.querySelector('[data-r4-bakery-order]')?.addEventListener('click',async()=>{
+            try{const order=await r4('/bakery/orders','POST',{items:[{productId:v.productId,quantity:quote.quote.quantity}]});
+              toast('Pedido de balcão registrado. Senha '+order.order.ticketNumber+'.');
+              await show({sessionId,preserve:true});
+            }catch(error){toast(error.message,true);}
+          });
+        }return;
       }
       if(kind==='recipe'){
         const ingredients=String(v.ingredients).split(/\r?\n/).filter(s=>s.trim()).map(line=>{
