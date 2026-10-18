@@ -43,3 +43,21 @@ test('roadmap and README reflect canonical 56 capabilities without reopening cov
   assert.match(peripherals,/Aprimorar e certificar/);
   assert.equal(peripherals.includes('Criar agente local open source/self-hosted'),false);
 });
+
+test('roadmap and README prioritize hosted SaaS, keeping Windows LAN-only tasks out of release blockers',async()=>{
+  const [roadmap,readme,scopeText,packageText]=await Promise.all([
+    read('docs/ROADMAP-PARIDADE-56.md'),
+    read('README.md'),
+    read('docs/parity/saas-delivery-scope.json'),
+    read('package.json')]);
+  const scope=JSON.parse(scopeText),pkg=JSON.parse(packageText);
+  assert.deepEqual(scope.deferredCapabilityIds.map(item=>item.id),['cap-001','cap-047','cap-056']);
+  assert.equal(pkg.scripts['report:saas'],'node scripts/p6-capability-report.mjs --saas');
+  assert.match(roadmap,/Não exige instalador, servidor local nem topologia LAN/);
+  assert.match(roadmap,/R2: nenhuma pendência obrigatória para o lançamento do SaaS hospedado/);
+  assert.match(roadmap,/Não depende de 56\/56 referências desktop/);
+  assert.match(readme,/SaaS web\/PWA por HTTPS/);
+  assert.match(readme,/53 referências aplicáveis ao escopo web/);
+  assert.match(readme,/Não exige instalar executável/);
+  assert.doesNotMatch(roadmap,/R2: fechar apenas as três capacidades parciais/);
+});
