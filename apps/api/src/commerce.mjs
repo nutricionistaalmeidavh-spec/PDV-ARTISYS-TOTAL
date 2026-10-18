@@ -588,12 +588,50 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(supplierId&&!await first('SELECT id FROM suppliers WHERE tenant_id=? AND id=? AND active=1',tenant,supplierId))
         throw error(404,'Fornecedor não encontrado nesta empresa.');
       if(supplierId&&!hasCost)throw error(400,'Compra com fornecedor exige custo unitário.');
+      const code=body?.lotCode==null?'':String(body.lotCode).trim().toUpperCase();
+      if(code&&!/^[A-Z0-9][A-Z0-9._/-]{0,63}$/.test(code))
+        throw error(400,'Lote deve conter até 64 caracteres alfanuméricos, ponto, barra, hífen ou sublinhado.');
+      if(!code&&(body?.manufacturedAt||body?.expiresAt))
+        throw error(400,'Informe o lote antes de registrar fabricação ou validade.');
+      const dateField=(value,label)=>{
+        if(value==null||value==='')return null;
+        if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)||
+          Number.isNaN(Date.parse(value+'T00:00:00Z'))||
+          new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)
+          throw error(400,label+' deve usar a data AAAA-MM-DD.');
+        return value;
+      };
+      const manufacturedAt=dateField(body?.manufacturedAt,'Fabricação');
+      const expiresAt=dateField(body?.expiresAt,'Validade');
+      if(manufacturedAt&&expiresAt&&expiresAt<manufacturedAt)
+        throw error(400,'Validade anterior à fabricação.');
       const at=stamp(),result={movementId:randomId(),productId:row.id,branchId:branch,
-        quantity:milli/1000,type:kind,...(hasCost?{unitCostCents:cost,supplierId}:{})};
+        quantity:milli/1000,type:kind,...(hasCost?{unitCostCents:cost,supplierId}:{}),
+        ...(code?{lot:{code,manufacturedAt,expiresAt}}:{})};
       const statements=ledgerReceipt(tenant,branch,user,row.id,milli,cost,supplierId,key,at,result.movementId,kind);
+      if(code)statements.push(q(`INSERT INTO inventory_lot_receipts
+        (id,tenant_id,branch_id,product_id,movement_id,lot_code,manufactured_at,expires_at,quantity_milli,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,row.id,result.movementId,code,
+        manufacturedAt,expiresAt,milli,at));
       statements.push(audit(tenant,scope,key,result));
       await batch(statements);
       return result;
+    },
+    async lotReceipts(tenant,branch,{productId='',limit=50}={}){
+      await branchExists(tenant,branch);
+      const filter=text(productId,128);
+      const capped=Number(limit);
+      if(!Number.isInteger(capped)||capped<1||capped>100)
+        throw error(400,'Limite de consulta inválido.');
+      return all(`SELECT l.id,l.product_id AS productId,p.name AS productName,
+        l.movement_id AS movementId,l.lot_code AS lotCode,
+        l.manufactured_at AS manufacturedAt,l.expires_at AS expiresAt,
+        l.quantity_milli/1000.0 AS receivedQuantity,l.created_at AS receivedAt
+        FROM inventory_lot_receipts l
+        JOIN products p ON p.id=l.product_id AND p.tenant_id=l.tenant_id
+        WHERE l.tenant_id=? AND l.branch_id=? AND (?='' OR l.product_id=?)
+        ORDER BY l.created_at DESC,l.id DESC LIMIT ?`,
+        tenant,branch,filter,filter,capped);
     },
     async stock(tenant,branch,limit=100){
       await branchExists(tenant,branch);
