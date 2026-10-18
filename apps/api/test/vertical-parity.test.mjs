@@ -647,7 +647,7 @@ test('R4 cap-034: kitchen print outbox claims one job at a time and retries fail
    assert.ok(first.body.job.leaseToken);assert.equal(first.body.job.status,'LEASED');
    const second=await x.request('a',`restaurant/kitchen/print-jobs/${jid}/claim`,'POST',{branchId:'filial-a'});
    assert.equal(second.status,409);
-   assert.equal((await x.request('a',`restaurant/kitchen/print-jobs/${jid}/ack`,'POST',{branchId:'filial-a',leaseToken:'invalid',status:'PRINTED'})).status,409);
+   assert.equal((await x.request('a',`restaurant/kitchen/print-jobs/${jid}/ack`,'POST',{branchId:'filial-a',leaseToken:'00000000-0000-4000-8000-000000000000',status:'PRINTED'})).status,409);
    assert.equal((await x.request('a',`restaurant/kitchen/print-jobs/${jid}/ack`,'POST',{branchId:'filial-a',leaseToken:first.body.job.leaseToken,status:'FAILED'})).status,200);
    const reattempt=await x.request('a',`restaurant/kitchen/print-jobs/${jid}/claim`,'POST',{branchId:'filial-a'});
    assert.equal(reattempt.status,200,JSON.stringify(reattempt.body));
