@@ -363,6 +363,11 @@
             ${metric('Sem estoque disponível',String(data.outOfStockCount))}
             ${metric('Produtos com estoque monitorado',String(data.trackedProducts))}
             ${metric('Abaixo do mínimo cadastrado',String(data.belowMinimumCount||0))}
+            ${metric('Vendas líquidas do mês',ui.formatCents(data.monthToDateNetSalesCents||0))}
+            ${data.monthlyTargetCents!=null?metric('Meta comercial mensal',
+              ui.formatCents(data.monthlyTargetCents))+
+              metric('Atingimento da meta',data.targetProgressPercent.toLocaleString('pt-BR')+'%'):
+              metric('Meta comercial mensal','Não cadastrada')}
           </div>
           <p class="ops-muted">Dados do caixa, vendas e estoque canônicos. ${
             data.stockCoverageUnknown?'Sem base de consumo para estimar cobertura de '+data.stockCoverageUnknown+' produto(s).':
