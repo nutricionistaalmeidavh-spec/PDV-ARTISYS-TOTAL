@@ -69,8 +69,8 @@
         else if(original==='/api/v1/inventory')operation='inventory';
         else if(original==='/api/v1/inventory/movements')operation=method==='GET'?'inventory/movements':'inventory/receipts';
         else if(original==='/api/v1/inventory/adjustments')operation='inventory/adjustments';
-        else if(original==='/api/v1/inventory/lots')operation='inventory/lots';
         else if(original==='/api/v1/inventory/counts')operation='inventory/counts';
+        else if(original==='/api/v1/inventory/lots')operation='inventory/lots';
         else if(original==='/api/v1/inventory/transfers')operation='inventory/transfers';
         else if(original.startsWith('/api/v1/inventory/reservations'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/inventory/purchase-costs')operation='inventory/purchase-costs';
@@ -209,8 +209,10 @@
 
     categories(includeInactive = false) { return this.request(this.webMode?'/api/v1/products/categories':`/api/v1/categories${includeInactive ? '?includeInactive=true' : ''}`); }
     saveCategory(body) { return this.request(this.webMode?'/api/v1/products/categories':'/api/v1/categories', { method: 'POST', body }); }
-    previewCatalogCsv(csv){return this.request('/api/v1/products/import/preview',{method:'POST',body:{csv}});}
-    commitCatalogCsv(csv,mutationId){return this.request('/api/v1/products/import/commit',{method:'POST',body:{csv},mutationId});}
+    previewCatalogCsv(csv,mode='create'){return this.request('/api/v1/products/import/preview',{method:'POST',body:{csv,mode}});}
+    commitCatalogCsv(csv,mutationId,mode='create',previewToken=null){
+      return this.request('/api/v1/products/import/commit',{method:'POST',body:{csv,mode,...(previewToken?{previewToken}:{})},mutationId});
+    }
     products(includeInactive = false) { return this.request(`/api/v1/products${includeInactive ? '?includeInactive=true' : ''}`); }
     saveProduct(body,mutationId) { return this.request('/api/v1/products', { method: 'POST', body,mutationId }); }
     updateProduct(id,body,mutationId) { return this.request(`/api/v1/products/${encodeURIComponent(id)}`, { method:'PATCH', body,mutationId }); }
