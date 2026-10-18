@@ -143,6 +143,13 @@ export function createVerticalService(db){
      if(s.status==='CLOSED')throw err(409,'Comanda já fechada.');
      const active=await first(`SELECT COUNT(*) AS n FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND table_session_id=? AND status NOT IN('CANCELLED','DELIVERED')`,t,b,id);
      if(active.n)throw err(409,'Finalize ou cancele todos os pedidos antes de fechar a mesa.');
+     const delivered=await first("SELECT COUNT(*) AS n FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND table_session_id=? AND status='DELIVERED'",t,b,id);
+     if(delivered.n){
+       const linked=await first(`SELECT sale.status FROM restaurant_sale_links link
+         JOIN sales sale ON sale.tenant_id=link.tenant_id AND sale.branch_id=link.branch_id AND sale.id=link.sale_id
+         WHERE link.tenant_id=? AND link.branch_id=? AND link.table_session_id=?`,t,b,id);
+       if(linked?.status!=='COMPLETED')throw err(409,'Conclua o pagamento no checkout canônico antes de fechar a mesa.');
+     }
      return mutate(t,'restaurant.close:'+id,key,async()=>{
        const result={id,status:'CLOSED'};
        return {statements:[q("UPDATE restaurant_table_sessions SET status='CLOSED',closed_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status IN('OPEN','CHECKOUT')",now(),t,b,id)],result};
