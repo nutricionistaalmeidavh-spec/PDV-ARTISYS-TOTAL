@@ -98,3 +98,13 @@ Regressão reproduzível nos contratos `checkout-011` e `checkout-012`: a atribu
 A correção exige ID de mutação por operação, mantém o vendedor na mesma empresa e ativo e conserva a vinculação imutável de cliente de uma cotação B2B. O `UPDATE sales` condicional e o recibo em `commerce_mutations` são executados no mesmo lote; apenas uma atualização aceita gera recibo. Um replay exato apenas lê o estado atual; reuso da chave com outro valor é conflito 409. Os testes SQLite usam duas trocas de cliente, duas de vendedor, repetição de mensagens em ordem inversa, papéis sem acesso e separação por empresa. O navegador gera IDs por cada troca sem mexer nos dados históricos.
 
 **Prova de integração não é prova de todo R1**: o escopo de 21 capacidades requer os demais casos de desktop e contratos ainda parciais. Não houve migração ou armazenamento duplicado.
+
+## R1 adicional — itens configurados e venda por peso no checkout canônico
+
+**Capacidades impactadas**: cap-005/007/008/013/040, com contratos dependentes `checkout-017/019`.
+
+O endpoint de remoção de peso antes chamava `removeItem()` sem o identificador de operação obrigatório e gerava 400; agora identifica a linha pesada, valida a unidade KG/G, grava DELETE e recibo na mesma transação e usa o ID histórico da linha. Reexecutar a exclusão não pode retirar uma nova pesagem do mesmo SKU. O saldo do estoque nunca é alterado enquanto a venda continua OPEN.
+
+Alteração de quantidade e remoção de linhas configuradas compartilhando um mesmo produto-pai também recebem IDs de mutação, CAS do estado OPEN e de quantidade anterior, com atualização conjunta da quantidade do pai e recibo persistente. A transação impede que uma mensagem atrasada rebaixe quantidade, remova uma nova configuração ou deixe quantidade-pai diferente da soma das linhas. Há regressão SQLite com dois perfis de configuração do mesmo SKU, mudança 1→2→3, replay de 2, remoção, reinclusão e replay da exclusão; além de isolamento empresa/perfil.
+
+**Importante:** esta melhoria é uma prova operacional específica, não uma declaração de todos os 21 itens cobertos. Sem migration nova, sem segunda tabela de produtos, sem teste físico como critério para saber se o código está pronto.
