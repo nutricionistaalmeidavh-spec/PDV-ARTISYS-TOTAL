@@ -152,13 +152,14 @@
   function receiptHtml(sale,options={}) {
     if(!sale || sale.status!=='COMPLETED' || !sale.id) throw new Error('Somente venda concluída pode ser impressa.');
     const prefs=normalizeSettings(options);
+    const branding=root.PdvReceiptBranding?.normalize(options.branding||root.PdvReceiptBranding.read())||{name:'PDV TOTAL',address:'',phone:'',logoDataUrl:null};
     const amount=n=>(Number(n||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
     const qty=n=>Number(n||0).toLocaleString('pt-BR',{maximumFractionDigits:3});
     const items=(sale.items||[]).map(item=>
       '<tr><td>'+escapeHtml(item.productName||item.sku||item.productId||'Produto')+
       '</td><td>'+escapeHtml(qty(item.quantity))+'</td><td>'+escapeHtml(amount(item.totalCents??Math.round(item.quantity*item.unitPriceCents)))+'</td></tr>').join('');
     const payments=(sale.payments||[]).map(p=>'<div>'+escapeHtml(p.method)+': '+escapeHtml(amount(p.amountCents))+'</div>').join('');
-    return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Cupom não fiscal</title><style>@page{size:'+prefs.paperMm+'mm auto;margin:3mm}body{font:12px monospace;margin:0;color:#000}h1{text-align:center;font-size:15px}table{width:100%;border-collapse:collapse}td{border-bottom:1px dotted #aaa;padding:6px 2px}td:not(:first-child){text-align:right}strong{font-size:15px}.total{display:flex;justify-content:space-between;margin:12px 0}</style></head><body><h1>PDV TOTAL</h1><p>CUPOM NÃO FISCAL</p><p>Venda '+escapeHtml(sale.saleNumber||sale.id)+'</p><p>'+escapeHtml(sale.completedAt||'')+'</p><table><tbody>'+items+'</tbody></table><div class="total"><strong>TOTAL</strong><strong>'+escapeHtml(amount(sale.totalCents))+'</strong></div>'+payments+'<div>Troco: '+escapeHtml(amount(sale.changeCents))+'</div><hr><p>Obrigado pela preferência.</p></body></html>';
+    return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Cupom não fiscal</title><style>@page{size:'+prefs.paperMm+'mm auto;margin:3mm}body{font:12px monospace;margin:0;color:#000}h1{text-align:center;font-size:15px}.receipt-logo{max-width:95%;max-height:26mm;display:block;margin:0 auto 2mm;object-fit:contain}.receipt-meta{text-align:center;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}td{border-bottom:1px dotted #aaa;padding:6px 2px}td:not(:first-child){text-align:right}strong{font-size:15px}.total{display:flex;justify-content:space-between;margin:12px 0}</style></head><body>'+(branding.logoDataUrl?'<img class="receipt-logo" src="'+escapeHtml(branding.logoDataUrl)+'" alt="Logotipo da loja">':'')+'<h1>'+escapeHtml(branding.name)+'</h1>'+(branding.address?'<p class="receipt-meta">'+escapeHtml(branding.address)+'</p>':'')+(branding.phone?'<p class="receipt-meta">Telefone: '+escapeHtml(branding.phone)+'</p>':'')+'<p>CUPOM NÃO FISCAL</p><p>Venda '+escapeHtml(sale.saleNumber||sale.id)+'</p><p>'+escapeHtml(sale.completedAt||'')+'</p><table><tbody>'+items+'</tbody></table><div class="total"><strong>TOTAL</strong><strong>'+escapeHtml(amount(sale.totalCents))+'</strong></div>'+payments+'<div>Troco: '+escapeHtml(amount(sale.changeCents))+'</div><hr><p>Obrigado pela preferência.</p></body></html>';
   }
   function openPrintDocument(html,providedPopup) {
     const popup=providedPopup||root.open('','_blank');
@@ -171,9 +172,11 @@
     // Browser cannot reliably observe physical spooler success or PDF save.
     return {dialogOpened:true};
   }
-  function receiptText(sale) {
+  function receiptText(sale,options={}) {
+    if(!sale||sale.status!=='COMPLETED'||!sale.id)throw new Error('Somente venda concluída pode ser impressa.');
+    const branding=root.PdvReceiptBranding?.normalize(options.branding||root.PdvReceiptBranding.read())||{name:'PDV TOTAL',address:'',phone:''};
     const fmt=n=>(Number(n||0)/100).toFixed(2);
-    return ['PDV TOTAL','CUPOM NAO FISCAL','Venda '+String(sale.saleNumber||sale.id),String(sale.completedAt||''),...((sale.items||[]).map(i=>String(i.productName||i.sku||i.productId||'Produto')+'  '+String(i.quantity)+' x '+fmt(i.unitPriceCents)+' = '+fmt(i.totalCents??Math.round(i.quantity*i.unitPriceCents)))),'TOTAL: '+fmt(sale.totalCents),...((sale.payments||[]).map(p=>String(p.method)+': '+fmt(p.amountCents))),'Troco: '+fmt(sale.changeCents),'Obrigado pela preferencia.','',''].join('\n');
+    return [branding.name,...(branding.address?[branding.address]:[]),...(branding.phone?['Telefone: '+branding.phone]:[]),'CUPOM NAO FISCAL','Venda '+String(sale.saleNumber||sale.id),String(sale.completedAt||''),...((sale.items||[]).map(i=>String(i.productName||i.sku||i.productId||'Produto')+'  '+String(i.quantity)+' x '+fmt(i.unitPriceCents)+' = '+fmt(i.totalCents??Math.round(i.quantity*i.unitPriceCents)))),'TOTAL: '+fmt(sale.totalCents),...((sale.payments||[]).map(p=>String(p.method)+': '+fmt(p.amountCents))),'Troco: '+fmt(sale.changeCents),'Obrigado pela preferencia.','',''].join('\n');
   }
   async function printSale(sale,opts={}) {
     if(!sale||sale.status!=='COMPLETED'||!sale.id)throw new Error('Venda concluída obrigatória.');
@@ -192,10 +195,12 @@
     dialog.id='pdv-peripherals-dialog';
     dialog.setAttribute('aria-label','Dispositivos locais');
     dialog.style.cssText='max-width:min(540px,95vw);border:1px solid #64748b;border-radius:16px;padding:24px;color:#e5e7eb;background:#13233e;box-shadow:0 18px 60px #0008';
-    dialog.innerHTML='<form method="dialog" id="pdv-peripherals-form"><h2>Dispositivos locais</h2><p>Configuração deste navegador. Não altera vendas nem dados do servidor.</p><label>Papel <select name="paperMm"><option value="58">58 mm</option><option value="80">80 mm</option></select></label><p><label>Impressora <select name="printerMode"><option value="browser">Diálogo do sistema (recomendado)</option><option value="serial">ESC/POS serial compatível (experimental)</option><option value="bridge">Conector local (sem diálogo)</option></select></label></p><p><label>Perfil da balança <select name="scaleProfile"><option value="generic">Serial numérico genérico</option><option value="urano-pop-s">Urano POP-S (requer homologação)</option></select></label></p><p><label>Velocidade serial <input name="scaleBaud" type="number" min="300" max="115200"></label></p><p><label>Comando de leitura Urano <select name="uranoCommand"><option value="0x04">0x04 (padrão)</option><option value="0x05">0x05</option></select></label></p><p><label>Velocidade da impressora serial <input name="printerBaud" type="number" min="300" max="115200"></label></p><p><label>Velocidade da gaveta serial <input name="drawerBaud" type="number" min="300" max="115200"></label></p><p><label><input name="cut" type="checkbox"> Acionar corte ESC/POS (somente quando compatível)</label></p><p><label><input name="autoPrint" type="checkbox"> Impressão automática (somente conector local)</label></p><p><label>Chave do conector local <input name="bridgeToken" type="password" autocomplete="off" placeholder="Código de pareamento de 64 caracteres"></label></p><p><button type="button" id="pdv-bridge-connect">Conectar serviço local</button><button type="button" id="pdv-bridge-queue">Consultar fila</button></p><div id="pdv-bridge-history"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-device="scale">Conectar balança</button><button type="button" data-device="printer">Conectar impressora serial</button><button type="button" data-device="drawer">Conectar gaveta</button><button type="button" id="pdv-test-printer">Imprimir teste</button><button type="button" id="pdv-test-drawer">Abrir gaveta</button></div><p role="status" id="pdv-peripherals-status" aria-live="polite"></p><div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" id="pdv-peripherals-save">Salvar</button><button value="cancel">Fechar</button></div></form>';
+    dialog.innerHTML='<form method="dialog" id="pdv-peripherals-form"><h2>Dispositivos locais</h2><p>Configuração deste navegador e filial. Não altera vendas nem dados do servidor.</p><fieldset><legend>Identificação do comprovante não fiscal</legend><label>Nome da loja <input name="receiptName" maxlength="80" autocomplete="organization"></label><p><label>Endereço <input name="receiptAddress" maxlength="160" autocomplete="street-address"></label></p><p><label>Telefone <input name="receiptPhone" maxlength="60" autocomplete="tel"></label></p><p><label>Logotipo PNG (até 512 KB; somente no PDF e no diálogo do navegador) <input type="file" name="receiptLogo" accept="image/png"></label></p><p><label><input type="checkbox" name="receiptRemoveLogo"> Remover logotipo atual</label></p><p>Conector local e serial imprimem texto, sem logotipo; configuração salva somente neste navegador e filial.</p></fieldset><label>Papel <select name="paperMm"><option value="58">58 mm</option><option value="80">80 mm</option></select></label><p><label>Impressora <select name="printerMode"><option value="browser">Diálogo do sistema (recomendado)</option><option value="serial">ESC/POS serial compatível (experimental)</option><option value="bridge">Conector local (sem diálogo)</option></select></label></p><p><label>Perfil da balança <select name="scaleProfile"><option value="generic">Serial numérico genérico</option><option value="urano-pop-s">Urano POP-S (requer homologação)</option></select></label></p><p><label>Velocidade serial <input name="scaleBaud" type="number" min="300" max="115200"></label></p><p><label>Comando de leitura Urano <select name="uranoCommand"><option value="0x04">0x04 (padrão)</option><option value="0x05">0x05</option></select></label></p><p><label>Velocidade da impressora serial <input name="printerBaud" type="number" min="300" max="115200"></label></p><p><label>Velocidade da gaveta serial <input name="drawerBaud" type="number" min="300" max="115200"></label></p><p><label><input name="cut" type="checkbox"> Acionar corte ESC/POS (somente quando compatível)</label></p><p><label><input name="autoPrint" type="checkbox"> Impressão automática (somente conector local)</label></p><p><label>Chave do conector local <input name="bridgeToken" type="password" autocomplete="off" placeholder="Código de pareamento de 64 caracteres"></label></p><p><button type="button" id="pdv-bridge-connect">Conectar serviço local</button><button type="button" id="pdv-bridge-queue">Consultar fila</button></p><div id="pdv-bridge-history"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-device="scale">Conectar balança</button><button type="button" data-device="printer">Conectar impressora serial</button><button type="button" data-device="drawer">Conectar gaveta</button><button type="button" id="pdv-test-printer">Imprimir teste</button><button type="button" id="pdv-test-drawer">Abrir gaveta</button></div><p role="status" id="pdv-peripherals-status" aria-live="polite"></p><div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" id="pdv-peripherals-save">Salvar</button><button value="cancel">Fechar</button></div></form>';
     root.document.body.append(dialog);
     const form=dialog.querySelector('form');
     const saved=settings();
+    const receiptBrand=root.PdvReceiptBranding?.read()||{name:'PDV TOTAL',address:'',phone:'',logoDataUrl:null};
+    for(const [key,value] of [['receiptName',receiptBrand.name],['receiptAddress',receiptBrand.address],['receiptPhone',receiptBrand.phone]])form.elements.namedItem(key).value=value;
     for(const key of ['paperMm','printerMode','scaleProfile','scaleBaud','uranoCommand','printerBaud','drawerBaud'])form.elements.namedItem(key).value=String(saved[key]);
     form.elements.namedItem('cut').checked=saved.cut;
     form.elements.namedItem('autoPrint').checked=saved.autoPrint;
@@ -250,9 +255,29 @@
         if(e.target?.id==='pdv-test-drawer'){await openDrawer();status.textContent='Pulso enviado; verifique a gaveta.';}
         if(e.target?.id==='pdv-peripherals-save'){
           const token=form.elements.namedItem('bridgeToken').value;
+          const logoFile=form.elements.namedItem('receiptLogo').files?.[0];
+          let logoDataUrl=receiptBrand.logoDataUrl;
+          if(form.elements.namedItem('receiptRemoveLogo').checked)logoDataUrl=null;
+          if(logoFile){
+            if(logoFile.type!=='image/png'||logoFile.size<8||logoFile.size>root.PdvReceiptBranding.MAX_LOGO_BYTES)
+              throw Error('Use um PNG válido com no máximo 512 KB.');
+            logoDataUrl=await new Promise((resolve,reject)=>{
+              const reader=new FileReader();
+              reader.onerror=()=>reject(Error('Falha ao ler PNG.'));
+              reader.onload=()=>resolve(reader.result);
+              reader.readAsDataURL(logoFile);
+            });
+            if(!root.PdvReceiptBranding.normalize({logoDataUrl}).logoDataUrl)
+              throw Error('Arquivo não contém um logotipo PNG válido.');
+          }
+          root.PdvReceiptBranding.write({
+            name:form.elements.namedItem('receiptName').value,
+            address:form.elements.namedItem('receiptAddress').value,
+            phone:form.elements.namedItem('receiptPhone').value,
+            logoDataUrl});
           if(token)root.PdvLocalBridge.pair(token);
           saveSettings({...settings(),...Object.fromEntries(new FormData(form)),cut:form.elements.namedItem('cut').checked,autoPrint:form.elements.namedItem('autoPrint').checked});
-          status.textContent='Preferências deste navegador salvas.';
+          status.textContent='Preferências locais da filial salvas; imagens apenas no diálogo/PDF.';
         }
       }catch(error){status.textContent=error?.message||'Falha ao acessar dispositivo.';}
     });

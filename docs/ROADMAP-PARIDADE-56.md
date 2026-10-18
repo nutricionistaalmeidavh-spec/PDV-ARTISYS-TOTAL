@@ -18,7 +18,7 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 
 **Precisão obrigatória:** gap NÃO comprova ausência de código. O terceiro estado inclui casos ainda não investigados. Não promover a pronto por nome de arquivo, CI verde ou um cenário isolado. Auditoria de código exige revisão explícita e evidências executáveis. Testes em equipamento real não bloqueiam código pronto.
 
-**Fotografia documentada em 18/10/2026 (inventário da `main` no SHA `b2f2a66`; confira o SHA atual antes de usar):** 56 capacidades: **33 cobertas, 21 parciais e 2 não demonstradas**. Por onda: R1 **21 cobertas**; R2 **11 cobertas / 3 parciais**; R3 **6 parciais / 2 sem prova suficiente** (cap-030 e cap-043); R4 **1 coberta / 12 parciais**. Os 68 contratos subordinados registram **43 cobertos e 25 parciais**. Execute `npm run report:parity` para obter os valores do inventário versionado. A existência de testes de subconjunto não equivale à certificação integral; testes físicos não bloqueiam código.
+**Fotografia documentada em 18/10/2026 (inventário da `main` no SHA `b2f2a66`; confira o SHA atual antes de usar):** 56 capacidades: **33 cobertas, 23 parciais e 0 não demonstradas**. Por onda: R1 **21 cobertas**; R2 **11 cobertas / 3 parciais**; R3 **8 parciais / 0 lacunas sem implementação demonstrada** (cap-030 e cap-043 passaram a parciais após implementação e simulação, não a cobertas); R4 **1 coberta / 12 parciais**. Os 68 contratos subordinados registram **43 cobertos e 25 parciais**. Execute `npm run report:parity` para obter os valores do inventário versionado. A existência de testes de subconjunto não equivale à certificação integral; testes físicos não bloqueiam código.
 
 ## Ondas de implementação — 56 sem duplicação
 
@@ -39,7 +39,7 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 
 **R2: fechar apenas as três capacidades parciais** (`cap-001`, `cap-047`, `cap-056`): inicialização/reinício do servidor local e perfil de instalação, jornada mobile na LAN e distribuição servidor/terminal. Preservar as 11 cobertas, reaproveitar autenticação, credenciais, revogação e backup existentes. Reconciliar a PR #68 com o snapshot já integrado pela #73; não fazer merge integral de branch divergente nem rebaixar provas válidas.
 
-**R3: completar protocolos e provas dos seis itens parciais** (`cap-025` a `cap-029`, `cap-050`) e investigar primeiro se `cap-030` (personalização de comprovante) e `cap-043` (compatibilidade versionada) exigem código ou evidência. Reaproveitar `tools/local-hardware-bridge/`; simular spooler, serial, balança, falhas e recuperação, sem exigir periférico físico.
+**R3: fechar as oito capacidades ainda parciais** (`cap-025` a `cap-030`, `cap-043`, `cap-050`). `cap-030` agora possui identificação por loja/filial no navegador, texto no bridge e logo PNG no diálogo/PDF; falta configuração canônica compartilhada e snapshot de reimpressão. `cap-043` agora possui matriz de protocolos versionada e cenários emulados, mas depende também de `checkout-016` ainda parcial. Reaproveitar `tools/local-hardware-bridge/` e certificar paridade com o desktop, sem exigir periférico físico.
 
 **R4: concluir os 12 itens parciais** (cap-009, cap-031, cap-032, cap-034–039, cap-041, cap-048 e cap-049), sem duplicar pedidos, caixa ou ledger. Priorizar divisão individual por pagador/item, corridas entre operadores, roteamento e recuperação do KDS, insumos da pizzaria, delivery, onboarding e relatórios; usar comparações executáveis com o desktop fixado.
 

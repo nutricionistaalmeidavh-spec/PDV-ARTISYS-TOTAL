@@ -13,6 +13,10 @@ A implementação opera no navegador do terminal e, quando selecionado, em um **
 
 Nenhum comando de periférico é emitido por alteração de banco ou job em background; impressão local requer ação humana e escolha do navegador. O navegador não fornece retorno confiável de sucesso físico do spooler. Não registrar como "impresso" com base apenas na abertura do diálogo.
 
+## Personalização de comprovante (cap-030)
+
+Em **Balcão → Dispositivos locais** há campos de nome da loja, endereço e telefone e importação de **PNG de até 512 KB**, com assinatura de arquivo validada. A identidade é persistida **por estabelecimento e filial neste navegador**, sem compartilhar dados entre filiais. A visualização HTML/PDF imprime o logo, mas o adaptador serial ESC/POS e o conector local imprimem somente nome, endereço e telefone em texto; eles não possuem rasterização de PNG. Esse fluxo ainda não equivale à configuração canônica global/snapshot de reimpressões do desktop. É comprovante **não fiscal**, sem alterar a venda.
+
 ## Compatibilidade
 
 | Caminho | Estado |
@@ -27,9 +31,11 @@ Nenhum comando de periférico é emitido por alteração de banco ou job em back
 | Conector local de impressão com fila persistente, reenvio controlado e spooler do SO | **Implementado parcialmente** em `tools/local-hardware-bridge/`; não garante saída física nem paridade universal de drivers |
 | Fiscal NFC-e/NF-e e TEF | Não implementados neste adaptador de periféricos |
 
+A fonte versionada de status, ambientes e provas automatizadas é [`docs/parity/hardware-compatibility.json`](parity/hardware-compatibility.json). `PROTOCOL_VERIFIED` significa somente contrato emulado; `FIELD_VERIFIED` exigiria evidência real por modelo/firmware e atualmente **nenhum modelo foi declarado testado fisicamente**.
+
 ## Próxima etapa de paridade total
 
-- **Aprimorar e certificar** o conector local open source/self-hosted já existente em `tools/local-hardware-bridge/`: autenticação por terminal, bind loopback, fila SQLite e estados `PENDING`, `SUBMITTING`, `SUBMITTED`, `FAILED` e `UNCERTAIN` já estão documentados. Validar paridade do driver/protocolo, sem assumir sucesso físico ao obter aceitação do spooler.
+- **Aprimorar e certificar** o conector local open source/self-hosted já existente em `tools/local-hardware-bridge/`: autenticação por terminal, bind loopback, fila SQLite e estados `PENDING`, `SUBMITTING`, `SUBMITTED`, `FAILED` e `UNCERTAIN` já estão documentados. Integrar configuração de marca do comprovante no servidor canônico, com snapshot no job idempotente, e acrescentar imagem raster somente nos drivers que a suportem. Não assumir impressão física ao obter aceitação do spooler.
 - Validar leitura em equipamento Urano físico; o parser foi portado com reconhecimento de frames e testes automatizados, mas compatibilidade física permanece não homologada.
 - Projetar job canônico tenant/filial/terminal com idempotência e tentativas auditáveis no D1; impedir impressão duplicada ao repetir a venda, sem inventar impressão enviada.
 - Homologar equipamento físico com fabricante/modelo/firmware, 58/80 mm, corte, gaveta, desconexão, replug, falha de driver, retomada e impressão concorrente.

@@ -897,7 +897,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -906,7 +906,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "configurable-non-fiscal-receipt-branding-name-address-phone-logo: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Logo PNG e identificação local de comprovante, sanitizados, persistidos por filial neste navegador e renderizados no diálogo/PDF; texto no bridge/ESC-POS. Ainda não sincroniza configurações de loja entre terminais nem replica snapshots canônicos/reimpressões do desktop; portanto parcial.",
+      "implementationEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "function receiptHtml",
+        "testFile": "apps/api/test/r3-receipt-branding.test.mjs",
+        "testContains": "test('cap-030 R3: store name, address, phone"
+      }
     },
     {
       "id": "cap-031",
@@ -1293,7 +1299,7 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1302,7 +1308,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "versioned-hardware-compatibility-evidence: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Matriz versionada com tipos PRINTER/SCALE/DRAWER/SCANNER, protocolo emulado, sistemas operacionais, limitações e evidências executáveis. Nenhuma homologação física declarada. Ainda depende de checkout-016 parcial e exige revisão de equivalência integral com a referência desktop.",
+      "implementationEvidence": {
+        "file": "docs/parity/hardware-compatibility.json",
+        "contains": "r3-hardware-contracts-2026-10-18",
+        "testFile": "apps/api/test/r3-hardware-compatibility.test.mjs",
+        "testContains": "test('cap-043 versioned R3 compatibility matrix"
+      }
     },
     {
       "id": "cap-044",
