@@ -59,3 +59,27 @@ Novas rotas de recuperação:
 - `GET /api/v1/tenants/:tenant/restaurant/orders/:order/checkout?branchId=:branch`
 
 A `main` não recebe automaticamente um estado **coberto integralmente** por esta entrega. Revisão e testes continuam vinculados ao SHA da PR.
+
+## PR #59 — matriz atualizada dos avanços
+
+Os contratos novos ampliam o R4, mas não equivalem automaticamente à certificação integral desktop.
+
+| Capacidade | Implementação nova | Validação ainda necessária |
+| --- | --- | --- |
+| cap-009 | Versões imutáveis de receita, consumo pelo estoque canônico, snapshot na venda | Comparação com receitas desktop |
+| cap-031 | Transferência de mesa e de itens sem duplicar pedido | Concorrência multicaixa |
+| cap-032 | Divisão igual, taxa de serviço explícita e recebimentos na venda única | Demais políticas de split desktop |
+| cap-033 | Um único checkout com idempotência, estoque e caixa | Retornos e conciliação completa |
+| cap-034 | Estações KDS, rotas por produto, nome da impressora | Impressão física, spool e reconexão |
+| cap-035 | Compartilhamento de KDS por pedidos/canais | Alteração de rotas após expedição |
+| cap-036 | Pizza por tamanho, sabores, borda e preço servidor | Múltiplas configurações do mesmo SKU no caixa |
+| cap-037 | Delivery, retirada, balcão, despacho/entregador | Estados e responsabilidades desktop |
+| cap-038 | Pedidos e senhas diárias opcionais | Importação/histórico legado |
+| cap-039 | Preço por grama/kg e pedido padaria pelo balcão | Balança e etiqueta física |
+| cap-041 | Segmento escolhido, módulos recomendados separadamente | Fluxo de primeiro acesso |
+| cap-048 | Chamado garçom/conta com estados e RBAC | QA completo UI e desktop |
+| cap-049 | Resumo operacional por filial e CSV | Reconciliação com relatórios desktop |
+
+**Ambiente obrigatório:** R$ 0, open source, SQLite local e self-hosted. D1/nuvem são opcionais; nenhum serviço pago é dependência.
+
+**Sem declaração 13/13:** a paridade integral permanece pendente de evidência independente por capacidade e validação de dispositivos. A PR mantém as implementações existentes de atacado/R1 ao integrar a `main`.
