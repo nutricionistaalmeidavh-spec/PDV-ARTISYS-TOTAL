@@ -141,14 +141,14 @@
  async function reload(){await load();render();}
  async function show(){
    if(!api.webMode)return root.PdvRestaurantUi?.show?.();
-   state.selected='';state.checkout=null;state.section='tables';
+   state.selected='';state.checkout=null;state.split=null;state.section='tables';
    host.innerHTML='<section class="page vertical-page"><h2>Carregando alimentação…</h2></section>';
    try{await reload();}catch(e){host.textContent=e.message;notice(e.message,true);}
  }
  async function click(el){
    const what=el.dataset.r4Action,id=el.dataset.id;
    if(what==='back')return root.PdvAppNavigation?.navigate?.('home');
-   if(what==='tab'){state.section=id;state.checkout=null;return render();}
+   if(what==='tab'){state.section=id;state.checkout=null;state.split=null;return render();}
    if(what==='select'){state.selected=id;return render();}
    if(what==='refresh')return reload();
    if(what==='advanced')return root.PdvR4AdvancedUi?.show?.({sessionId:id||state.selected});
@@ -179,6 +179,7 @@
          }
        }
        state.checkout=linked;
+       state.split=session?(await safe(()=>action(endpoint+'/split').then(v=>v.plan),null)):null;
      }
      if(what==='csv'){
        const text=await action('/reports/csv?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to));
@@ -202,8 +203,9 @@
      }
      if(what==='dates'){state.from=v.from;state.to=v.to;}
      if(what==='payment'){
-       const sale=await api.request('/api/v1/sales/'+encodeURIComponent(v.saleId)+'/complete',{
-         method:'POST',body:{payments:[{method:v.method,amountCents:Number(v.totalCents)}]}});
+       const body=state.split?{shares:state.split.shares.map((amountCents,i)=>({index:i+1,amountCents,method:v['shareMethod'+(i+1)]}))}:
+         {payments:[{method:v.method,amountCents:Number(v.totalCents)}]};
+       const sale=await api.request('/api/v1/sales/'+encodeURIComponent(v.saleId)+'/complete',{method:'POST',body});
        const settled=sale.sale||sale;
        state.checkout={...state.checkout,status:settled.status};
        notice('Pagamento registrado na venda canônica.');
