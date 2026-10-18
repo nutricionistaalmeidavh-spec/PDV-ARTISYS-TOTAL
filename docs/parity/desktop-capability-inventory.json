@@ -1630,7 +1630,7 @@
         "file": "apps/api/src/r2-lan-router.mjs",
         "contains": "const KINDS=new Set",
         "testFile": "apps/api/test/r2-lan-operations.test.mjs",
-        "testContains": "test('R2: hashed one-use pairing"
+        "testContains": "test('cap-003 cap-044 cap-045 cap-046 R2: independently paired terminal"
       }
     }
   ],
