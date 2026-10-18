@@ -1158,3 +1158,27 @@ test('P4 seller monthly goals rank actual net sales after dated returns and neve
   assert.equal((await x.get('a','reports/commission-ranking?branchId=branch-b&month=2026-10')).status,404);
  }finally{x.close();}
 });
+
+test('P1 restored category management API enforces tenant scope and products.manage permission',async()=>{
+ const x=await setup();try{
+   const first=await x.write('a','products/categories',{branchId:'branch-a',name:'Categoria A'});
+   assert.equal(first.status,201,first.body.error);
+   const id=first.body.category.id;
+   const product=await x.write('a','products',{branchId:'branch-a',name:'Produto de teste',sku:'CATEGORY-TEST',salePriceCents:500,categoryId:id});
+   assert.equal(product.status,201,product.body.error);
+   const address='products/categories/'+id;
+   assert.equal((await x.write('a',address,{branchId:'branch-a',name:'Invasão'},{method:'PATCH',who:x.viewer})).status,403);
+   assert.equal((await x.write('b',address,{branchId:'branch-b',name:'Invasão'},{method:'PATCH',who:x.other})).status,404);
+   const k=next();
+   const rename=await x.write('a',address,{branchId:'branch-a',name:'Categoria renomeada'},{method:'PATCH',key:k});
+   assert.equal(rename.status,200,rename.body.error);
+   assert.equal(rename.body.category.id,id);
+   assert.equal(rename.body.category.name,'Categoria renomeada');
+   assert.deepEqual((await x.write('a',address,{branchId:'branch-a',name:'Categoria renomeada'},{method:'PATCH',key:k})).body,rename.body);
+   const listed=await x.get('a','products?branchId=branch-a');
+   assert.equal(listed.body.products.find(p=>p.id===product.body.product.id).categoryId,id);
+   const all=await x.get('a','products/categories?branchId=branch-a');
+   assert.equal(all.body.categories.length,1);
+   assert.equal(all.body.categories[0].name,'Categoria renomeada');
+ }finally{x.close();}
+});

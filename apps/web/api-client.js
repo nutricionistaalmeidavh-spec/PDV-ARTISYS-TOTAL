@@ -120,6 +120,7 @@
       if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
       if(operation==='products/categories')return method==='GET'?value.categories:value.category;
+      if(/^products\/categories\/[^/]+$/.test(operation))return value.category;
       if(/^products\/[^/]+\/configuration$/.test(operation))return value.configuration;
       if(/^products\/[^/]+\/configuration\/price$/.test(operation))return value.quote;
       if(operation==='products/import/preview')return value.preview;
@@ -212,6 +213,7 @@
 
     categories(includeInactive = false) { return this.request(this.webMode?'/api/v1/products/categories':`/api/v1/categories${includeInactive ? '?includeInactive=true' : ''}`); }
     saveCategory(body) { return this.request(this.webMode?'/api/v1/products/categories':'/api/v1/categories', { method: 'POST', body }); }
+    renameCategory(id,name,mutationId){return this.request('/api/v1/products/categories/'+encodeURIComponent(id),{method:'PATCH',body:{name},mutationId});}
     previewCatalogCsv(csv,mode='create'){return this.request('/api/v1/products/import/preview',{method:'POST',body:{csv,mode}});}
     commitCatalogCsv(csv,mutationId,mode='create',previewToken=null){
       return this.request('/api/v1/products/import/commit',{method:'POST',body:{csv,mode,...(previewToken?{previewToken}:{})},mutationId});

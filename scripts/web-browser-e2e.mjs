@@ -60,6 +60,27 @@ try{
   await page.locator('#web-product-price').fill('12,90');
   await page.locator('#web-product-form button[type=submit]').click();
   await page.locator('.web-product-row').filter({hasText:sku}).waitFor();
+  // P1 category management regression: category rename must stay operable in
+  // the canonical web UI and category filtering must not hide uncategorized goods.
+  await page.locator('#web-new-category').click();
+  await page.locator('#web-category-form input[name=name]').fill('Categoria QA');
+  await page.locator('#web-category-form button[type=submit]').click();
+  await page.locator('#web-category-form').waitFor({state:'detached',timeout:12000});
+  await page.locator('#web-new-category').click();
+  await page.locator('[data-edit-web-category]').filter({hasText:'Renomear'}).first().click();
+  await page.locator('#web-category-form input[name=name]').fill('Categoria testada');
+  await page.locator('#web-category-form button[type=submit]').click();
+  await page.locator('#web-category-form').waitFor({state:'detached',timeout:12000});
+  const category=page.locator('#web-products-category-filter option').filter({hasText:'Categoria testada'});
+  const categoryId=await category.getAttribute('value');
+  assert.ok(categoryId,'renamed category must be available to the filter');
+  await page.locator('#web-products-category-filter').selectOption(categoryId);
+  assert.equal(await page.locator('.web-product-row').filter({hasText:sku}).count(),0,
+    'unassigned product must not leak into a different category');
+  await page.locator('#web-products-category-filter').selectOption('uncategorized');
+  await page.locator('.web-product-row').filter({hasText:sku}).waitFor({timeout:12000});
+  await page.locator('#web-products-category-filter').selectOption('');
+
   const row=page.locator('.web-product-row').filter({hasText:sku});
   await row.locator('[data-web-edit]').click();
   await page.locator('#web-edit-product-form').waitFor({timeout:12000});

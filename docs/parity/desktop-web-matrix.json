@@ -32,7 +32,7 @@
             "file": "apps/web/app.js",
             "contains": "const WEB_ROUTES",
             "testFile": "scripts/web-browser-e2e.mjs",
-            "testContains": "data-route",
+            "testContains": "await page.locator('#product-search').fill('Web QA');",
             "testAssertionContains": "assert.equal(await page.locator('#product-search').inputValue(),'Web QA','search query survives cart mutation');",
             "testRunner": "playwright"
           },
