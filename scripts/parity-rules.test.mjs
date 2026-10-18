@@ -31,13 +31,9 @@ test('published desktop manifest prevents silently dropping a capability from th
     testedContractRefs:['home-001'],sourceEvidence:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
       file:'release/capabilities.json',manifestIndex:0},
     acceptance:'Validate canonical catalog changes in executed integration and browser QA'};
-  const pending={id:'cap-002',capability:published[1],owner:'operations',dependsOn:[],
-    status:'gap',testedContractRefs:[],sourceEvidence:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
-      file:'release/capabilities.json',manifestIndex:1},
-    acceptance:'Second capability not yet proven by an independent browser test'};
   const inventory={schemaVersion:1,baseline:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
-      manifest:'release/capabilities.json',publishedCapabilities:published,sourceManifestCount:2},
-    web:{repo:WEB_REPO},contracts:[row,pending],fullSystemClaim:'incomplete'};
+      manifest:'release/capabilities.json',publishedCapabilities:published,sourceManifestCount:1},
+    web:{repo:WEB_REPO},contracts:[row],fullSystemClaim:'incomplete'};
   assert.equal(verifyCapabilityInventory(matrix,inventory,published).partial,1);
   assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[]},published),/every published capability/);
   assert.throws(()=>verifyCapabilityInventory(matrix,inventory,[...published,'new-published-capability']),/missing published desktop capabilities/);
@@ -53,9 +49,13 @@ test('P6 covered LAN capability fails closed without a specific executable test 
     independentEvidence:{file:'apps/api/src/p6.mjs',contains:'localFirst',
       testFile:'apps/api/test/p6.test.mjs',testContains:"test('cap-001 local first'",
       testAssertionContains:'assert.equal(result, true)',testRunner:'node-test'}};
+  const pending={id:'cap-002',capability:published[1],owner:'operations',dependsOn:[],
+    status:'gap',testedContractRefs:[],sourceEvidence:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
+      file:'release/capabilities.json',manifestIndex:1},
+    acceptance:'Second capability not yet proven by an independent browser test'};
   const inventory={schemaVersion:1,baseline:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
-      manifest:'release/capabilities.json',publishedCapabilities:published,sourceManifestCount:1},
-    web:{repo:WEB_REPO},contracts:[row],fullSystemClaim:'incomplete'};
+      manifest:'release/capabilities.json',publishedCapabilities:published,sourceManifestCount:2},
+    web:{repo:WEB_REPO},contracts:[row,pending],fullSystemClaim:'incomplete'};
   const matrix={modules:[]};
   const files={'apps/api/src/p6.mjs':'export const localFirst = true;',
     'apps/api/test/p6.test.mjs':"test('cap-001 local first',()=>{const result=true;assert.equal(result, true);});",
