@@ -13,6 +13,8 @@ on:
       - 'packages/core/**'
       - 'apps/web/**'
       - 'docs/parity/**'
+      - 'scripts/selfhost-backup.mjs'
+      - 'scripts/selfhost-backup.test.mjs'
       - 'scripts/check-desktop-parity.mjs'
       - 'scripts/parity-rules.mjs'
       - 'scripts/parity-rules.test.mjs'
@@ -47,6 +49,8 @@ jobs:
       - name: Validate entrypoints
         working-directory: apps/api
         run: npm run check
+      - name: Test free offline SQLite backup and safe staged restore
+        run: npm run test:selfhost
       - name: Test real SQLite isolation and canonical identity
         working-directory: apps/api
         run: npm test
