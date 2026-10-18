@@ -1185,7 +1185,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         if(sourceOrders.some(o=>!['DELIVERED','CANCELLED'].includes(o.status)))
           throw error(409,'Todos os pedidos precisam estar entregues ou cancelados antes da cobrança.');
         const restaurantLines=restaurantSessionId
-          ?await all(`SELECT oi.product_id AS productId,oi.quantity_milli AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
+          ?await all(`SELECT oi.product_id AS productId,oi.quantity_milli-COALESCE((SELECT SUM(tr.quantity_milli) FROM r4_item_transfers tr WHERE tr.tenant_id=oi.tenant_id AND tr.branch_id=oi.branch_id AND tr.order_item_id=oi.id),0) AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
               FROM restaurant_order_items oi JOIN restaurant_orders o ON o.id=oi.order_id AND o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id
               JOIN products p ON p.id=oi.product_id AND p.tenant_id=oi.tenant_id
               WHERE oi.tenant_id=? AND oi.branch_id=? AND o.table_session_id=? AND o.status='DELIVERED' ORDER BY oi.rowid`,tenant,branch,restaurantSessionId)
