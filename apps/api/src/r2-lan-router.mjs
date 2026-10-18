@@ -1,3 +1,4 @@
+import {zipJsonEntries} from './r2-diagnostics-zip.mjs';
 import {sha256,newSessionToken} from './password.mjs';
 
 const KINDS=new Set(['TERMINAL','WAITER','KITCHEN']);
@@ -162,6 +163,28 @@ export async function r2LanRoute(request,db,session,member,tenantId,path,{now=()
         .bind(tenantId,key,status,note,evidenceRef,userId,instant).run();
       await audit(db,tenantId,userId,'readiness.update','check',key,instant);
       return json({check:{...definition,status,note,evidenceRef,updatedAt:instant}});
+    }
+    if(path==='lan/diagnostics.zip'&&method==='GET'){
+      if(!owner)return err(403,'Somente o administrador exporta diagnósticos.');
+      // Explicit allowlist: never export users, sessions, passwords, raw logs,
+      // LAN tokens, credential hashes or raw SQLite files.
+      const [schema,devices,events]=await Promise.all([
+        db.prepare('SELECT name FROM schema_migrations ORDER BY name').bind().all(),
+        db.prepare('SELECT COUNT(*) AS n,SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) AS active FROM r2_devices WHERE tenant_id=?').bind(tenantId).first(),
+        db.prepare('SELECT action,target_type AS type,created_at AS createdAt FROM r2_audit WHERE tenant_id=? ORDER BY created_at DESC,id DESC LIMIT 100').bind(tenantId).all()
+      ]);
+      const diagnostic={
+        'manifest.json':{format:'pdv-total-r2-support-v1',source:'self-hosted-lan',
+          sanitized:true,generatedAt:new Date(instant).toISOString(),files:['manifest.json','health.json','migrations.json','audit.json']},
+        'health.json':{database:'available',terminalCount:Number(devices?.n||0),activeTerminals:Number(devices?.active||0),
+          migrationCount:schema.results.length,cloudRequired:false},
+        'migrations.json':{applied:schema.results.map(row=>row.name)},
+        'audit.json':{events:events.results}
+      };
+      const zip=zipJsonEntries(diagnostic,new Date(instant).toISOString());
+      return new Response(zip,{status:200,headers:{'content-type':'application/zip',
+        'content-disposition':'attachment; filename="pdv-total-lan-diagnostics.zip"',
+        'cache-control':'no-store','x-content-type-options':'nosniff'}});
     }
     if(path==='lan/audit'&&method==='GET'){
       if(!owner)return err(403,'Somente o administrador consulta o registro.');
