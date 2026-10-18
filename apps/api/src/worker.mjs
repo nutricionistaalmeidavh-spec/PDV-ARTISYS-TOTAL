@@ -127,7 +127,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
         // D1 can be auto-provisioned on deploy but still require the initial migration.
         try {
           await db.prepare('SELECT id FROM tenants LIMIT 1').bind().first();
-          return response({ok:true,service:'pdv-artisys-total',status:'identity-ready'});
+          return response({ok:true,service:'pdv-artisys-total',status:'identity-ready',lanMode:env.LAN_MODE==='true'});
         } catch {
           return response({ok:false,service:'pdv-artisys-total',status:'setup-required'},503);
         }
