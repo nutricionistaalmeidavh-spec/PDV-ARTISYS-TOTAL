@@ -1137,7 +1137,7 @@
           "acceptance": "Detalhamento filtrado por cliente, vendedor, produto e meio de pagamento. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
           "webEvidence": {
             "file": "apps/api/src/report-depth.mjs",
-            "contains": "details:(tenant,branch,filters",
+            "contains": "details:namedDetails",
             "testFile": "apps/api/test/commerce.test.mjs",
             "testContains": "P4 detailed report applies"
           },
