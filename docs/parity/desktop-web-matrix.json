@@ -853,7 +853,7 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async cash(tenant,branch,terminalId='DEFAULT')",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "test('cash-046 P3 independent terminal drawers",
+            "testContains": "test('P3 independent terminal drawers link every sale",
             "testAssertionContains": "assert.notEqual(cashA,cashB);",
             "testRunner": "node-test"
           },
