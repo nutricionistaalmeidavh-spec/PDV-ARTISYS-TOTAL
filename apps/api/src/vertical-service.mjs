@@ -171,12 +171,25 @@ export function createVerticalService(db){
      if(body.customerId)await customer(t,body.customerId);
      const lines=await orderItems(t,b,body.items);
      const totals=calculateSaleTotals({items:lines});
+     const routed=[];
+     for(const line of lines){
+       const route=await first('SELECT mode,station_id AS stationId FROM r4_product_kitchen_routes WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,line.productId);
+       if(route?.mode==='PRODUCTION'){
+         const station=await first('SELECT id FROM r4_kitchen_stations WHERE tenant_id=? AND branch_id=? AND id=? AND active=1',t,b,route.stationId);
+         if(!station)throw err(409,'Estação de produção inativa; reconfigure o destino do produto.');
+         routed.push(route.stationId);
+       }
+     }
+     const stations=[...new Set(routed)];
      return mutate(t,'restaurant.order:'+b,key,async()=>{
        const id=uuid(),stamp=now(),result={id,status:'OPEN',fulfillment,tableSessionId:sid,totalCents:totals.totalCents,items:lines};
        const statements=[q(`INSERT INTO restaurant_orders(id,tenant_id,branch_id,table_session_id,customer_id,fulfillment,status,address,contact,note,total_cents,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
          id,t,b,sid,body.customerId||null,fulfillment,'OPEN',clean(body.address,300)||null,clean(body.contact,120)||null,clean(body.note,500)||null,totals.totalCents,user,stamp,stamp)];
        for(const l of lines)statements.push(q('INSERT INTO restaurant_order_items(id,tenant_id,branch_id,order_id,product_id,product_name,quantity_milli,unit_price_cents) VALUES(?,?,?,?,?,?,?,?)',uuid(),t,b,id,l.productId,l.name,l.milli,l.unitPriceCents));
        statements.push(q('INSERT INTO restaurant_kitchen_tickets(id,tenant_id,branch_id,order_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',uuid(),t,b,id,'NEW',stamp,stamp));
+       for(const stationId of stations)statements.push(q(
+         'INSERT INTO r4_station_tickets(id,tenant_id,branch_id,order_id,station_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
+         uuid(),t,b,id,stationId,'NEW',stamp,stamp));
        return {statements,result};
      });
    },
@@ -185,6 +198,8 @@ export function createVerticalService(db){
      await branchExists(t,b);const status=body.status;isSafeStatus(status,['PREPARING','READY']);
      const current=await first('SELECT status FROM restaurant_kitchen_tickets WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
      if(!current)throw err(404,'Ticket não encontrado.');
+     if((await first('SELECT id FROM r4_station_tickets WHERE tenant_id=? AND branch_id=? AND order_id=(SELECT order_id FROM restaurant_kitchen_tickets WHERE tenant_id=? AND branch_id=? AND id=?) LIMIT 1',t,b,t,b,id)))
+       throw err(409,'Pedido roteado por estação: atualize os tickets de cada estação.');
      if((current.status==='NEW'&&status!=='PREPARING')||(current.status==='PREPARING'&&status!=='READY')||current.status==='READY')throw err(409,'Transição da cozinha inválida.');
      return mutate(t,'restaurant.kitchen:'+id+':'+status,key,async()=>{
        const result={id,status};
@@ -250,7 +265,8 @@ export function createVerticalService(db){
        const stamp=now();
        return {result:{id,status:'CANCELLED'},statements:[
          q("UPDATE restaurant_orders SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN'",stamp,t,b,id),
-         q("UPDATE restaurant_kitchen_tickets SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND order_id=? AND status='NEW'",stamp,t,b,id)
+         q("UPDATE restaurant_kitchen_tickets SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND order_id=? AND status='NEW'",stamp,t,b,id),
+         q("UPDATE r4_station_tickets SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND order_id=? AND status='NEW'",stamp,t,b,id)
        ]};
      });
    },
