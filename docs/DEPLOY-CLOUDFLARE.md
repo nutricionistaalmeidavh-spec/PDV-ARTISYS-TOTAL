@@ -97,10 +97,10 @@ Migração **0013_cash_terminals.sql** após 0012. Faz backfill de histórico co
 
 ### P5 — política de estoque mínimo (aditiva, não automática)
 
-A migração `0016_inventory_minimum_levels.sql` deve ser aplicada **somente após** `0015_seller_sales_targets.sql` na base nova e isolada do PDV TOTAL, com backup verificado. Ela não altera `inventory_movements` ou `stock_positions`; cria a política por empresa, filial e produto. A CI aplica a migração ao D1 **local**, não ao banco remoto.
+A migração `0017_inventory_minimum_levels.sql` deve ser aplicada **somente após** `0016_inventory_lot_receipts.sql` na base nova e isolada do PDV TOTAL, com backup verificado. Ela não altera `inventory_movements` ou `stock_positions`; cria a política por empresa, filial e produto. A CI aplica a migração ao D1 **local**, não ao banco remoto.
 
 1. Antes de expor a alteração ao cliente, verificar a versão da base e realizar backup consistente.
-2. Executar `npx wrangler d1 execute pdv-artisys-total --remote --file apps/api/migrations/0016_inventory_minimum_levels.sql` somente mediante liberação operacional para a base remota correta.
+2. Executar `npx wrangler d1 execute pdv-artisys-total --remote --file apps/api/migrations/0017_inventory_minimum_levels.sql` somente mediante liberação operacional para a base remota correta.
 3. Conferir a tabela `inventory_minimum_levels`, autorização `inventory.adjust` e cenários de duas filiais antes de habilitar clientes.
 
 **Compatibilidade:** sem a 0016, a API continua servindo estoque/cobertura e dashboard com mínimos não configurados, enquanto a escrita de política responde 503 e a UI explica a pendência. Isso evita interromper o relatório durante um deploy anterior à migração. Não interpretar esse comportamento de compatibilidade como homologação do recurso. Nenhum serviço pago é necessário para a instalação local Node + SQLite.
