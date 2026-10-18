@@ -46,7 +46,10 @@ try{
   server=createLanServer({origin,tlsKey:await readFile(keyPath),
     tlsCert:await readFile(certPath),db,webRoot:resolve(root,'dist/web')});
   await new Promise((ok,reject)=>server.once('error',reject).listen(port,'127.0.0.1',ok));
-  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  // The generated TLS cert exists only in this localhost CI fixture; Chromium's
+  // worker process also needs the temporary certificate exception.
+  // Production LAN devices still require a trusted certificate/CA.
+  browser=await chromium.launch({headless:true,args:['--no-sandbox','--ignore-certificate-errors']});
   const context=await browser.newContext({viewport:{width:390,height:844},
     ignoreHTTPSErrors:true,deviceScaleFactor:1});
   const page=await context.newPage();
@@ -123,7 +126,19 @@ try{
     navigator.serviceWorker.ready.then(()=>true),
     new Promise(resolve=>setTimeout(()=>resolve(false),10000))
   ]));
-  assert.equal(swReady,true,'cap-047 self-hosted LAN must register its public asset service worker');
+  if(!swReady){
+    const diagnostics=await page.evaluate(async()=>{
+      const supported='serviceWorker' in navigator;
+      const registrations=supported?await navigator.serviceWorker.getRegistrations():[];
+      let script;
+      try{const response=await fetch('/sw.js');script={status:response.status,type:response.headers.get('content-type')};}
+      catch(error){script={error:String(error)};}
+      return {isSecureContext:window.isSecureContext,supported,
+        registrations:registrations.map(reg=>({scope:reg.scope,installing:reg.installing?.state,
+          waiting:reg.waiting?.state,active:reg.active?.state})),script};
+    });
+    throw Error('cap-047 Service Worker registration/activation failed: '+JSON.stringify(diagnostics));
+  }
   await context.setOffline(true);
   const blocked=await page.evaluate(async()=>{
     try{await fetch('/api/v1/auth/session',{cache:'no-store'});return false;}
