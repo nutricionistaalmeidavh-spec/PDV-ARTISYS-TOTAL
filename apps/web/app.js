@@ -196,6 +196,7 @@
   }
 
   function canAccessRoute(route) {
+    if(route==='settings'&&api.webMode)return Boolean(state.user);
     if(api.webMode){
       if(!WEB_ROUTES.has(route))return false;
       const permission={suppliers:'suppliers.view',credit:'customers.view',commissions:'finance.view',FOOD:'restaurant.access',WHOLESALE:'wholesale.access'}[route];
