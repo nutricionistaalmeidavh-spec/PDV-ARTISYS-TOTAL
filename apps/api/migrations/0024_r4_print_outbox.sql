@@ -29,3 +29,8 @@ WHEN NEW.id<>OLD.id OR NEW.tenant_id<>OLD.tenant_id OR NEW.branch_id<>OLD.branch
 BEGIN SELECT RAISE(ABORT,'R4_PRINT_JOB_IMMUTABLE'); END;
 CREATE TRIGGER r4_print_no_delete BEFORE DELETE ON r4_kitchen_print_jobs
 BEGIN SELECT RAISE(ABORT,'R4_PRINT_JOB_IMMUTABLE'); END;
+
+-- Desktop-compatible pizza policy is explicit. Existing 0023 absolute-price
+-- profiles retain their behavior; new catalogs may opt into base+delta semantics.
+ALTER TABLE r4_pizza_profiles ADD COLUMN pricing_mode TEXT NOT NULL DEFAULT 'ABSOLUTE_OPTIONS'
+ CHECK(pricing_mode IN('ABSOLUTE_OPTIONS','DESKTOP_DELTAS'));
