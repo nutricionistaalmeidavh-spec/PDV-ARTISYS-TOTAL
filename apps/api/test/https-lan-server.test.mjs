@@ -63,7 +63,7 @@ test('cap-002 LAN: two authenticated HTTPS terminals, strict host/CSRF, RBAC and
   const send=(path,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
     const data=body===undefined?undefined:JSON.stringify(body);
     const req=httpsRequest({host:'127.0.0.1',port,path,method,rejectUnauthorized:false,
-      headers:{host:'localhost:8443',...(data?{'content-type':'application/json'}:{}),...headers}},
+      headers:{host:'localhost:8443',...(data?{'content-type':'application/json','content-length':Buffer.byteLength(data)}:{}),...headers}},
     res=>{
       const chunks=[];res.on('data',chunk=>chunks.push(chunk));
       res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body:Buffer.concat(chunks).toString()}));
