@@ -55,3 +55,12 @@ Origem somente leitura: PDV-ARTISYS @ `7efea9c61f75be1536a1e516e917218f2b8bf2bf`
 5. Atualizar `desktop-capability-inventory.json` somente após gates de certificação; passar CI por si só não justifica mudança.
 
 **Custo obrigatório:** R$ 0, open source, self-hosted (Node 22 + SQLite). Cloudflare Free é opção, serviços pagos nunca são dependência oculta.
+
+
+### R1 adicional — proteção contra requisições antigas no carrinho
+
+A mesma proteção foi aplicada a **alterar quantidade de item**, **remover item** e **alterar desconto**. Uma resposta atrasada ou repetição da mesma requisição não pode sobrescrever uma quantidade mais recente, restaurar um desconto antigo ou remover um item que já foi readicionado. O servidor exige uma chave por mutação e registra a mudança atômica na tabela `commerce_mutations`, somente se o CAS/update realmente afetou a linha; o frontend gera um ID para cada nova operação.
+
+Os testes usam a API real e SQLite: alteração de 1→2→3 com repetição atrasada de 2; desconto de 100→300 centavos com replay de 100; remoção/reinclusão do produto com replay da remoção. Eles também verificam as entradas de deduplicação persistidas. Nenhum segundo estado de carrinho nem migration SQL foi criado.
+
+**Limite:** replay de requisição com mesma chave está coberto, mas a certificação completa de todas as capacidades R1 continua exigindo os demais cenários do desktop, testes de dispositivo/conectividade onde pertinentes e revisão.
