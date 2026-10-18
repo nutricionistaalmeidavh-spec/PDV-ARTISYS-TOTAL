@@ -16,7 +16,9 @@ test('all 56 P6 IDs remain visible, grouped exactly once and never overclaimed',
   assert.equal(Object.values(report.groups).flat().length,56);
   assert.equal(report.rows.find(r=>r.id==='cap-002').front,'infra-lan-selfhost');
   assert.match(report.rows.find(r=>r.id==='cap-002').blockers.join(' '),/cash-046/);
-  assert.match(report.rows.find(r=>r.id==='cap-025').blockers.join(' '),/homologacao fisica/);
+  assert.doesNotMatch(report.rows.find(r=>r.id==='cap-025').blockers.join(' '),/homologacao fisica|teste fisico|hardware real/i);
+  assert.equal(report.rows.find(r=>r.id==='cap-025').fieldValidation.requiredForCodeReady,false);
+  assert.equal(report.rows.find(r=>r.id==='cap-025').fieldValidation.status,'not-verified');
   assert.throws(()=>buildReport(matrix,{contracts:contracts.slice(1)}),/56 unique/);
 });
 
