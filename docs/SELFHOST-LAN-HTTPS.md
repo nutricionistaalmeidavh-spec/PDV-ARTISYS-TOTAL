@@ -74,6 +74,28 @@ npm run serve:lan
 - Com o servidor indisponível não há novas operações comerciais confirmadas.
   Não presumir que a página em cache seja uma confirmação de venda.
 
+### Perfis locais gratuitos para Windows (cap-001 e cap-056)
+
+Com o código e a PWA compilados, provisionamento feito uma vez e
+certificados TLS válidos, crie os atalhos usando Node.js 22+:
+
+```powershell
+node scripts/r2-deploy.mjs server --dir "C:\\PDVTotal\\launcher" --origin "https://pdv.loja.local:8443" --key "C:\\PDVTotal\\certs\\server.key" --cert "C:\\PDVTotal\\certs\\server.crt" --db "C:\\PDVTotal\\data\\pdv.sqlite" --bind "0.0.0.0"
+node scripts/r2-deploy.mjs check-server --config "C:\\PDVTotal\\launcher\\pdv-total-server.json"
+node scripts/r2-deploy.mjs terminal --dir "C:\\PDVTotal\\terminal" --origin "https://pdv.loja.local:8443"
+```
+
+No computador servidor, use `iniciar-pdv-total.cmd` gerado pelo primeiro comando;
+no cliente use `pdv-total-terminal.url`. A operação é **local**, não
+registra nem transmite dados para SaaS. Não há instalador EXE/MSI nem serviço
+Windows permanente: esses atalhos exigem Node.js e a pasta do repositório
+disponíveis no servidor. O gerador recusa sobrescrever perfis existentes.
+
+Para ouvir na rede interna (`--bind "0.0.0.0"`), proteja a porta com firewall
+e instale a CA privada no navegador do terminal. Não exponha o servidor à
+Internet. Credenciais de usuário/dispositivo não são gravadas nos atalhos;
+o pareamento ocorre via PWA após o login.
+
 ### Autorizar os primeiros terminais (obrigatório em LAN)
 
 Após provisionar e iniciar HTTPS, abra a PWA e faça login como proprietário.
