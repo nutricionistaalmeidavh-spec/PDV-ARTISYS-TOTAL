@@ -54,3 +54,14 @@ A paridade permanece **incompleta**. `npm run test:parity` executa testes de reg
 - `npm run test:selfhost`: regressão offline de backup SQLite, SHA-256 e restauração não destrutiva.
 - A CLI `scripts/selfhost-backup.mjs` **não substitui** automaticamente o banco de produção; consulte o plano antes de executar a restauração.
 - **Não declarar paridade total** até 68/68 operações e 56/56 capacidades certificados; o núcleo permanece gratuito e self-hosted.
+
+### HTTPS na rede local (P6, implantação self-hosted gratuita)
+
+A interface web pode usar a mesma API autoritativa em **Node.js + SQLite local** sem Cloudflare e sem mensalidade. A implantação LAN exige TLS com certificado confiável nos terminais, autenticação habilitada explicitamente, firewall de rede interna e banco novo com migrações rastreadas. Início: `npm run serve:lan` após configurar as variáveis da documentação.
+
+- [Manual de instalação HTTPS LAN, provisionamento e recuperação](docs/SELFHOST-LAN-HTTPS.md)
+- `apps/api/src/local-migrations.mjs`: migrações transacionais com checksum; banco antigo sem histórico exige migração assistida (sem replay perigoso).
+- `apps/api/src/https-lan-server.mjs`: PWA e API na mesma origem HTTPS, cookies Secure, validação de Host e CSRF na API.
+- `apps/api/test/https-lan-server.test.mjs`: teste real com TLS temporário e 3 contas em 2 empresas; **não é homologação física**.
+- A aplicação precisa da API local acessível para confirmar transações: PWA offline mantém apenas a casca pública, não vendas.
+
