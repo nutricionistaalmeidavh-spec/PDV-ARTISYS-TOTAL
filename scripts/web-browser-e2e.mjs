@@ -401,8 +401,18 @@ try{
   await page.locator('#web-stock-minimum').waitFor({timeout:12000});
   const minimumForm=page.locator('#web-stock-minimum');
   await minimumForm.locator('[name=minimum]').fill('2');
+  const minimumMutation=page.waitForResponse(resp=>resp.url().includes('/reports/stock-minimum')&&resp.request().method()==='PUT',{timeout:12000});
   await minimumForm.locator('[type=submit]').click();
-  await page.waitForFunction(()=>document.querySelector('#report-v2-body')?.textContent.includes('Mínimo 2'),null,{timeout:12000});
+  const minimumResponse=await minimumMutation;
+  assert.equal(minimumResponse.status(),200,'Stock minimum mutation failed: '+(await minimumResponse.text()));
+  await page.waitForFunction(()=>document.querySelector('#report-v2-body')?.textContent.includes('Mínimo 2'),null,{timeout:12000}).catch(async(error)=>{
+    const diagnostic=await page.evaluate(()=>({
+      form:document.querySelector('#web-stock-minimum')?.textContent,
+      body:document.querySelector('#report-v2-body')?.textContent?.slice(-2500),
+      lastToast:document.querySelector('[role=alert]')?.textContent
+    }));
+    throw new Error('P5 minimum view did not refresh: '+JSON.stringify(diagnostic)+'; '+error.message);
+  });
   assert.match(await page.locator('#report-v2-body').innerText(),/Abaixo do mínimo|No mínimo|Acima do mínimo/);
   await page.screenshot({path:'qa-artifacts/pdv-minimum-stock-mobile.png',fullPage:true});
   await page.locator('#web-stock-minimum-clear').click();
