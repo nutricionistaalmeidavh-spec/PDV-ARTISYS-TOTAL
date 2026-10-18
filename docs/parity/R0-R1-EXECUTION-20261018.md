@@ -75,3 +75,18 @@ Os testes usam a API real e SQLite: alteração de 1→2→3 com repetição atr
 - **Escopo ainda parcial:** arquivo limitado a 100 produtos, XLSX de até 512 KiB e CSV de até 13.500 caracteres; a comparação exaustiva com todas as variantes do desktop ainda está aberta. Portanto `cap-052` permanece `gap` de paridade total, embora o fluxo descrito esteja implementado e testado.
 
 **Não afirmar R1 completo:** as 21 capacidades dependem de revisão específica do comportamento original e de testes independentes; este incremento não certifica magicamente as outras 20. A CI do PR é regressão técnica, não homologação do desktop.
+
+
+## Incremento R1 — política do cliente de atacado executável (cap-023/024)
+
+A interface de atacado já apresentava um editor para política comercial, mas faltavam as rotas reais para buscar/salvar o pedido mínimo e os meios de pagamento permitidos. A UI ainda recebia envelopes de resposta incompatíveis com seus modelos, e a listagem dos pedidos omitira itens e identificação do cliente.
+
+**Implementado no produto web único:**
+- `GET/PUT wholesale/customers/:id/policy`: leitura/salvamento com RBAC, empresa/filial, operações idempotentes, pedido mínimo em centavos e métodos sem duplicação; limite e saldo de crédito permanecem nas tabelas canônicas de cliente/ledger.
+- `wholesale/price` fornece subtotal estendido real; listagem das cotações traz cliente, itens/preços históricos e estados reais `QUOTE/CONFIRMED/FULFILLED`. A página adapta os envelopes da API sem criar estado duplicado; não exige endereço de estoque para simplesmente cotar.
+- No checkout canônico, uma venda aberta a partir do atacado mantém o cliente da cotação e verifica a política no servidor **antes** de gravar estoque/caixa/crediário: pedido mínimo mesmo após desconto e todos os meios de pagamento de uma transação mista. Pedido cancelado não é cobrável; política não limita vendas normais de balcão.
+- Teste API/SQLite autentica empresas A/B, recusa edição cruzada, rejeita mínimo, pagamento em dinheiro quando só PIX é permitido, desconto abaixo do mínimo, aceita PIX válido e reconcilia o pedido faturado. Teste Chromium usa o editor real, lista a cotação e confirma pelo navegador.
+
+**Limites:** a política é conferida com os valores vigentes ao fechar a venda, não é um snapshot imutável da data da cotação. Ainda faltam a certificação integral do manifesto desktop, testes de todos os casos de credito/estorno e revisão dos demais dependentes R1. `cap-023/024` continuam `gap` na classificação estrita de paridade e **não podem ser marcadas como completas apenas por esses cenários**.
+
+Sem migration, sem segundo caixa ou estoque, sem serviço pago obrigatório.

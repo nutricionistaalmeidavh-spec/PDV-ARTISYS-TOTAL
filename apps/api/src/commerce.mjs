@@ -1239,6 +1239,9 @@ export function createCommerceService(db,{now=nowISO}={}){
     listSales:listing,
     async assignSaleCustomer(tenant,branch,id,customerId){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+      const wholesale=await first('SELECT customer_id AS customerId FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND sale_id=?',tenant,branch,id);
+      if(wholesale&&customerId!==wholesale.customerId)
+        throw error(409,'O cliente do pedido de atacado está vinculado à cotação e não pode ser alterado no caixa.');
       if(customerId){
         const customer=await first('SELECT id FROM customers WHERE tenant_id=? AND id=? AND active=1',tenant,customerId);
         if(!customer)throw error(404,'Cliente não encontrado neste estabelecimento.');
@@ -1569,6 +1572,22 @@ export function createCommerceService(db,{now=nowISO}={}){
           throw error(400,'Forma ou valor de pagamento inválido.');
         return {method,amountCents:p.amountCents};
       });
+      // A B2B customer policy is enforced at the ONLY sale authority, not merely
+      // at quotation or in a disabled UI button. Every tender in a mixed payment
+      // is checked before touching the stock/cash/credit ledgers.
+      const wholesale=await first('SELECT customer_id AS customerId,status FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND sale_id=?',tenant,branch,id);
+      if(wholesale){
+        if(wholesale.status!=='CONFIRMED')
+          throw error(409,'Pedido de atacado cancelado ou indisponível para pagamento.');
+        if(sale.customer_id!==wholesale.customerId)
+          throw error(409,'O cliente do pedido de atacado foi alterado. Reabra a cotação corretamente.');
+        const policy=await first('SELECT minimum_order_cents AS minimumOrderCents,allowed_payment_methods_json AS methods FROM wholesale_customer_policies WHERE tenant_id=? AND customer_id=? AND active=1',tenant,wholesale.customerId);
+        if(totals.totalCents<(policy?.minimumOrderCents||0))
+          throw error(409,'Pagamento abaixo do pedido mínimo configurado para o cliente de atacado.');
+        const methods=policy?JSON.parse(policy.methods):['CASH','PIX','DEBIT_CARD','CREDIT_CARD'];
+        if(!Array.isArray(methods)||normalized.some(p=>!methods.includes(p.method)))
+          throw error(409,'Forma de pagamento não autorizada para este cliente de atacado.');
+      }
       // Cash movements are one per method; coalesce duplicate methods, preserving total.
       const grouped=new Map();
       for(const p of normalized)grouped.set(p.method,(grouped.get(p.method)||0)+p.amountCents);

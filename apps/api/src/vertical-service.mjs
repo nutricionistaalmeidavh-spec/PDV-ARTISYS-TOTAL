@@ -85,7 +85,9 @@ export function createVerticalService(db){
  async function price(t,b,productId,quantity){
    const productRow=await product(t,productId),milli=qty(quantity);
    const tier=await first('SELECT id,min_quantity_milli,unit_price_cents FROM wholesale_tiers WHERE tenant_id=? AND branch_id=? AND product_id=? AND active=1 AND min_quantity_milli<=? ORDER BY min_quantity_milli DESC LIMIT 1',t,b,productId,milli);
-   return {productId,productName:productRow.name,quantity:milli/1000,unitPriceCents:tier?.unit_price_cents??productRow.sale_price_cents,
+   const unitPriceCents=tier?.unit_price_cents??productRow.sale_price_cents;
+   return {productId,productName:productRow.name,quantity:milli/1000,unitPriceCents,
+     totalCents:Math.round(unitPriceCents*milli/1000),
      baseUnitPriceCents:productRow.sale_price_cents,tierId:tier?.id||null,minQuantity:(tier?.min_quantity_milli||0)/1000};
  }
  return {
@@ -321,6 +323,58 @@ export function createVerticalService(db){
        channels:Object.fromEntries(['TABLE','DELIVERY','PICKUP'].map(channel=>[channel,active.filter(r=>r.fulfillment===channel).length])),
        note:'Indicadores operacionais: pedido entregue não equivale a venda recebida. Faturamento, caixa e estoque pertencem ao checkout canônico.'};
    },
+   async wholesaleCustomerPolicy(t,b,customerId){
+     await branchExists(t,b);
+     const c=await customer(t,customerId);
+     if(!c.active)throw err(409,'Cliente inativo.');
+     const policy=await first('SELECT minimum_order_cents,allowed_payment_methods_json FROM wholesale_customer_policies WHERE tenant_id=? AND customer_id=? AND active=1',t,customerId);
+     const balance=await first('SELECT COALESCE(SUM(amount_cents),0) AS used FROM customer_credit_ledger WHERE tenant_id=? AND customer_id=?',t,customerId);
+     const creditUsedCents=Math.max(0,balance?.used||0);
+     return {
+       customerId,customerName:c.name,minimumOrderCents:policy?.minimum_order_cents??0,
+       allowedPaymentMethods:policy?JSON.parse(policy.allowed_payment_methods_json):['CASH','PIX','DEBIT_CARD','CREDIT_CARD'],
+       creditLimitCents:c.credit_limit_cents,
+       creditUsedCents,availableCreditCents:Math.max(0,c.credit_limit_cents-creditUsedCents)
+     };
+   },
+   async saveWholesaleCustomerPolicy(t,b,customerId,body,key){
+     await branchExists(t,b);
+     const c=await customer(t,customerId);
+     if(!c.active)throw err(409,'Cliente inativo.');
+     const minimumOrderCents=cents(body?.minimumOrderCents,'Pedido mínimo');
+     const allowedPaymentMethods=body?.allowedPaymentMethods;
+     const permitted=new Set(['CASH','PIX','DEBIT_CARD','CREDIT_CARD','STORE_CREDIT']);
+     if(!Array.isArray(allowedPaymentMethods)||allowedPaymentMethods.length<1||
+        allowedPaymentMethods.length>permitted.size||
+        new Set(allowedPaymentMethods).size!==allowedPaymentMethods.length||
+        allowedPaymentMethods.some(method=>typeof method!=='string'||!permitted.has(method)))
+       throw err(400,'Escolha meios de pagamento válidos sem repetições.');
+     const scope='wholesale.policy:'+customerId;
+     // The same mutation key must not acknowledge a different commercial policy.
+     if(keyOK(key)){
+       const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+       if(prior){
+         const previous=JSON.parse(prior.result_json);
+         if(previous.minimumOrderCents!==minimumOrderCents||
+            JSON.stringify(previous.allowedPaymentMethods)!==JSON.stringify(allowedPaymentMethods))
+           throw err(409,'Esta operação já registrou outra política comercial.');
+         return previous;
+       }
+     }
+     return mutate(t,scope,key,async()=>{
+       const stamp=now();
+       const current=await this.wholesaleCustomerPolicy(t,b,customerId);
+       const result={...current,minimumOrderCents,allowedPaymentMethods};
+       return {statements:[q(`INSERT INTO wholesale_customer_policies
+         (tenant_id,customer_id,minimum_order_cents,allowed_payment_methods_json,active)
+         VALUES(?,?,?,?,1)
+         ON CONFLICT(tenant_id,customer_id) DO UPDATE SET
+           minimum_order_cents=excluded.minimum_order_cents,
+           allowed_payment_methods_json=excluded.allowed_payment_methods_json,
+           active=1`,
+         t,customerId,minimumOrderCents,JSON.stringify(allowedPaymentMethods))],result};
+     });
+   },
    async wholesaleTiers(t,b){await branchExists(t,b);return all('SELECT id,product_id AS productId,min_quantity_milli / 1000.0 AS minQuantity,unit_price_cents AS unitPriceCents,active FROM wholesale_tiers WHERE tenant_id=? AND branch_id=? ORDER BY product_id,min_quantity_milli',t,b);},
    async saveWholesaleTier(t,b,body,key){
      await branchExists(t,b);await product(t,body.productId);const milli=qty(body.minQuantity),price=cents(body.unitPriceCents,'Preço');
@@ -332,7 +386,32 @@ export function createVerticalService(db){
      });
    },
    async wholesalePrice(t,b,productId,quantity){await branchExists(t,b);return price(t,b,productId,quantity);},
-   async wholesaleOrders(t,b){await branchExists(t,b);return all('SELECT id,customer_id AS customerId,status,total_cents AS totalCents,sale_id AS saleId,created_at AS createdAt FROM wholesale_orders WHERE tenant_id=? AND branch_id=? ORDER BY created_at DESC LIMIT 100',t,b);},
+   async wholesaleOrders(t,b){
+     await branchExists(t,b);
+     const orders=await all(`SELECT o.id,o.customer_id AS customerId,c.name AS customerName,
+       o.status,o.total_cents AS totalCents,o.sale_id AS saleId,o.fulfillment AS fulfillmentType,
+       o.expected_at AS expectedAt,o.created_at AS createdAt
+       FROM wholesale_orders o JOIN customers c ON c.tenant_id=o.tenant_id AND c.id=o.customer_id
+       WHERE o.tenant_id=? AND o.branch_id=? ORDER BY o.created_at DESC,o.id DESC LIMIT 100`,t,b);
+     if(!orders.length)return [];
+     // Fetch all visible line snapshots in one query (no N+1 or independent stock).
+     const ids=orders.map(o=>o.id),placeholders=ids.map(()=>'?').join(',');
+     const lines=await all(`SELECT i.order_id AS orderId,i.product_id AS productId,
+       p.name AS productName,i.quantity_milli / 1000.0 AS quantity,
+       i.unit_price_cents AS unitPriceCents,i.tier_id AS tierId
+       FROM wholesale_order_items i JOIN products p ON p.tenant_id=i.tenant_id AND p.id=i.product_id
+       WHERE i.tenant_id=? AND i.branch_id=? AND i.order_id IN (${placeholders})
+       ORDER BY i.rowid`,t,b,...ids);
+     const byOrder=new Map(orders.map(order=>[order.id,[]]));
+     for(const line of lines)byOrder.get(line.orderId)?.push({
+       productId:line.productId,productName:line.productName,quantity:line.quantity,
+       pendingQuantity:line.quantity,unitPriceCents:line.unitPriceCents,
+       pricingSnapshot:line.tierId?{tierId:line.tierId}:null
+     });
+     return orders.map(order=>({...order,items:byOrder.get(order.id).map(item=>({
+       ...item,pendingQuantity:order.status==='FULFILLED'?0:item.quantity
+     }))}));
+   },
    wholesaleOrder:loadWholesale,
    async wholesaleQuote(t,b,user,body,key){
      await branchExists(t,b);const cust=await customer(t,body.customerId);

@@ -287,3 +287,95 @@ test('R4 cap-033/cap-037: retirada vira exatamente uma venda com preços congela
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM restaurant_sale_links WHERE tenant_id=?').bind('a').first()).n,1);
  }finally{x.close();}
 });
+
+test('R1 cap-024: customer wholesale policy is editable, tenant-scoped and enforced at canonical checkout',async()=>{
+ const x=await setup();try{
+  const created=await x.request('a','customers','POST',{branchId:'filial-a',name:'Atacado Política',creditLimitCents:9000});
+  assert.equal(created.status,201,JSON.stringify(created.body));
+  const customerId=created.body.customer.id;
+  const policyPath=`wholesale/customers/${customerId}/policy`;
+  const defaults=await x.request('a',policyPath+'?branchId=filial-a');
+  assert.equal(defaults.status,200,JSON.stringify(defaults.body));
+  assert.equal(defaults.body.policy.customerName,'Atacado Política');
+  assert.equal(defaults.body.policy.creditLimitCents,9000);
+  assert.equal(defaults.body.policy.creditUsedCents,0);
+  assert.equal(defaults.body.policy.availableCreditCents,9000);
+  const policyKey=crypto.randomUUID();
+  const changed=await x.request('a',policyPath,'PUT',{
+    branchId:'filial-a',minimumOrderCents:2000,allowedPaymentMethods:['PIX']
+  },{key:policyKey});
+  assert.equal(changed.status,200,JSON.stringify(changed.body));
+  assert.deepEqual(changed.body.policy.allowedPaymentMethods,['PIX']);
+  assert.equal(changed.body.policy.minimumOrderCents,2000);
+  const replay=await x.request('a',policyPath,'PUT',{
+    branchId:'filial-a',minimumOrderCents:2000,allowedPaymentMethods:['PIX']
+  },{key:policyKey});
+  assert.deepEqual(replay.body.policy,changed.body.policy,'policy update is idempotent');
+  assert.equal((await x.request('b',policyPath+'?branchId=filial-b','GET',undefined,{as:'b'})).status,404);
+  assert.equal((await x.request('a',policyPath,'PUT',{
+    branchId:'filial-a',minimumOrderCents:0,allowedPaymentMethods:[]
+  })).status,400,'no customer may be left without accepted payment methods');
+  assert.equal((await x.request('a',policyPath,'PUT',{
+    branchId:'filial-a',minimumOrderCents:0,allowedPaymentMethods:['PIX','PIX']
+  })).status,400,'duplicated payment policies are invalid');
+  const product=(await x.request('a','products','POST',{
+    branchId:'filial-a',sku:'R1-POLICY',name:'Caixa do cliente',salePriceCents:1500,trackStock:false
+  })).body.product;
+  const priced=await x.request('a',`wholesale/price?branchId=filial-a&productId=${product.id}&quantity=2`);
+  assert.equal(priced.status,200);
+  assert.equal(priced.body.price.totalCents,3000,'cart preview must show actual tier-priced extended total');
+  const quotePath='wholesale/orders';
+  const tooSmall=await x.request('a',quotePath,'POST',{
+    branchId:'filial-a',customerId,items:[{productId:product.id,quantity:1}]
+  });
+  assert.equal(tooSmall.status,409,'customer minimum order must be enforced before quotation');
+  const quote=await x.request('a',quotePath,'POST',{
+    branchId:'filial-a',customerId,items:[{productId:product.id,quantity:2}]
+  });
+  assert.equal(quote.status,201,JSON.stringify(quote.body));
+  const orderId=quote.body.order.id;
+  const quoteList=await x.request('a','wholesale/orders?branchId=filial-a');
+  assert.equal(quoteList.status,200,JSON.stringify(quoteList.body));
+  assert.equal(quoteList.body.orders.length,1);
+  assert.equal(quoteList.body.orders[0].status,'QUOTE');
+  assert.equal(quoteList.body.orders[0].customerName,'Atacado Política');
+  assert.equal(quoteList.body.orders[0].items[0].productName,'Caixa do cliente');
+  assert.equal(quoteList.body.orders[0].items[0].pendingQuantity,2);
+  assert.equal((await x.request('a',`wholesale/orders/${orderId}/confirm`,'POST',{
+    branchId:'filial-a'
+  })).status,200);
+  const opened=await x.request('a','sales','POST',{branchId:'filial-a',wholesaleOrderId:orderId});
+  assert.equal(opened.status,201,JSON.stringify(opened.body));
+  const sid=opened.body.sale.id;
+  assert.equal((await x.request('a',`sales/${sid}/customer`,'POST',{
+    branchId:'filial-a',customerId:null
+  })).status,409,'wholesale sale customer must not be changed after quoting');
+  assert.equal((await x.request('a','cash/open','POST',{
+    branchId:'filial-a',openingCents:0
+  })).status,201);
+  const cashAttempt=await x.request('a',`sales/${sid}/complete`,'POST',{
+    branchId:'filial-a',payments:[{method:'CASH',amountCents:3000}]
+  });
+  assert.equal(cashAttempt.status,409,'disallowed method must be rejected before any stock/cash effects');
+  assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM cash_movements WHERE tenant_id=?').bind('a').first()).n,0);
+  assert.equal((await x.request('a',`sales/${sid}?branchId=filial-a`)).body.sale.status,'OPEN');
+  const tooMuchDiscount=await x.request('a',`sales/${sid}/discount`,'POST',{
+    branchId:'filial-a',discountCents:1500
+  });
+  assert.equal(tooMuchDiscount.status,200);
+  const tooCheap=await x.request('a',`sales/${sid}/complete`,'POST',{
+    branchId:'filial-a',payments:[{method:'PIX',amountCents:1500}]
+  });
+  assert.equal(tooCheap.status,409,'checkout cannot bypass minimum order via a later discount');
+  assert.equal((await x.request('a',`sales/${sid}/discount`,'POST',{
+    branchId:'filial-a',discountCents:0
+  })).status,200);
+  const paid=await x.request('a',`sales/${sid}/complete`,'POST',{
+    branchId:'filial-a',payments:[{method:'PIX',amountCents:3000}]
+  });
+  assert.equal(paid.status,200,JSON.stringify(paid.body));
+  assert.equal((await x.request('a',`wholesale/orders/${orderId}?branchId=filial-a`)).body.order.status,'FULFILLED');
+  const paidList=await x.request('a','wholesale/orders?branchId=filial-a');
+  assert.equal(paidList.body.orders[0].items[0].pendingQuantity,0,'settled order is no longer pending');
+ }finally{x.close();}
+});

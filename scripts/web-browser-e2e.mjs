@@ -617,6 +617,42 @@ try{
   await page.setViewportSize({width:1366,height:860});
   await page.screenshot({path:'qa-artifacts/pdv-reports-desktop.png',fullPage:true});
 
+  // R1: the Atacado page must consume unwrapped API objects, allow editing
+  // a customer policy, price the cart and confirm a quote in the same PWA.
+  const wholesaleCustomer=await page.evaluate(async()=>{
+    const api=new window.PdvApiClient.ApiClient();
+    await api.initialize();
+    return api.saveCustomer({name:'Atacado QA de navegador',creditLimitCents:10000});
+  });
+  assert.ok(wholesaleCustomer.id);
+  await page.locator('#app-sidebar [data-route=WHOLESALE]').click();
+  await page.locator('#wholesale-item-form').waitFor({timeout:12000});
+  await page.locator('[name=policyCustomerId]').selectOption(wholesaleCustomer.id);
+  await page.locator('#wholesale-edit-policy').click();
+  await page.locator('#wholesale-policy-form').waitFor({timeout:12000});
+  assert.match(await page.locator('#wholesale-policy-form').innerText(),/Atacado QA de navegador/);
+  await page.locator('#wholesale-policy-form [name=minimumOrder]').fill('10,00');
+  for(const method of ['CASH','DEBIT_CARD','CREDIT_CARD'])
+    await page.locator(`#wholesale-policy-form [name=paymentMethod][value=${method}]`).uncheck();
+  await page.locator('#wholesale-policy-form button[type=submit]').click();
+  await page.locator('#wholesale-policy-form').waitFor({state:'detached',timeout:12000});
+  await page.locator('#wholesale-item-form [name=customerId]').selectOption(wholesaleCustomer.id);
+  const saleProductOption=await page.locator('#wholesale-item-form [name=productId] option')
+    .filter({hasText:'Produto Web QA'}).first().getAttribute('value');
+  assert.ok(saleProductOption,'the canonical catalog product must be selectable for wholesale');
+  await page.locator('#wholesale-item-form [name=productId]').selectOption(saleProductOption);
+  await page.locator('#wholesale-item-form [name=quantity]').fill('2');
+  await page.locator('#wholesale-item-form button[type=submit]').click();
+  await page.locator('[data-wholesale-cart]').getByText('Produto Web QA').waitFor({timeout:12000});
+  assert.match(await page.locator('[data-wholesale-cart]').innerText(),/25,80/,
+    'tier-quote browser UI must display the actual extended total in reais');
+  await page.locator('#wholesale-create-order').click();
+  await page.locator('[data-wholesale-orders] [data-order]').first().waitFor({timeout:12000});
+  assert.match(await page.locator('[data-wholesale-orders]').innerText(),/Atacado QA de navegador/);
+  await page.locator('[data-wholesale-orders] [data-order-action=confirm]').first().click();
+  await page.locator('[data-wholesale-orders]').getByText('Confirmado').first().waitFor({timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-wholesale-policy-r1.png',fullPage:true});
+
   assert.deepEqual(unexpectedHttp,[],'unexpected online HTTP errors');
   assert.deepEqual(errors,[],'online browser console or script failures');
   // P5: An offline reload may display only cached public UI. Never queue or cache sales.
