@@ -28,6 +28,10 @@ a API de pareamento está indisponível fora de LAN_MODE=true.
   verificação de integridade, restore de ensaio para NOVO destino, sem
   sobrescrever o banco em uso.
 
+## Estado de evidência reclassificado em 18/10/2026
+
+**14/14 capacidades de R2 estão como `partial`**, pois há código operacional e testes automatizados apontados no inventário canônico; isso não certifica 14/14 de paridade desktop. Nenhum equipamento físico é requisito para a prontidão do código. A consulta atualizada está em `npm run report:parity`.
+
 ## Rastreabilidade dos 14 IDs
 
 | ID | Escopo e prova atualmente disponível | Lacuna de código / evidência executável |
