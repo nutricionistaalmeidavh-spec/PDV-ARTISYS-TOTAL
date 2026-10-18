@@ -15,7 +15,7 @@ Data: 2026-10-18. Baseline desktop: `7efea9c61f75be1536a1e516e917218f2b8bf2bf`.
 | cap-036 | Pizzaria: tamanhos, sabores, bordas e preços | Core `pizzeria` e UI existente | Não implementado na API D1 nesta entrega |
 | cap-037 | Delivery, retirada e balcão | Core `delivery`, UI existente | Cancelamento pré-produção, checkout canônico de entrega/retirada concluída; fluxo detalhado de entregadores ainda pendente |
 | cap-038 | Pedidos unificados, senhas e histórico legado | Core `food-order`, UI existente | Cancelamento idempotente; senhas/histórico D1 pendentes |
-| cap-039 | Padaria e itens por peso | Core de pesagem e padaria | Paridade de balança física pendente |
+| cap-039 | Padaria e itens por peso | Core de pesagem e padaria | Paridade do protocolo de pesagem emulado pendente |
 | cap-041 | Onboarding por segmento/módulos | Registro de módulos e primeira entrada | Recomendações e gestão web D1 pendentes |
 | cap-048 | Chamados de garçom e conta | Core `restaurant-service` | Chamados persistidos e transições autorizadas |
 | cap-049 | Relatórios restaurante e CSV | Core `restaurant-reporting-service` | Resumo por filial e período e CSV operacional |
@@ -44,7 +44,7 @@ Migrações incrementais `0021_r4_restaurant_operations.sql` (chamados) e `0022_
 2. A venda canônica já é reutilizada para cobrança integral de uma comanda ou pedido entregue; faltam divisão parcial de conta, taxa de serviço configurável, transferência de itens e aceites de conciliação do desktop.
 3. Igualar mesa, operação de garçom, KDS por estação, roteamento por produto e impressão à baseline desktop, incluindo dispositivos autorizados e recuperação após falhas.
 4. Portar as políticas de pizza, delivery/retirada/senha, histórico, padaria/balança, ficha técnica e onboarding de módulos sem duplicação da autoridade de vendas.
-5. Provar acessos de todos os perfis, isolamento multiempresa, concorrência, falhas e dispositivo físico quando aplicável; executar testes navegadores PC/tablet/celular e homologação independente.
+5. Provar acessos de todos os perfis, isolamento multiempresa, concorrência, falhas e periféricos emulados quando aplicável; executar testes Chromium responsivos e revisão independente de código.
 
 **Não rotular R4 como integral** antes de concluir estes critérios e atualizar evidências canônicas com a execução da CI no SHA exato.
 
@@ -52,7 +52,7 @@ Migrações incrementais `0021_r4_restaurant_operations.sql` (chamados) e `0022_
 
 A rota existente `FOOD` da PWA usa agora `apps/web/restaurant-web-ui.js` com guias Mesas, Pedidos, KDS, Chamados e Relatórios. Mantém os recursos exclusivos do desktop isolados; a migração do roteamento não muda o domínio desktop. Pedidos podem virar venda somente quando entregues e um fechamento de mesa com pedidos entregues exige o estado `COMPLETED` no único registro de vendas.
 
-A mesma venda contém itens de pedidos operacionais congelados, `restaurant_sale_links` impede criação de duas vendas por comanda/pedido e `GET .../checkout` permite recuperar uma cobrança iniciada antes de uma falha. A cobrança ainda depende de caixa aberto no terminal (sem abrir caixa implicitamente). Estorno, split por participante, composição de pizza e balança precisam ser homologados antes de paridade integral.
+A mesma venda contém itens de pedidos operacionais congelados, `restaurant_sale_links` impede criação de duas vendas por comanda/pedido e `GET .../checkout` permite recuperar uma cobrança iniciada antes de uma falha. A cobrança ainda depende de caixa aberto no terminal (sem abrir caixa implicitamente). Estorno, split por participante, composição de pizza e balança exigem testes de integração/protocolo, concorrência e paridade antes de completar o código.
 
 Novas rotas de recuperação:
 - `GET /api/v1/tenants/:tenant/restaurant/sessions/:session/checkout?branchId=:branch`
@@ -70,12 +70,12 @@ Os contratos novos ampliam o R4, mas não equivalem automaticamente à certifica
 | cap-031 | Transferência de mesa e de itens sem duplicar pedido | Concorrência multicaixa |
 | cap-032 | Divisão igual, taxa de serviço explícita e recebimentos na venda única | Demais políticas de split desktop |
 | cap-033 | Um único checkout com idempotência, estoque e caixa | Retornos e conciliação completa |
-| cap-034 | Estações KDS, rotas por produto, nome da impressora | Impressão física, spool e reconexão |
+| cap-034 | Estações KDS, rotas por produto, nome da impressora | Contrato de impressão emulado, spool e reconexão simulada |
 | cap-035 | Compartilhamento de KDS por pedidos/canais | Alteração de rotas após expedição |
 | cap-036 | Pizza por tamanho, sabores, borda e preço servidor | Múltiplas configurações do mesmo SKU no caixa |
 | cap-037 | Delivery, retirada, balcão, despacho/entregador | Estados e responsabilidades desktop |
 | cap-038 | Pedidos e senhas diárias opcionais | Importação/histórico legado |
-| cap-039 | Preço por grama/kg e pedido padaria pelo balcão | Balança e etiqueta física |
+| cap-039 | Preço por grama/kg e pedido padaria pelo balcão | Contrato de balança e etiqueta simulados |
 | cap-041 | Segmento escolhido, módulos recomendados separadamente | Fluxo de primeiro acesso |
 | cap-048 | Chamado garçom/conta com estados e RBAC | QA completo UI e desktop |
 | cap-049 | Resumo operacional por filial e CSV | Reconciliação com relatórios desktop |
