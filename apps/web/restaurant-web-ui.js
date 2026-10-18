@@ -20,7 +20,44 @@
  const btn=(label,what,id='',extra='')=>'<button class="secondary-button" type="button" data-r4-action="'+esc(what)+'" data-id="'+esc(id)+'" '+extra+'>'+esc(label)+'</button>';
  const form=async(endpoint,body)=>action(endpoint,'POST',body);
  function back(){return '<button type="button" class="secondary-button" data-r4-action="back">← Alimentação</button>';}
- function orderLines(order){return (order.items||[]).map(i=>esc(i.name||i.productName)+' × '+esc(i.quantity)).join(', ')||'Nenhum item';}
+ function orderLines(order){return (order.items||[]).map(i=>esc(i.name||i.productName)+' × '+esc(i.quantity)+
+   (i.configuration?.flavors?.length?' ('+esc(i.configuration.flavors.map(x=>x.name).join(' / '))+')':'')).join(', ')||'Nenhum item';}
+ function orderItemRow(){
+   return '<div class="restaurant-card" data-r4-order-item>'+
+     '<label class="field"><span>Produto</span><select name="productId" required>'+state.products.filter(p=>p.active!==false).map(p=>
+       '<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('')+'</select></label>'+
+     field('Quantidade','quantity','number','min="0.001" step="0.001" value="1" required')+
+     '<div data-r4-pizza-options aria-live="polite"></div>'+
+     '<button type="button" class="secondary-button" data-r4-remove-line>Remover item</button></div>';
+ }
+ async function preparePizzaRow(row){
+   const select=row.querySelector('[name="productId"]'),output=row.querySelector('[data-r4-pizza-options]');
+   if(!select||!output)return;
+   const id=select.value;
+   row.dataset.r4PizzaState='loading';output.textContent='Consultando configurações do produto…';
+   try{
+     const response=await action('/pizzeria/products/'+encodeURIComponent(id));
+     if(select.value!==id)return;
+     const profile=response.profile;
+     if(!profile){row.dataset.r4PizzaState='none';output.textContent='';return;}
+     row.dataset.r4PizzaState='configured';
+     row.dataset.r4MaxFlavors=String(profile.maxFlavors||4);
+     output.innerHTML='<fieldset><legend>Monte a pizza</legend>'+
+       '<label class="field"><span>Tamanho</span><select name="sizeCode" required>'+profile.sizes.map(x=>
+         '<option value="'+esc(x.code)+'">'+esc(x.name)+'</option>').join('')+'</select></label>'+
+       '<fieldset><legend>Sabores (até '+esc(profile.maxFlavors)+')</legend>'+profile.flavors.map(x=>
+         '<label><input type="checkbox" name="flavorCodes" value="'+esc(x.code)+'"> '+esc(x.name)+'</label>').join('')+'</fieldset>'+
+       '<label class="field"><span>Borda</span><select name="crustCode"><option value="">Sem borda</option>'+
+       profile.crusts.map(x=>'<option value="'+esc(x.code)+'">'+esc(x.name)+'</option>').join('')+'</select></label></fieldset>';
+   }catch(e){if(select.value!==id)return;row.dataset.r4PizzaState='error';output.textContent='Não foi possível carregar opções de pizza. Atualize ou selecione outro produto.';}
+ }
+ function bindOrderRow(row){
+   row.querySelector('[name="productId"]')?.addEventListener('change',()=>void preparePizzaRow(row));
+   row.querySelector('[data-r4-remove-line]')?.addEventListener('click',()=>{
+     if(row.closest('form')?.querySelectorAll('[data-r4-order-item]').length>1)row.remove();
+   });
+   void preparePizzaRow(row);
+ }
  function title(value){return ({TABLE:'Mesa',PICKUP:'Retirada',DELIVERY:'Entrega',OPEN:'Aberto',READY:'Pronto',DELIVERED:'Entregue',CANCELLED:'Cancelado',NEW:'Novo',PREPARING:'Preparando',ACKNOWLEDGED:'Em atendimento',CLOSED:'Finalizado',WAITER:'Garçom',BILL:'Conta'})[value]||value;}
  async function load(){
    const [tables,orders,tickets,stationTickets,requests,products,report]=await Promise.all([
