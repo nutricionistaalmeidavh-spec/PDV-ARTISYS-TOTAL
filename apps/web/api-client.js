@@ -357,8 +357,8 @@
     updateSaleItem(id, productId, quantity) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/items/${encodeURIComponent(productId)}`, { method: 'PUT', body: { quantity }, mutationId: this.mutationId() }); }
     overrideSaleItemPrice(id, itemId, body) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/price`, { method: 'PUT', body }); }
     setSaleItemNote(id,itemId,note,mutationId=this.mutationId()){return this.request(`/api/v1/sales/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/note`,{method:'PUT',body:{note},mutationId});}
-    removeSaleItem(id, productId) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/items/${encodeURIComponent(productId)}`, { method: 'DELETE' }); }
-    discountSale(id, discountCents) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/discount`, { method: 'POST', body: { discountCents } }); }
+    removeSaleItem(id, productId) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/items/${encodeURIComponent(productId)}`, { method: 'DELETE', mutationId: this.mutationId() }); }
+    discountSale(id, discountCents) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/discount`, { method: 'POST', body: { discountCents }, mutationId: this.mutationId() }); }
     suspendSale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/suspend`, { method: 'POST', body: {}, mutationId: this.mutationId() }); }
     resumeSale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/resume`, { method: 'POST', body: {}, mutationId: this.mutationId() }); }
     completeSale(id, payments) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/complete`, { method: 'POST', body: { payments }, mutationId: this.mutationId() }); }
