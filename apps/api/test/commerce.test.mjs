@@ -2421,3 +2421,40 @@ test('R1 cart mutations use operation receipts: delayed item, discount and remov
     assert.equal(ledger.results.length>=3,true);
   }finally{x.close();}
 });
+
+test('R1 checkout-011/012: replayed customer and seller selections cannot reverse newer edits',async()=>{
+ const x=await setup();try{
+  const a=await x.write('a','customers',{branchId:'branch-a',name:'Cliente Alpha'});
+  const b=await x.write('a','customers',{branchId:'branch-a',name:'Cliente Beta'});
+  assert.equal(a.status,201);assert.equal(b.status,201);
+  const first=a.body.customer.id,second=b.body.customer.id;
+  const opened=await x.write('a','sales',{branchId:'branch-a'});
+  assert.equal(opened.status,201);
+  const id=opened.body.sale.id;
+  const customerPath='sales/'+id+'/customer',sellerPath='sales/'+id+'/seller';
+  const customerKey=next(),sellerKey=next();
+  assert.equal((await x.write('a',customerPath,{branchId:'branch-a',customerId:first},{key:customerKey})).status,200);
+  assert.equal((await x.write('a',customerPath,{branchId:'branch-a',customerId:second})).status,200);
+  assert.equal((await x.write('a',customerPath,{branchId:'branch-a',customerId:first},{key:customerKey})).status,200);
+  assert.equal((await x.get('a','sales/'+id+'?branchId=branch-a')).body.sale.customerId,second,
+    'out-of-order HTTP replay must not reassign an older customer');
+  assert.equal((await x.write('a',sellerPath,{branchId:'branch-a',sellerId:'viewer'},{key:sellerKey})).status,200);
+  assert.equal((await x.write('a',sellerPath,{branchId:'branch-a',sellerId:'owner'})).status,200);
+  assert.equal((await x.write('a',sellerPath,{branchId:'branch-a',sellerId:'viewer'},{key:sellerKey})).status,200);
+  assert.equal((await x.get('a','sales/'+id+'?branchId=branch-a')).body.sale.sellerId,'owner',
+    'out-of-order HTTP replay must not overwrite the newest commission recipient');
+  assert.equal((await x.write('a',customerPath,{branchId:'branch-a',customerId:second},{key:customerKey})).status,409,
+    'same mutation ID with different customer is a conflict');
+  assert.equal((await x.write('a',sellerPath,{branchId:'branch-a',sellerId:'owner'},{key:sellerKey})).status,409,
+    'same mutation ID with different seller is a conflict');
+  assert.equal((await x.write('a',sellerPath,{branchId:'branch-a',sellerId:'viewer'},{who:x.viewer})).status,403,
+    'read-only user cannot change seller and commissions');
+  assert.equal((await x.write('b',sellerPath,{branchId:'branch-b',sellerId:'viewer'},{who:x.other})).status,404,
+    'other tenant must not access sale');
+  const noKey=await x.call(x.path('a',customerPath),{cookie:x.owner,body:{branchId:'branch-a',customerId:first},method:'POST'});
+  assert.equal(noKey.status,400,'every person/seller mutation must be traceable and retry-safe');
+  const receipts=await x.db.prepare("SELECT COUNT(*) AS n FROM commerce_mutations WHERE tenant_id=? AND scope IN (?,?)")
+    .bind('a','sale.customer:'+id,'sale.seller:'+id).first();
+  assert.equal(receipts.n,4,'each distinct accepted selection has one transaction receipt');
+ }finally{x.close();}
+});
