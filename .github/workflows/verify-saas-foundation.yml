@@ -31,6 +31,10 @@ on:
       - 'scripts/web-browser-e2e.mjs'
       - 'scripts/r2-deploy.mjs'
       - 'scripts/r2-lan-browser-e2e.mjs'
+      - 'scripts/parity-docs.test.mjs'
+      - 'README.md'
+      - 'docs/ROADMAP-PARIDADE-56.md'
+      - 'docs/WEB-PERIPHERALS.md'
       - '.github/workflows/verify-saas-foundation.yml'
   workflow_dispatch:
 
