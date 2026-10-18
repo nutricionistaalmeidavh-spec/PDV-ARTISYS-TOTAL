@@ -358,12 +358,15 @@
             ${metric('Devoluções',ui.formatCents(data.refundedCents))}
             ${metric('Caixa da filial',data.cashOpen?'Aberto':'Fechado')}
             ${metric('Sem estoque disponível',String(data.outOfStockCount))}
+            ${metric('Abaixo do mínimo cadastrado',String(data.belowMinimumCount||0))}
           </div>
           <p class="ops-muted">Dados do caixa, vendas e estoque canônicos. ${
             data.stockCoverageUnknown?'Sem base de consumo para estimar cobertura de '+data.stockCoverageUnknown+' produto(s).':
             'Cobertura estimada a partir de movimentações reais.'}</p>
           ${data.outOfStockCount>0?`<p role="alert">${data.outOfStockCount}
             produto(s) sem disponibilidade após reservas. Consulte Estoque.</p>`:''}
+          ${data.belowMinimumCount>0?`<p role="alert">${data.belowMinimumCount}
+            produto(s) abaixo do mínimo cadastrado nesta filial. Consulte Cobertura do estoque.</p>`:''}
           ${!data.cashOpen?'<p class="ops-muted">Não existe caixa aberto nesta filial.</p>':''}`;
       }).catch(error=>{
         if(host?.isConnected&&document.body.dataset.activeRoute==='home')
