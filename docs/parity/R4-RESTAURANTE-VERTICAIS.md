@@ -6,7 +6,7 @@ Data: 2026-10-18. Baseline desktop: `7efea9c61f75be1536a1e516e917218f2b8bf2bf`.
 
 **Regra de fechamento R4:** validação exclusivamente por software: API, UI web/PWA, SQLite self-hosted, D1 local, testes de perfil/filial, concorrência, recuperação, protocolos simulados e comparação executável com a referência desktop. **Impressoras, balanças, leitores, tablets e terminais físicos não fazem parte do gate, do merge nem da classificação `covered`.** Uma inspeção de instalação em campo pode ocorrer posteriormente, em checklist opcional e separado.
 
-As capacidades abaixo permanecem com os **estados da matriz canônica**, e não estados inferidos da existência de implementação. Na matriz atual: **0/13 certificadas `covered`; 2 `partial` (cap-032, cap-033); 11 `gap` de evidência.** `gap` não significa necessariamente que o recurso esteja sem código.
+As capacidades abaixo permanecem com os **estados da matriz canônica**, e não estados inferidos da existência de implementação. Na matriz auditada de 18/10/2026: **0/13 certificadas `covered`; 13/13 `partial` com referência ao subconjunto implementado/testado**. `partial` não significa ausência de código: a comparação integral com todos os comportamentos da origem ainda precisa ser demonstrada por software, sem teste físico.
 
 | ID | Fluxo | Código existente / aceite que falta comprovar em software |
 |---|---|---|
