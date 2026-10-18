@@ -17,6 +17,7 @@ on:
       - 'scripts/parity-rules.mjs'
       - 'scripts/parity-rules.test.mjs'
       - 'scripts/report-xlsx.test.mjs'
+      - 'scripts/smoke-selfhosted.mjs'
       - 'scripts/web-browser-e2e.mjs'
       - '.github/workflows/verify-saas-foundation.yml'
   workflow_dispatch:
@@ -51,6 +52,8 @@ jobs:
       - name: Test real SQLite isolation and canonical identity
         working-directory: apps/api
         run: npm test
+      - name: Smoke real self-hosted PWA and SQLite API on one origin
+        run: node scripts/smoke-selfhosted.mjs
       - name: Smoke test offline self-hosted provisioning
         working-directory: apps/api
         env:
