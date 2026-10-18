@@ -86,6 +86,39 @@ test('P3 commerce: tenant isolation, canonical permissions, unique SKU and no am
   }finally{x.close();}
 });
 
+test('P2 inventory count is tenant-scoped, idempotent, zero-aware and rejects stale stock',async()=>{
+  const x=await setup();try{
+    const productId=await x.id('Inventário físico','COUNT-1',5);
+    const path='inventory/counts',key=next();
+    const count={branchId:'branch-a',productId,expectedQuantity:5,countedQuantity:3,
+      reason:'Contagem física conferida'};
+    const first=await x.write('a',path,count,{key});
+    assert.equal(first.status,201,first.body.error);
+    assert.equal(first.body.count.quantityDelta,-2);
+    assert.deepEqual((await x.write('a',path,count,{key})).body,first.body,
+      'retry of the same mutation must return the prior result');
+    const balance=async()=>((await x.get('a','inventory?branchId=branch-a')).body.stock
+      .find(s=>s.productId===productId)?.quantity??0);
+    assert.equal(await balance(),3);
+    const movements=await x.db.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE tenant_id='a' AND product_id=? AND type='adjustment'").bind(productId).first();
+    assert.equal(movements.n,1,'no duplicate ledger effects');
+    assert.equal((await x.write('a',path,{...count,countedQuantity:0})).status,409,
+      'stale expected balance must be rejected');
+    assert.equal(await balance(),3);
+    assert.equal((await x.write('a',path,{...count,expectedQuantity:3,countedQuantity:0})).status,201);
+    assert.equal(await balance(),0,'physical zero is valid');
+    const zero=await x.write('a',path,{...count,expectedQuantity:0,countedQuantity:0});
+    assert.equal(zero.status,201,zero.body.error);
+    assert.equal(zero.body.count.movementId,null,'no fake zero-delta ledger entry');
+    assert.equal((await x.write('a',path,{...count,expectedQuantity:0,countedQuantity:2})).status,201);
+    assert.equal(await balance(),2);
+    assert.equal((await x.write('a',path,{...count,expectedQuantity:2,countedQuantity:1.0001})).status,400);
+    assert.equal((await x.write('a',path,{...count,expectedQuantity:2,countedQuantity:1},{who:x.viewer})).status,403);
+    assert.equal((await x.write('b',path,{...count,branchId:'branch-b',expectedQuantity:0,countedQuantity:1},{who:x.other})).status,404);
+    assert.equal((await x.get('b','inventory?branchId=branch-b',x.other)).body.stock.length,0);
+  }finally{x.close();}
+});
+
 test('P3 immutable stock ledger: receipt is idempotent and balance is projection',async()=>{
   const x=await setup();try{
     const product=await x.write('a','products',{branchId:'branch-a',name:'Mouse',sku:'M1',salePriceCents:1500});
