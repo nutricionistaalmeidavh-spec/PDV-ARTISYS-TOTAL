@@ -316,6 +316,12 @@
       try { await restoreCheckoutState(); } catch (error) { showToast(error.message, 'error'); }
     }
     await renderRoute(); content.focus({ preventScroll: true });
+    // Desktop keeps the route accessible; web reports have a selected keyboard
+    // tab whose focus must be restored AFTER route-level focus is applied.
+    if(api.webMode&&route==='reports'&&state.route===route){
+      content.querySelector('[data-report-web][aria-selected="true"]')
+        ?.focus({preventScroll:true});
+    }
     window.PdvUiLifecycle?.emit('route:focus-ready',{route,
       scope:String(api.tenantId||'')+'|'+String(api.branchId||'')+'|'+String(state.user?.id||'')});
   }
