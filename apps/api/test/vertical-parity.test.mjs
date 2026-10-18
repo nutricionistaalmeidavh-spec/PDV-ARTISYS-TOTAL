@@ -8,7 +8,7 @@ import {hashPassword} from '../src/password.mjs';
 const origin='https://pdvtotal.test';
 async function setup(){
   const db=openLocalDatabase();
-  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0021_r4_restaurant_operations.sql','0022_r4_restaurant_checkout.sql'])
+  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0021_r4_restaurant_operations.sql','0022_r4_restaurant_checkout.sql','0023_r4_extended_verticals.sql'])
     db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
   const stamp='2026-10-17T12:00:00.000Z';
   const h=await hashPassword('Senha-de-teste-123!');
@@ -285,5 +285,61 @@ test('R4 cap-033/cap-037: retirada vira exatamente uma venda com preços congela
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM cash_movements WHERE tenant_id=?').bind('a').first()).n,1);
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,1);
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM restaurant_sale_links WHERE tenant_id=?').bind('a').first()).n,1);
+ }finally{x.close();}
+});
+
+test('R4 cap-034/035: KDS routes independently to production stations; one order remains canonical',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Prato KDS',sku:'R4KDS',salePriceCents:2600,trackStock:false})).body.product;
+   const station=await x.request('a','restaurant/kitchen/stations','POST',{branchId:'filial-a',name:'Grelha',printerName:'cozinha-1',printEnabled:false});
+   assert.equal(station.status,201,JSON.stringify(station.body));
+   const sid=station.body.station.id;
+   const route=await x.request('a','restaurant/kitchen/routes','POST',{branchId:'filial-a',productId:p.id,mode:'PRODUCTION',stationId:sid});
+   assert.equal(route.status,201,JSON.stringify(route.body));
+   const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:p.id,quantity:2}]})).body.order;
+   const tickets=(await x.request('a','restaurant/kitchen/station-tickets?branchId=filial-a')).body.tickets;
+   assert.equal(tickets.length,1);assert.equal(tickets[0].stationId,sid);assert.equal(tickets[0].orderId,order.id);
+   assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,409);
+   const ticket=tickets[0].id;
+   assert.equal((await x.request('a',`restaurant/kitchen/station-tickets/${ticket}`,'PATCH',{branchId:'filial-a',status:'READY'})).status,409);
+   assert.equal((await x.request('a',`restaurant/kitchen/station-tickets/${ticket}`,'PATCH',{branchId:'filial-a',status:'PREPARING'})).status,200);
+   assert.equal((await x.request('a',`restaurant/kitchen/station-tickets/${ticket}`,'PATCH',{branchId:'filial-a',status:'READY'})).status,200);
+   assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+   assert.equal((await x.request('b','restaurant/kitchen/station-tickets?branchId=filial-b','GET',undefined,{as:'b'})).body.tickets.length,0);
+ }finally{x.close();}
+});
+
+test('R4 cap-036: pizza profiles and flavor pricing are tenant-isolated and integer cents',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Pizza',sku:'R4PIZZA',salePriceCents:2000,trackStock:false})).body.product;
+   const profile=await x.request('a','restaurant/pizzeria/profiles','POST',{branchId:'filial-a',productId:p.id,policy:'HIGHEST_FLAVOR',
+     sizes:[{code:'M',name:'Média',priceCents:3000}],
+     flavors:[{code:'MARG',name:'Marguerita',priceCents:3600},{code:'CAL',name:'Calabresa',priceCents:4200}],
+     crusts:[{code:'CAT',name:'Catupiry',priceCents:600}]});
+   assert.equal(profile.status,201,JSON.stringify(profile.body));
+   const quote=await x.request('a','restaurant/pizzeria/quote','POST',{branchId:'filial-a',productId:p.id,sizeCode:'M',flavorCodes:['MARG','CAL'],crustCode:'CAT'});
+   assert.equal(quote.status,200,JSON.stringify(quote.body));
+   assert.equal(quote.body.quote.unitPriceCents,4800);
+   assert.equal((await x.request('a','restaurant/pizzeria/quote','POST',{branchId:'filial-a',productId:p.id,sizeCode:'M',flavorCodes:['MARG','MARG']})).status,400);
+   const avg=await x.request('a','restaurant/pizzeria/profiles','POST',{branchId:'filial-a',productId:p.id,policy:'PROPORTIONAL_AVERAGE',
+     sizes:[{code:'M',name:'Média',priceCents:3000}],
+     flavors:[{code:'MARG',name:'Marguerita',priceCents:3600},{code:'CAL',name:'Calabresa',priceCents:4200}],crusts:[]});
+   assert.equal(avg.status,201,JSON.stringify(avg.body));
+   assert.equal((await x.request('a','restaurant/pizzeria/quote','POST',{branchId:'filial-a',productId:p.id,sizeCode:'M',flavorCodes:['MARG','CAL']})).body.quote.unitPriceCents,3900);
+   assert.equal((await x.request('b','restaurant/pizzeria/profiles?branchId=filial-b','GET',undefined,{as:'b'})).body.profiles.length,0);
+ }finally{x.close();}
+});
+
+test('R4 cap-039/041: peso in grams priced safely and segment recommendations do not create duplicate sales',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Pão a peso',sku:'R4PESO',salePriceCents:2999,unit:'KG',trackStock:false})).body.product;
+   const price=await x.request('a','restaurant/weight/quote','POST',{branchId:'filial-a',productId:p.id,grams:450});
+   assert.equal(price.status,200,JSON.stringify(price.body));
+   assert.equal(price.body.quote.totalCents,1350);
+   assert.equal((await x.request('a','restaurant/weight/quote','POST',{branchId:'filial-a',productId:p.id,grams:-5})).status,400);
+   const rec=await x.request('a','restaurant/segments?branchId=filial-a');
+   assert.equal(rec.status,200,JSON.stringify(rec.body));
+   assert.ok(rec.body.segments.some(s=>s.id==='RESTAURANT'));
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,0);
  }finally{x.close();}
 });
