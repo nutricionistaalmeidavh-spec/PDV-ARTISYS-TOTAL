@@ -843,7 +843,7 @@
         {
           "id": "cash-046",
           "name": "Sessões independentes por terminal no mesmo ponto de venda",
-          "status": "partial",
+          "status": "covered",
           "owner": "cash",
           "dependsOn": [
             "cash-040"
@@ -853,9 +853,11 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async cash(tenant,branch,terminalId='DEFAULT')",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 independent terminal drawers link every sale"
+            "testContains": "test('cash-046 P3 independent terminal drawers",
+            "testAssertionContains": "assert.notEqual(cashA,cashB);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Sessões e vendas associadas a terminais separados no mesmo estabelecimento, reembolso e auditoria. Pendem cadastro/identidade gerenciada, migração de caixa legado quando houver dados e concorrência/revogação simuladas. Não depende de dois computadores reais."
+          "reviewNote": "Cobertura de software: duas sessões de caixa no mesmo PDV, vendas vinculadas ao caixa correto, fechamento isolado, restituição em outro terminal, separação entre empresas e rejeição de ID inválido; teste Node real com SQLite. Equipamento físico opcional."
         }
       ]
     },
