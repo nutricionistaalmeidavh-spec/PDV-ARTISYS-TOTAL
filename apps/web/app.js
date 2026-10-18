@@ -366,6 +366,7 @@
             ${metric('Vendas líquidas do mês',ui.formatCents(data.monthToDateNetSalesCents||0))}
             ${data.monthlyTargetCents!=null?metric('Meta comercial mensal',
               ui.formatCents(data.monthlyTargetCents))+
+              metric('Vendas dos vendedores com meta',ui.formatCents(data.targetedSellerNetCents||0))+
               metric('Atingimento da meta',data.targetProgressPercent.toLocaleString('pt-BR')+'%'):
               metric('Meta comercial mensal','Não cadastrada')}
           </div>
