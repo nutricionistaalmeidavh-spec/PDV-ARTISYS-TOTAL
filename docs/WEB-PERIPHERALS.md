@@ -1,6 +1,6 @@
 # Periféricos na versão web — contrato e homologação
 
-Esta implementação opera **no navegador do terminal**: a API Cloudflare/D1 mantém a venda, produtos, estoque e caixa canônicos. O acesso físico ao hardware não pertence ao Worker e não tem API remota capaz de abrir gavetas ou portas seriais da loja.
+A implementação opera no navegador do terminal e, quando selecionado, em um **conector local open source** restrito ao `127.0.0.1`. A venda, produtos, estoque e caixa continuam canônicos na API Node.js + SQLite self-hosted **ou** Workers/D1 opcional. Nenhum Worker remoto pode controlar diretamente portas seriais da loja. O conector local não cria um segundo backend comercial.
 
 ## Operação gratuita
 
@@ -24,12 +24,12 @@ Nenhum comando de periférico é emitido por alteração de banco ou job em back
 | Urano US31/2 POP-S com protocolo 9600/8N2 e 0x04/0x05 | Parser de quadros USE-P2/USE-CB2 migrado e coberto por testes; sem homologação com equipamento físico |
 | Safari/iOS/Firefox sem Web Serial | Entrada manual; sem acesso direto serial |
 | Térmica USB driver do SO | Pelo diálogo de impressão; impressão silenciosa fora do escopo |
-| Impressão silenciosa, filas de jobs com retry persistente, seleção programática de impressora | Exigem **agente local opcional**, nunca simular por Cloudflare |
+| Conector local de impressão com fila persistente, reenvio controlado e spooler do SO | **Implementado parcialmente** em `tools/local-hardware-bridge/`; não garante saída física nem paridade universal de drivers |
 | Fiscal NFC-e/NF-e e TEF | Não implementados neste adaptador de periféricos |
 
 ## Próxima etapa de paridade total
 
-- Criar agente local open source/self-hosted **opcional**, pareado por terminal com lista restrita de comandos e autenticação, sem porta pública na LAN, compatível com adaptadores existentes; eliminar duplicação e reportar resultado real do spooler.
+- **Aprimorar e certificar** o conector local open source/self-hosted já existente em `tools/local-hardware-bridge/`: autenticação por terminal, bind loopback, fila SQLite e estados `PENDING`, `SUBMITTING`, `SUBMITTED`, `FAILED` e `UNCERTAIN` já estão documentados. Validar paridade do driver/protocolo, sem assumir sucesso físico ao obter aceitação do spooler.
 - Validar leitura em equipamento Urano físico; o parser foi portado com reconhecimento de frames e testes automatizados, mas compatibilidade física permanece não homologada.
 - Projetar job canônico tenant/filial/terminal com idempotência e tentativas auditáveis no D1; impedir impressão duplicada ao repetir a venda, sem inventar impressão enviada.
 - Homologar equipamento físico com fabricante/modelo/firmware, 58/80 mm, corte, gaveta, desconexão, replug, falha de driver, retomada e impressão concorrente.

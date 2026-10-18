@@ -29,6 +29,12 @@ on:
       - 'scripts/parity-desktop-pricing.test.mjs'
       - 'scripts/audit-parity-evidence.mjs'
       - 'scripts/web-browser-e2e.mjs'
+      - 'scripts/r2-deploy.mjs'
+      - 'scripts/r2-lan-browser-e2e.mjs'
+      - 'scripts/parity-docs.test.mjs'
+      - 'README.md'
+      - 'docs/ROADMAP-PARIDADE-56.md'
+      - 'docs/WEB-PERIPHERALS.md'
       - '.github/workflows/verify-saas-foundation.yml'
   workflow_dispatch:
 
@@ -40,6 +46,16 @@ permissions:
   contents: read
 
 jobs:
+  r2-windows-deployment:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify free Windows local server and terminal deployment profiles
+        run: node --experimental-sqlite --test apps/api/test/r2-deployment-profiles.test.mjs
   identity-and-cloudflare:
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -159,6 +175,8 @@ jobs:
           node scripts/smoke-workerd.mjs
       - name: E2E original PDV renderer in Chromium (desktop + mobile)
         run: node scripts/web-browser-e2e.mjs
+      - name: R2 self-hosted HTTPS LAN mobile pairing, revocation, offline/reconnection E2E
+        run: node --experimental-sqlite scripts/r2-lan-browser-e2e.mjs
       - name: Save independently auditable P0 parity evidence
         if: always()
         uses: actions/upload-artifact@v4

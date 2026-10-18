@@ -2277,6 +2277,34 @@ function openCategoryForm() {
     window.PdvCurrentAccess=state.user;
     updateTopbar();
     setOnline(true);
+    // Self-hosted LAN requires device pairing before business reads. Avoid
+    // blocking the first authenticated login by querying catalog/cash too early.
+    const health=await api.health();
+    if(health.lanMode===true){
+      const localKey='pdv-total-r2-device-'+api.tenantId;
+      const deviceId=window.localStorage?.getItem(localKey+'-id');
+      const credential=window.localStorage?.getItem(localKey+'-credential');
+      let authorized=false;
+      if(deviceId&&credential){
+        try{
+          const checked=await api.request('/api/v1/tenants/'+encodeURIComponent(api.tenantId)+'/lan/devices/check',{
+            method:'POST',body:{id:deviceId,credential}
+          });
+          authorized=Boolean(checked?.device?.active);
+        }catch{
+          window.localStorage?.removeItem(localKey+'-id');
+          window.localStorage?.removeItem(localKey+'-credential');
+        }
+      }
+      if(!authorized){
+        state.products=[];state.categories=[];state.customers=[];state.sellers=[];state.cashSession=null;
+        renderSidebar();
+        authOverlay.classList.add('hidden');authOverlay.innerHTML='';
+        await navigate('settings');
+        window.PdvUiLifecycle?.emit('auth:hidden',{reason:'lan-pairing-required'});
+        return;
+      }
+    }
     await loadCommonData();
     renderSidebar();
     authOverlay.classList.add('hidden');authOverlay.innerHTML='';
