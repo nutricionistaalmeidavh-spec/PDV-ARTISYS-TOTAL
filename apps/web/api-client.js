@@ -112,7 +112,8 @@
       try{response=await root.fetch(target,{method,credentials:'same-origin',headers,
         ...(['GET','HEAD'].includes(method)?{}:{body:JSON.stringify(payload)})});}
       catch{throw new Error('Sem conexão. Seus dados permanecem na tela; tente novamente.');}
-      let value;try{value=await response.json();}catch{value={};}
+      const isCsv=response.headers.get('content-type')?.includes('text/csv');
+      let value;try{value=isCsv?await response.text():await response.json();}catch{value={};}
       if(!response.ok){
         const e=new Error(value.error||'Não foi possível concluir a operação.');
         e.status=response.status;

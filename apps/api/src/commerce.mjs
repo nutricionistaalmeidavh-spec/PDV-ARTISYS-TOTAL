@@ -1151,6 +1151,14 @@ export function createCommerceService(db,{now=nowISO}={}){
       const seller=await first('SELECT user_id FROM tenant_memberships WHERE tenant_id=? AND user_id=? AND active=1',tenant,sellerId);
       if(!seller)throw error(404,'Vendedor não encontrado neste estabelecimento.');
       const wholesaleId=body?.wholesaleOrderId||null;
+      const restaurantSessionId=body?.restaurantSessionId||null;
+      const restaurantOrderId=body?.restaurantOrderId||null;
+      if([wholesaleId,restaurantSessionId,restaurantOrderId].filter(Boolean).length>1)
+        throw error(400,'Escolha apenas uma origem de cobrança.');
+      if(restaurantSessionId&&(typeof restaurantSessionId!=='string'||restaurantSessionId.length>128)||
+         restaurantOrderId&&(typeof restaurantOrderId!=='string'||restaurantOrderId.length>128))
+        throw error(400,'Identificador de comanda ou pedido inválido.');
+      let restaurantCheckout=null;
       let order=null,quoted=[];
       if(wholesaleId){
         order=await first('SELECT id,customer_id,status,sale_id FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND id=?',tenant,branch,wholesaleId);
@@ -1161,8 +1169,44 @@ export function createCommerceService(db,{now=nowISO}={}){
           WHERE w.tenant_id=? AND w.branch_id=? AND w.order_id=? ORDER BY w.rowid`,tenant,branch,wholesaleId);
         if(!quoted.length)throw error(409,'Cotação sem itens.');
       }
+      if(restaurantSessionId||restaurantOrderId){
+        let source;
+        if(restaurantSessionId){
+          source=await first("SELECT id,customer_id AS customerId,status FROM restaurant_table_sessions WHERE tenant_id=? AND branch_id=? AND id=?",tenant,branch,restaurantSessionId);
+          if(!source)throw error(404,'Comanda não encontrada.');
+          if(source.status!=='OPEN')throw error(409,'Comanda não está disponível para cobrança.');
+        }else{
+          source=await first("SELECT id,customer_id AS customerId,status,fulfillment FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?",tenant,branch,restaurantOrderId);
+          if(!source)throw error(404,'Pedido não encontrado.');
+          if(source.fulfillment==='TABLE')throw error(400,'Pedido de mesa deve ser cobrado pela comanda.');
+          if(source.status!=='DELIVERED')throw error(409,'Finalize a entrega ou retirada antes da cobrança.');
+        }
+        const sourceOrders=restaurantSessionId?await all("SELECT id,status FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND table_session_id=?",tenant,branch,restaurantSessionId):[source];
+        if(sourceOrders.length===0||sourceOrders.some(o=>!['DELIVERED','CANCELLED'].includes(o.status))||
+           !sourceOrders.some(o=>o.status==='DELIVERED'))
+          throw error(409,'Todos os pedidos precisam estar entregues ou cancelados antes da cobrança.');
+        const restaurantLines=restaurantSessionId
+          ?await all(`SELECT oi.product_id AS productId,oi.quantity_milli AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
+              FROM restaurant_order_items oi JOIN restaurant_orders o ON o.id=oi.order_id AND o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id
+              JOIN products p ON p.id=oi.product_id AND p.tenant_id=oi.tenant_id
+              WHERE oi.tenant_id=? AND oi.branch_id=? AND o.table_session_id=? AND o.status='DELIVERED' ORDER BY oi.rowid`,tenant,branch,restaurantSessionId)
+          :await all(`SELECT oi.product_id AS productId,oi.quantity_milli AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
+              FROM restaurant_order_items oi JOIN products p ON p.id=oi.product_id AND p.tenant_id=oi.tenant_id
+              WHERE oi.tenant_id=? AND oi.branch_id=? AND oi.order_id=? ORDER BY oi.rowid`,tenant,branch,restaurantOrderId);
+        const grouped=new Map();
+        for(const line of restaurantLines){
+          const existing=grouped.get(line.productId);
+          if(existing&&existing.unitPriceCents!==line.unitPriceCents)
+            throw error(409,'O mesmo produto possui preços diferentes na comanda. Revise antes de consolidar.');
+          if(existing)existing.milli+=line.milli;
+          else grouped.set(line.productId,{...line});
+        }
+        quoted=[...grouped.values()];
+        if(!quoted.length)throw error(409,'Não há itens para cobrança.');
+        restaurantCheckout={tableSessionId:restaurantSessionId,orderId:restaurantOrderId,customerId:source.customerId||null};
+      }
       const quotedTotals=calculateSaleTotals({items:quoted.map(x=>({unitPriceCents:x.unitPriceCents,quantity:x.milli/1000}))});
-      const result={id,tenantId:tenant,branchId:branch,terminalId,saleNumber,operatorId:user,sellerId,customerId:order?.customer_id||null,status:'OPEN',
+      const result={id,tenantId:tenant,branchId:branch,terminalId,saleNumber,operatorId:user,sellerId,customerId:order?.customer_id||restaurantCheckout?.customerId||null,status:'OPEN',
         items:quoted.map(x=>({productId:x.productId,productName:x.name,sku:x.sku,quantity:x.milli/1000,unitPriceCents:x.unitPriceCents,totalCents:Math.round(x.unitPriceCents*x.milli/1000)})),
         payments:[],subtotalCents:quotedTotals.subtotalCents,discountCents:0,totalCents:quotedTotals.totalCents,changeCents:0,completedAt:null};
       // One sale authority: a quote is a price snapshot, not a second sale.
@@ -1172,12 +1216,21 @@ export function createCommerceService(db,{now=nowISO}={}){
           SELECT ?,tenant_id,branch_id,?,?,customer_id,?,'OPEN',?,?
           FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND id=? AND status='CONFIRMED' AND sale_id IS NULL`,
           id,user,sellerId,saleNumber,created,terminalId,tenant,branch,wholesaleId)
-        :q('INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,sale_number,status,created_at,terminal_id) VALUES(?,?,?,?,?,?,?,?,?)',
-          id,tenant,branch,user,sellerId,saleNumber,'OPEN',created,terminalId)];
+        :restaurantCheckout
+          ?q('INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,customer_id,sale_number,status,created_at,terminal_id) VALUES(?,?,?,?,?,?,?,?,?,?)',
+            id,tenant,branch,user,sellerId,restaurantCheckout.customerId,saleNumber,'OPEN',created,terminalId)
+          :q('INSERT INTO sales(id,tenant_id,branch_id,operator_id,seller_id,sale_number,status,created_at,terminal_id) VALUES(?,?,?,?,?,?,?,?,?)',
+            id,tenant,branch,user,sellerId,saleNumber,'OPEN',created,terminalId)];
       for(const line of quoted)statements.push(q(`INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at)
         VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,id,line.productId,line.name,line.sku,line.milli,line.unitPriceCents,created));
       if(wholesaleId)statements.push(q('UPDATE wholesale_orders SET sale_id=?,updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND sale_id IS NULL',
         id,created,tenant,branch,wholesaleId));
+      if(restaurantCheckout){
+        statements.push(q('INSERT INTO restaurant_sale_links(id,tenant_id,branch_id,table_session_id,order_id,sale_id,created_at) VALUES(?,?,?,?,?,?,?)',
+          randomId(),tenant,branch,restaurantCheckout.tableSessionId,restaurantCheckout.orderId,id,created));
+        if(restaurantCheckout.tableSessionId)statements.push(q("UPDATE restaurant_table_sessions SET status='CHECKOUT' WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN'",
+          tenant,branch,restaurantCheckout.tableSessionId));
+      }
       statements.push(audit(tenant,scope,key,result));
       await batch(statements);
       return result;
@@ -1636,6 +1689,8 @@ export function createCommerceService(db,{now=nowISO}={}){
   };
 }
 export function commerceError(errorValue){
+  if(/RESTAURANT_SALE_SNAPSHOT_LOCKED/.test(String(errorValue?.message||'')))
+    return {status:409,message:'A cobrança já usa os itens congelados da comanda. Não altere esta venda diretamente.'};
   return {status:Number.isInteger(errorValue?.status)?errorValue.status:500,
     message:errorValue?.status?errorValue.message:'Erro interno. Operação não confirmada.'};
 }
