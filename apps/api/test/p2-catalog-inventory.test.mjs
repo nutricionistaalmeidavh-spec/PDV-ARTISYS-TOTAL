@@ -110,3 +110,34 @@ test('P2 stock reservations block checkout stock debit, allow explicit release a
    await assert.rejects(x.service.releaseReservation('a','x',first.id,'u',key()),e=>e.status===409);
  }finally{x.close();}
 });
+
+test('P1 category rename keeps the canonical ID and every product historical category reference',async()=>{
+ const x=await setup();try{
+  const category=await x.service.createCategory('a','x','u',{name:'Laticínios'},key());
+  const p=await x.create('MANTEIGA',1500,false,{categoryId:category.id});
+  const transaction=key();
+  const changed=await x.service.renameCategory('a','x','u',category.id,{name:'Frios e laticínios'},transaction);
+  assert.equal(changed.id,category.id);
+  assert.equal(changed.name,'Frios e laticínios');
+  assert.deepEqual(await x.service.renameCategory('a','x','u',category.id,{name:'Frios e laticínios'},transaction),changed);
+  assert.equal((await x.service.categories('a','x')).find(c=>c.id===category.id).name,'Frios e laticínios');
+  assert.equal((await x.service.products('a','x')).find(item=>item.id===p.id).categoryId,category.id);
+  assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM products WHERE category_id=?',category.id),1);
+  assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM product_categories WHERE tenant_id=?','a'),1);
+ }finally{x.close();}
+});
+
+test('P1 category rename rejects duplicate names, foreign tenant and missing categories without changing products',async()=>{
+ const x=await setup();try{
+  const a=await x.service.createCategory('a','x','u',{name:'Armazém'},key());
+  const b=await x.service.createCategory('a','x','u',{name:'Frutas'},key());
+  const product=await x.create('FRUTA-1',120,true,{categoryId:b.id});
+  await assert.rejects(x.service.renameCategory('a','x','u',b.id,{name:'armazém'},key()),e=>e.status===409);
+  await assert.rejects(x.service.renameCategory('b','y','u',b.id,{name:'Categoria roubada'},key()),e=>e.status===404);
+  await assert.rejects(x.service.renameCategory('a','x','u','missing-category',{name:'Categoria ausente'},key()),e=>e.status===404);
+  await assert.rejects(x.service.renameCategory('a','x','u',b.id,{name:'Z'},key()),e=>e.status===400);
+  assert.equal((await x.service.categories('a','x')).find(c=>c.id===b.id).name,'Frutas');
+  assert.equal((await x.service.products('a','x')).find(p=>p.id===product.id).categoryId,b.id);
+  assert.equal((await x.service.categories('b','y')).length,0);
+ }finally{x.close();}
+});
