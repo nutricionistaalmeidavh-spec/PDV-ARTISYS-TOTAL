@@ -136,8 +136,19 @@ export function createCatalogImportService(h){
    const mode=body?.mode??'create';
    if(!['create','upsert'].includes(mode))throw error(400,'Modo de importação inválido.');
    const key=requiredMutation(body,header),scope='catalog.csv.import:'+branch+(mode==='upsert'?':upsert':'');
+   // A mutation ID identifies one immutable import payload. Replaying the same
+   // key with another file must never claim that file was successfully imported.
+   if(typeof body?.csv!=='string'||body.csv.length>13500)
+     throw error(400,'CSV inválido ou maior que 13.500 caracteres.');
+   const importDigest=await snapshotToken({tenant,branch,mode,csv:body.csv});
    const previous=await applied(tenant,scope,key);
-   if(previous)return previous;
+   if(previous){
+     // Legacy receipts predating the digest stay replayable to preserve earlier
+     // accepted operations; new receipts always reject a conflicting payload.
+     if(previous.importDigest&&previous.importDigest!==importDigest)
+       throw error(409,'Esta chave já foi usada para outro arquivo. Valide e importe com uma nova operação.');
+     return previous;
+   }
    const p=await preview(tenant,branch,body);
    if(p.invalidRows)throw error(409,'Corrija as linhas inválidas na prévia antes de importar.');
    if(mode==='upsert'&&(typeof body?.previewToken!=='string'||body.previewToken!==p.previewToken))
@@ -166,7 +177,7 @@ export function createCatalogImportService(h){
      }
    }
    const result={createdCount:createdIds.length,updatedCount:updatedIds.length,
-     productIds:createdIds,updatedProductIds:updatedIds,createdAt:at};
+     productIds:createdIds,updatedProductIds:updatedIds,createdAt:at,importDigest};
    statements.push(audit(tenant,scope,key,result));
    await batch(statements);
    return result;
