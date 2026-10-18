@@ -102,7 +102,7 @@ test('cap-002 LAN: two authenticated HTTPS terminals, strict host/CSRF, RBAC and
   assert.equal((await send('/api/v1/tenants/a/branches','GET',undefined,{cookie:cashierCookie})).status,200);
   const logout=await send('/api/v1/auth/session','DELETE',{},{
     cookie:ownerCookie,origin:'https://localhost:8443'});
-  assert.equal(logout.status,200);
+  assert.equal(logout.status,200,'Logout HTTPS failure: '+JSON.stringify(logout));
   assert.equal((await send('/api/v1/auth/session','GET',undefined,{cookie:ownerCookie})).status,401);
   assert.equal((await send('/api/v1/auth/session','GET',undefined,{cookie:cashierCookie})).status,200);
 });
