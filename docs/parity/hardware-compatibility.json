@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 2,
+  "registryVersion": "r3-hardware-contracts-2026-10-18",
+  "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+  "sourceReference": "PDV-ARTISYS/release/hardware-compatibility.json",
+  "scope": "R3 software protocol certification only; physical installation separate",
+  "statusDefinitions": {
+    "PROTOCOL_VERIFIED": "Protocol exercised in automated deterministic emulator; not a physical device certification.",
+    "FIELD_VERIFIED": "Exact physical model, firmware, operating system and collected evidence confirmed in the field.",
+    "UNTESTED_MODEL": "Physical model compatibility not established; protocol inheritance not sufficient.",
+    "PARTIAL": "Partial implementation and limitations documented.",
+    "UNSUPPORTED": "Unsupported adapter/protocol."
+  },
+  "entries": [
+    {
+      "id": "browser-print-58-80",
+      "kind": "PRINTER",
+      "manufacturer": "Protocol",
+      "model": "Browser print / installed OS driver",
+      "os": [
+        "windows",
+        "macos",
+        "linux"
+      ],
+      "transport": "Browser print/PDF",
+      "status": "PROTOCOL_VERIFIED",
+      "evidence": {
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('diálogo de impressão não altera"
+      },
+      "limitations": "Print dialog is not physical spool confirmation; driver support depends on the installed OS."
+    },
+    {
+      "id": "escpos-serial",
+      "kind": "PRINTER",
+      "manufacturer": "Protocol",
+      "model": "ESC/POS generic serial",
+      "os": [
+        "windows",
+        "macos",
+        "linux"
+      ],
+      "transport": "Web Serial Chrome/Edge over HTTPS",
+      "status": "PROTOCOL_VERIFIED",
+      "evidence": {
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('ESC/POS conserva"
+      },
+      "limitations": "ESC/POS subset only; cut, paper 58/80mm and model commands require specific driver and on-site checks."
+    },
+    {
+      "id": "spooler-loopback",
+      "kind": "PRINTER",
+      "manufacturer": "Protocol",
+      "model": "Local spooler bridge",
+      "os": [
+        "windows",
+        "macos",
+        "linux"
+      ],
+      "transport": "Authenticated 127.0.0.1 bridge + OS spooler",
+      "status": "PROTOCOL_VERIFIED",
+      "evidence": {
+        "testFile": "apps/api/test/local-bridge.test.mjs",
+        "testContains": "test('failed spool job is retryable"
+      },
+      "limitations": "SUBMITTED means accepted by operating system spooler; UNCERTAIN never retried automatically; physical paper output not proven."
+    },
+    {
+      "id": "generic-numeric-scale",
+      "kind": "SCALE",
+      "manufacturer": "Protocol",
+      "model": "Numeric serial scale",
+      "os": [
+        "windows",
+        "macos",
+        "linux"
+      ],
+      "transport": "Web Serial HTTPS (numeric kg/g frames)",
+      "status": "PROTOCOL_VERIFIED",
+      "evidence": {
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('balança genérica aceita"
+      },
+      "limitations": "Only bounded numeric responses; serial permissions and cable/device model untested."
+    },
+    {
+      "id": "urano-pop-s-parser",
+      "kind": "SCALE",
+      "manufacturer": "Urano (protocol family)",
+      "model": "POP-S USE-P2 / USE-CB2",
+      "os": [
+        "windows",
+        "macos",
+        "linux"
+      ],
+      "transport": "Web Serial 9600/8N2 + 0x04 or 0x05",
+      "status": "PROTOCOL_VERIFIED",
+      "evidence": {
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('Urano POP-S lê os frames binários"
+      },
+      "limitations": "Binary protocol simulated with known frames; NO particular Urano model/firmware physically certified."
+    },
+    {
+      "id": "drawer-escpos-pulse",
+      "kind": "DRAWER",
+      "manufacturer": "Protocol",
+      "model": "ESC/POS generic cash drawer",
+      "os": [
+        "windows",
+        "macos",
+        "linux"
+      ],
+      "transport": "Local serial bridge or Web Serial with explicit action",
+      "status": "PROTOCOL_VERIFIED",
+      "evidence": {
+        "testFile": "apps/api/test/local-bridge.test.mjs",
+        "testContains": "test('local serial drawer config works"
+      },
+      "limitations": "Pulse tested at command/configuration level only; physical pinout and open state not confirmed."
+    },
+    {
+      "id": "scanner-keyboard-hid",
+      "kind": "SCANNER",
+      "manufacturer": "Protocol",
+      "model": "HID keyboard-wedge barcode",
+      "os": [
+        "windows",
+        "macos",
+        "linux"
+      ],
+      "transport": "USB HID as keyboard events (no SDK)",
+      "status": "PROTOCOL_VERIFIED",
+      "evidence": {
+        "testFile": "scripts/web-browser-e2e.mjs",
+        "testContains": "USB HID scanners normally send the barcode"
+      },
+      "limitations": "Chromium key events simulated; non-keyboard proprietary scanner SDK not supported or tested."
+    },
+    {
+      "id": "unknown-printer-model",
+      "kind": "PRINTER",
+      "manufacturer": "Unspecified",
+      "model": "Unidentified physical thermal model",
+      "os": [
+        "windows",
+        "macos",
+        "linux"
+      ],
+      "transport": "Needs declared driver/protocol",
+      "status": "UNTESTED_MODEL",
+      "evidence": null,
+      "limitations": "No field test; protocol compatibility cannot be inferred solely from brand name."
+    }
+  ]
+}
