@@ -80,7 +80,7 @@
       "capability": "desktop-windows-local-first",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -89,7 +89,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "desktop windows local first: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/local-migrations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/local-db.mjs",
+        "contains": "openLocalDatabase",
+        "testFile": "apps/api/test/local-migrations.test.mjs",
+        "testContains": "test('selfhost canonical migrations run once"
+      }
     },
     {
       "id": "cap-002",
@@ -770,7 +776,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -779,7 +785,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "thermal-print-queue-and-retry: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "implementationEvidence": {
+        "file": "tools/local-hardware-bridge/bridge.mjs",
+        "contains": "createSpoolQueue",
+        "testFile": "apps/api/test/local-bridge.test.mjs",
+        "testContains": "test('failed spool job is retryable"
+      }
     },
     {
       "id": "cap-026",
@@ -788,7 +800,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -797,7 +809,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared-artisys-printing-renderer-and-drivers: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "implementationEvidence": {
+        "file": "tools/local-hardware-bridge/main.mjs",
+        "contains": "const printer=",
+        "testFile": "apps/api/test/local-bridge.test.mjs",
+        "testContains": "test('local SQLite queue keeps idempotent receipt"
+      }
     },
     {
       "id": "cap-027",
@@ -806,7 +824,7 @@
       "dependsOn": [
         "checkout-016"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -815,7 +833,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared-artisys-serialport-peripheral-runtime: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "implementationEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "function serialApi",
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('sem permissão explícita"
+      }
     },
     {
       "id": "cap-028",
@@ -825,7 +849,7 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -834,7 +858,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "hardware-protocol-simulation-ci-and-recovery-tests: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "implementationEvidence": {
+        "file": "tools/local-hardware-bridge/bridge.mjs",
+        "contains": "createSpoolQueue",
+        "testFile": "apps/api/test/local-bridge.test.mjs",
+        "testContains": "test('in-progress spool job recovered"
+      }
     },
     {
       "id": "cap-029",
@@ -843,7 +873,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -852,7 +882,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "non-fiscal-sale-prebill-kitchen-and-cash-printing: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "implementationEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "function receiptHtml",
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('comprovante web só aceita"
+      }
     },
     {
       "id": "cap-030",
@@ -1432,7 +1468,7 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1441,7 +1477,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "barcode-scale-drawer-adapters: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "implementationEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "function parseUranoWeight",
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('Urano POP-S lê os frames binários"
+      }
     },
     {
       "id": "cap-051",
@@ -1574,7 +1616,7 @@
       "dependsOn": [
         "cash-046"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1583,8 +1625,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "server terminal and terminal deployment profiles: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo operacional implementado e referenciado em teste executável de domínio (apps/api/test/r2-lan-operations.test.mjs). Paridade integral com o desktop não certificada: ainda exige os demais comportamentos, falhas, perfis e comparação original no SHA exato. Testes físicos não são requisito de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "const KINDS=new Set",
+        "testFile": "apps/api/test/r2-lan-operations.test.mjs",
+        "testContains": "test('cap-003 cap-044 cap-045 cap-046 R2: independently paired terminal"
+      }
     }
   ],
-  "notes": "Inventário sem duplicar serviços ou assumir paridade por mera presença de código; o manifesto cobre capacidades publicadas no desktop, não todos os subfluxos. Subfluxos serão decompostos em cenários E2E por domínio."
+  "notes": "Inventário sem duplicar serviços ou assumir paridade por mera presença de código; o manifesto cobre capacidades publicadas no desktop, não todos os subfluxos. Subfluxos serão decompostos em cenários E2E por domínio.",
+  "deliveryAudit": {
+    "reviewedAt": "2026-10-18",
+    "scope": "R3 and remaining R2 evidence after R1/R2/R4 merges",
+    "auditedMainCommit": "1d757d5dbf49f0143d5fc4e6779476de2ff428e1",
+    "description": "Eight still-unclassified capabilities have code plus executable tests and are partial, not missing: cap-001,cap-056 and six R3 peripheral functions. cap-030 complete branding and cap-043 hardware compatibility evidence remain gaps. Covered statuses from main are never downgraded. Physical QA optional."
+  }
 }
