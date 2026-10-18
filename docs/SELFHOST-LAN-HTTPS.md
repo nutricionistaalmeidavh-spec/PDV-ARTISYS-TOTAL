@@ -74,6 +74,25 @@ npm run serve:lan
 - Com o servidor indisponível não há novas operações comerciais confirmadas.
   Não presumir que a página em cache seja uma confirmação de venda.
 
+### Autorizar os primeiros terminais (obrigatório em LAN)
+
+Após provisionar e iniciar HTTPS, abra a PWA e faça login como proprietário.
+Acesse **Configurações > Rede local**. Gere um código de uso único para a
+filial e tipo **Terminal de caixa**. No dispositivo que vai operar, faça
+login com operador autorizado e preencha **Parear este aparelho**.
+O computador principal também deve ser pareado se operar vendas pela PWA.
+
+Sem dispositivo ativo para aquela filial, rotas de vendas, caixa, estoque
+e operações de módulos retornam erro de autorização: **não** há
+funcionamento comercial anônimo nem fallback para burlar o pareamento.
+O código expira em cinco minutos e só pode ser consumido uma vez.
+A revogação do dispositivo bloqueia a próxima operação comercial,
+mesmo se a sessão de operador ainda estiver válida.
+
+As áreas opcionais **Alimentação** e **Atacado** podem ser habilitadas/
+desabilitadas pelo administrador nessa mesma tela. Desabilitar não apaga
+histórico. O endereço e QR são gerados localmente, sem serviço externo.
+
 ## 4. Backup e recuperação sem sobrescrita
 
 ```bash
@@ -90,7 +109,7 @@ cópia do arquivo ativo e aceite de responsável humano. Os backups são
 **sensíveis, não criptografados pela ferramenta**; usar disco/volume criptografado,
 controle de acesso e política de retenção externa ao diretório público.
 
-## 5. Verificações de QA (não equivalem a homologação física)
+## 5. Verificações de software — gate de código pronto
 
 ```bash
 npm run test:api
@@ -102,12 +121,13 @@ npm run build
 O teste `cap-002 LAN` sobe servidor HTTPS real com certificado temporário,
 3 contas em 2 estabelecimentos, 2 sessões no mesmo estabelecimento,
 permissões de leitura, origem hostil, Host inválido, revogação de sessão e PWA.
-A CI usa TLS real mas **não** demonstra certificado confiável instalado
-em dois dispositivos físicos nem concorrência multi-terminal comercial completa.
-A capacidade `cap-002` permanece `gap` até provas físicas e de negócio;
-o avanço técnico isolado não altera o inventário artificialmente.
+A CI comprova apenas as propriedades cobertas pelas asserções e fixtures;
+a capacidade `cap-002` recebe `covered` quando **todos os subfluxos de código**
+são comprovados (TLS em integração, sessões concorrentes, RBAC, falha/retry,
+reconexão e paridade desktop). Certificado implantado e dois dispositivos
+físicos não são requisitos para classificar o código.
 
-Registrar também ensaios em Windows/Linux, desconexão de rede, reinício,
-dois operadores concorrentes, transação idempotente, impressora/balança real,
-recuperação e revisão independente. Consultar o gate em
+Automatizar regressões Windows/Linux, desconexão e recuperação simuladas,
+reinício, usuários concorrentes, idempotência, bridge periférica emulada e revisão de código.
+Testes físicos são opcionais e posteriores ao aceite do software. Consultar o gate em
 `docs/parity/P6-56-CAPACIDADES.md`.
