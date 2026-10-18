@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync,existsSync} from 'node:fs';
 import {dirname,resolve,relative,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {buildScenarioCatalog,validateScenarioEvidence} from './parity-scenarios.mjs';
 import {DESKTOP_SHA,DESKTOP_REPO,WEB_REPO,MODULES,STATUSES,requireProof,
   verifyClaim,verifyCapabilityInventory,verifyExecutableEvidence} from './parity-rules.mjs';
 
@@ -18,6 +19,14 @@ function checkedFile(path){
 const json=path=>JSON.parse(checkedFile(path));
 const matrix=json('docs/parity/desktop-web-matrix.json');
 const inventory=json('docs/parity/desktop-capability-inventory.json');
+const registry=json('docs/parity/scenario-evidence.json');
+const scenarios=buildScenarioCatalog(matrix,inventory);
+const scenarioStatus=validateScenarioEvidence(scenarios,registry,checkedFile);
+const screenScenarios=scenarios.filter(s=>s.scope==='seven-screen-operations');
+const validatedIds=new Set(registry.results.map(result=>result.scenarioId));
+const screenScenariosComplete=screenScenarios.length>0 && screenScenarios.every(s=>validatedIds.has(s.id));
+requireProof(scenarios.length>=496,'P0 requires at least four independently specified cases per pinned contract');
+requireProof(scenarios.length===new Set(scenarios.map(s=>s.id)).size,'duplicate P0 scenario IDs');
 const rawManifest=checkedFile('docs/parity/desktop-capabilities-baseline.json');
 const blobHash=createHash('sha1').update('blob '+Buffer.byteLength(rawManifest)+'\0').update(rawManifest).digest('hex');
 requireProof(blobHash==='191e0b30e872ea65b9d3b2853d29d4c05878a9cb',
@@ -61,8 +70,8 @@ function visit(id){
   visiting.delete(id);visited.add(id);
 }
 for(const id of dependencies.keys())visit(id);
-const sevenComplete=verifyClaim(all,matrix.parityClaim,matrix.certification||null,'seven-screen-operations');
-const extra=verifyCapabilityInventory(matrix,inventory,manifest);
+const sevenComplete=verifyClaim(all,matrix.parityClaim,matrix.certification||null,'seven-screen-operations',{scenarioEvidenceComplete:screenScenariosComplete});
+const extra=verifyCapabilityInventory(matrix,inventory,manifest,{scenarioEvidenceComplete:scenarioStatus.complete&&screenScenariosComplete});
 const allComplete=sevenComplete && inventory.fullSystemClaim==='complete';
 const readme=checkedFile('README.md');
 if(!allComplete)requireProof(!/PARIDADE COMPLETA COM O DESKTOP|100% DE PARIDADE DESKTOP/i.test(readme),
@@ -70,6 +79,7 @@ if(!allComplete)requireProof(!/PARIDADE COMPLETA COM O DESKTOP|100% DE PARIDADE 
 console.log('Desktop reference: '+DESKTOP_REPO+'@'+DESKTOP_SHA);
 console.log('Seven operational screens: '+all.length+' contracts; covered '+stats.covered+
   ', partial '+stats.partial+', gaps '+stats.gap);
+console.log('P0 independently verified comparisons: '+scenarioStatus.verified+'/'+scenarioStatus.total+' scenarios');
 console.log('Published desktop manifest: '+manifest.length+' capabilities; covered '+extra.covered+
   ', partial '+extra.partial+', gaps '+extra.gap);
 for(const module of matrix.modules){
