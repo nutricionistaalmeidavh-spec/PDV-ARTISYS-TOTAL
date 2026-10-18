@@ -276,6 +276,7 @@ export function createCommerceService(db,{now=nowISO}={}){
     purchaseCostSummary:(t,b,filters)=>purchasing.purchaseCostSummary(t,b,filters),
     categories:(t,b)=>catalogDepth.categories(t,b),
     createCategory:(t,b,u,body,key)=>catalogDepth.createCategory(t,b,u,body,key),
+    renameCategory:(t,b,u,id,body,key)=>catalogDepth.renameCategory(t,b,u,id,body,key),
     productBundle:(t,b,id)=>catalogDepth.bundle(t,b,id),
     setBundle:(t,b,id,u,body,key)=>catalogDepth.setBundle(t,b,id,u,body,key),
     reserveStock:(t,b,u,body,key)=>catalogDepth.reserveStock(t,b,u,body,key),
