@@ -108,6 +108,20 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
          permission(member,user,'products.manage');return json({route:await ext.setRoute(tenantId,branch,body,key)},201);
        }
      }
+     if(parts[1]==='kitchen'&&parts[2]==='print-jobs'){
+       if(parts.length===3&&method==='GET'){
+         permission(member,user,'kitchen.view');
+         return json({jobs:await ext.printJobs(tenantId,branch)});
+       }
+       if(parts.length===5&&parts[4]==='claim'&&method==='POST'){
+         permission(member,user,'kitchen.update_status');
+         return json({job:await ext.claimPrint(tenantId,branch,parts[3],key)});
+       }
+       if(parts.length===5&&parts[4]==='ack'&&method==='POST'){
+         permission(member,user,'kitchen.update_status');
+         return json({job:await ext.acknowledgePrint(tenantId,branch,parts[3],body,key)});
+       }
+     }
      if(parts[1]==='kitchen'&&parts[2]==='station-tickets'){
        if(parts.length===3&&method==='GET'){
          permission(member,user,'kitchen.view');return json({tickets:await ext.tickets(tenantId,branch)});
