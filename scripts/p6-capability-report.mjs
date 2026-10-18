@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {FIELD_REQUIRED_CAPS} from './parity-rules.mjs';
+import {FIELD_OPTIONAL_CAPS} from './parity-rules.mjs';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const LAN=new Set([1,2,3,10,42,44,45,46,47,51,53,54,55,56].map(n=>'cap-'+String(n).padStart(3,'0')));
@@ -12,12 +12,12 @@ const LABELS=Object.freeze({
   integral:'Copiado integralmente',
   parcial:'Copiado parcialmente',
   nao_copiado:'Não copiado / não demonstrado',
-  aguardando_homologacao:'Implementado, aguardando homologação'
+  aguardando_homologacao:'Implementado, aguardando auditoria de código'
 });
 const WAVE_LABELS=Object.freeze({
   R1:'Operação comercial canônica (balcão, estoque, caixa e financeiro)',
   R2:'Rede local e operação self-hosted multiusuário',
-  R3:'Periféricos e impressão no equipamento físico',
+  R3:'Periféricos, protocolos simulados e integração local',
   R4:'Restaurante, KDS, delivery e segmentos especializados'
 });
 
@@ -42,7 +42,7 @@ function classify(cap,prerequisites){
   // Never infer completed implementation from some passing contracts or a file name.
   if(cap.status==='covered')return {classification:'integral',certainty:'certificado',blockerType:'nenhum'};
   if(readyForHomologation(cap,prerequisites))
-    return {classification:'aguardando_homologacao',certainty:'revisao-de-implementacao',blockerType:'homologacao'};
+    return {classification:'aguardando_homologacao',certainty:'revisao-de-implementacao',blockerType:'auditoria-de-codigo'};
   if(cap.status==='partial')
     return {classification:'parcial',certainty:'evidencia-parcial',blockerType:'implementacao'};
   // "gap" means *no certified parity evidence*, NOT proof that the code does not exist.
@@ -68,15 +68,18 @@ export function buildReport(matrix,inventory){
     if(classification==='nao_copiado')
       blockers.push('levantamento de implementacao e equivalencia pendente; nao significa codigo ausente');
     if(classification==='parcial')blockers.push('fluxos incompletos ou sem equivalencia demonstrada');
-    if(classification==='aguardando_homologacao')blockers.push('homologacao final e certificacao independente pendentes');
+    if(classification==='aguardando_homologacao')blockers.push('auditoria de paridade e certificacao de codigo pendentes');
     if(prerequisites.length)blockers.push('dependencias incompletas: '+prerequisites.join(', '));
     if(!cap.independentEvidence)blockers.push('cenario independente por ID ausente');
-    if(FIELD_REQUIRED_CAPS.has(cap.id)&&cap.fieldVerification?.status!=='FIELD_VERIFIED')
-      blockers.push('homologacao fisica LAN/dispositivo pendente');
+    // Field inspections are optional post-code deployment checks, never backlog blockers.
+    const fieldValidation={applicable:FIELD_OPTIONAL_CAPS.has(cap.id),
+      status:cap.fieldVerification?.status==='FIELD_VERIFIED'?'verified':'not-verified',
+      requiredForCodeReady:false};
     const linkedContracts=cap.dependsOn.map(id=>({id,status:contractStatus.get(id)||'nao-catalogado'}));
     const result={id:cap.id,name:cap.capability,front,wave:stage,
       status:cap.status,classification,classificationLabel:LABELS[classification],
-      certainty,blockerType,linkedContracts,blockers};
+      certainty,blockerType,linkedContracts,blockers,
+      codeReady:cap.status==='covered',fieldValidation};
     (groups[front]??=[]).push(result);
     waves[stage].push(result);
     return result;
@@ -87,12 +90,12 @@ export function buildReport(matrix,inventory){
     scope:'desktop-extended-parity',fullSystemClaim:inventory.fullSystemClaim,
     // One public management backlog: 56 capabilities. Contract IDs are internal diagnostics.
     progress:{
-      total:56,counts:progressCounts,labels:LABELS,
+      total:56,codeReady:counts.covered,counts:progressCounts,labels:LABELS,
       notes:[
         'Os 68 contratos detalham criterios e testes das mesmas capacidades; nao sao outra lista de funcionalidades.',
         'O estado gap nao comprova ausencia de codigo: nao copiado/nao demonstrado exige triagem antes de afirmar inexistencia.',
-        'Aguardando homologacao so e permitido com revisao explicita, testes identificados e dependencias cobertas.',
-        'Copiado integralmente somente quando o inventario canonico tem status covered; CI verde por si so nao altera o status.'
+        'Aguardando auditoria de codigo exige revisao explicita, testes identificados e dependencias cobertas; inspeção em campo e opcional.',
+        'Copiado integralmente exige status covered baseado em evidencia automatizada e revisao independente de codigo; teste fisico nao e bloqueio.'
       ]
     },
     contractDiagnostics:{

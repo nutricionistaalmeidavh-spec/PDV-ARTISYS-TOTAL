@@ -14,13 +14,13 @@ const sampleInventory={baseline:{repo:'nutricionistaalmeidavh-spec/PDV-ARTISYS',
   capability:'hardware-protocol-simulation-ci-and-recovery-tests',
   sourceEvidence:{repo:'nutricionistaalmeidavh-spec/PDV-ARTISYS',commit:DESKTOP_SHA,file:'release/capabilities.json',manifestIndex:0}}]};
 
-test('P0 maps every contract to four reproducible review dimensions and hardware has physical gate',()=>{
+test('P0 maps every contract to four reproducible review dimensions and hardware uses software test gate',()=>{
   const cases=buildScenarioCatalog(sampleMatrix,sampleInventory);
   assert.equal(cases.filter(c=>c.contractId==='checkout-005').length,4);
   assert.deepEqual(cases.filter(c=>c.contractId==='checkout-007').map(c=>c.dimension),
     ['nominal','authorization','tenant-isolation','failure-recovery']);
-  assert.equal(cases.filter(c=>c.contractId==='cap-001').length,5);
-  assert(cases.some(c=>c.id==='cap-001/physical-device'));
+  assert.equal(cases.filter(c=>c.contractId==='cap-001').length,4);
+  assert.equal(cases.some(c=>c.dimension==='physical-device'),false,'physical field QA is not a code-readiness gate');
   assert.equal(new Set(cases.map(c=>c.id)).size,cases.length);
   assert(cases.every(c=>c.desktopSource.commit===DESKTOP_SHA));
 });

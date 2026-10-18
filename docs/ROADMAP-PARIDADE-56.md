@@ -14,39 +14,43 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 | Copiado integralmente | Capacidade coberta na matriz canônica, com certificação exigida pelo gate | Somente regressão |
 | Copiado parcialmente | Há funcionamento/evidências de subconjuntos, mas faltam fluxos ou equivalência | Completar e testar o fluxo real |
 | Não copiado / não demonstrado | Ainda não há prova de cópia integral (gap) | Primeiro verificar se falta código ou apenas evidência |
-| Implementado, aguardando homologação | Implementação revisada explicitamente, com testes e dependências concluídos; certificação pendente | Homologar, não reimplementar |
+| Implementado, aguardando auditoria de código | Implementação revisada, testes e dependências concluídos; falta apenas auditoria automatizada/revisão de paridade | Validar evidência de software e classificar `covered` |
 
-**Precisão obrigatória:** gap NÃO comprova ausência de código. O terceiro estado inclui casos ainda não investigados. Não promover a pronto por nome de arquivo, CI verde ou um cenário isolado. Aguardando homologação exige revisão explícita e evidências listadas.
+**Precisão obrigatória:** gap NÃO comprova ausência de código. O terceiro estado inclui casos ainda não investigados. Não promover a pronto por nome de arquivo, CI verde ou um cenário isolado. Auditoria de código exige revisão explícita e evidências executáveis. Testes em equipamento real não bloqueiam código pronto.
 
-**Fotografia em 18/10/2026:** 56 capacidades: 0 integrais, 14 parciais, 42 não demonstradas, 0 formalmente aguardando homologação. Internamente, os 68 contratos estão em 23 cobertos e 45 parciais. Estes são números históricos; consultar a saída gerada para o estado atual.
+**Fotografia em 18/10/2026:** 56 capacidades: 0 integrais, 14 parciais, 42 não demonstradas, 0 formalmente aguardando auditoria de código. Internamente, os 68 contratos estão em 23 cobertos e 45 parciais. Estes são números históricos; consultar a saída gerada para o estado atual.
 
 ## Ondas de implementação — 56 sem duplicação
 
 | Onda | Capacidades | Conteúdo e gate |
 |---|---|---|
-| **R0 — Diagnóstico e gestão** | Transversal; nenhum ID adicional | Painel de 56, 68 contratos internos, rastreabilidade, distinguir implementação e homologação |
+| **R0 — Diagnóstico e gestão** | Transversal; nenhum ID adicional | Painel de 56, 68 contratos internos, rastreabilidade e estado verificável de código pronto |
 | **R1 — PDV comercial e gestão** | cap-004–008, cap-011–024, cap-040, cap-052 (**21**) | Venda, cliente, vendedor, desconto, devoluções, variações, kits, estoque, compras, caixa, financeiro, relatórios, atacado/importações. Aceite: jornada real completa na UI, resultados iguais ao desktop e lançamentos reconciliados |
-| **R2 — Self-hosted e rede local** | cap-001–003, cap-010, cap-042, cap-044–047, cap-051, cap-053–056 (**14**) | API SQLite, HTTPS LAN, terminais independentes, credenciais revogáveis, backup/restauração, diagnósticos. Aceite: testes com duas máquinas físicas, recuperação e segurança sem SaaS obrigatório |
-| **R3 — Periféricos físicos** | cap-025–030, cap-043, cap-050 (**8**) | Impressão, reimpressão, filas, balanças, gavetas e serial. Aceite: bridge local open source quando necessária, testes físicos por modelo/SO e reconexão; impressão não determina sucesso da venda |
+| **R2 — Self-hosted e rede local** | cap-001–003, cap-010, cap-042, cap-044–047, cap-051, cap-053–056 (**14**) | API SQLite, HTTPS LAN, terminais independentes, credenciais revogáveis, backup/restauração, diagnósticos. Aceite de código: suíte LAN automatizada com sessões simultâneas, segurança, revogação, backup/restore isolado e falhas simuladas; sem SaaS obrigatório |
+| **R3 — Periféricos físicos** | cap-025–030, cap-043, cap-050 (**8**) | Impressão, reimpressão, filas, balanças, gavetas e serial. Aceite de código: bridge local open source, drivers/protocolos com mocks e emuladores, fila, retry, reconexão simulada; impressão não determina sucesso da venda |
 | **R4 — Alimentação e verticais** | cap-009, cap-031–039, cap-041, cap-048–049 (**13**) | Mesas, comandas, atendimento, KDS, pizza, delivery/retirada, padaria e relatórios específicos. Aceite: fluxo completo por perfil e segmento sem criar outra autoridade de vendas/estoque |
-| **R5 — Certificação/piloto** | As mesmas 56, sem duplicação | Revisão independente, regressão, testes físicos aplicáveis, restore, segurança, QA PC/tablet/celular e piloto consentido |
+| **R5 — Certificação de código** | As mesmas 56, sem duplicação | Revisão de paridade, regressão, restore em banco temporário, segurança e E2E em Chromium responsivo; não exige equipamento físico nem piloto |
 
-**Total exclusivo de R1–R4: 21 + 14 + 8 + 13 = 56.** R0 e R5 são gates, não novos itens.
+**Total exclusivo de R1–R4: 21 + 14 + 8 + 13 = 56.** R0 e R5 são gates de software, não novos itens.
 
 ### Fila prioritária antes de abrir novas frentes
 
 **Fechar R1:** venda completa (desconto/perfis, múltiplas configurações do mesmo SKU, suspensão, retomada, pagamento), cliente/vendedor, devolução/cancelamento com efeitos corretos, estoque por filial, caixa por terminal, relatórios/CSV e reconciliação financeira. Reaproveitar implementação e testes atuais; não reescrever o que já existe.
 
-**R2 em paralelo:** LAN segura, 2 terminais reais, credenciais, backup/restore com SQLite; manter core R$ 0.
+**R2 em paralelo:** LAN segura, sessões de dois terminais em integração HTTPS local, credenciais, backup/restore automatizados em SQLite; manter core R$ 0.
 
-**R3 e R4 conforme dependências:** homologar equipamentos fisicamente sem bloquear funcionalidades puramente lógicas; não chamar restaurante/periféricos de integrais antes de provar fluxos completos.
+**R3 e R4 conforme dependências:** provar fluxos com testes automatizados, protocolos emulados e falhas injetadas; marcar o código como integral quando equivalência e regressão forem demonstradas.
+
+### Regra definitiva de pronto
+
+**CÓDIGO PRONTO** = todos os subfluxos existentes no manifesto demonstrados na UI/API/banco, permissões e isolamento corretos, testes automatizados (incluindo falhas e reconexão simuladas) e comparação desktop executada em CI, com revisão independente de código. **Não exige computador, impressora, balança, tablet ou celular físico.** Uma revisão de implantação em campo, caso desejada no futuro, será registro separado e opcional, sem modificar `covered`.
 
 ### Fechamento por capacidade
 
 1. Inspecionar primeiro o desktop fixado, o código já existente, UI e API; registrar lacuna real versus prova faltante.
 2. Implementar somente o comportamento ausente na jornada UI → permissão → domínio canônico → SQLite/D1 → estoque/caixa/financeiro.
-3. Usar os contratos vinculados entre os 68 e executar casos nominal, autorização, isolamento de empresa e falha/recuperação; incluir teste físico apenas onde pertinente.
-4. Se todos os subfluxos foram implementados e revisados, registrar revisão explícita e classificar **aguardando homologação**. Se a certificação passar, mudar o inventário canônico para **covered**.
+3. Usar os contratos vinculados entre os 68 e executar casos nominal, autorização, isolamento de empresa e falha/recuperação; cobrir integração com periféricos por simuladores e testes determinísticos.
+4. Se todos os subfluxos foram implementados e revisados, registrar revisão explícita e classificar **aguardando auditoria de código**. Com paridade funcional e testes automatizados verificados, mudar para **covered**, sem precisar testar equipamento real.
 5. Não reabrir entregas por tarefas não relacionadas. Correções exigem teste de reprodução.
 
 ## Migrações: política para aplicativo ainda novo
@@ -62,7 +66,7 @@ Existem **20 migrations SQL de desenvolvimento** de 0001 a 0020. Não são 20 ve
 
 ## Critério para merge/publicação
 
-Uma CI verde não comprova homologação física ou deploy Cloudflare. Exigir testes de regressão, perfil/tenant, falha e retry, integridade, navegadores e dispositivos conforme capacidade. Confirmar o SHA exato. O desktop original não pode sofrer alteração.
+Uma CI verde isolada não prova paridade: exigir cenários por capacidade, regressão, perfil/tenant, falha/retry, integridade, navegadores e periféricos simulados. O teste físico NÃO bloqueia classificação, merge nem conclusão do código. Confirmar o SHA exato. O desktop original não pode sofrer alteração.
 
 **Política de custo:** core obrigatório R$ 0, self-hosted, open source; Cloudflare Free opcional com limites. Cobrança Asaas/serviços pagos somente mediante opção explícita.
 
@@ -75,6 +79,6 @@ Uma CI verde não comprova homologação física ou deploy Cloudflare. Exigir te
 - Fonte 56: docs/parity/desktop-capability-inventory.json
 - Evidência 68: docs/parity/desktop-web-matrix.json
 - Comparações: docs/parity/scenario-evidence.json
-- Certificação: docs/parity/P0-AUDIT-PLAN.md
+- Certificação de código: docs/parity/P0-AUDIT-PLAN.md
 
 O antigo docs/ROADMAP-SAAS-CLOUDFLARE.md permanece como **documentação histórica de arquitetura e implantação**. Este arquivo é o roadmap operacional vigente da paridade.
