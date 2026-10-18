@@ -2,6 +2,7 @@
 // Documents never debit stock or create a second sale; checkout remains the sole sale authority.
 import canonicalPricing from '../../../packages/core/js/domains/sales/pricing.js';
 import inventoryRules from '../../../packages/core/js/domains/inventory/inventory-rules.js';
+import {createR4ExtendedService} from './r4-extended-service.mjs';
 const {calculateSaleTotals}=canonicalPricing;
 const {roundQuantity}=inventoryRules;
 const err=(status,message)=>Object.assign(new Error(message),{status});
@@ -63,10 +64,14 @@ export function createVerticalService(db){
    if(!Array.isArray(items)||items.length<1||items.length>80)throw err(400,'Informe de 1 a 80 itens.');
    const keys=new Set(),result=[];
    for(const item of items){
-     if(keys.has(item.productId))throw err(400,'Produto repetido. Agrupe a quantidade.');
-     keys.add(item.productId);
+     const itemKey=item?.pizza?JSON.stringify([item.productId,item.pizza.sizeCode,item.pizza.flavorCodes,item.pizza.crustCode||null]):item?.productId;
+     if(keys.has(itemKey))throw err(400,'Configuração de produto repetida. Agrupe a quantidade.');
+     keys.add(itemKey);
      const p=await product(t,item.productId),milli=qty(item.quantity);
-     result.push({productId:p.id,name:p.name,quantity:milli/1000,milli,unitPriceCents:p.sale_price_cents});
+     const pizza=item.pizza?await createR4ExtendedService(db).quotePizza(t,b,{productId:p.id,...item.pizza}):null;
+     result.push({productId:p.id,name:p.name,quantity:milli/1000,milli,
+       unitPriceCents:pizza?.unitPriceCents??p.sale_price_cents,
+       configuration:pizza?.configuration||null});
    }
    return result;
  }
@@ -85,7 +90,9 @@ export function createVerticalService(db){
  async function price(t,b,productId,quantity){
    const productRow=await product(t,productId),milli=qty(quantity);
    const tier=await first('SELECT id,min_quantity_milli,unit_price_cents FROM wholesale_tiers WHERE tenant_id=? AND branch_id=? AND product_id=? AND active=1 AND min_quantity_milli<=? ORDER BY min_quantity_milli DESC LIMIT 1',t,b,productId,milli);
-   return {productId,productName:productRow.name,quantity:milli/1000,unitPriceCents:tier?.unit_price_cents??productRow.sale_price_cents,
+   const unitPriceCents=tier?.unit_price_cents??productRow.sale_price_cents;
+   return {productId,productName:productRow.name,quantity:milli/1000,unitPriceCents,
+     totalCents:Math.round(unitPriceCents*milli/1000),
      baseUnitPriceCents:productRow.sale_price_cents,tierId:tier?.id||null,minQuantity:(tier?.min_quantity_milli||0)/1000};
  }
  return {
@@ -144,7 +151,13 @@ export function createVerticalService(db){
      const active=await first(`SELECT COUNT(*) AS n FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND table_session_id=? AND status NOT IN('CANCELLED','DELIVERED')`,t,b,id);
      if(active.n)throw err(409,'Finalize ou cancele todos os pedidos antes de fechar a mesa.');
      const delivered=await first("SELECT COUNT(*) AS n FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND table_session_id=? AND status='DELIVERED'",t,b,id);
-     if(delivered.n){
+     const remainder=await first(`SELECT COALESCE(SUM(oi.quantity_milli-COALESCE((SELECT SUM(tr.quantity_milli)
+       FROM r4_item_transfers tr WHERE tr.tenant_id=oi.tenant_id AND tr.branch_id=oi.branch_id AND tr.order_item_id=oi.id),0)),0) AS milli
+       FROM restaurant_order_items oi JOIN restaurant_orders o ON o.id=oi.order_id AND o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id
+       WHERE o.tenant_id=? AND o.branch_id=? AND o.table_session_id=? AND o.status='DELIVERED'`,t,b,id);
+     const incoming=await first('SELECT COALESCE(SUM(quantity_milli),0) AS milli FROM r4_item_transfers WHERE tenant_id=? AND branch_id=? AND target_session_id=?',t,b,id);
+     const pendingMilli=remainder.milli+incoming.milli;
+     if(pendingMilli>0){
        const linked=await first(`SELECT sale.status FROM restaurant_sale_links link
          JOIN sales sale ON sale.tenant_id=link.tenant_id AND sale.branch_id=link.branch_id AND sale.id=link.sale_id
          WHERE link.tenant_id=? AND link.branch_id=? AND link.table_session_id=?`,t,b,id);
@@ -157,11 +170,17 @@ export function createVerticalService(db){
    },
    async foodOrders(t,b,fulfillment=''){await branchExists(t,b);
      const rows=await all(`SELECT * FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND (?='' OR fulfillment=?) ORDER BY created_at DESC LIMIT 100`,t,b,fulfillment,fulfillment);
-     return Promise.all(rows.map(async row=>({...row,items:await all('SELECT product_id AS productId,product_name AS name,quantity_milli / 1000.0 AS quantity,unit_price_cents AS unitPriceCents FROM restaurant_order_items WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,row.id)})));
+     return Promise.all(rows.map(async row=>{
+       const items=await all('SELECT id,product_id AS productId,product_name AS name,quantity_milli / 1000.0 AS quantity,unit_price_cents AS unitPriceCents,configuration_json AS configurationJson FROM restaurant_order_items WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,row.id);
+       return {...row,items:items.map(({configurationJson,...item})=>({...item,configuration:configurationJson?JSON.parse(configurationJson):null}))};
+     }));
    },
    async createFoodOrder(t,b,user,body,key){
      await branchExists(t,b);
-     const fulfillment=body.fulfillment||'TABLE';isSafeStatus(fulfillment,['TABLE','DELIVERY','PICKUP']);
+     const serviceChannel=body.fulfillment||'TABLE';
+     isSafeStatus(serviceChannel,['TABLE','DELIVERY','PICKUP','COUNTER']);
+     const fulfillment=serviceChannel==='COUNTER'?'PICKUP':serviceChannel;
+     const useTicket=body.useTicket===true;
      const sid=body.tableSessionId||null;
      if(fulfillment==='TABLE'){
        const s=await checkSession(t,b,sid);
@@ -171,12 +190,47 @@ export function createVerticalService(db){
      if(body.customerId)await customer(t,body.customerId);
      const lines=await orderItems(t,b,body.items);
      const totals=calculateSaleTotals({items:lines});
+     const routed=[],printStations=new Map();let directCount=0;
+     for(const line of lines){
+       const route=await first('SELECT mode,station_id AS stationId FROM r4_product_kitchen_routes WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,line.productId);
+       if(route?.mode==='DIRECT')directCount++;
+       if(route?.mode==='PRODUCTION'){
+         const station=await first('SELECT id,printer_name AS printerName,print_enabled AS printEnabled FROM r4_kitchen_stations WHERE tenant_id=? AND branch_id=? AND id=? AND active=1',t,b,route.stationId);
+         if(!station)throw err(409,'Estação de produção inativa; reconfigure o destino do produto.');
+         routed.push(route.stationId);
+         if(station.printEnabled&&station.printerName){
+           if(!printStations.has(route.stationId))printStations.set(route.stationId,{printerName:station.printerName,items:[]});
+           printStations.get(route.stationId).items.push({name:line.name,quantity:line.quantity,configuration:line.configuration||null});
+         }
+       }
+     }
+     const stations=[...new Set(routed)];
+     const allDirect=directCount===lines.length;
      return mutate(t,'restaurant.order:'+b,key,async()=>{
-       const id=uuid(),stamp=now(),result={id,status:'OPEN',fulfillment,tableSessionId:sid,totalCents:totals.totalCents,items:lines};
-       const statements=[q(`INSERT INTO restaurant_orders(id,tenant_id,branch_id,table_session_id,customer_id,fulfillment,status,address,contact,note,total_cents,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-         id,t,b,sid,body.customerId||null,fulfillment,'OPEN',clean(body.address,300)||null,clean(body.contact,120)||null,clean(body.note,500)||null,totals.totalCents,user,stamp,stamp)];
-       for(const l of lines)statements.push(q('INSERT INTO restaurant_order_items(id,tenant_id,branch_id,order_id,product_id,product_name,quantity_milli,unit_price_cents) VALUES(?,?,?,?,?,?,?,?)',uuid(),t,b,id,l.productId,l.name,l.milli,l.unitPriceCents));
-       statements.push(q('INSERT INTO restaurant_kitchen_tickets(id,tenant_id,branch_id,order_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',uuid(),t,b,id,'NEW',stamp,stamp));
+       const id=uuid(),stamp=now(),day=useTicket?stamp.slice(0,10):null;
+       const previous=useTicket?await first('SELECT COALESCE(MAX(ticket_number),0) AS last FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND ticket_day=?',t,b,day):null;
+       const ticketNumber=useTicket?previous.last+1:null;
+       if(ticketNumber>99999)throw err(409,'Limite diário de senhas atingido.');
+       const result={id,status:allDirect?'READY':'OPEN',fulfillment,serviceChannel,tableSessionId:sid,totalCents:totals.totalCents,
+         ticketDay:day,ticketNumber,items:lines};
+       const statements=[q(`INSERT INTO restaurant_orders(id,tenant_id,branch_id,table_session_id,customer_id,fulfillment,status,address,contact,note,total_cents,created_by,created_at,updated_at,service_channel,ticket_day,ticket_number) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         id,t,b,sid,body.customerId||null,fulfillment,allDirect?'READY':'OPEN',clean(body.address,300)||null,clean(body.contact,120)||null,clean(body.note,500)||null,totals.totalCents,user,stamp,stamp,serviceChannel,day,ticketNumber)];
+       for(const l of lines)statements.push(q('INSERT INTO restaurant_order_items(id,tenant_id,branch_id,order_id,product_id,product_name,quantity_milli,unit_price_cents,configuration_json) VALUES(?,?,?,?,?,?,?,?,?)',uuid(),t,b,id,l.productId,l.name,l.milli,l.unitPriceCents,l.configuration?JSON.stringify(l.configuration):null));
+       statements.push(q('INSERT INTO restaurant_kitchen_tickets(id,tenant_id,branch_id,order_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',uuid(),t,b,id,allDirect?'READY':'NEW',stamp,stamp));
+       for(const stationId of stations){
+         const ticketId=uuid();
+         statements.push(q(
+           'INSERT INTO r4_station_tickets(id,tenant_id,branch_id,order_id,station_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
+           ticketId,t,b,id,stationId,'NEW',stamp,stamp));
+         const printer=printStations.get(stationId);
+         if(printer){
+           const payload=JSON.stringify({jobFormat:'R4_KITCHEN_V1',stationTicketId:ticketId,orderId:id,ticketNumber,items:printer.items,orderedAt:stamp});
+           if(payload.length>16000)throw err(400,'Conteúdo do ticket excede o limite de impressão.');
+           statements.push(q(`INSERT INTO r4_kitchen_print_jobs
+             (id,tenant_id,branch_id,station_ticket_id,printer_name,payload_json,status,created_at,updated_at)
+             VALUES(?,?,?,?,?,?,'PENDING',?,?)`,uuid(),t,b,ticketId,printer.printerName,payload,stamp,stamp));
+         }
+       }
        return {statements,result};
      });
    },
@@ -185,6 +239,8 @@ export function createVerticalService(db){
      await branchExists(t,b);const status=body.status;isSafeStatus(status,['PREPARING','READY']);
      const current=await first('SELECT status FROM restaurant_kitchen_tickets WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
      if(!current)throw err(404,'Ticket não encontrado.');
+     if((await first('SELECT id FROM r4_station_tickets WHERE tenant_id=? AND branch_id=? AND order_id=(SELECT order_id FROM restaurant_kitchen_tickets WHERE tenant_id=? AND branch_id=? AND id=?) LIMIT 1',t,b,t,b,id)))
+       throw err(409,'Pedido roteado por estação: atualize os tickets de cada estação.');
      if((current.status==='NEW'&&status!=='PREPARING')||(current.status==='PREPARING'&&status!=='READY')||current.status==='READY')throw err(409,'Transição da cozinha inválida.');
      return mutate(t,'restaurant.kitchen:'+id+':'+status,key,async()=>{
        const result={id,status};
@@ -193,11 +249,27 @@ export function createVerticalService(db){
        return {statements,result};
      });
    },
+   async dispatchFoodOrder(t,b,id,body,key){
+     await branchExists(t,b);
+     const row=await first('SELECT status,fulfillment FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
+     if(!row)throw err(404,'Pedido não encontrado.');
+     if(row.fulfillment!=='DELIVERY'||row.status!=='READY')throw err(409,'Entrega precisa estar pronta para despacho.');
+     const courier=clean(body.courierName,120);
+     if(!courier)throw err(400,'Informe o nome do entregador.');
+     return mutate(t,'r4.dispatch:'+b+':'+id,key,async()=>{
+       const dispatchedAt=now(),result={id,status:'DISPATCHED',courierName:courier,dispatchedAt};
+       return {result,statements:[q('INSERT INTO r4_delivery_dispatches(tenant_id,branch_id,order_id,courier_name,dispatched_at) VALUES(?,?,?,?,?)',
+         t,b,id,courier,dispatchedAt)]};
+     });
+   },
    async deliverFoodOrder(t,b,id,key){
      await branchExists(t,b);
      const order=await first('SELECT id,status FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
      if(!order)throw err(404,'Pedido não encontrado.');
      if(order.status!=='READY')throw err(409,'Só é possível entregar pedido pronto.');
+     if((await first('SELECT fulfillment FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id))?.fulfillment==='DELIVERY'&&
+        !(await first('SELECT order_id FROM r4_delivery_dispatches WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,id)))
+       throw err(409,'Registre o despacho e o entregador antes da entrega final.');
      return mutate(t,'restaurant.deliver:'+id,key,async()=>{
        const result={id,status:'DELIVERED'};
        return {statements:[q("UPDATE restaurant_orders SET status='DELIVERED',updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='READY'",now(),t,b,id)],result};
@@ -211,7 +283,14 @@ export function createVerticalService(db){
      if(tableSessionId)await checkSession(t,b,tableSessionId);
      else if(!(await first('SELECT id FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,orderId)))
        throw err(404,'Pedido não encontrado.');
-     return first(`SELECT s.id AS saleId,s.status,s.total_cents AS totalCents,s.sale_number AS saleNumber,
+     return first(`SELECT s.id AS saleId,s.status,
+         CASE WHEN s.status='OPEN' THEN MAX(0,COALESCE((SELECT SUM(COALESCE((SELECT SUM(ROUND(cl.quantity_milli*cl.unit_price_cents/1000.0))
+             FROM sale_configured_lines cl WHERE cl.tenant_id=si.tenant_id AND cl.branch_id=si.branch_id
+             AND cl.sale_id=si.sale_id AND cl.sale_item_id=si.id),
+             ROUND(si.quantity_milli*si.unit_price_cents/1000.0)))
+           FROM sale_items si WHERE si.tenant_id=s.tenant_id AND si.branch_id=s.branch_id AND si.sale_id=s.id),0)-s.discount_cents)
+         ELSE s.total_cents END AS totalCents,
+         s.sale_number AS saleNumber,
          s.terminal_id AS terminalId
        FROM restaurant_sale_links link JOIN sales s ON s.id=link.sale_id AND s.tenant_id=link.tenant_id AND s.branch_id=link.branch_id
        WHERE link.tenant_id=? AND link.branch_id=?
@@ -250,7 +329,12 @@ export function createVerticalService(db){
        const stamp=now();
        return {result:{id,status:'CANCELLED'},statements:[
          q("UPDATE restaurant_orders SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN'",stamp,t,b,id),
-         q("UPDATE restaurant_kitchen_tickets SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND order_id=? AND status='NEW'",stamp,t,b,id)
+         q("UPDATE restaurant_kitchen_tickets SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND order_id=? AND status='NEW'",stamp,t,b,id),
+         q("UPDATE r4_station_tickets SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND order_id=? AND status='NEW'",stamp,t,b,id),
+         q(`UPDATE r4_kitchen_print_jobs SET status='CANCELLED',lease_token=NULL,leased_until=NULL,updated_at=?
+           WHERE tenant_id=? AND branch_id=? AND station_ticket_id IN
+            (SELECT st.id FROM r4_station_tickets st WHERE st.tenant_id=? AND st.branch_id=? AND st.order_id=?)
+           AND status IN('PENDING','FAILED','LEASED')`,stamp,t,b,t,b,id)
        ]};
      });
    },
@@ -321,6 +405,58 @@ export function createVerticalService(db){
        channels:Object.fromEntries(['TABLE','DELIVERY','PICKUP'].map(channel=>[channel,active.filter(r=>r.fulfillment===channel).length])),
        note:'Indicadores operacionais: pedido entregue não equivale a venda recebida. Faturamento, caixa e estoque pertencem ao checkout canônico.'};
    },
+   async wholesaleCustomerPolicy(t,b,customerId){
+     await branchExists(t,b);
+     const c=await customer(t,customerId);
+     if(!c.active)throw err(409,'Cliente inativo.');
+     const policy=await first('SELECT minimum_order_cents,allowed_payment_methods_json FROM wholesale_customer_policies WHERE tenant_id=? AND customer_id=? AND active=1',t,customerId);
+     const balance=await first('SELECT COALESCE(SUM(amount_cents),0) AS used FROM customer_credit_ledger WHERE tenant_id=? AND customer_id=?',t,customerId);
+     const creditUsedCents=Math.max(0,balance?.used||0);
+     return {
+       customerId,customerName:c.name,minimumOrderCents:policy?.minimum_order_cents??0,
+       allowedPaymentMethods:policy?JSON.parse(policy.allowed_payment_methods_json):['CASH','PIX','DEBIT_CARD','CREDIT_CARD'],
+       creditLimitCents:c.credit_limit_cents,
+       creditUsedCents,availableCreditCents:Math.max(0,c.credit_limit_cents-creditUsedCents)
+     };
+   },
+   async saveWholesaleCustomerPolicy(t,b,customerId,body,key){
+     await branchExists(t,b);
+     const c=await customer(t,customerId);
+     if(!c.active)throw err(409,'Cliente inativo.');
+     const minimumOrderCents=cents(body?.minimumOrderCents,'Pedido mínimo');
+     const allowedPaymentMethods=body?.allowedPaymentMethods;
+     const permitted=new Set(['CASH','PIX','DEBIT_CARD','CREDIT_CARD','STORE_CREDIT']);
+     if(!Array.isArray(allowedPaymentMethods)||allowedPaymentMethods.length<1||
+        allowedPaymentMethods.length>permitted.size||
+        new Set(allowedPaymentMethods).size!==allowedPaymentMethods.length||
+        allowedPaymentMethods.some(method=>typeof method!=='string'||!permitted.has(method)))
+       throw err(400,'Escolha meios de pagamento válidos sem repetições.');
+     const scope='wholesale.policy:'+customerId;
+     // The same mutation key must not acknowledge a different commercial policy.
+     if(keyOK(key)){
+       const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+       if(prior){
+         const previous=JSON.parse(prior.result_json);
+         if(previous.minimumOrderCents!==minimumOrderCents||
+            JSON.stringify(previous.allowedPaymentMethods)!==JSON.stringify(allowedPaymentMethods))
+           throw err(409,'Esta operação já registrou outra política comercial.');
+         return previous;
+       }
+     }
+     return mutate(t,scope,key,async()=>{
+       const stamp=now();
+       const current=await this.wholesaleCustomerPolicy(t,b,customerId);
+       const result={...current,minimumOrderCents,allowedPaymentMethods};
+       return {statements:[q(`INSERT INTO wholesale_customer_policies
+         (tenant_id,customer_id,minimum_order_cents,allowed_payment_methods_json,active)
+         VALUES(?,?,?,?,1)
+         ON CONFLICT(tenant_id,customer_id) DO UPDATE SET
+           minimum_order_cents=excluded.minimum_order_cents,
+           allowed_payment_methods_json=excluded.allowed_payment_methods_json,
+           active=1`,
+         t,customerId,minimumOrderCents,JSON.stringify(allowedPaymentMethods))],result};
+     });
+   },
    async wholesaleTiers(t,b){await branchExists(t,b);return all('SELECT id,product_id AS productId,min_quantity_milli / 1000.0 AS minQuantity,unit_price_cents AS unitPriceCents,active FROM wholesale_tiers WHERE tenant_id=? AND branch_id=? ORDER BY product_id,min_quantity_milli',t,b);},
    async saveWholesaleTier(t,b,body,key){
      await branchExists(t,b);await product(t,body.productId);const milli=qty(body.minQuantity),price=cents(body.unitPriceCents,'Preço');
@@ -332,7 +468,32 @@ export function createVerticalService(db){
      });
    },
    async wholesalePrice(t,b,productId,quantity){await branchExists(t,b);return price(t,b,productId,quantity);},
-   async wholesaleOrders(t,b){await branchExists(t,b);return all('SELECT id,customer_id AS customerId,status,total_cents AS totalCents,sale_id AS saleId,created_at AS createdAt FROM wholesale_orders WHERE tenant_id=? AND branch_id=? ORDER BY created_at DESC LIMIT 100',t,b);},
+   async wholesaleOrders(t,b){
+     await branchExists(t,b);
+     const orders=await all(`SELECT o.id,o.customer_id AS customerId,c.name AS customerName,
+       o.status,o.total_cents AS totalCents,o.sale_id AS saleId,o.fulfillment AS fulfillmentType,
+       o.expected_at AS expectedAt,o.created_at AS createdAt
+       FROM wholesale_orders o JOIN customers c ON c.tenant_id=o.tenant_id AND c.id=o.customer_id
+       WHERE o.tenant_id=? AND o.branch_id=? ORDER BY o.created_at DESC,o.id DESC LIMIT 100`,t,b);
+     if(!orders.length)return [];
+     // Fetch all visible line snapshots in one query (no N+1 or independent stock).
+     const ids=orders.map(o=>o.id),placeholders=ids.map(()=>'?').join(',');
+     const lines=await all(`SELECT i.order_id AS orderId,i.product_id AS productId,
+       p.name AS productName,i.quantity_milli / 1000.0 AS quantity,
+       i.unit_price_cents AS unitPriceCents,i.tier_id AS tierId
+       FROM wholesale_order_items i JOIN products p ON p.tenant_id=i.tenant_id AND p.id=i.product_id
+       WHERE i.tenant_id=? AND i.branch_id=? AND i.order_id IN (${placeholders})
+       ORDER BY i.rowid`,t,b,...ids);
+     const byOrder=new Map(orders.map(order=>[order.id,[]]));
+     for(const line of lines)byOrder.get(line.orderId)?.push({
+       productId:line.productId,productName:line.productName,quantity:line.quantity,
+       pendingQuantity:line.quantity,unitPriceCents:line.unitPriceCents,
+       pricingSnapshot:line.tierId?{tierId:line.tierId}:null
+     });
+     return orders.map(order=>({...order,items:byOrder.get(order.id).map(item=>({
+       ...item,pendingQuantity:order.status==='FULFILLED'?0:item.quantity
+     }))}));
+   },
    wholesaleOrder:loadWholesale,
    async wholesaleQuote(t,b,user,body,key){
      await branchExists(t,b);const cust=await customer(t,body.customerId);

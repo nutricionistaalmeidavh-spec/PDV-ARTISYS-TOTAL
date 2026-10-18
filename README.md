@@ -47,7 +47,7 @@ O núcleo pode rodar em localhost com Node 22+ e SQLite, sem Cloudflare: execute
 
 ## Progresso e roadmap atual (56 capacidades)
 
-A **fila única de implementação** é composta por **56 capacidades do desktop**; os 68 contratos das sete telas são verificações internas associadas a elas, não um segundo backlog. Use `npm run report:parity` para visualizar os quatro estados: copiado integralmente, copiado parcialmente, não copiado/não demonstrado e implementado aguardando homologação. **Atenção:** ausência de prova (`gap`) não significa necessariamente ausência de código.
+A **fila única de implementação** é composta por **56 capacidades do desktop**; os 68 contratos das sete telas são verificações internas associadas a elas, não um segundo backlog. Use `npm run report:parity` para visualizar os quatro estados: copiado integralmente, copiado parcialmente, não copiado/não demonstrado e implementado aguardando auditoria de código. **Atenção:** ausência de prova (`gap`) não significa necessariamente ausência de código.
 
 - [Roadmap operacional vigente — 56 capacidades, prioridades R0–R5 e política de migrations](docs/ROADMAP-PARIDADE-56.md)
 - [Auditoria R0 e execução R1 — diagnóstico dos 21 itens e testes de suspensão/retomada](docs/parity/R0-R1-EXECUTION-20261018.md)
@@ -58,7 +58,7 @@ A **fila única de implementação** é composta por **56 capacidades do desktop
 
 A matriz operacional em `docs/parity/desktop-web-matrix.json` verifica 68 contratos de sete telas e o inventário em `docs/parity/desktop-capability-inventory.json` cobre **todas as 56 capacidades publicadas** no manifesto `release/capabilities.json` do desktop original, fixado em `7efea9c`. A cópia verificável por SHA Git fica em `docs/parity/desktop-capabilities-baseline.json`. O escopo estendido não é prova de que todos os subfluxos já estejam catalogados ou equivalentes.
 
-A paridade permanece **incompleta**. `npm run test:parity` executa testes de regressão do gate e valida links para as asserções dos testes Node/Chromium, a integridade de IDs, responsáveis, pré-requisitos e reivindicações; a CI executa os testes de domínio e E2E correspondentes. **Não** equiparar a existência de um arquivo a funcionalidade comprovada; teste físico de periféricos e prova independente de homologação são etapas separadas. Os estados `complete` só são aceitos com cobertura 100% do escopo e atestado rastreável de revisão/CI. Ver `docs/parity/P0-AUDIT-PLAN.md`.
+A paridade permanece **incompleta**. `npm run test:parity` executa testes de regressão do gate e valida links para as asserções dos testes Node/Chromium, a integridade de IDs, responsáveis, pré-requisitos e reivindicações; a CI executa os testes de domínio e E2E correspondentes. **Não** equiparar a existência de um arquivo a funcionalidade comprovada; testes automatizados de periféricos com simuladores e revisão independente de código demonstram conclusão de software; inspeção física é opcional e não bloqueia `covered`. Os estados `complete` só são aceitos com cobertura 100% do escopo e atestado rastreável de revisão/CI. Ver `docs/parity/P0-AUDIT-PLAN.md`.
 
 ## Auditoria de paridade do desktop
 
@@ -71,6 +71,6 @@ A interface web pode usar a mesma API autoritativa em **Node.js + SQLite local**
 - [Manual de instalação HTTPS LAN, provisionamento e recuperação](docs/SELFHOST-LAN-HTTPS.md)
 - `apps/api/src/local-migrations.mjs`: migrações transacionais com checksum; banco antigo sem histórico exige migração assistida (sem replay perigoso).
 - `apps/api/src/https-lan-server.mjs`: PWA e API na mesma origem HTTPS, cookies Secure, validação de Host e CSRF na API.
-- `apps/api/test/https-lan-server.test.mjs`: teste real com TLS temporário e 3 contas em 2 empresas; **não é homologação física**.
+- `apps/api/test/https-lan-server.test.mjs`: teste real com TLS temporário e 3 contas em 2 empresas; é prova automatizada de integração, não ensaio presencial (que é opcional).
 - A aplicação precisa da API local acessível para confirmar transações: PWA offline mantém apenas a casca pública, não vendas.
 

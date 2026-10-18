@@ -85,7 +85,7 @@
         else if(original.startsWith('/api/v1/reports/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/sales'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/returns')operation='returns';
-        else if(/^\/api\/v1\/(customers|suppliers|sellers|restaurant|wholesale|commissions|credit)(\/|$)/.test(original))operation=original.slice(apiRoot.length);
+        else if(/^\/api\/v1\/(customers|suppliers|sellers|restaurant|recipes|onboarding|wholesale|commissions|credit)(\/|$)/.test(original))operation=original.slice(apiRoot.length);
         else throw new Error('Este módulo ainda não está disponível na versão online.');
         targetPath=apiRoot+'tenants/'+encodeURIComponent(this.tenantId)+'/'+operation;
         if(method==='GET'||method==='DELETE')url.searchParams.set('branchId',this.branchId);
@@ -93,8 +93,8 @@
       const target=new URL(targetPath,root.location.origin);
       for(const [k,v] of url.searchParams)target.searchParams.set(k,v);
       const headers={'accept':'application/json'};
-      // In self-hosted LAN, the server enforces this device credential on
-      // every business route; a revoked terminal cannot continue selling.
+      if(!['GET','HEAD'].includes(method))headers['content-type']='application/json';
+      // A revoked LAN terminal cannot use business APIs; device scope is verified by the server.
       if(this.tenantId&&target.pathname.startsWith('/api/v1/tenants/')){
         const deviceKey='pdv-total-r2-device-'+this.tenantId;
         const deviceId=root.localStorage?.getItem(deviceKey+'-id');
@@ -104,7 +104,6 @@
           headers['x-pdv-device-credential']=credential;
         }
       }
-      if(!['GET','HEAD'].includes(method))headers['content-type']='application/json';
       const payload=body==null?{}:{...body};
       if(!['GET','HEAD'].includes(method)){
         if(operation)payload.branchId=this.branchId;
@@ -143,7 +142,15 @@
       if(operation==='customers')return method==='GET'?value.customers:value.customer;
       if(operation==='suppliers')return method==='GET'?value.suppliers:value.supplier;
       if(operation==='sellers')return value.sellers;
-      if(operation.startsWith('restaurant/')||operation.startsWith('wholesale/')||operation.startsWith('commissions')||operation.startsWith('credit/'))return value;
+      // A single canonical API returns named envelopes; the wholesale view
+      // consumes the underlying records/arrays just like the catalog screens.
+      if(operation==='wholesale/tiers')return method==='GET'?value.tiers:value.tier;
+      if(operation==='wholesale/price')return value.price;
+      if(/^wholesale\/customers\/[^/]+\/policy$/.test(operation))return value.policy;
+      if(operation==='wholesale/orders')return method==='GET'?value.orders:value.order;
+      if(/^wholesale\/orders\/[^/]+\/(confirm|cancel)$/.test(operation))return value.order;
+      if(/^wholesale\/orders\/[^/]+$/.test(operation))return value.order;
+      if(operation.startsWith('recipes/')||operation.startsWith('onboarding/')||operation.startsWith('restaurant/')||operation.startsWith('wholesale/')||operation.startsWith('commissions')||operation.startsWith('credit/'))return value;
       if(operation==='inventory')return value.stock;
       if(operation==='inventory/receipts'||operation==='inventory/adjustments')return value.movement;
       if(operation==='inventory/movements')return value.movements;
@@ -363,8 +370,8 @@
     sale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}`); }
     saleDetails(id) { return this.webMode?this.sale(id):this.request(`/api/v1/sales/${encodeURIComponent(id)}/details`); }
     openSale(body,mutationId) { return this.request('/api/v1/sales', { method: 'POST', body,mutationId }); }
-    setSaleCustomer(id, customerId) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/customer`, { method: 'POST', body: { customerId } }); }
-    setSaleSeller(id, sellerId) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/seller`, { method: 'POST', body: { sellerId } }); }
+    setSaleCustomer(id, customerId) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/customer`, { method: 'POST', body: { customerId }, mutationId:this.mutationId() }); }
+    setSaleSeller(id, sellerId) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/seller`, { method: 'POST', body: { sellerId }, mutationId:this.mutationId() }); }
     addSaleItem(id, productId, quantity = 1) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/items`, { method: 'POST', body: { productId, quantity } }); }
     updateSaleItem(id, productId, quantity) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/items/${encodeURIComponent(productId)}`, { method: 'PUT', body: { quantity }, mutationId: this.mutationId() }); }
     overrideSaleItemPrice(id, itemId, body) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/price`, { method: 'PUT', body }); }
@@ -415,13 +422,6 @@
     validateBackup(id) { return this.request(`/api/v1/backups/${encodeURIComponent(id)}/validate`, { method:'POST', body:{} }); }
     prepareRestore(id) { return this.request(`/api/v1/backups/${encodeURIComponent(id)}/restore`, { method:'POST', body:{} }); }
 
-    async modules(){
-      if(!this.webMode)return this.request('/api/v1/modules');
-      if(!this.tenantId)return [];
-      const result=await this.request('/api/v1/tenants/'+encodeURIComponent(this.tenantId)+'/lan/modules');
-      return result.modules||[];
-    }
-
     settings(filters={}) { return this.request(`/api/v1/settings${this.params(filters)}`); }
     saveSetting(key,value,scope='global') { return this.request(`/api/v1/settings/${encodeURIComponent(key)}`, { method:'PUT', body:{value,scope} }); }
     removeSetting(key,scope='global') { return this.request(`/api/v1/settings/${encodeURIComponent(key)}${this.params({scope})}`, { method:'DELETE' }); }
@@ -434,6 +434,13 @@
     systemHealth() { return this.request('/api/v1/system/health'); }
     systemLogs(filters={}) { return this.request(`/api/v1/system/logs${this.params(filters)}`); }
     createDiagnostics() { return this.request('/api/v1/system/diagnostics', { method:'POST', body:{} }); }
+
+    async modules(){
+      if(!this.webMode)return this.request('/api/v1/modules');
+      if(!this.tenantId)return [];
+      const result=await this.request('/api/v1/tenants/'+encodeURIComponent(this.tenantId)+'/lan/modules');
+      return result.modules||[];
+    }
 
     pilotChecks() { return this.request('/api/v1/pilot'); }
     pilotReadiness() { return this.request('/api/v1/pilot/readiness'); }

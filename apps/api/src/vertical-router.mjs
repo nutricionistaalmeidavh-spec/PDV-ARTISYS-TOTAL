@@ -1,4 +1,5 @@
 import {createVerticalService} from './vertical-service.mjs';
+import {createR4ExtendedService} from './r4-extended-service.mjs';
 import canonicalAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import canonicalProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
 
@@ -24,8 +25,8 @@ async function readBody(request){
 export async function verticalRoute(request,db,session,member,tenantId,path){
  const url=new URL(request.url),method=request.method,parts=path.split('/').filter(Boolean);
  const feature=parts[0];
- if(!['customers','suppliers','sellers','restaurant','wholesale','commissions','credit'].includes(feature))return null;
- const svc=createVerticalService(db),user=session.userId;
+ if(!['customers','suppliers','sellers','restaurant','recipes','onboarding','wholesale','commissions','credit'].includes(feature))return null;
+ const svc=createVerticalService(db),ext=createR4ExtendedService(db),user=session.userId;
  try{
    const write=['POST','PATCH','PUT','DELETE'].includes(method),body=write?await readBody(request):{};
    const branch=body.branchId||url.searchParams.get('branchId');
@@ -39,8 +40,97 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
    if(feature==='sellers'&&parts.length===1&&method==='GET'){
      permission(member,user,'sellers.view');return json({sellers:await svc.sellers(tenantId,branch)});
    }
+   if(feature==='onboarding'){
+     if(parts[1]==='segments'&&parts.length===2&&method==='GET'){
+       permission(member,user,'settings.view');
+       return json(await ext.segments(tenantId,branch));
+     }
+     if(parts[1]==='segments'&&parts.length===2&&method==='PUT'){
+       permission(member,user,'settings.manage');
+       return json({choice:await ext.selectSegment(tenantId,branch,body,key)});
+     }
+   }
+   if(feature==='recipes'&&parts[1]){
+     if(parts.length===2&&method==='GET'){
+       permission(member,user,'products.view');
+       return json({recipe:await ext.recipe(tenantId,branch,parts[1])});
+     }
+     if(parts.length===2&&method==='PUT'){
+       permission(member,user,'products.manage');
+       return json({recipe:await ext.saveRecipe(tenantId,branch,parts[1],body,key)});
+     }
+   }
    if(feature==='restaurant'){
      permission(member,user,'restaurant.access');
+     if(parts[1]==='segments'&&parts.length===2&&method==='GET'){
+       permission(member,user,'restaurant.orders.view');return json(await ext.segments(tenantId,branch));
+     }
+     if(parts[1]==='bakery'&&parts[2]==='orders'&&parts.length===3){
+       if(method==='GET'){
+         permission(member,user,'restaurant.orders.view');
+         const orders=await svc.foodOrders(tenantId,branch,'PICKUP');
+         return json({orders:orders.filter(row=>row.service_channel==='COUNTER')});
+       }
+       if(method==='POST'){
+         permission(member,user,'restaurant.orders.create');
+         return json({order:await svc.createFoodOrder(tenantId,branch,user,
+           {...body,fulfillment:'COUNTER',tableSessionId:null,useTicket:body.useTicket!==false},key)},201);
+       }
+     }
+     if(parts[1]==='weight'&&parts[2]==='quote'&&parts.length===3&&method==='POST'){
+       permission(member,user,'products.view');return json({quote:await ext.quoteWeight(tenantId,branch,body)});
+     }
+     if(parts[1]==='pizzeria'){
+       if(parts.length===3&&parts[2]==='profiles'){
+         if(method==='GET'){permission(member,user,'products.view');return json({profiles:await ext.pizzaProfiles(tenantId,branch)});}
+         if(method==='POST'){permission(member,user,'products.manage');return json({profile:await ext.savePizzaProfile(tenantId,branch,body,key)},201);}
+       }
+       if(parts.length===4&&parts[2]==='products'&&method==='GET'){
+         permission(member,user,'products.view');return json({profile:await ext.pizzaProfile(tenantId,branch,parts[3])});
+       }
+       if(parts.length===3&&parts[2]==='quote'&&method==='POST'){
+         permission(member,user,'products.view');return json({quote:await ext.quotePizza(tenantId,branch,body)});
+       }
+     }
+     if(parts[1]==='kitchen'&&parts[2]==='stations'){
+       if(parts.length===3&&method==='GET'){
+         permission(member,user,'kitchen.view');return json({stations:await ext.stations(tenantId,branch)});
+       }
+       if(parts.length===3&&method==='POST'){
+         permission(member,user,'settings.manage');return json({station:await ext.saveStation(tenantId,branch,body,key)},201);
+       }
+     }
+     if(parts[1]==='kitchen'&&parts[2]==='routes'){
+       if(parts.length===3&&method==='GET'){
+         permission(member,user,'kitchen.view');return json({routes:await ext.routes(tenantId,branch)});
+       }
+       if(parts.length===3&&method==='POST'){
+         permission(member,user,'products.manage');return json({route:await ext.setRoute(tenantId,branch,body,key)},201);
+       }
+     }
+     if(parts[1]==='kitchen'&&parts[2]==='print-jobs'){
+       if(parts.length===3&&method==='GET'){
+         permission(member,user,'kitchen.view');
+         return json({jobs:await ext.printJobs(tenantId,branch)});
+       }
+       if(parts.length===5&&parts[4]==='claim'&&method==='POST'){
+         permission(member,user,'kitchen.update_status');
+         return json({job:await ext.claimPrint(tenantId,branch,parts[3],key)});
+       }
+       if(parts.length===5&&parts[4]==='ack'&&method==='POST'){
+         permission(member,user,'kitchen.update_status');
+         return json({job:await ext.acknowledgePrint(tenantId,branch,parts[3],body,key)});
+       }
+     }
+     if(parts[1]==='kitchen'&&parts[2]==='station-tickets'){
+       if(parts.length===3&&method==='GET'){
+         permission(member,user,'kitchen.view');return json({tickets:await ext.tickets(tenantId,branch)});
+       }
+       if(parts.length===4&&method==='PATCH'){
+         permission(member,user,'kitchen.update_status');
+         return json({ticket:await ext.updateTicket(tenantId,branch,parts[3],body.status,key)});
+       }
+     }
      if(parts[1]==='tables'){
        if(parts.length===2&&method==='GET'){permission(member,user,'restaurant.orders.view');return json({tables:await svc.tables(tenantId,branch)});}
        if(parts.length===2&&method==='POST'){permission(member,user,'restaurant.tables.manage');return json({table:await svc.saveTable(tenantId,branch,body,key)},201);}
@@ -49,6 +139,20 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
      if(parts[1]==='sessions'&&parts[2]){
        if(parts.length===3&&method==='GET'){permission(member,user,'restaurant.orders.view');return json({session:await svc.tableSession(tenantId,branch,parts[2])});}
        if(parts.length===4&&parts[3]==='close'&&method==='POST'){permission(member,user,'restaurant.tables.manage');return json({session:await svc.closeTable(tenantId,branch,parts[2],key)});}
+       if(parts.length===4&&parts[3]==='transfer-items'&&method==='POST'){
+         permission(member,user,'restaurant.orders.transfer');
+         return json({transfer:await ext.transferItems(tenantId,branch,user,parts[2],body,key)});
+       }
+       if(parts.length===4&&parts[3]==='split'){
+         if(method==='GET'){
+           permission(member,user,'restaurant.orders.view');
+           return json({plan:await ext.split(tenantId,branch,parts[2])});
+         }
+         if(method==='POST'){
+           permission(member,user,'restaurant.orders.transfer');
+           return json({plan:await ext.saveSplit(tenantId,branch,parts[2],body,key)});
+         }
+       }
        if(parts.length===4&&parts[3]==='checkout'&&method==='GET'){
          permission(member,user,'restaurant.orders.view');
          return json({checkout:await svc.linkedCheckout(tenantId,branch,{tableSessionId:parts[2]})});
@@ -88,6 +192,10 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
        permission(member,user,'restaurant.orders.transfer');
        return json({order:await svc.cancelFoodOrder(tenantId,branch,parts[2],key)});
      }
+     if(parts[1]==='orders'&&parts.length===4&&parts[3]==='dispatch'&&method==='POST'){
+       permission(member,user,'restaurant.orders.transfer');
+       return json({order:await svc.dispatchFoodOrder(tenantId,branch,parts[2],body,key)});
+     }
      if(parts[1]==='orders'&&parts.length===4&&parts[3]==='deliver'&&method==='POST'){
        permission(member,user,'restaurant.orders.transfer');
        return json({order:await svc.deliverFoodOrder(tenantId,branch,parts[2],key)});
@@ -99,6 +207,13 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
    }
    if(feature==='wholesale'){
      permission(member,user,'wholesale.access');
+     if(parts[1]==='customers'&&parts.length===4&&parts[3]==='policy'){
+       if(method==='GET')return json({policy:await svc.wholesaleCustomerPolicy(tenantId,branch,parts[2])});
+       if(method==='PUT'){
+         permission(member,user,'wholesale.orders.manage');
+         return json({policy:await svc.saveWholesaleCustomerPolicy(tenantId,branch,parts[2],body,key)});
+       }
+     }
      if(parts[1]==='tiers'&&parts.length===2){
        if(method==='GET')return json({tiers:await svc.wholesaleTiers(tenantId,branch)});
        if(method==='POST'){permission(member,user,'wholesale.orders.manage');return json({tier:await svc.saveWholesaleTier(tenantId,branch,body,key)},201);}

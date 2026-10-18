@@ -2252,6 +2252,7 @@ function openCategoryForm() {
       permissions:context.capabilities||[],profileId:'profile-'+String(context.profileKey||'operator').toLowerCase(),
       profile:{name:String(context.profileKey||'Equipe'),permissions:context.capabilities||[]}
     };
+    window.PdvCurrentAccess=state.user;
     updateTopbar();
     setOnline(true);
     await loadCommonData();
@@ -2259,6 +2260,7 @@ function openCategoryForm() {
     authOverlay.classList.add('hidden');authOverlay.innerHTML='';
     await navigate('checkout');
     window.PdvUiLifecycle?.emit('auth:hidden',{reason:'authenticated'});
+    void window.PdvR4AdvancedUi?.offerFirstRun?.();
   }
 
   async function bootWeb(){

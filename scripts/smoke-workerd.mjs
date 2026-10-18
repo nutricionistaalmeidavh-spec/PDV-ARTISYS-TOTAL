@@ -95,6 +95,13 @@ try {
       await page.getByLabel('Senha').fill('DummyStrongPassOnlyForCI2026');
       await page.getByRole('button',{name:'Entrar no PDV'}).click();
       await page.getByRole('heading',{name:'Balcão'}).waitFor({timeout:12000});
+      // First-run R4 segment preference is a real modal: choose a segment
+      // explicitly before interacting with the underlying checkout.
+      await page.locator('#r4-segment-first-run').waitFor({timeout:12000});
+      await page.locator('#r4-segment-first-run [name=segmentId]').selectOption('RESTAURANT');
+      await page.locator('#r4-segment-first-run [type=submit]').click();
+      await page.locator('#r4-segment-first-run').waitFor({state:'detached',timeout:12000});
+      assert.equal(await page.locator('#auth-overlay').isVisible(),false,'segment wizard must release checkout focus');
       assert.equal(await page.locator('[data-add-product="'+pid+'"]').count(),1,'canonical product should reach original checkout');
       await page.locator('[data-add-product="'+pid+'"]').click();
       await page.locator('.cart-line').first().waitFor({timeout:12000});

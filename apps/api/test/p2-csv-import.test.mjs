@@ -165,3 +165,24 @@ test('P1 assisted upsert rejects barcode collisions in whole batch and isolates 
   assert.equal(isolated.rows[0].action,'create');
  }finally{x.close();}
 });
+
+test('R1 cap-052 import mutation key cannot acknowledge a different CSV without writing its goods',async()=>{
+ const x=await setup();try{
+  const firstCsv='sku;name;salePriceCents\nR1-IDEMP-A;Primeiro importado;1200\n';
+  const secondCsv='sku;name;salePriceCents\nR1-IDEMP-B;Outro arquivo distinto;2400\n';
+  const mutation=key();
+  const committed=await x.service.commitCatalogImport('a','x','user',{csv:firstCsv},mutation);
+  assert.equal(committed.createdCount,1);
+  assert.deepEqual(await x.service.commitCatalogImport('a','x','user',{csv:firstCsv},mutation),
+    committed,'exact replay remains idempotent');
+  await assert.rejects(
+    x.service.commitCatalogImport('a','x','user',{csv:secondCsv},mutation),
+    e=>e.status===409,
+    'changed contents with original mutation ID must be an explicit conflict, not a false success'
+  );
+  assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM products WHERE tenant_id=?','a'),1);
+  assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM products WHERE tenant_id=? AND sku=?','a','R1-IDEMP-B'),0);
+  assert.equal((await x.service.previewCatalogImport('a','x',{csv:secondCsv})).validRows,1,
+    'the rejected file can still be imported normally with its own mutation ID');
+ }finally{x.close();}
+});
