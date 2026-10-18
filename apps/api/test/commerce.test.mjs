@@ -20,7 +20,7 @@ const notesMigration=readFileSync(new URL('../migrations/0012_sale_item_notes.sq
 const cashTerminalMigration=readFileSync(new URL('../migrations/0013_cash_terminals.sql',import.meta.url),'utf8');
 const checkoutConfigurationMigration=readFileSync(new URL('../migrations/0014_checkout_configurations.sql',import.meta.url),'utf8');
 const salesTargetsMigration=readFileSync(new URL('../migrations/0015_seller_sales_targets.sql',import.meta.url),'utf8');
-const minimumMigration=readFileSync(new URL('../migrations/0016_inventory_minimum_levels.sql',import.meta.url),'utf8');
+const minimumMigration=readFileSync(new URL('../migrations/0017_inventory_minimum_levels.sql',import.meta.url),'utf8');
 // A fixed business date must reach the commerce adapter, not only session authentication.
 // Otherwise UTC midnight makes period-filtered reports silently disappear in CI.
 const NOW=Date.parse('2026-10-17T14:00:00Z');
