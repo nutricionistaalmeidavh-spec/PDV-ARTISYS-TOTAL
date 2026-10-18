@@ -330,7 +330,7 @@ test('R4 cap-036: pizza profiles and flavor pricing are tenant-isolated and inte
  }finally{x.close();}
 });
 
-test('R4 cap-039/041: peso in grams priced safely and segment recommendations do not create duplicate sales',async()=>{
+test('R4 cap-039/cap-041: peso in grams priced safely and segment recommendations do not create duplicate sales',async()=>{
  const x=await setup();try{
    const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Pão a peso',sku:'R4PESO',salePriceCents:2999,unit:'KG',trackStock:false})).body.product;
    const price=await x.request('a','restaurant/weight/quote','POST',{branchId:'filial-a',productId:p.id,grams:450});

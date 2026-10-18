@@ -285,7 +285,7 @@
         "products-031",
         "checkout-019"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -294,7 +294,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "recipe versioning and ingredient consumption: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Fichas versionadas e consumo de ingredientes na venda única comprovados; faltam equivalência de consumo para cada configuração do desktop.",
+      "independentEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "async saveRecipe(",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-009:",
+        "testAssertionContains": "assert.equal(movement.delta,-600);",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": ""
+      }
     },
     {
       "id": "cap-010",
@@ -842,7 +855,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -851,7 +864,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "restaurant tables tabs orders and table transfer: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Transferência de mesa sem clonar pedidos, destinos ocupados rejeitados e isolamento demonstrados; faltam corridas multicaixa e estados desktop.",
+      "independentEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "async transferTable(",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-031:",
+        "testAssertionContains": "assert.equal(orders.filter(o=>o.id===order.id&&o.table_session_id===session.id).length,1);",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": ""
+      }
     },
     {
       "id": "cap-032",
@@ -872,7 +898,20 @@
         "checkout-008"
       ],
       "acceptance": "restaurant advanced split settlement service charge and item transfer: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "Divisão igual, taxa de serviço, recebimentos e transferência de itens provados; faltam split personalizados por item/pagador e pagamentos parciais independentes.",
+      "independentEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "async split(",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-032: equal split",
+        "testAssertionContains": "assert.equal((await x.db.prepare('SELECT count(*) AS n FROM r4_split_tenders WHERE sale_id=?').bind(saleId).first()).n,2);",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": ""
+      }
     },
     {
       "id": "cap-033",
@@ -882,7 +921,7 @@
         "checkout-008",
         "products-021"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -894,7 +933,20 @@
         "products-021"
       ],
       "acceptance": "restaurant checkout reusing sales cash and inventory: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "Checkout único de pedido entregue comprovado na API/SQLite: preço congelado, apenas uma venda, caixa e estoque canônicos, bloqueio de venda duplicada. Regras avançadas de rateio pertencem à cap-032.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "restaurantCheckout=",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-033/cap-037:",
+        "testAssertionContains": "assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,1);",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": ""
+      }
     },
     {
       "id": "cap-034",
@@ -904,7 +956,7 @@
         "checkout-017",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -913,7 +965,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "kitchen kds stations product routing and printer routing: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "KDS por estação, fila durável, lease, retry e cancelamento provados; falta cobertura de todos os protocolos simulados de impressão e permissões de spool.",
+      "independentEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "async claimPrint(",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-034: kitchen print outbox",
+        "testAssertionContains": "assert.equal(second.status,409);",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": ""
+      }
     },
     {
       "id": "cap-035",
@@ -922,7 +987,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -931,7 +996,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared kds routing for food orders: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Canal direto e KDS compartilhado operam na mesma ordem; snapshot da estação testado contra mudança de rota. Faltam transições concorrentes por canal/perfil.",
+      "independentEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "async tickets(",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-035: direct food item",
+        "testAssertionContains": "assert.equal((await x.db.prepare('SELECT count(*) AS n FROM r4_station_tickets').bind().first()).n,0);",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": "am transições concorrentes por canal/perfil."
+      }
     },
     {
       "id": "cap-036",
@@ -940,7 +1018,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -949,7 +1027,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "optional pizzeria size flavors crust and pricing policy: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Pizza com variações da mesma SKU, tamanhos, bordas e preços absolutos/delta comprovados; faltam adicionais e equivalência de insumos por sabor desktop.",
+      "independentEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "async quotePizza(",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-036: same pizza SKU",
+        "testAssertionContains": "assert.deepEqual(children.results.map(r=>r.price),[4000,5000]);",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": ""
+      }
     },
     {
       "id": "cap-037",
@@ -958,7 +1049,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -967,7 +1058,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "food delivery pickup counter workflow: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Retirada, balcão, delivery e despacho reutilizam pedido, KDS e caixa. Falta ciclo completo de entregador, retornos e reconexão concorrente.",
+      "independentEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "async dispatchFoodOrder(",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-033/cap-037:",
+        "testAssertionContains": "assert.equal((await x.request('a','sales','POST',{branchId:'filial-a',restaurantOrderId:orderId})).status,409);",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": "a ciclo completo de entregador, retornos e reconexão concorrente."
+      }
     },
     {
       "id": "cap-038",
@@ -977,7 +1081,7 @@
         "checkout-017",
         "history-034"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -986,7 +1090,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "food unified orders with optional daily ticket and legacy history: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Pedidos únicos e cancelamento idempotente provados, senhas diárias têm cenários próprios. Falta testar dia local/histórico, sem exigir migração fictícia de usuários inexistentes.",
+      "independentEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "ticketNumber=useTicket?",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-038 e cap-049:",
+        "testAssertionContains": "assert.equal(cancelled.status,200,JSON.stringify(cancelled.body));",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": "a testar dia local/histórico, sem exigir migração fictícia de usuários inexistentes."
+      }
     },
     {
       "id": "cap-039",
@@ -995,7 +1112,7 @@
       "dependsOn": [
         "checkout-016"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1004,7 +1121,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "optional market bakery weighted items and orders: Comprovar precisão por peso e unidade, preço total, etiquetas por dados simulados, idempotência e checkout/estoque canônicos. Balança física não integra o gate de código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Padaria por peso, preço exato e checkout único comprovados; falta emulação de leitura de balança/etiqueta e casos de rejeição/reconexão, sem hardware real.",
+      "independentEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "async quoteWeight(",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-039: bakery weighted order",
+        "testAssertionContains": "assert.equal(sale.body.sale.totalCents,quote.totalCents);",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": ""
+      }
     },
     {
       "id": "cap-040",
@@ -1043,7 +1173,7 @@
       "dependsOn": [
         "home-002"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1052,7 +1182,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "first run segment onboarding and editable module recommendations: Comprovar recomendações e escolha de módulos independentes de licença desktop.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Seleção/sugestões por segmento e wizard PWA implementados e testados; ainda faltam aceites de edição individual de módulos e persistência por perfil.",
+      "independentEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "async segments(",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-039/cap-041:",
+        "testAssertionContains": "assert.ok(rec.body.segments.some(s=>s.id==='RESTAURANT'));",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": ""
+      }
     },
     {
       "id": "cap-042",
@@ -1168,7 +1311,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1177,7 +1320,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "restaurant service requests waiter and bill: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Chamados garçom/conta com estados, autenticação e isolamento testados; faltam jornada PWA e concorrência por múltiplos papéis.",
+      "independentEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "async createServiceRequest(",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-048:",
+        "testAssertionContains": "assert.equal(request.status,201,JSON.stringify(request.body));",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": ""
+      }
     },
     {
       "id": "cap-049",
@@ -1187,7 +1343,7 @@
         "reports-062",
         "reports-068"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1196,7 +1352,20 @@
       },
       "testedContractRefs": [],
       "acceptance": "restaurant operational reports and csv export: Conciliar dados de base com CSV e resultados por filial/período sem estimar lucro indevidamente.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Relatório por filial e CSV concilia pedidos, cancelamentos e valores sem confundir faturamento. Faltam comparação abrangente com desktop e limites/paginação.",
+      "independentEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "async restaurantReport(",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-038 e cap-049:",
+        "testAssertionContains": "assert.equal(report.body.report.orderedCents,1700);",
+        "testRunner": "node-test"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-18",
+        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "missingSoftwareWork": "am comparação abrangente com desktop e limites/paginação."
+      }
     },
     {
       "id": "cap-050",
