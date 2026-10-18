@@ -23,7 +23,7 @@ test('selfhost canonical migrations run once; restart neither repeats ALTERs nor
 test('migrations stop before touching a legacy untracked database',async()=>{
   const db=openLocalDatabase();
   try{
-    db.exec('CREATE TABLE preexisting_customer_data(id TEXT PRIMARY KEY); INSERT INTO preexisting_customer_data VALUES ("one");');
+    db.exec("CREATE TABLE preexisting_customer_data(id TEXT PRIMARY KEY); INSERT INTO preexisting_customer_data VALUES ('one');");
     await assert.rejects(applyLocalMigrations(db),/migração assistida obrigatória/);
     assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM preexisting_customer_data').bind().first()).n,1);
     assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name='schema_migrations'").bind().first()).n,0);
