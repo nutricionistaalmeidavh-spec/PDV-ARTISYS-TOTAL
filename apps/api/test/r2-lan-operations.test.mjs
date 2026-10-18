@@ -107,6 +107,35 @@ test('cap-003 cap-044 cap-045 cap-046 R2: independently paired terminal, waiter 
   assert.ok(Array.isArray(kitchenFeed.data.tickets));
   assert.equal((await call('/api/v1/tenants/a/restaurant/tables?branchId=branch-a',
     'GET',null,kitchen,true,kitchenHeaders)).status,403);
+
+  // Actual waiter-to-KDS workflow on the paired devices.
+  const mut=()=>({'x-mutation-id':crypto.randomUUID()});
+  const product=await call('/api/v1/tenants/a/products','POST',
+    {branchId:'branch-a',sku:'R2-PLATE',name:'Prato LAN',salePriceCents:1700},
+    owner,true,{...secondHeaders,...mut()});
+  assert.equal(product.status,201,JSON.stringify(product.data));
+  const table=await call('/api/v1/tenants/a/restaurant/tables','POST',
+    {branchId:'branch-a',label:'Mesa R2',seats:2},waiter,true,{...waiterHeaders,...mut()});
+  assert.equal(table.status,201,JSON.stringify(table.data));
+  const session=await call('/api/v1/tenants/a/restaurant/tables/'+table.data.table.id+'/open','POST',
+    {branchId:'branch-a',partySize:2},waiter,true,{...waiterHeaders,...mut()});
+  assert.equal(session.status,201,JSON.stringify(session.data));
+  const order=await call('/api/v1/tenants/a/restaurant/orders','POST',
+    {branchId:'branch-a',tableSessionId:session.data.session.id,
+      items:[{productId:product.data.product.id,quantity:1}]},
+    waiter,true,{...waiterHeaders,...mut()});
+  assert.equal(order.status,201,JSON.stringify(order.data));
+  const feed=await call('/api/v1/tenants/a/restaurant/kitchen?branchId=branch-a',
+    'GET',null,kitchen,true,kitchenHeaders);
+  assert.equal(feed.status,200);
+  const ticket=feed.data.tickets.find(item=>item.orderId===order.data.order.id);
+  assert.ok(ticket,'cap-044 waiter order must reach cap-045 kitchen without duplicate tickets');
+  const preparing=await call('/api/v1/tenants/a/restaurant/kitchen/'+ticket.id,'PATCH',
+    {branchId:'branch-a',status:'PREPARING'},kitchen,true,{...kitchenHeaders,...mut()});
+  assert.equal(preparing.status,200,JSON.stringify(preparing.data));
+  const ready=await call('/api/v1/tenants/a/restaurant/kitchen/'+ticket.id,'PATCH',
+    {branchId:'branch-a',status:'READY'},kitchen,true,{...kitchenHeaders,...mut()});
+  assert.equal(ready.status,200,JSON.stringify(ready.data));
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},cashier)).status,403);
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},owner)).status,200);
   assert.equal((await call(base+'/devices/check','POST',{id,credential:paired.data.credential},waiter)).status,401);
