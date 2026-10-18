@@ -16,6 +16,8 @@ on:
       - 'scripts/check-desktop-parity.mjs'
       - 'scripts/parity-rules.mjs'
       - 'scripts/parity-rules.test.mjs'
+      - 'scripts/report-xlsx.test.mjs'
+      - 'scripts/smoke-selfhosted.mjs'
       - 'scripts/parity-scenarios.mjs'
       - 'scripts/parity-scenarios.test.mjs'
       - 'scripts/parity-desktop-pricing.test.mjs'
@@ -54,6 +56,8 @@ jobs:
       - name: Test real SQLite isolation and canonical identity
         working-directory: apps/api
         run: npm test
+      - name: Smoke real self-hosted PWA and SQLite API on one origin
+        run: node scripts/smoke-selfhosted.mjs
       - name: Smoke test offline self-hosted provisioning
         working-directory: apps/api
         env:
