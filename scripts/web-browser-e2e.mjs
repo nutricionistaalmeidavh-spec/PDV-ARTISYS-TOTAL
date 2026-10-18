@@ -82,6 +82,47 @@ try{
   await page.screenshot({path:'qa-artifacts/pdv-parity-stock-history.png',fullPage:true});
   await page.locator('.web-stock-history [data-close-modal]').click();
 
+  // P2: a real deflated OOXML spreadsheet goes through the SAME preview/commit
+  // pipeline as CSV. No external conversion service or client-side catalog.
+  await page.locator('#web-import-csv').click();
+  const workbook=Buffer.from('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','base64');
+  await page.locator('#web-import-file').setInputFiles({
+    name:'products.xlsx',
+    mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer:workbook
+  });
+  await page.locator('#web-import-preview').getByText('XLSX-QA-001').waitFor({timeout:12000});
+  assert.equal(await page.locator('#web-import-confirm').isEnabled(),true,
+    'valid XLSX must enable canonical previewed import');
+  await page.locator('#web-import-confirm').click();
+  await page.locator('.web-product-row').filter({hasText:'XLSX-QA-001'}).waitFor({timeout:12000});
+
+  // P2 counted inventory: exercise the actual canonical stock screen in Chromium.
+  await page.locator('#app-sidebar [data-route=inventory]').click();
+  const countForm=page.locator('#web-stock-count');
+  await countForm.waitFor({timeout:12000});
+  const productChoice=await countForm.locator('select[name=productId] option').filter({hasText:sku})
+    .first().getAttribute('value');
+  assert.ok(productChoice,'counted inventory must expose the catalogued product from the canonical API');
+  await countForm.locator('select[name=productId]').selectOption(productChoice);
+  await countForm.locator('select[name=operation]').selectOption('purchase');
+  await countForm.locator('[name=quantity]').fill('1');
+  await countForm.locator('[name=reason]').fill('Entrada de lote para teste');
+  await countForm.locator('[name=lotCode]').fill('QA-LOTE-01');
+  await countForm.locator('[name=manufacturedAt]').fill('2026-10-01');
+  await countForm.locator('[name=expiresAt]').fill('2026-11-01');
+  await countForm.locator('button[type=submit]').click();
+  await page.getByText('QA-LOTE-01',{exact:true}).waitFor({timeout:12000});
+  // Historical lot intake must not display a fabricated per-lot balance.
+  assert.match(await page.getByText(/ainda não existe baixa por lote/).innerText(),/saldo individual/);
+  await countForm.locator('select[name=productId]').selectOption(productChoice);
+  await countForm.locator('select[name=operation]').selectOption('count');
+  await countForm.locator('[name=quantity]').fill('2.25');
+  await countForm.locator('[name=reason]').fill('Conferência física no navegador QA');
+  await countForm.locator('button[type=submit]').click();
+  await page.locator('table tbody tr').filter({hasText:sku}).first().getByText('2,25',{exact:true}).waitFor({timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-parity-inventory-count.png',fullPage:true});
+
   await page.locator('#app-sidebar [data-route=checkout]').click();
   const product=page.locator('[data-add-product]').filter({hasText:'Produto Web QA'});
   await product.waitFor({timeout:12000});
@@ -390,8 +431,12 @@ try{
   assert.match(await page.locator('#route-content').innerText(),/7,00/);
   await page.screenshot({path:'qa-artifacts/pdv-finance-mobile.png',fullPage:true});
 
+  // P5: authorized home indicators are scoped and link back to the one report route.
+  await page.locator('#sidebar-nav [data-route=home]').click();
+  await page.locator('#web-home-live [data-home-open-report]').waitFor({timeout:12000});
+  assert.match(await page.locator('#web-home-live').innerText(),/Terminais com caixa aberto/i);
+  await page.locator('#web-home-live [data-home-open-report]').click();
   // P4: Shared ReportsV2 owner, no duplicate report rendering pipeline.
-  await page.locator('#app-sidebar [data-route=reports]').click();
   await page.getByRole('heading',{name:'Relatórios comerciais'}).waitFor({timeout:12000});
   const report=await page.locator('#route-content').innerText();
   assert.match(report,/Faturamento registrado/i);
@@ -428,6 +473,26 @@ try{
     null,{timeout:12000});
   assert.match(await page.locator('#report-v2-body').innerText(),/Metas e vendas líquidas|Metas e ranking|Meta mensal/);
   await page.screenshot({path:'qa-artifacts/pdv-seller-targets.png',fullPage:true});
+  await page.locator('[data-report-web=overview]').click();
+  // P5 comparisons use the canonical API and do not invent rates without a base.
+  await page.locator('#web-report-filter [name=from]').fill('2026-10-17');
+  await page.locator('#web-report-filter [name=to]').fill('2026-10-17');
+  await page.locator('#web-report-filter button[type=submit]').click();
+  await page.locator('[data-report-web=overview][aria-selected=true]').waitFor();
+  await page.locator('[data-report-web=comparison]').click();
+  await page.locator('[data-report-web=comparison][aria-selected=true]').waitFor();
+  assert.match(await page.locator('#report-v2-body').innerText(),/Receita líquida|Variação de receita/i);
+  assert.match(await page.locator('#report-v2-body').innerText(),/Sem base comparativa anterior/i);
+  await page.locator('[data-report-web=comparison]').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.locator('[data-report-web=products][aria-selected=true]').waitFor();
+  assert.equal(await page.evaluate(()=>document.activeElement?.dataset.reportWeb),'products',
+    'keyboard tab navigation must restore focus after asynchronous report render');
+  await page.locator('#app-sidebar [data-route=checkout]').click();
+  await page.locator('#app-sidebar [data-route=reports]').click();
+  await page.locator('[data-report-web=products][aria-selected=true]').waitFor();
+  assert.equal(await page.locator('#web-report-filter [name=from]').inputValue(),'2026-10-17');
+  assert.equal(await page.locator('#web-report-filter [name=to]').inputValue(),'2026-10-17');
   await page.locator('[data-report-web=overview]').click();
   const downloadEvent=page.waitForEvent('download');
   await page.locator('#web-report-export').click();

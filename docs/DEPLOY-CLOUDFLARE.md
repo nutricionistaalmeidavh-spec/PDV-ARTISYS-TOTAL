@@ -95,6 +95,13 @@ Depois de `0010_purchase_orders.sql`, aplicar `0011_product_media.sql` somente c
 Migração **0013_cash_terminals.sql** após 0012. Faz backfill de histórico com terminal `DEFAULT`, substitui a restrição de uma única sessão aberta por filial pela de **uma sessão aberta por terminal e filial**. Não renomear IDs de sessões já registrados. Antes da migração remota: backup/restore testado, conferir sessões legadas abertas, plano de encerramento do caixa `DEFAULT`, registro estável do terminal no navegador e regressão física de dois caixas e estorno. **Não aplicar automaticamente o banco remoto**; o deploy não deve ativar `AUTH_ENABLED` nem alterar licenças ou secrets.
 
 
+## P2 — recebimento identificado por lote (0016, ainda parcial)
+
+Depois da migration 0015_seller_sales_targets.sql, fazer backup e aplicar apps/api/migrations/0016_inventory_lot_receipts.sql somente no banco do PDV TOTAL. O deploy do Worker não instala tabelas remotamente; a operação D1 exige migração manual explícita. Para instalações self-hosted novas, a inicialização Node aplica a sequência incluindo 0016. Em SQLite já existente, não reaplicar DDL sem verificar migrações anteriores.
+
+A migração não altera inventory_movements, stock_positions ou itens de venda: registra apenas lote, fabricação, validade e quantidade vinculados a entradas do ledger canônico. A UI mostra entradas históricas por lote, nunca saldo atual por lote. Saídas FIFO/FEFO, reserva, venda, estorno, transferência e inventário físico por lote ainda não estão implementados.
+
+
 ### P5 — política de estoque mínimo (aditiva, não automática)
 
 A migração `0017_inventory_minimum_levels.sql` deve ser aplicada **somente após** `0016_inventory_lot_receipts.sql` na base nova e isolada do PDV TOTAL, com backup verificado. Ela não altera `inventory_movements` ou `stock_positions`; cria a política por empresa, filial e produto. A CI aplica a migração ao D1 **local**, não ao banco remoto.

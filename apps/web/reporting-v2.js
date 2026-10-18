@@ -13,8 +13,9 @@
   let storeTimeZone = 'America/Sao_Paulo';
   let state = { view:'overview',fromDate:'',toDate:'',sellerId:'',customerId:'',productId:'',paymentMethod:'',locationId:'' };
   let webReportContextKey = '';
-  let lastWebReportRequest = 0;
-  const webReportViews = new Set(['overview','products','payments','inventory','cash','finance','margins','details','coverage','targets']);
+  // Ignore stale API results after a view switch, route switch or tenant change.
+  let webReportGeneration = 0;
+  const webReportViews = new Set(['overview','comparison','products','payments','inventory','cash','finance','margins','details','coverage','targets']);
   // Keep only presentation preferences per tenant/branch in this browser tab.
   // Never persist monetary aggregates, customer IDs, or authorization data.
   function restoreWebReportContext() {
@@ -366,8 +367,9 @@
   // Web mode stays within the original PdvReportsV2 route owner and state.
   // Backend D1 aggregates are authoritative; no replica or browser-side ledger.
   async function renderWebReports(next={}){
-    const requestId=++lastWebReportRequest;
+    const generation=++webReportGeneration;
     await ready();
+    if(generation!==webReportGeneration)return;
     restoreWebReportContext();
     state={...state,...next};
     markActive();
@@ -375,8 +377,9 @@
     if(!state.fromDate)state.fromDate=date.slice(0,8)+'01';
     if(!state.toDate)state.toDate=date;
     const fromDate=state.fromDate,toDate=state.toDate;
+    const contextKey=webReportContextKey;
     const query=new URLSearchParams({from:fromDate,to:toDate});
-    const available=['overview','products','payments','inventory','cash','finance','margins','details','coverage','targets'];
+    const available=['overview','comparison','products','payments','inventory','cash','finance','margins','details','coverage','targets'];
     if(!available.includes(state.view))state.view='overview';
     saveWebReportView();
     let report,comparison=null,trend=null,margin=null,detail=null,coverage=null,ranking=null,sellersForGoals=[];
@@ -385,9 +388,9 @@
       const spanDays=Math.round((Date.parse(toDate+'T00:00:00Z')-Date.parse(fromDate+'T00:00:00Z'))/86400000)+1;
       [report,comparison,trend,margin,detail,coverage,ranking,sellersForGoals]=await Promise.all([
         api.request('/api/v1/reports/summary?'+query.toString()),
-        state.view==='overview'?api.compareSalesPeriods({
+        ['overview','comparison'].includes(state.view)?api.compareSalesPeriods({
           from:fromDate,to:toDate,compareFrom:previous.previousFrom,compareTo:previous.previousTo
-        }).catch(()=>null):Promise.resolve(null),
+        }).catch(error=>{if(state.view==='comparison')throw error;return null;}):Promise.resolve(null),
         state.view==='overview'&&spanDays>=1&&spanDays<=90?api.dailySalesTrend({from:fromDate,to:toDate}):Promise.resolve(null),
         state.view==='margins'?api.historicalMarginReport({from:fromDate,to:toDate}):Promise.resolve(null),
         state.view==='details'?api.reportSalesDetailsCanonical({from:fromDate,to:toDate,
@@ -399,17 +402,17 @@
         state.view==='targets'?api.sellers():Promise.resolve([])
       ]);
     }catch(error){
-      if(routeActive()&&requestId===lastWebReportRequest)content.innerHTML=`<section class="ops-page report-v2-page">
+      if(generation===webReportGeneration&&contextKey===String(api.tenantId||'')+'/'+String(api.branchId||'')&&routeActive())content.innerHTML=`<section class="ops-page report-v2-page">
         <header class="ops-head"><div><h1>Relatórios</h1><p>Não foi possível consultar os dados.</p></div></header>
         <section class="ops-card"><div class="ops-empty">${escapeHtml(error.message)}</div></section></section>`;
       return;
     }
-    if(!routeActive()||requestId!==lastWebReportRequest)return;
+    if(generation!==webReportGeneration||!routeActive()||contextKey!==String(api.tenantId||'')+'/'+String(api.branchId||''))return;
     const sale=report.sales||{},cash=report.cash||[],inventory=report.inventory||[],
       payments=report.methodTotals||[],products=report.products||[],finance=report.finance||{};
     const total=Number(sale.totalCents)||0,count=Number(sale.count)||0;
     const value=(v)=>money(Number(v)||0);
-    const viewLabels={overview:'Visão geral',products:'Produtos',payments:'Recebimentos',
+    const viewLabels={overview:'Visão geral',comparison:'Comparativos',products:'Produtos',payments:'Recebimentos',
       inventory:'Estoque',cash:'Caixa',finance:'Financeiro',margins:'Margem histórica',details:'Vendas detalhadas',coverage:'Cobertura do estoque',targets:'Metas e ranking'};
     const table=(heads,rows,colspan=heads.length)=>`<div class="ops-table-wrap"><table class="ops-table">
       <thead><tr>${heads.map(x=>`<th>${escapeHtml(x)}</th>`).join('')}</tr></thead><tbody>
@@ -539,6 +542,20 @@
           <button class="ops-primary" type="submit" ${allSellers.length?'':'disabled'}>Salvar meta</button>
         </form>`;
     };
+    const comparativeView=()=>{
+      if(!comparison)return '<p class="ops-muted">Comparação indisponível. Atualize o período.</p>';
+      const c=comparison.current.sales,p=comparison.previous.sales,d=comparison.delta;
+      const from=comparison.previous.period.from,to=comparison.previous.period.to;
+      return `<p class="ops-muted">Período atual: ${escapeHtml(fromDate)} a ${escapeHtml(toDate)}.
+        Base equivalente anterior: ${escapeHtml(from)} a ${escapeHtml(to)}.
+        Devoluções reconhecidas na data do estorno.</p>`
+        +table(['Indicador','Atual','Anterior','Variação'],[
+          `<tr><td>Receita líquida</td><td>${value(c.totalCents)}</td><td>${value(p.totalCents)}</td><td>${value(d.totalCents)}</td></tr>`,
+          `<tr><td>Vendas concluídas</td><td>${escapeHtml(String(c.count))}</td><td>${escapeHtml(String(p.count))}</td><td>${escapeHtml(String(d.count))}</td></tr>`,
+          `<tr><td>Devoluções</td><td>${value(c.refundedCents)}</td><td>${value(p.refundedCents)}</td><td>${value(d.refundedCents)}</td></tr>`,
+          `<tr><td>Variação de receita (%)</td><td colspan="3">${d.percentage==null?'Sem base comparativa anterior':escapeHtml(d.percentage.toLocaleString('pt-BR')+'%')}</td></tr>`
+        ]);
+    };
     const trendTable=()=>{
       if(!trend)return '<p class="ops-muted">Para consultar a evolução diária, selecione até 90 dias no período.</p>';
       const points=trend.points||[];
@@ -559,12 +576,19 @@
       <section class="ops-card"><h2>Evolução diária de vendas líquidas</h2>
       <p class="ops-muted">Movimentos por data efetiva: vendas concluídas e devoluções são apresentados separadamente, sem reescrever o faturamento de períodos passados.</p>
       ${trendTable()}</section>`;
-    const views={overview,products:productsTable(),payments:paymentsTable(),inventory:inventoryTable(),
+    const views={overview,comparison:comparativeView(),products:productsTable(),payments:paymentsTable(),inventory:inventoryTable(),
       cash:cashTable(),finance:financeTable(),margins:marginsTable(),details:detailedTable(),coverage:coverageTable(),targets:sellerTargetsView()};
 
     const xlsxData=()=>{
       const brl=cents=>Number(cents||0)/100;
       switch(state.view){
+        case 'comparison':return {headers:['Indicador','Atual','Anterior','Variação'],
+          rows:comparison?[
+            ['Receita líquida (R$)',brl(comparison.current.sales.totalCents),brl(comparison.previous.sales.totalCents),brl(comparison.delta.totalCents)],
+            ['Vendas concluídas',comparison.current.sales.count,comparison.previous.sales.count,comparison.delta.count],
+            ['Devoluções (R$)',brl(comparison.current.sales.refundedCents),brl(comparison.previous.sales.refundedCents),brl(comparison.delta.refundedCents)],
+            ['Variação receita (%)',comparison.delta.percentage==null?'Sem base anterior':comparison.delta.percentage,'','']
+          ]:[]};
         case 'products':return {headers:['Produto','Unidades','Vendas','Valor bruto (R$)'],
           rows:products.map(p=>[p.name,p.quantity,p.salesCount,brl(p.grossCents)])};
         case 'payments':return {headers:['Forma','Recebido (R$)'],
@@ -604,9 +628,18 @@
     const tabs=available.map(key=>`<button type="button" data-report-web="${key}"
       class="report-v2-tab ${state.view===key?'active':''}"
       role="tab" aria-selected="${state.view===key?'true':'false'}"
+      tabindex="${state.view===key?'0':'-1'}"
       aria-controls="report-v2-body">${viewLabels[key]}</button>`).join('');
+    // A report date range MUST NOT be presented as filtering a snapshot that ignores it.
+    const viewScopeNotice={
+      inventory:'Posição de estoque atual da filial. O intervalo de datas não altera estes saldos.',
+      cash:'Até 50 sessões de caixa mais recentes. O intervalo de datas ainda não filtra essas sessões.',
+      finance:'Saldos atuais de contas manuais. O intervalo de datas não altera estes saldos.',
+      coverage:'A cobertura considera os 30 dias anteriores à data final. A data inicial não se aplica.',
+      targets:'Metas e comissões são consultadas pelo mês de referência na própria aba, não pelo intervalo acima.'
+    }[state.view]||'';
     content.innerHTML=`<section class="ops-page report-v2-page web-report-page">
-      <header class="ops-head"><div><span class="web-section-kicker">DADOS CANÔNICOS · D1</span>
+      <header class="ops-head"><div><span class="web-section-kicker">DADOS CANÔNICOS · API LOCAL OU CLOUD</span>
         <h1>Relatórios comerciais</h1><p>Dados registrados pelo PDV Total, separados por filial.</p></div>
         <div class="ops-head-actions"><button id="web-report-export" class="ops-secondary" type="button">
           Exportar vendas CSV</button><button id="web-report-xlsx" class="ops-secondary" type="button">
@@ -616,7 +649,8 @@
         <label>De<input name="from" type="date" class="ops-input" value="${escapeHtml(fromDate)}" required></label>
         <label>Até<input name="to" type="date" class="ops-input" value="${escapeHtml(toDate)}" required></label>
         <button class="ops-primary" type="submit">Aplicar período</button>
-      </form><nav class="report-v2-tabs" role="tablist" aria-label="Categorias de relatório">${tabs}</nav>
+      </form>${viewScopeNotice?'<p class="ops-muted" role="note">'+escapeHtml(viewScopeNotice)+'</p>':''}
+      <nav class="report-v2-tabs" role="tablist" aria-label="Categorias de relatório">${tabs}</nav>
       <div id="report-v2-body" role="tabpanel"><section class="ops-card">
         ${views[state.view]||overview}</section></div>
       <p class="ops-muted">O XLSX contém os dados desta aba; em Vendas detalhadas exporta todos os registros filtrados dentro do limite da API (não apenas a página). O PDF usa a impressão do navegador.</p>

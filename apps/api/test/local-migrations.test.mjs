@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import {join} from 'node:path';
+import {readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {openLocalDatabase} from '../src/local-db.mjs';
 import {applyLocalMigrations} from '../src/local-migrations.mjs';
@@ -10,11 +11,11 @@ test('selfhost canonical migrations run once; restart neither repeats ALTERs nor
   const db=openLocalDatabase();
   try{
     const first=await applyLocalMigrations(db);
-    assert.equal(first.applied,16);
-    assert.equal(first.total,16);
+    assert.equal(first.applied,17);
+    assert.equal(first.total,17);
     await db.prepare("INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)").bind('a','site-a','First shop',new Date().toISOString()).run();
     const second=await applyLocalMigrations(db);
-    assert.deepEqual(second,{applied:0,total:16});
+    assert.deepEqual(second,{applied:0,total:17});
     const row=await db.prepare('SELECT name FROM tenants WHERE id=?').bind('a').first();
     assert.equal(row.name,'First shop');
   }finally{db.close();}

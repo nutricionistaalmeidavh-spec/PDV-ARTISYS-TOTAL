@@ -376,6 +376,46 @@ export function createCommerceService(db,{now=nowISO}={}){
       ]);
       return result;
     },
+    // Counted stock is an adjustment to the existing immutable stock ledger,
+    // not a second mutable stock balance. The client must prove what it saw.
+    async countStock(tenant,branch,user,body,header){
+      await branchExists(tenant,branch);
+      const key=requiredMutation(body,header),scope='inventory.count:'+branch;
+      const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const p=await product(tenant,body?.productId);
+      if(!p.track_stock)throw error(409,'Produto não controla estoque físico.');
+      const parseCount=(value,label)=>{
+        if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>100000||
+           Math.abs(value-roundQuantity(value))>0.00000001)
+          throw error(400,label+' deve ser positiva ou zero, com até três casas decimais.');
+        return Math.round(roundQuantity(value)*1000);
+      };
+      const expectedMilli=parseCount(body?.expectedQuantity,'Saldo esperado');
+      const countedMilli=parseCount(body?.countedQuantity,'Quantidade contada');
+      const reason=text(body?.reason,240);
+      if(reason.length<3)throw error(400,'Inventário contado exige justificativa.');
+      const existing=await first('SELECT balance_milli AS milli FROM stock_positions WHERE tenant_id=? AND branch_id=? AND product_id=?',tenant,branch,p.id);
+      if((existing?.milli||0)!==expectedMilli)
+        throw error(409,'O saldo mudou desde a contagem. Atualize o inventário antes de confirmar.');
+      const delta=countedMilli-expectedMilli,at=stamp();
+      const result={movementId:delta?randomId():null,productId:p.id,branchId:branch,
+        quantityBefore:expectedMilli/1000,quantityDelta:delta/1000,
+        quantityAfter:countedMilli/1000,reason,type:'inventory-count',operatorId:user};
+      // A nonzero delta is checked a SECOND time inside the write statement.
+      // If another terminal changes stock between read and write, CHECK(delta<>0)
+      // aborts the whole batch (including the idempotency record).
+      const commands=[];
+      if(delta)commands.push(q(`INSERT INTO inventory_movements
+        (id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at,reason)
+        SELECT ?,?,?,?,
+          CASE WHEN COALESCE((SELECT balance_milli FROM stock_positions
+            WHERE tenant_id=? AND branch_id=? AND product_id=?),0)=?
+          THEN ? ELSE 0 END,'adjustment',NULL,?,?,?`,
+        result.movementId,tenant,branch,p.id,tenant,branch,p.id,expectedMilli,delta,key,at,reason));
+      commands.push(audit(tenant,scope,key,result));
+      await batch(commands);
+      return result;
+    },
     async transferStock(tenant,branch,user,body,header){
       await branchExists(tenant,branch);
       const target=String(body?.toBranchId||'').trim();
@@ -548,12 +588,50 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(supplierId&&!await first('SELECT id FROM suppliers WHERE tenant_id=? AND id=? AND active=1',tenant,supplierId))
         throw error(404,'Fornecedor não encontrado nesta empresa.');
       if(supplierId&&!hasCost)throw error(400,'Compra com fornecedor exige custo unitário.');
+      const code=body?.lotCode==null?'':String(body.lotCode).trim().toUpperCase();
+      if(code&&!/^[A-Z0-9][A-Z0-9._/-]{0,63}$/.test(code))
+        throw error(400,'Lote deve conter até 64 caracteres alfanuméricos, ponto, barra, hífen ou sublinhado.');
+      if(!code&&(body?.manufacturedAt||body?.expiresAt))
+        throw error(400,'Informe o lote antes de registrar fabricação ou validade.');
+      const dateField=(value,label)=>{
+        if(value==null||value==='')return null;
+        if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)||
+          Number.isNaN(Date.parse(value+'T00:00:00Z'))||
+          new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)
+          throw error(400,label+' deve usar a data AAAA-MM-DD.');
+        return value;
+      };
+      const manufacturedAt=dateField(body?.manufacturedAt,'Fabricação');
+      const expiresAt=dateField(body?.expiresAt,'Validade');
+      if(manufacturedAt&&expiresAt&&expiresAt<manufacturedAt)
+        throw error(400,'Validade anterior à fabricação.');
       const at=stamp(),result={movementId:randomId(),productId:row.id,branchId:branch,
-        quantity:milli/1000,type:kind,...(hasCost?{unitCostCents:cost,supplierId}:{})};
+        quantity:milli/1000,type:kind,...(hasCost?{unitCostCents:cost,supplierId}:{}),
+        ...(code?{lot:{code,manufacturedAt,expiresAt}}:{})};
       const statements=ledgerReceipt(tenant,branch,user,row.id,milli,cost,supplierId,key,at,result.movementId,kind);
+      if(code)statements.push(q(`INSERT INTO inventory_lot_receipts
+        (id,tenant_id,branch_id,product_id,movement_id,lot_code,manufactured_at,expires_at,quantity_milli,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,row.id,result.movementId,code,
+        manufacturedAt,expiresAt,milli,at));
       statements.push(audit(tenant,scope,key,result));
       await batch(statements);
       return result;
+    },
+    async lotReceipts(tenant,branch,{productId='',limit=50}={}){
+      await branchExists(tenant,branch);
+      const filter=text(productId,128);
+      const capped=Number(limit);
+      if(!Number.isInteger(capped)||capped<1||capped>100)
+        throw error(400,'Limite de consulta inválido.');
+      return all(`SELECT l.id,l.product_id AS productId,p.name AS productName,
+        l.movement_id AS movementId,l.lot_code AS lotCode,
+        l.manufactured_at AS manufacturedAt,l.expires_at AS expiresAt,
+        l.quantity_milli/1000.0 AS receivedQuantity,l.created_at AS receivedAt
+        FROM inventory_lot_receipts l
+        JOIN products p ON p.id=l.product_id AND p.tenant_id=l.tenant_id
+        WHERE l.tenant_id=? AND l.branch_id=? AND (?='' OR l.product_id=?)
+        ORDER BY l.created_at DESC,l.id DESC LIMIT ?`,
+        tenant,branch,filter,filter,capped);
     },
     async stock(tenant,branch,limit=100){
       await branchExists(tenant,branch);
@@ -965,7 +1043,8 @@ export function createCommerceService(db,{now=nowISO}={}){
         s.status,COALESCE((SELECT SUM(r.amount_cents) FROM sale_returns r
           WHERE r.tenant_id=s.tenant_id AND r.branch_id=s.branch_id AND r.sale_id=s.id),0) AS refundedCents
         FROM sales s WHERE s.tenant_id=? AND s.branch_id=? AND s.status IN('COMPLETED','CANCELLED')
-        AND s.completed_at BETWEEN ? AND ? ORDER BY s.completed_at,s.id LIMIT 3000`,tenant,branch,a,b);
+        AND s.completed_at BETWEEN ? AND ? ORDER BY s.completed_at,s.id LIMIT 3001`,tenant,branch,a,b);
+      if(rows.length>3000)throw error(413,'Mais de 3000 vendas. Divida o período para exportar sem truncamento.');
       const cell=value=>'"'+String(value??'').replace(/"/g,'""').replace(/^[=+@-]/,"'")+'"';
       return '\uFEFF'+'Venda;Data;Total (R$);Desconto (R$);Operador;Status;Reembolsado (R$);Liquido acumulado (R$)\r\n'+
         rows.map(x=>[x.saleNumber,x.completedAt,(x.totalCents/100).toFixed(2).replace('.',','),
