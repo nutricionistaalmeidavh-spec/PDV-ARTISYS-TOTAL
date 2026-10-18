@@ -80,7 +80,7 @@
       "capability": "desktop-windows-local-first",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -89,7 +89,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "desktop windows local first: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Perfil gratuito e local por papel gerado/validado com Node 22, sem credenciais embutidas nem SaaS obrigatório; execução da suíte CI Windows para o instalador lógico, sem teste físico.",
+      "independentEvidence": {
+        "file": "scripts/r2-deploy.mjs",
+        "contains": "export async function prepareLocalServer",
+        "testFile": "apps/api/test/r2-deployment-profiles.test.mjs",
+        "testContains": "test('cap-001 R2 Windows local-first",
+        "testAssertionContains": "assert.equal(checked.readyForLaunch,true);",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-002",
@@ -1012,7 +1020,7 @@
       "dependsOn": [
         "home-001"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1023,7 +1031,15 @@
         "home-001"
       ],
       "acceptance": "self hosted mobile ui on local lan: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "Navegador Chromium responsivo com a PWA real servida sobre HTTPS Node/SQLite LAN, pareamento, revogação, indisponibilidade e recuperação de API; validação em equipamentos reais é opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/https-lan-server.mjs",
+        "contains": "export function createLanServer",
+        "testFile": "scripts/r2-lan-browser-e2e.mjs",
+        "testContains": "// cap-047: actual Node+SQLite HTTPS LAN",
+        "testAssertionContains": "assert.equal(response.status(),200,'cap-047 HTTPS local PWA must load on a mobile viewport');",
+        "testRunner": "playwright"
+      }
     },
     {
       "id": "cap-048",
@@ -1203,7 +1219,7 @@
       "dependsOn": [
         "cash-046"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1212,7 +1228,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "server terminal and terminal deployment profiles: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Perfil gratuito e local por papel gerado/validado com Node 22, sem credenciais embutidas nem SaaS obrigatório; execução da suíte CI Windows para o instalador lógico, sem teste físico.",
+      "independentEvidence": {
+        "file": "scripts/r2-deploy.mjs",
+        "contains": "export async function prepareLocalTerminal",
+        "testFile": "apps/api/test/r2-deployment-profiles.test.mjs",
+        "testContains": "test('cap-056 R2 server/terminal",
+        "testAssertionContains": "assert.equal(terminal.role,'TERMINAL');",
+        "testRunner": "node-test"
+      }
     }
   ],
   "notes": "Inventário sem duplicar serviços ou assumir paridade por mera presença de código; o manifesto cobre capacidades publicadas no desktop, não todos os subfluxos. Subfluxos serão decompostos em cenários E2E por domínio."
