@@ -51,6 +51,23 @@ try{
   await page.locator('#web-login-form button[type=submit]').click();
   await page.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
   await page.locator('#product-search').waitFor({state:'visible',timeout:12000});
+  // R4: the first authenticated owner session receives segment recommendations,
+  // but no optional module is activated by the choice itself.
+  const freshSegment=page.locator('#r4-segment-first-run');
+  if(await freshSegment.count()){
+    await freshSegment.locator('[name=segmentId]').selectOption('RESTAURANT');
+    await freshSegment.locator('[type=submit]').click();
+    await freshSegment.waitFor({state:'detached',timeout:12000});
+  }
+  const savedSegment=await page.evaluate(async()=>{
+    const api=new window.PdvApiClient.ApiClient();
+    return api.request('/api/v1/onboarding/segments');
+  });
+  assert.equal(savedSegment.selectedId,'RESTAURANT',
+    'saved first-login segment should persist across second authenticated browser session');
+  assert.equal(await page.locator('#auth-overlay').isVisible(),false,
+    'persisted segment must not intercept cashier pointer events');
+
   assert.equal(await page.locator('#product-search').count(),1,'only the canonical checkout renderer should exist');
   await page.locator('#app-sidebar [data-route=products]').click();
   await page.locator('#web-new-product').click();
@@ -652,6 +669,27 @@ try{
   await page.locator('[data-wholesale-orders] [data-order-action=confirm]').first().click();
   await page.locator('[data-wholesale-orders]').getByText('Confirmado').first().waitFor({timeout:12000});
   await page.screenshot({path:'qa-artifacts/pdv-wholesale-policy-r1.png',fullPage:true});
+  // R4 browser acceptance: multiple different products compose one kitchen
+  // order. Every line must remain editable and the order uses the same API.
+  const foodProduct=await page.evaluate(async()=>{
+    const client=new window.PdvApiClient.ApiClient();await client.initialize();
+    return client.saveProduct({name:'Salgado QA R4',sku:'R4-FOOD-'+Date.now(),salePriceCents:900,trackStock:false});
+  });
+  assert.ok(foodProduct.id);
+  await page.locator('#app-sidebar [data-route=FOOD]').click();
+  await page.locator('[data-r4-action=tab][data-id=orders]').click();
+  const foodForm=page.locator('[data-r4-form=order]');
+  await foodForm.waitFor({state:'visible',timeout:12000});
+  await foodForm.locator('[name=fulfillment]').selectOption('PICKUP');
+  await foodForm.locator('[data-r4-order-item]').first().locator('[name=productId]').selectOption(foodProduct.id);
+  await foodForm.locator('[data-r4-action=add-line]').click();
+  await foodForm.locator('[data-r4-order-item]').nth(1).locator('[name=productId]').selectOption(saleProductOption);
+  await foodForm.locator('[data-r4-order-item]').nth(1).locator('[name=quantity]').fill('2');
+  await page.waitForFunction(()=>[...document.querySelectorAll('[data-r4-order-item]')].every(row=>['none','configured'].includes(row.dataset.r4PizzaState)),null,{timeout:12000});
+  await foodForm.locator('button.primary-button[type=submit]').click();
+  await page.locator('[data-r4-web] .restaurant-list').getByText('Salgado QA R4',{exact:false}).first().waitFor({timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-r4-multiline-food.png',fullPage:true});
+
 
   assert.deepEqual(unexpectedHttp,[],'unexpected online HTTP errors');
   assert.deepEqual(errors,[],'online browser console or script failures');

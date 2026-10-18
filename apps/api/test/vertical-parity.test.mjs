@@ -8,7 +8,7 @@ import {hashPassword} from '../src/password.mjs';
 const origin='https://pdvtotal.test';
 async function setup(){
   const db=openLocalDatabase();
-  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0021_r4_restaurant_operations.sql','0022_r4_restaurant_checkout.sql','0023_r4_extended_verticals.sql'])
+  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0021_r4_restaurant_operations.sql','0022_r4_restaurant_checkout.sql','0023_r4_extended_verticals.sql','0024_r4_print_outbox.sql'])
     db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
   const stamp='2026-10-17T12:00:00.000Z';
   const h=await hashPassword('Senha-de-teste-123!');
@@ -594,5 +594,101 @@ test('R1 cap-024: customer wholesale policy is editable, tenant-scoped and enfor
   assert.equal((await x.request('a',`wholesale/orders/${orderId}?branchId=filial-a`)).body.order.status,'FULFILLED');
   const paidList=await x.request('a','wholesale/orders?branchId=filial-a');
   assert.equal(paidList.body.orders[0].items[0].pendingQuantity,0,'settled order is no longer pending');
+ }finally{x.close();}
+});
+
+test('R4 cap-036: same pizza SKU with two configurations keeps exact child line prices in one sale',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'PIZZA-VARIANT',name:'Pizza variantes',salePriceCents:2000,trackStock:false})).body.product;
+   const prof=await x.request('a','restaurant/pizzeria/profiles','POST',{branchId:'filial-a',productId:p.id,policy:'HIGHEST_FLAVOR',
+     sizes:[{code:'M',name:'Média',priceCents:3000}],flavors:[{code:'CAL',name:'Calabresa',priceCents:4000},{code:'QUE',name:'Quatro queijos',priceCents:5000}],crusts:[]});
+   assert.equal(prof.status,201,JSON.stringify(prof.body));
+   const table=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Mesa Duas Pizzas'})).body.table;
+   const session=(await x.request('a',`restaurant/tables/${table.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+   const order=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:session.id,items:[
+     {productId:p.id,quantity:1,pizza:{sizeCode:'M',flavorCodes:['CAL']}},
+     {productId:p.id,quantity:1,pizza:{sizeCode:'M',flavorCodes:['QUE']}}
+   ]});
+   assert.equal(order.status,201,JSON.stringify(order.body));assert.equal(order.body.order.totalCents,9000);
+   const ticket=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0].id;
+   assert.equal((await x.request('a',`restaurant/kitchen/${ticket}`,'PATCH',{branchId:'filial-a',status:'PREPARING'})).status,200);
+   assert.equal((await x.request('a',`restaurant/kitchen/${ticket}`,'PATCH',{branchId:'filial-a',status:'READY'})).status,200);
+   assert.equal((await x.request('a',`restaurant/orders/${order.body.order.id}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+   const sale=await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:session.id});
+   assert.equal(sale.status,201,JSON.stringify(sale.body));assert.equal(sale.body.sale.totalCents,9000);
+   const children=await x.db.prepare('SELECT unit_price_cents AS price,configuration_json AS config FROM sale_configured_lines WHERE tenant_id=? AND sale_id=? ORDER BY price').bind('a',sale.body.sale.id).all();
+   assert.equal(children.results.length,2);
+   assert.deepEqual(children.results.map(r=>r.price),[4000,5000]);
+   assert.match(children.results[1].config,/Quatro queijos/);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sale_items WHERE sale_id=?').bind(sale.body.sale.id).first()).n,1);
+   await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0});
+   const completed=await x.request('a',`sales/${sale.body.sale.id}/complete`,'POST',{branchId:'filial-a',payments:[{method:'PIX',amountCents:9000}]});
+   assert.equal(completed.status,200,JSON.stringify(completed.body));
+   assert.equal(completed.body.sale.totalCents,9000);
+ }finally{x.close();}
+});
+
+test('R4 cap-034: kitchen print outbox claims one job at a time and retries failed printer safely',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'PRINT-KDS',name:'Ticket grelha',salePriceCents:1800,trackStock:false})).body.product;
+   const station=await x.request('a','restaurant/kitchen/stations','POST',{branchId:'filial-a',name:'Grelha impressão',printerName:'cozinha-local',printEnabled:true});
+   assert.equal(station.status,201,JSON.stringify(station.body));
+   const sid=station.body.station.id;
+   assert.equal((await x.request('a','restaurant/kitchen/routes','POST',{branchId:'filial-a',productId:p.id,mode:'PRODUCTION',stationId:sid})).status,201);
+   const order=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:p.id,quantity:1}]});
+   assert.equal(order.status,201,JSON.stringify(order.body));
+   const jobs=await x.request('a','restaurant/kitchen/print-jobs?branchId=filial-a');
+   assert.equal(jobs.status,200,JSON.stringify(jobs.body));
+   assert.equal(jobs.body.jobs.length,1);assert.equal(jobs.body.jobs[0].status,'PENDING');
+   assert.equal(jobs.body.jobs[0].printerName,'cozinha-local');
+   const jid=jobs.body.jobs[0].id;
+   const first=await x.request('a',`restaurant/kitchen/print-jobs/${jid}/claim`,'POST',{branchId:'filial-a'});
+   assert.equal(first.status,200,JSON.stringify(first.body));
+   assert.ok(first.body.job.leaseToken);assert.equal(first.body.job.status,'LEASED');
+   const second=await x.request('a',`restaurant/kitchen/print-jobs/${jid}/claim`,'POST',{branchId:'filial-a'});
+   assert.equal(second.status,409);
+   assert.equal((await x.request('a',`restaurant/kitchen/print-jobs/${jid}/ack`,'POST',{branchId:'filial-a',leaseToken:'00000000-0000-4000-8000-000000000000',status:'PRINTED'})).status,409);
+   assert.equal((await x.request('a',`restaurant/kitchen/print-jobs/${jid}/ack`,'POST',{branchId:'filial-a',leaseToken:first.body.job.leaseToken,status:'FAILED'})).status,200);
+   const reattempt=await x.request('a',`restaurant/kitchen/print-jobs/${jid}/claim`,'POST',{branchId:'filial-a'});
+   assert.equal(reattempt.status,200,JSON.stringify(reattempt.body));
+   assert.notEqual(reattempt.body.job.leaseToken,first.body.job.leaseToken);
+   const printed=await x.request('a',`restaurant/kitchen/print-jobs/${jid}/ack`,'POST',{branchId:'filial-a',leaseToken:reattempt.body.job.leaseToken,status:'PRINTED'});
+   assert.equal(printed.status,200,JSON.stringify(printed.body));
+   assert.equal((await x.request('a',`restaurant/kitchen/print-jobs/${jid}/claim`,'POST',{branchId:'filial-a'})).status,409);
+   assert.equal((await x.request('b','restaurant/kitchen/print-jobs?branchId=filial-b','GET',undefined,{as:'b'})).body.jobs.length,0);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM restaurant_orders WHERE tenant_id=?').bind('a').first()).n,1);
+ }finally{x.close();}
+});
+
+test('R4 cap-034: cancelling unstarted production cancels pending print jobs atomically',async()=>{
+ const x=await setup();try{
+  const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'KDS-CANCEL',name:'Cancelar impressão',salePriceCents:1000,trackStock:false})).body.product;
+  const s=(await x.request('a','restaurant/kitchen/stations','POST',{branchId:'filial-a',name:'Estação cancelamento',printerName:'cozinha-teste',printEnabled:true})).body.station;
+  await x.request('a','restaurant/kitchen/routes','POST',{branchId:'filial-a',productId:p.id,mode:'PRODUCTION',stationId:s.id});
+  const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:p.id,quantity:1}]})).body.order;
+  const jobs=(await x.request('a','restaurant/kitchen/print-jobs?branchId=filial-a')).body.jobs;
+  assert.equal(jobs.length,1);
+  const cancel=await x.request('a',`restaurant/orders/${order.id}/cancel`,'POST',{branchId:'filial-a'});
+  assert.equal(cancel.status,200,JSON.stringify(cancel.body));
+  const after=(await x.request('a','restaurant/kitchen/print-jobs?branchId=filial-a')).body.jobs;
+  assert.equal(after[0].status,'CANCELLED');
+  assert.equal((await x.request('a',`restaurant/kitchen/print-jobs/${jobs[0].id}/claim`,'POST',{branchId:'filial-a'})).status,409);
+ }finally{x.close();}
+});
+
+test('R4 cap-036 desktop delta policy adds catalog price plus size, flavor and crust exactly once',async()=>{
+ const x=await setup();try{
+  const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'PIZZA-DELTA',name:'Pizza base',salePriceCents:2000,trackStock:false})).body.product;
+  const profile=await x.request('a','restaurant/pizzeria/profiles','POST',{branchId:'filial-a',productId:p.id,
+    policy:'HIGHEST_FLAVOR',pricingMode:'DESKTOP_DELTAS',sizes:[{code:'M',name:'Média',priceCents:500}],
+    flavors:[{code:'CAL',name:'Calabresa',priceCents:300},{code:'QUE',name:'Queijo',priceCents:600}],
+    crusts:[{code:'CAT',name:'Catupiry',priceCents:200}]});
+  assert.equal(profile.status,201,JSON.stringify(profile.body));
+  const quote=await x.request('a','restaurant/pizzeria/quote','POST',{branchId:'filial-a',
+    productId:p.id,sizeCode:'M',flavorCodes:['CAL','QUE'],crustCode:'CAT'});
+  assert.equal(quote.status,200,JSON.stringify(quote.body));
+  assert.equal(quote.body.quote.unitPriceCents,3300);
+  assert.equal(quote.body.quote.configuration.pricingMode,'DESKTOP_DELTAS');
+  assert.equal((await x.request('a','restaurant/pizzeria/products/'+p.id+'?branchId=filial-a')).body.profile.pricingMode,'DESKTOP_DELTAS');
  }finally{x.close();}
 });

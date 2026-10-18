@@ -54,6 +54,7 @@ export function createR4ExtendedService(db){
      const stationId=label(body.id,100)||id(),name=label(body.name,100),printer=label(body.printerName,120)||null;
      const sort=integer(body.sortOrder??0,-10000,10000,'Ordenação'),enabled=body.printEnabled===true?1:0,active=body.active!==false?1:0;
      if(!name)throw fail(400,'Informe nome da estação.');
+     if(enabled&&!printer)throw fail(400,'Informe a fila de impressão para habilitar impressão.');
      if(!active&&(await first("SELECT id FROM r4_product_kitchen_routes WHERE tenant_id=? AND branch_id=? AND station_id=? AND mode='PRODUCTION' LIMIT 1",t,b,stationId)))
        throw fail(409,'Retire as rotas ativas antes de desativar a estação.');
      return mutation(t,'r4.station:'+b+':'+stationId,key,async()=>{
@@ -224,13 +225,73 @@ export function createR4ExtendedService(db){
            t,b,sessionId,parts,bps,feeId,stamp())]};
      });
    },
+
+   async printJobs(t,b){
+     await branch(t,b);
+     const rows=await all(`SELECT j.id,j.station_ticket_id AS stationTicketId,j.printer_name AS printerName,
+       j.status,j.attempt_count AS attempts,j.leased_until AS leasedUntil,
+       j.created_at AS createdAt,j.updated_at AS updatedAt,j.payload_json AS payload
+       FROM r4_kitchen_print_jobs j WHERE j.tenant_id=? AND j.branch_id=?
+       ORDER BY j.created_at DESC,j.id DESC LIMIT 250`,t,b);
+     return rows.map(({payload,...row})=>({...row,payload:JSON.parse(payload)}));
+   },
+   async claimPrint(t,b,jobId,key){
+     await branch(t,b);
+     if(!keyValid(key))throw fail(400,'Identificador da operação obrigatório.');
+     const scope='r4.print.claim:'+b+':'+jobId;
+     const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(prior)return JSON.parse(prior.result_json);
+     const row=await first('SELECT status,attempt_count AS attempts,leased_until AS until FROM r4_kitchen_print_jobs WHERE tenant_id=? AND branch_id=? AND id=?',t,b,jobId);
+     if(!row)throw fail(404,'Ticket de impressão não encontrado.');
+     const current=stamp();
+     if(row.attempts>=8||!(['PENDING','FAILED'].includes(row.status)||(row.status==='LEASED'&&row.until<=current)))
+       throw fail(409,'Ticket já em impressão ou finalizado.');
+     const leaseToken=id(),leasedUntil=new Date(Date.now()+120000).toISOString(),result={id:jobId,status:'LEASED',leaseToken,leasedUntil,attempts:row.attempts+1};
+     await db.batch([
+       q(`UPDATE r4_kitchen_print_jobs SET status='LEASED',lease_token=?,leased_until=?,
+           attempt_count=attempt_count+1,last_error=NULL,updated_at=?
+           WHERE tenant_id=? AND branch_id=? AND id=? AND attempt_count<8
+             AND (status IN('PENDING','FAILED') OR (status='LEASED' AND leased_until<=?))`,
+         leaseToken,leasedUntil,current,t,b,jobId,current),
+       q(`INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at)
+          SELECT ?,?,?,?,? WHERE changes()=1`,t,scope,key,JSON.stringify(result),current)
+     ]);
+     const won=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(!won)throw fail(409,'Outro terminal assumiu a impressão. Atualize o painel.');
+     return JSON.parse(won.result_json);
+   },
+   async acknowledgePrint(t,b,jobId,body,key){
+     await branch(t,b);
+     const scope='r4.print.ack:'+b+':'+jobId;
+     if(!keyValid(key))throw fail(400,'Identificador da operação obrigatório.');
+     const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(prior)return JSON.parse(prior.result_json);
+     const token=label(body.leaseToken,128),status=label(body.status).toUpperCase();
+     const lastError=status==='FAILED'?label(body.error,200)||'Falha de impressão local.':null;
+     if(!/^[a-f0-9-]{36}$/i.test(token)||!['PRINTED','FAILED'].includes(status))throw fail(400,'Confirmação de impressão inválida.');
+     const row=await first('SELECT status,lease_token AS token,leased_until AS until FROM r4_kitchen_print_jobs WHERE tenant_id=? AND branch_id=? AND id=?',t,b,jobId);
+     if(!row)throw fail(404,'Ticket de impressão não encontrado.');
+     const current=stamp();
+     if(row.status!=='LEASED'||row.token!==token||row.until<current)throw fail(409,'Reserva de impressão expirada ou inválida.');
+     const result={id:jobId,status};
+     await db.batch([
+       q(`UPDATE r4_kitchen_print_jobs SET status=?,lease_token=NULL,leased_until=NULL,last_error=?,updated_at=?
+          WHERE tenant_id=? AND branch_id=? AND id=? AND status='LEASED'
+          AND lease_token=? AND leased_until>=?`,status,lastError,current,t,b,jobId,token,current),
+       q(`INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at)
+         SELECT ?,?,?,?,? WHERE changes()=1`,t,scope,key,JSON.stringify(result),current)
+     ]);
+     const won=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(!won)throw fail(409,'O ticket foi confirmado por outro terminal.');
+     return JSON.parse(won.result_json);
+   },
    async pizzaProfiles(t,b){
      await branch(t,b);
-     return all('SELECT product_id AS productId,pricing_policy AS policy,max_flavors AS maxFlavors FROM r4_pizza_profiles WHERE tenant_id=? AND branch_id=? ORDER BY product_id',t,b);
+     return all('SELECT product_id AS productId,pricing_policy AS policy,pricing_mode AS pricingMode,max_flavors AS maxFlavors FROM r4_pizza_profiles WHERE tenant_id=? AND branch_id=? ORDER BY product_id',t,b);
    },
    async pizzaProfile(t,b,productId){
      await branch(t,b);await product(t,productId);
-     const profile=await first('SELECT product_id AS productId,pricing_policy AS policy,max_flavors AS maxFlavors FROM r4_pizza_profiles WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,productId);
+     const profile=await first('SELECT product_id AS productId,pricing_policy AS policy,pricing_mode AS pricingMode,max_flavors AS maxFlavors FROM r4_pizza_profiles WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,productId);
      if(!profile)return null;
      const entries=await all('SELECT kind,code,name,price_cents AS priceCents FROM r4_pizza_options WHERE tenant_id=? AND branch_id=? AND product_id=? ORDER BY kind,code',t,b,productId);
      return {...profile,sizes:entries.filter(x=>x.kind==='SIZE'),flavors:entries.filter(x=>x.kind==='FLAVOR'),crusts:entries.filter(x=>x.kind==='CRUST')};
@@ -239,15 +300,17 @@ export function createR4ExtendedService(db){
      await branch(t,b);const p=await product(t,body.productId);
      const policy=label(body.policy).toUpperCase();
      if(!['HIGHEST_FLAVOR','PROPORTIONAL_AVERAGE'].includes(policy))throw fail(400,'Política de preço inválida.');
+     const pricingMode=label(body.pricingMode||'ABSOLUTE_OPTIONS').toUpperCase();
+     if(!['ABSOLUTE_OPTIONS','DESKTOP_DELTAS'].includes(pricingMode))throw fail(400,'Modo de preço inválido.');
      const maxFlavors=integer(body.maxFlavors??4,1,8,'Limite de sabores');
      const sizes=options(body.sizes,'SIZE',true),flavors=options(body.flavors,'FLAVOR',true),crusts=options(body.crusts??[],'CRUST',false);
      return mutation(t,'r4.pizza.profile:'+b+':'+p.id,key,async()=>{
        const entries=[...sizes,...flavors,...crusts];
-       return {result:{productId:p.id,policy,maxFlavors,sizes,flavors,crusts},statements:[
-         q(`INSERT INTO r4_pizza_profiles(tenant_id,branch_id,product_id,pricing_policy,max_flavors,updated_at)
-          VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,product_id) DO UPDATE SET
-          pricing_policy=excluded.pricing_policy,max_flavors=excluded.max_flavors,updated_at=excluded.updated_at`,
-          t,b,p.id,policy,maxFlavors,stamp()),
+       return {result:{productId:p.id,policy,pricingMode,maxFlavors,sizes,flavors,crusts},statements:[
+         q(`INSERT INTO r4_pizza_profiles(tenant_id,branch_id,product_id,pricing_policy,pricing_mode,max_flavors,updated_at)
+          VALUES(?,?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,product_id) DO UPDATE SET
+          pricing_policy=excluded.pricing_policy,pricing_mode=excluded.pricing_mode,max_flavors=excluded.max_flavors,updated_at=excluded.updated_at`,
+          t,b,p.id,policy,pricingMode,maxFlavors,stamp()),
          q('DELETE FROM r4_pizza_options WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,p.id),
          ...entries.map(x=>q('INSERT INTO r4_pizza_options(tenant_id,branch_id,product_id,kind,code,name,price_cents) VALUES(?,?,?,?,?,?,?)',
           t,b,p.id,x.kind,x.code,x.name,x.priceCents))]};
@@ -267,8 +330,12 @@ export function createR4ExtendedService(db){
      if(body.crustCode&&!crust)throw fail(400,'Borda inválida.');
      const flavorCents=p.policy==='HIGHEST_FLAVOR'?Math.max(...flavors.map(x=>x.priceCents)):
        Math.round(flavors.reduce((sum,x)=>sum+x.priceCents,0)/flavors.length);
-     const unitPriceCents=integer(Math.max(size.priceCents,flavorCents)+(crust?.priceCents||0),0,1_000_000_000,'Preço final');
-     return {productId:p.productId,policy:p.policy,unitPriceCents,configuration:{
+     const base=p.pricingMode==='DESKTOP_DELTAS'?(await product(t,p.productId)).sale_price_cents:0;
+     const price=p.pricingMode==='DESKTOP_DELTAS'?base+size.priceCents+flavorCents+(crust?.priceCents||0):
+       Math.max(size.priceCents,flavorCents)+(crust?.priceCents||0);
+     const unitPriceCents=integer(price,0,1_000_000_000,'Preço final');
+     return {productId:p.productId,policy:p.policy,pricingMode:p.pricingMode,unitPriceCents,configuration:{
+       pricingMode:p.pricingMode,
        size:{code:size.code,name:size.name},flavors:flavors.map(x=>({code:x.code,name:x.name})),
        crust:crust?{code:crust.code,name:crust.name}:null}};
    },

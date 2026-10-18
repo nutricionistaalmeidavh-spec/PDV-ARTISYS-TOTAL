@@ -100,6 +100,8 @@
       '<div class="restaurant-list">'+model.profiles.map(p=>'<div class="restaurant-row">'+esc(model.products.find(x=>x.id===p.productId)?.name||p.productId)+' · '+esc(p.policy)+'</div>').join('')+'</div>'+
       (can('products.manage')?'<form data-r4-advanced="pizza" class="vertical-form"><label class="field"><span>Produto base</span>'+select('productId',model.products)+'</label>'+
       '<label class="field"><span>Política</span><select name="policy"><option value="HIGHEST_FLAVOR">Cobrar sabor mais caro</option><option value="PROPORTIONAL_AVERAGE">Média dos sabores</option></select></label>'+
+      '<label class="field"><span>Como os preços são definidos?</span><select name="pricingMode"><option value="DESKTOP_DELTAS">Preço base do produto + acréscimos</option><option value="ABSOLUTE_OPTIONS">Tabela de preços finais por opção</option></select></label>'+
+      '<p>Em acréscimos, cadastre nos campos abaixo somente a diferença de preço; em tabela final, informe o preço completo.</p>'+
       field('maxFlavors','Máximo de sabores','number','min="1" max="8" value="4"')+
       '<label class="field"><span>Tamanhos</span><textarea name="sizes" required rows="3" placeholder="Média=30,00"></textarea></label>'+
       '<label class="field"><span>Sabores</span><textarea name="flavors" required rows="3" placeholder="Calabresa=42,00"></textarea></label>'+
@@ -155,7 +157,7 @@
       if(kind==='station')await r4('/kitchen/stations','POST',{name:v.name,printerName:v.printerName,printEnabled:!!v.printEnabled});
       if(kind==='route')await r4('/kitchen/routes','POST',{productId:v.productId,mode:v.mode,
         stationId:v.mode==='PRODUCTION'?v.stationId:null});
-      if(kind==='pizza')await r4('/pizzeria/profiles','POST',{productId:v.productId,policy:v.policy,maxFlavors:Number(v.maxFlavors),
+      if(kind==='pizza')await r4('/pizzeria/profiles','POST',{productId:v.productId,policy:v.policy,pricingMode:v.pricingMode,maxFlavors:Number(v.maxFlavors),
         sizes:parseCatalog(v.sizes),flavors:parseCatalog(v.flavors),crusts:parseCatalog(v.crusts)});
       if(kind==='pizza-quote'){
         const result=await r4('/pizzeria/products/'+uid(v.productId));
@@ -221,5 +223,38 @@
     node.innerHTML='<section class="page"><h2>Carregando opções…</h2></section>';
     try{await load();render();}catch(e){node.textContent='Não foi possível carregar: '+e.message;}
   }
-  root.PdvR4AdvancedUi=Object.freeze({show});
+
+  async function offerFirstRun(){
+    if(!api.webMode||!can('settings.manage'))return;
+    let preference;
+    try{preference=await api.request('/api/v1/onboarding/segments');}catch{return;}
+    if(preference?.selectedId||!preference?.segments?.length)return;
+    const overlay=document.getElementById('auth-overlay');
+    if(!overlay)return;
+    overlay.classList.remove('hidden');
+    overlay.innerHTML='<section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="r4-segment-title">'+
+      '<h1 id="r4-segment-title">Qual é o tipo do seu negócio?</h1>'+
+      '<p>Esta escolha sugere módulos. Nenhum recurso pago ou área opcional será ativado automaticamente.</p>'+
+      '<form id="r4-segment-first-run"><label class="field"><span>Segmento principal</span><select name="segmentId" required>'+
+      preference.segments.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.label)+'</option>').join('')+
+      '</select></label><div class="modal-actions"><button type="button" class="secondary-button" data-r4-onboard-later>Decidir depois</button>'+
+      '<button type="submit" class="primary-button">Salvar e continuar</button></div></form>'+
+      '<small>Depois, em Configurações, você poderá escolher quais áreas deseja habilitar.</small></section>';
+    const close=()=>{overlay.classList.add('hidden');overlay.innerHTML='';};
+    overlay.querySelector('[data-r4-onboard-later]')?.addEventListener('click',close);
+    const form=overlay.querySelector('#r4-segment-first-run');
+    form?.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const button=form.querySelector('[type="submit"]');button.disabled=true;
+      try{
+        const selected=form.elements.segmentId.value;
+        await api.request('/api/v1/onboarding/segments',{method:'PUT',body:{segmentId:selected}});
+        close();
+        toast('Segmento configurado. As áreas opcionais continuam sob seu controle.');
+      }catch(error){button.disabled=false;toast(error.message,true);}
+    });
+    form?.elements.segmentId.focus();
+  }
+
+  root.PdvR4AdvancedUi=Object.freeze({show,offerFirstRun});
 })();

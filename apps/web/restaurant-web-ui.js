@@ -12,7 +12,7 @@
  const path='/api/v1/restaurant';
  const today=new Date().toISOString().slice(0,10);
  const monthAgo=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
- let state={tables:[],orders:[],tickets:[],stationTickets:[],requests:[],products:[],split:null,report:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
+ let state={tables:[],orders:[],tickets:[],stationTickets:[],printJobs:[],requests:[],products:[],split:null,report:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
  const notice=(value,error=false)=>root.PdvToast?.show?.(value,error?'error':'success');
  const action=(endpoint,method='GET',body)=>api.request(path+endpoint,{method,body});
  const safe=async(fn,fallback=[])=>{try{return await fn();}catch{return fallback;}};
@@ -20,15 +20,52 @@
  const btn=(label,what,id='',extra='')=>'<button class="secondary-button" type="button" data-r4-action="'+esc(what)+'" data-id="'+esc(id)+'" '+extra+'>'+esc(label)+'</button>';
  const form=async(endpoint,body)=>action(endpoint,'POST',body);
  function back(){return '<button type="button" class="secondary-button" data-r4-action="back">← Alimentação</button>';}
- function orderLines(order){return (order.items||[]).map(i=>esc(i.name||i.productName)+' × '+esc(i.quantity)).join(', ')||'Nenhum item';}
+ function orderLines(order){return (order.items||[]).map(i=>esc(i.name||i.productName)+' × '+esc(i.quantity)+
+   (i.configuration?.flavors?.length?' ('+esc(i.configuration.flavors.map(x=>x.name).join(' / '))+')':'')).join(', ')||'Nenhum item';}
+ function orderItemRow(){
+   return '<div class="restaurant-card" data-r4-order-item>'+
+     '<label class="field"><span>Produto</span><select name="productId" required>'+state.products.filter(p=>p.active!==false).map(p=>
+       '<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('')+'</select></label>'+
+     field('Quantidade','quantity','number','min="0.001" step="0.001" value="1" required')+
+     '<div data-r4-pizza-options aria-live="polite"></div>'+
+     '<button type="button" class="secondary-button" data-r4-remove-line>Remover item</button></div>';
+ }
+ async function preparePizzaRow(row){
+   const select=row.querySelector('[name="productId"]'),output=row.querySelector('[data-r4-pizza-options]');
+   if(!select||!output)return;
+   const id=select.value;
+   row.dataset.r4PizzaState='loading';output.textContent='Consultando configurações do produto…';
+   try{
+     const response=await action('/pizzeria/products/'+encodeURIComponent(id));
+     if(select.value!==id)return;
+     const profile=response.profile;
+     if(!profile){row.dataset.r4PizzaState='none';output.textContent='';return;}
+     row.dataset.r4PizzaState='configured';
+     row.dataset.r4MaxFlavors=String(profile.maxFlavors||4);
+     output.innerHTML='<fieldset><legend>Monte a pizza</legend>'+
+       '<label class="field"><span>Tamanho</span><select name="sizeCode" required>'+profile.sizes.map(x=>
+         '<option value="'+esc(x.code)+'">'+esc(x.name)+'</option>').join('')+'</select></label>'+
+       '<fieldset><legend>Sabores (até '+esc(profile.maxFlavors)+')</legend>'+profile.flavors.map(x=>
+         '<label><input type="checkbox" name="flavorCodes" value="'+esc(x.code)+'"> '+esc(x.name)+'</label>').join('')+'</fieldset>'+
+       '<label class="field"><span>Borda</span><select name="crustCode"><option value="">Sem borda</option>'+
+       profile.crusts.map(x=>'<option value="'+esc(x.code)+'">'+esc(x.name)+'</option>').join('')+'</select></label></fieldset>';
+   }catch(e){if(select.value!==id)return;row.dataset.r4PizzaState='error';output.textContent='Não foi possível carregar opções de pizza. Atualize ou selecione outro produto.';}
+ }
+ function bindOrderRow(row){
+   row.querySelector('[name="productId"]')?.addEventListener('change',()=>void preparePizzaRow(row));
+   row.querySelector('[data-r4-remove-line]')?.addEventListener('click',()=>{
+     if(row.closest('form')?.querySelectorAll('[data-r4-order-item]').length>1)row.remove();
+   });
+   void preparePizzaRow(row);
+ }
  function title(value){return ({TABLE:'Mesa',PICKUP:'Retirada',DELIVERY:'Entrega',OPEN:'Aberto',READY:'Pronto',DELIVERED:'Entregue',CANCELLED:'Cancelado',NEW:'Novo',PREPARING:'Preparando',ACKNOWLEDGED:'Em atendimento',CLOSED:'Finalizado',WAITER:'Garçom',BILL:'Conta'})[value]||value;}
  async function load(){
-   const [tables,orders,tickets,stationTickets,requests,products,report]=await Promise.all([
+   const [tables,orders,tickets,stationTickets,printJobs,requests,products,report]=await Promise.all([
      safe(()=>action('/tables').then(v=>v.tables)),safe(()=>action('/orders').then(v=>v.orders)),
-     safe(()=>action('/kitchen').then(v=>v.tickets)),safe(()=>action('/kitchen/station-tickets').then(v=>v.tickets)),safe(()=>action('/requests').then(v=>v.requests)),
+     safe(()=>action('/kitchen').then(v=>v.tickets)),safe(()=>action('/kitchen/station-tickets').then(v=>v.tickets)),safe(()=>action('/kitchen/print-jobs').then(v=>v.jobs)),safe(()=>action('/requests').then(v=>v.requests)),
      safe(()=>api.products(false)),safe(()=>action('/reports/summary?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to)).then(v=>v.report),null)
    ]);
-   Object.assign(state,{tables,orders,tickets,stationTickets,requests,products,report});
+   Object.assign(state,{tables,orders,tickets,stationTickets,printJobs,requests,products,report});
  }
  function tableSection(){
    if(!can('restaurant.orders.view'))return '<p class="vertical-empty">Seu perfil não possui acesso às mesas.</p>';
@@ -62,10 +99,9 @@
        '<label class="field"><span>Canal</span><select name="fulfillment"><option value="TABLE">Mesa</option><option value="COUNTER">Balcão</option><option value="PICKUP">Retirada</option><option value="DELIVERY">Entrega</option></select></label>'+
        '<label class="field"><span>Comanda (para atendimento em mesa)</span><select name="tableSessionId"><option value="">Selecione a mesa</option>'+availableTables.map(t=>'<option value="'+esc(t.sessionId)+'">'+esc(t.label)+'</option>').join('')+'</select></label>'+
        field('Endereço (obrigatório para entrega)','address','text','maxlength="300"')+
-       '<label class="field"><span>Produto</span><select name="productId" required>'+products.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('')+'</select></label>'+
-       field('Quantidade','quantity','number','min="0.001" step="0.001" value="1" required')+
+       '<div data-r4-lines>'+orderItemRow()+'</div>'+btn('Adicionar outro item','add-line')+
         '<label><input type="checkbox" name="useTicket"> Gerar senha diária para acompanhar o pedido</label>'+
-       '<button class="primary-button">Enviar pedido para cozinha</button></form></details>':'')+
+       '<button class="primary-button" type="submit">Enviar pedido para cozinha</button></form></details>':'')+
      '<div class="restaurant-list">'+state.orders.map(o=>
        '<div class="restaurant-row"><div><strong>'+esc(title(o.service_channel||o.fulfillment))+' · '+esc(o.ticket_number?'Senha '+o.ticket_number:o.id.slice(0,8))+'</strong><small>'+esc(title(o.status))+' · '+esc(orderLines(o))+'</small></div><div class="restaurant-actions">'+
        (o.status==='READY'&&o.fulfillment==='DELIVERY'?btn('Despachar','dispatch',o.id):'')+
@@ -87,7 +123,13 @@
      '</small></div>'+(can('kitchen.update_status')?'<div class="restaurant-actions">'+
      (t.status==='NEW'?btn('Iniciar preparo',t.stationScoped?'preparing-station':'preparing',t.id):'')+
      (t.status==='PREPARING'?btn('Marcar pronto',t.stationScoped?'ready-station':'ready',t.id):'')+'</div>':'')+'</div>').join('')+
-     '</div></section>';
+     '</div><details><summary>Fila de impressão e falhas ('+state.printJobs.filter(x=>x.status==='FAILED').length+' pendentes)</summary>'+
+       '<div class="restaurant-list">'+state.printJobs.map(j=>
+         '<div class="restaurant-row"><strong>'+esc(j.printerName)+' · '+esc(j.id.slice(0,8))+'</strong>'+
+         '<small>'+esc(({PENDING:'Aguardando agente',LEASED:'Em envio',FAILED:'Aguardando nova tentativa',
+           PRINTED:'Enviado à fila local',CANCELLED:'Cancelado'})[j.status]||j.status)+
+         ' · tentativa '+esc(j.attempts)+'/8</small></div>').join('')+'</div>'+
+       '<p>O agente local precisa estar conectado à impressora. Enviado à fila não garante papel impresso.</p></details></section>';
  }
  function serviceSection(){
    if(!can('restaurant.service.manage'))return '<p class="vertical-empty">Seu perfil não tem acesso aos chamados.</p>';
@@ -137,6 +179,7 @@
      '</section>';
    host.querySelectorAll('[data-r4-action]').forEach(el=>el.addEventListener('click',()=>void click(el)));
    host.querySelectorAll('[data-r4-form]').forEach(el=>el.addEventListener('submit',e=>{e.preventDefault();void submit(el);}));
+   host.querySelectorAll('[data-r4-order-item]').forEach(bindOrderRow);
  }
  async function reload(){await load();render();}
  async function show(){
@@ -152,6 +195,14 @@
    if(what==='select'){state.selected=id;return render();}
    if(what==='refresh')return reload();
    if(what==='advanced')return root.PdvR4AdvancedUi?.show?.({sessionId:id||state.selected});
+   if(what==='add-line'){
+     const formEl=el.closest('form'),rows=formEl?.querySelector('[data-r4-lines]');
+     if(!rows)return;
+     if(rows.querySelectorAll('[data-r4-order-item]').length>=80)return notice('Máximo de 80 itens por pedido.',true);
+     rows.insertAdjacentHTML('beforeend',orderItemRow());
+     bindOrderRow(rows.lastElementChild);
+     return;
+   }
    try{
      if(what==='open')await form('/tables/'+encodeURIComponent(id)+'/open',{partySize:1});
      if(what==='close')await form('/sessions/'+encodeURIComponent(id)+'/close',{});
@@ -198,8 +249,22 @@
        const fulfillment=v.fulfillment;
        if(fulfillment==='TABLE'&&!v.tableSessionId)throw new Error('Selecione uma comanda.');
        if(fulfillment==='DELIVERY'&&!String(v.address).trim())throw new Error('Informe o endereço de entrega.');
+       const items=[...formEl.querySelectorAll('[data-r4-order-item]')].map(row=>{
+         const productId=row.querySelector('[name="productId"]').value,quantity=Number(row.querySelector('[name="quantity"]').value);
+         const status=row.dataset.r4PizzaState;
+         if(status==='loading'||status==='error')throw new Error('Confira as opções dos produtos antes de enviar.');
+         if(!Number.isFinite(quantity)||quantity<=0||quantity>100000)throw new Error('Quantidade inválida.');
+         const item={productId,quantity};
+         if(status==='configured'){
+           const selected=[...row.querySelectorAll('[name="flavorCodes"]:checked')].map(input=>input.value);
+           if(!selected.length||selected.length>Number(row.dataset.r4MaxFlavors))throw new Error('Escolha os sabores da pizza.');
+           item.pizza={sizeCode:row.querySelector('[name="sizeCode"]').value,
+             flavorCodes:selected,crustCode:row.querySelector('[name="crustCode"]').value||null};
+         }
+         return item;
+       });
        await form('/orders',{fulfillment,tableSessionId:fulfillment==='TABLE'?v.tableSessionId:null,
-         address:fulfillment==='DELIVERY'?String(v.address).trim():'',useTicket:v.useTicket==='on',items:[{productId:v.productId,quantity:Number(v.quantity)}]});
+         address:fulfillment==='DELIVERY'?String(v.address).trim():'',useTicket:v.useTicket==='on',items});
      }
      if(what==='dates'){state.from=v.from;state.to=v.to;}
      if(what==='payment'){
