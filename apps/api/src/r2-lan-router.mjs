@@ -123,8 +123,10 @@ export async function r2LanRoute(request,db,session,member,tenantId,path,{now=()
       const id=body?.id,credential=body?.credential;
       if(typeof id!=='string'||id.length>128||typeof credential!=='string'||!/^[a-f0-9]{64}$/.test(credential))
         return err(401,'Credencial inválida.');
-      const row=await db.prepare('SELECT * FROM r2_devices WHERE id=? AND tenant_id=? AND user_id=? AND active=1')
-        .bind(id,tenantId,userId).first();
+      const row=await db.prepare('SELECT * FROM r2_devices WHERE id=? AND tenant_id=? AND active=1')
+        .bind(id,tenantId).first();
+      if(row&&!DEVICE_ROLES[row.kind].has(member.profileKey))
+        return err(403,'Este perfil não pode usar o dispositivo.');
       if(!row||await sha256(credential)!==row.credential_hash)
         return err(401,'Dispositivo não autorizado ou revogado.');
       await db.prepare('UPDATE r2_devices SET last_seen_at=? WHERE id=? AND tenant_id=? AND active=1')
