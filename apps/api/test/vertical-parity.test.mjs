@@ -659,3 +659,19 @@ test('R4 cap-034: kitchen print outbox claims one job at a time and retries fail
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM restaurant_orders WHERE tenant_id=?').bind('a').first()).n,1);
  }finally{x.close();}
 });
+
+test('R4 cap-034: cancelling unstarted production cancels pending print jobs atomically',async()=>{
+ const x=await setup();try{
+  const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'KDS-CANCEL',name:'Cancelar impressão',salePriceCents:1000,trackStock:false})).body.product;
+  const s=(await x.request('a','restaurant/kitchen/stations','POST',{branchId:'filial-a',name:'Estação cancelamento',printerName:'cozinha-teste',printEnabled:true})).body.station;
+  await x.request('a','restaurant/kitchen/routes','POST',{branchId:'filial-a',productId:p.id,mode:'PRODUCTION',stationId:s.id});
+  const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:p.id,quantity:1}]})).body.order;
+  const jobs=(await x.request('a','restaurant/kitchen/print-jobs?branchId=filial-a')).body.jobs;
+  assert.equal(jobs.length,1);
+  const cancel=await x.request('a',`restaurant/orders/${order.id}/cancel`,'POST',{branchId:'filial-a'});
+  assert.equal(cancel.status,200,JSON.stringify(cancel.body));
+  const after=(await x.request('a','restaurant/kitchen/print-jobs?branchId=filial-a')).body.jobs;
+  assert.equal(after[0].status,'CANCELLED');
+  assert.equal((await x.request('a',`restaurant/kitchen/print-jobs/${jobs[0].id}/claim`,'POST',{branchId:'filial-a'})).status,409);
+ }finally{x.close();}
+});
