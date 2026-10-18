@@ -1182,12 +1182,44 @@ test('P3 configured item rejects invalid groups, strangers, cross-tenant selecti
     const sale=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
     const addition='sales/'+sale+'/items/configured';
     assert.equal((await x.write('a',addition,{branchId:'branch-a',productId,quantity:1,selections:['calabresa']})).status,200);
-    assert.equal((await x.write('a',addition,{branchId:'branch-a',productId,quantity:1,selections:['marguerita']})).status,409,
-      'two differently configured units must never be silently merged or undercharged');
+    assert.equal((await x.write('a',addition,{branchId:'branch-a',productId,quantity:1,selections:['marguerita']})).status,200,
+      'same SKU can have distinct validated configurations');
     assert.equal((await x.write('a',addition,{branchId:'branch-a',productId,quantity:1,selections:['calabresa']})).status,200);
     const detail=await x.get('a','sales/'+sale+'?branchId=branch-a');
-    assert.equal(detail.body.sale.items[0].quantity,2);
-    assert.equal(detail.body.sale.items[0].unitPriceCents,1200);
+    assert.equal(detail.body.sale.items.length,2,'two priced choice identities under one catalog SKU');
+    const slices=new Map(detail.body.sale.items.map(i=>[i.configuration.options[0].id,i]));
+    assert.equal(slices.get('calabresa').quantity,2);
+    assert.equal(slices.get('marguerita').quantity,1);
+    assert.equal(slices.get('calabresa').unitPriceCents,1200);
+    assert.equal(slices.get('marguerita').unitPriceCents,1150);
+    assert.equal(detail.body.sale.subtotalCents,3550);
+    assert.equal(new Set(detail.body.sale.items.map(i=>i.productId)).size,1);
+    assert.equal(new Set(detail.body.sale.items.map(i=>i.parentItemId)).size,1);
+    await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+    assert.equal((await x.write('a','sales/'+sale+'/complete',{
+      branchId:'branch-a',payments:[{method:'PIX',amountCents:3550}]})).status,200);
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock
+      .find(i=>i.productId===productId).quantity,1);
+    const returned={branchId:'branch-a',saleId:sale,
+      reason:'Cliente devolveu somente a configuração marguerita',
+      items:[{saleItemId:slices.get('marguerita').id,quantity:1}],
+      refunds:[{method:'PIX',amountCents:1150}]};
+    const quote=await x.write('a','sales/'+sale+'/returns/quote',returned);
+    assert.equal(quote.status,200,quote.body.error);
+    assert.equal(quote.body.quote.amountCents,1150);
+    const refund=await x.write('a','returns',returned);
+    assert.equal(refund.status,201,refund.body.error);
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock
+      .find(i=>i.productId===productId).quantity,2);
+    const historic=await x.get('a','sales/'+sale+'?branchId=branch-a');
+    assert.equal(historic.body.sale.items.length,2);
+    assert.equal(historic.body.sale.netTotalCents,2400);
+    assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM sale_items WHERE sale_id=?')
+      .bind(sale).first()).n,1,'the historical FK parent remains exactly one');
+    assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM sale_configured_lines WHERE sale_id=?')
+      .bind(sale).first()).n,2);
+    assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM sale_configured_return_lines WHERE sale_id=?')
+      .bind(sale).first()).n,1);
     assert.equal((await x.get('b','products/'+productId+'/configuration?branchId=branch-b',x.other)).status,404);
   }finally{x.close();}
 });
