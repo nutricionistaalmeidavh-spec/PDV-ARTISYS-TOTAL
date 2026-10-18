@@ -18,7 +18,7 @@ for(const desktopScript of ['first-access-ui.js','updater-ui.js','hardware-scale
 }
 html=html.replace('ArtiSys PDV</h1><p>Inicializando sistema local...','PDV Total</h1><p>Conectando ao seu estabelecimento...');
 html=html.replace('<div class="window-controls" aria-label="Controles da janela">','<div class="window-controls" hidden aria-label="Controles da janela">');
-html=html.replace('<span>Rede Local</span>','<span>Cloudflare</span>').replace('Sistema local</span>','Sistema online</span>');
+html=html.replace('<span>Rede Local</span>','<span>Servidor PDV</span>').replace('Sistema local</span>','Conectado ao servidor</span>');
 html=html.replace('</head>',`  <meta name="theme-color" content="#081a35" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
