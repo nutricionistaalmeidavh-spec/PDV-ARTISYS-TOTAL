@@ -54,6 +54,9 @@ jobs:
         run: |
           mkdir -p qa-artifacts
           node scripts/p6-capability-report.mjs --json > qa-artifacts/p6-capabilities.json
+          mkdir -p qa-artifacts/parity
+          node scripts/p6-capability-report.mjs --json > qa-artifacts/parity/progresso-56.json
+          node scripts/p6-capability-report.mjs --markdown > qa-artifacts/parity/progresso-56.md
       - name: Test free offline SQLite backup and restore
         run: npm run test:selfhost
       - name: Test canonical sales, inventory, cash and authorization contracts

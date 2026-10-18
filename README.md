@@ -40,10 +40,17 @@ O núcleo pode rodar em localhost com Node 22+ e SQLite, sem Cloudflare: execute
 
 ## Documentação
 
-- [Roadmap de conversão](docs/ROADMAP-SAAS-CLOUDFLARE.md)
+- [Roadmap vigente de paridade](docs/ROADMAP-PARIDADE-56.md)
 - [Setup e deploy Cloudflare](docs/DEPLOY-CLOUDFLARE.md)
 - [Proveniência do código original (histórica)](docs/IMPORT-MANIFEST.md)
 - [Contrato de fluxo e experiência](docs/ux/P1-P2-CONTRATO-EXPERIENCIA.md)
+
+## Progresso e roadmap atual (56 capacidades)
+
+A **fila única de implementação** é composta por **56 capacidades do desktop**; os 68 contratos das sete telas são verificações internas associadas a elas, não um segundo backlog. Use `npm run report:parity` para visualizar os quatro estados: copiado integralmente, copiado parcialmente, não copiado/não demonstrado e implementado aguardando homologação. **Atenção:** ausência de prova (`gap`) não significa necessariamente ausência de código.
+
+- [Roadmap operacional vigente — 56 capacidades, prioridades R0–R5 e política de migrations](docs/ROADMAP-PARIDADE-56.md)
+- [Roadmap original de arquitetura/Cloudflare (histórico)](docs/ROADMAP-SAAS-CLOUDFLARE.md)
 
 ## Auditoria de paridade desktop/web
 
