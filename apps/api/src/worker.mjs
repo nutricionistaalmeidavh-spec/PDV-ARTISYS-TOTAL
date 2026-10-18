@@ -3,7 +3,7 @@ import {commerceRoute} from './commerce-router.mjs';
 import {productMediaRoute} from './product-media.mjs';
 import {advancedFinanceRoute} from './advanced-finance-router.mjs';
 import {verticalRoute} from './vertical-router.mjs';
-import {r2LanRoute,authorizeLanBusinessRequest} from './r2-lan-router.mjs';
+import {r2LanRoute,authorizeLanBusinessRequest,authorizeLanModule} from './r2-lan-router.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import legacyProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
 import legacyPrincipals from '../../../packages/core/js/core/auth/principal-resolver.js';
@@ -178,6 +178,8 @@ export function createApi(env,{now=()=>Date.now()}={}){
           if(lan)return lan;
           const deviceDenied=await authorizeLanBusinessRequest(request,db,membership,tenantId);
           if(deviceDenied)return deviceDenied;
+          const moduleDenied=await authorizeLanModule(db,tenantId,commerceMatch[2]);
+          if(moduleDenied)return moduleDenied;
         }
         const media=await productMediaRoute(request,db,env.FILES,env.LOCAL_MEDIA_ENABLED==='true',session,membership,tenantId,commerceMatch[2]);
         if(media)return media;
