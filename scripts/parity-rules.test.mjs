@@ -93,3 +93,25 @@ test('physical printer, scale, scanner or computer never gate R3/R4 software rea
   assert.match(r4,/Impressoras, balanças, leitores, tablets e terminais físicos não fazem parte do gate/);
   assert.doesNotMatch(r4,/Checklist ainda bloqueado por evidência externa/);
 });
+
+test('partial R4 coverage may be demonstrated by direct runnable evidence even while dependent contracts are partial',()=>{
+ const evidence={file:'apps/api/src/vertical-service.mjs',contains:'transferTable',
+   testFile:'apps/api/test/vertical-parity.test.mjs',
+   testContains:"test('R4 cap-001: transfer'",
+   testAssertionContains:'assert.equal(value,1);',testRunner:'node-test'};
+ const row={id:'cap-001',capability:'example',owner:'restaurant',dependsOn:['checkout-017'],status:'partial',
+   sourceEvidence:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,file:'release/capabilities.json',manifestIndex:0},
+   testedContractRefs:[],acceptance:'Restaurant order transfer retains the canonical session after route changes',
+   independentEvidence:evidence};
+ const matrix={modules:[{contracts:[{id:'checkout-017',status:'partial'}]}]};
+ const inventory={schemaVersion:1,baseline:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
+   manifest:'release/capabilities.json',publishedCapabilities:['example'],sourceManifestCount:1},
+   web:{repo:WEB_REPO},contracts:[row],fullSystemClaim:'incomplete'};
+ const sources={
+   'apps/api/src/vertical-service.mjs':'transferTable() {}',
+   'apps/api/test/vertical-parity.test.mjs':"test('R4 cap-001: transfer',()=>{const value=1;assert.equal(value,1);});"
+ };
+ assert.equal(verifyCapabilityInventory(matrix,inventory,['example'],{readSource:p=>sources[p]}).partial,1);
+ assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[{...row,independentEvidence:null}]},
+   ['example'],{readSource:p=>sources[p]}),/partial capability needs/);
+});
