@@ -29,6 +29,8 @@ on:
       - 'scripts/parity-desktop-pricing.test.mjs'
       - 'scripts/audit-parity-evidence.mjs'
       - 'scripts/web-browser-e2e.mjs'
+      - 'scripts/r2-deploy.mjs'
+      - 'scripts/r2-lan-browser-e2e.mjs'
       - '.github/workflows/verify-saas-foundation.yml'
   workflow_dispatch:
 
@@ -40,6 +42,16 @@ permissions:
   contents: read
 
 jobs:
+  r2-windows-deployment:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: R2 Windows local server and terminal deployment proof
+        run: node --experimental-sqlite --test apps/api/test/r2-deployment-profiles.test.mjs
   identity-and-cloudflare:
     runs-on: ubuntu-latest
     timeout-minutes: 12
