@@ -1200,6 +1200,13 @@ test('P3 configured item rejects invalid groups, strangers, cross-tenant selecti
       branchId:'branch-a',payments:[{method:'PIX',amountCents:3550}]})).status,200);
     assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock
       .find(i=>i.productId===productId).quantity,1);
+    const reportBefore=await x.get('a','reports/summary?branchId=branch-a&from=2026-10-17&to=2026-10-17');
+    assert.equal(reportBefore.status,200,reportBefore.body.error);
+    assert.equal(reportBefore.body.report.products.find(p=>p.productId===productId).grossCents,3550);
+    const marginsBefore=await x.get('a','reports/margins?branchId=branch-a&from=2026-10-17&to=2026-10-17');
+    assert.equal(marginsBefore.status,200,marginsBefore.body.error);
+    assert.equal(marginsBefore.body.margin.revenueCents,3550);
+    assert.equal(marginsBefore.body.margin.costCents,0);
     const returned={branchId:'branch-a',saleId:sale,
       reason:'Cliente devolveu somente a configuração marguerita',
       items:[{saleItemId:slices.get('marguerita').id,quantity:1}],
@@ -1214,6 +1221,14 @@ test('P3 configured item rejects invalid groups, strangers, cross-tenant selecti
     const historic=await x.get('a','sales/'+sale+'?branchId=branch-a');
     assert.equal(historic.body.sale.items.length,2);
     assert.equal(historic.body.sale.netTotalCents,2400);
+    const marginsAfter=await x.get('a','reports/margins?branchId=branch-a&from=2026-10-17&to=2026-10-17');
+    assert.equal(marginsAfter.status,200,marginsAfter.body.error);
+    assert.equal(marginsAfter.body.margin.revenueCents,2400);
+    assert.equal(marginsAfter.body.margin.returnedCents,1150);
+    const summaryAfter=await x.get('a','reports/summary?branchId=branch-a&from=2026-10-17&to=2026-10-17');
+    assert.equal(summaryAfter.status,200,summaryAfter.body.error);
+    assert.equal(summaryAfter.body.report.products.find(p=>p.productId===productId).grossCents,3550);
+    assert.equal(summaryAfter.body.report.products.find(p=>p.productId===productId).refundedCents,1150);
     assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM sale_items WHERE sale_id=?')
       .bind(sale).first()).n,1,'the historical FK parent remains exactly one');
     assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM sale_configured_lines WHERE sale_id=?')
