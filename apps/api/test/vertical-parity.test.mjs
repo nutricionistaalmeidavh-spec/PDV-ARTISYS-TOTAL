@@ -343,3 +343,27 @@ test('R4 cap-039/041: peso in grams priced safely and segment recommendations do
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,0);
  }finally{x.close();}
 });
+
+test('R4 cap-009: recipe versioned consumption uses canonical inventory sale ledger once',async()=>{
+ const x=await setup();try{
+   const flour=(await x.request('a','products','POST',{branchId:'filial-a',name:'Farinha',sku:'R4-FLOUR',salePriceCents:100,unit:'KG',trackStock:true})).body.product;
+   const bread=(await x.request('a','products','POST',{branchId:'filial-a',name:'Pão pronto',sku:'R4-BREAD',salePriceCents:1000,trackStock:false})).body.product;
+   assert.equal((await x.request('a','inventory/receipts','POST',{branchId:'filial-a',productId:flour.id,quantity:2,type:'opening'})).status,201);
+   const first=await x.request('a',`recipes/${bread.id}`,'PUT',{branchId:'filial-a',ingredients:[{ingredientId:flour.id,quantity:0.25}]});
+   assert.equal(first.status,200,JSON.stringify(first.body));assert.equal(first.body.recipe.version,1);
+   const revised=await x.request('a',`recipes/${bread.id}`,'PUT',{branchId:'filial-a',ingredients:[{ingredientId:flour.id,quantity:0.3}]});
+   assert.equal(revised.status,200);assert.equal(revised.body.recipe.version,2);
+   const rev1=await x.db.prepare('SELECT quantity_milli AS q FROM r4_recipe_ingredients WHERE tenant_id=? AND product_id=? AND version=1').bind('a',bread.id).first();
+   assert.equal(rev1.q,250);
+   const sale=(await x.request('a','sales','POST',{branchId:'filial-a'})).body.sale;
+   assert.equal((await x.request('a',`sales/${sale.id}/items`,'POST',{branchId:'filial-a',productId:bread.id,quantity:2})).status,200);
+   await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0});
+   const result=await x.request('a',`sales/${sale.id}/complete`,'POST',{branchId:'filial-a',payments:[{method:'PIX',amountCents:2000}]});
+   assert.equal(result.status,200,JSON.stringify(result.body));
+   const movement=await x.db.prepare("SELECT delta_milli AS delta FROM inventory_movements WHERE tenant_id=? AND sale_id=? AND product_id=? AND type='sale'").bind('a',sale.id,flour.id).first();
+   assert.equal(movement.delta,-600);
+   assert.equal((await x.db.prepare("SELECT count(*) AS n FROM inventory_movements WHERE tenant_id=? AND sale_id=? AND type='sale'").bind('a',sale.id).first()).n,1);
+   const snapshot=await x.db.prepare('SELECT version FROM r4_sale_recipe_versions WHERE tenant_id=? AND sale_id=? AND product_id=?').bind('a',sale.id,bread.id).first();
+   assert.equal(snapshot.version,2);
+ }finally{x.close();}
+});
