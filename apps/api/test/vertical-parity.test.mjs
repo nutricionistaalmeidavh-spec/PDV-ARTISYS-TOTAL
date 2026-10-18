@@ -8,7 +8,7 @@ import {hashPassword} from '../src/password.mjs';
 const origin='https://pdvtotal.test';
 async function setup(){
   const db=openLocalDatabase();
-  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql'])
+  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0021_r4_restaurant_operations.sql'])
     db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
   const stamp='2026-10-17T12:00:00.000Z';
   const h=await hashPassword('Senha-de-teste-123!');
@@ -34,7 +34,7 @@ async function setup(){
     }
     const url=origin+'/api/v1/tenants/'+tenant+'/'+path;
     const response=await api.fetch(new Request(url,{method,headers,...(body===undefined?{}:{body:JSON.stringify(body)})}));
-    return {status:response.status,body:await response.json()};
+    return {status:response.status,body:response.headers.get('content-type')?.includes('application/json')?await response.json():await response.text()};
   }
   return {db,request,close:()=>db.close()};
 }
@@ -183,5 +183,74 @@ test('P7 quote confirmation converts at the quoted price into one canonical sale
    assert.equal(updated.body.order.status,'FULFILLED');
    assert.equal(updated.body.order.saleId,sid);
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=? AND branch_id=?').bind('a','filial-a').first()).n,1);
+ }finally{x.close();}
+});
+
+test('R4 cap-031: transferir mesa preserva comanda, pedidos e exige mesa de destino livre',async()=>{
+ const x=await setup();try{
+   const source=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Mesa origem'})).body.table;
+   const target=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Mesa destino'})).body.table;
+   const occupied=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Ocupada'})).body.table;
+   const session=(await x.request('a',`restaurant/tables/${source.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+   await x.request('a',`restaurant/tables/${occupied.id}/open`,'POST',{branchId:'filial-a'});
+   const product=(await x.request('a','products','POST',{branchId:'filial-a',sku:'R4MESA',name:'Lanche',salePriceCents:500,trackStock:false})).body.product;
+   const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:session.id,items:[{productId:product.id,quantity:2}]})).body.order;
+   assert.equal((await x.request('a',`restaurant/sessions/${session.id}/transfer`,'POST',{branchId:'filial-a',targetTableId:occupied.id})).status,409);
+   const key=crypto.randomUUID();
+   const moved=await x.request('a',`restaurant/sessions/${session.id}/transfer`,'POST',{branchId:'filial-a',targetTableId:target.id},{key});
+   assert.equal(moved.status,200,JSON.stringify(moved.body));
+   assert.equal(moved.body.session.tableId,target.id);
+   const replay=await x.request('a',`restaurant/sessions/${session.id}/transfer`,'POST',{branchId:'filial-a',targetTableId:target.id},{key});
+   assert.deepEqual(replay.body,moved.body);
+   const existing=await x.request('a',`restaurant/sessions/${session.id}?branchId=filial-a`);
+   assert.equal(existing.body.session.table_id,target.id);
+   const orders=(await x.request('a','restaurant/orders?branchId=filial-a')).body.orders;
+   assert.equal(orders.filter(o=>o.id===order.id&&o.table_session_id===session.id).length,1);
+   assert.equal((await x.request('b',`restaurant/sessions/${session.id}/transfer`,'POST',{branchId:'filial-b',targetTableId:target.id},{as:'b'})).status,404);
+ }finally{x.close();}
+});
+
+test('R4 cap-048: chamado garçom/conta é isolado, idempotente e tem transições autorizadas',async()=>{
+ const x=await setup();try{
+   const table=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Chamado'})).body.table;
+   const session=(await x.request('a',`restaurant/tables/${table.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+   const key=crypto.randomUUID();
+   const request=await x.request('a',`restaurant/sessions/${session.id}/requests`,'POST',{branchId:'filial-a',type:'BILL',note:'Pode trazer a conta?'},{key});
+   assert.equal(request.status,201,JSON.stringify(request.body));
+   assert.equal((await x.request('a',`restaurant/sessions/${session.id}/requests`,'POST',{branchId:'filial-a',type:'BILL',note:'Pode trazer a conta?'},{key})).body.request.id,request.body.request.id);
+   assert.equal((await x.request('b','restaurant/requests?branchId=filial-b','GET',undefined,{as:'b'})).body.requests.length,0);
+   const rid=request.body.request.id;
+   assert.equal((await x.request('a',`restaurant/requests/${rid}`,'PATCH',{branchId:'filial-a',status:'CLOSED'})).status,409);
+   assert.equal((await x.request('a',`restaurant/requests/${rid}`,'PATCH',{branchId:'filial-a',status:'ACKNOWLEDGED'})).status,200);
+   assert.equal((await x.request('a',`restaurant/requests/${rid}`,'PATCH',{branchId:'filial-a',status:'CLOSED'})).status,200);
+   assert.equal((await x.request('a',`restaurant/requests/${rid}`,'PATCH',{branchId:'filial-a',status:'ACKNOWLEDGED'})).status,409);
+   await x.db.prepare("UPDATE tenant_memberships SET profile_key='KITCHEN' WHERE tenant_id='a' AND user_id='a-user'").run();
+   assert.equal((await x.request('a','restaurant/requests?branchId=filial-a')).status,403);
+ }finally{x.close();}
+});
+
+test('R4 cap-038 e cap-049: cancelamento antes do KDS, relatório separado de vendas e CSV isolado',async()=>{
+ const x=await setup();try{
+   const product=(await x.request('a','products','POST',{branchId:'filial-a',sku:'R4-REL',name:'Prato',salePriceCents:1700,trackStock:false})).body.product;
+   const first=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:product.id,quantity:2}]})).body.order;
+   const second=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'DELIVERY',address:'Rua A, 10',items:[{productId:product.id,quantity:1}]})).body.order;
+   const cancelled=await x.request('a',`restaurant/orders/${first.id}/cancel`,'POST',{branchId:'filial-a',reason:'Cliente desistiu'});
+   assert.equal(cancelled.status,200,JSON.stringify(cancelled.body));
+   assert.equal((await x.request('a',`restaurant/orders/${first.id}/deliver`,'POST',{branchId:'filial-a'})).status,409);
+   const tickets=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets;
+   assert.equal(tickets.some(k=>k.orderId===first.id),false);
+   const other=tickets.find(k=>k.orderId===second.id);
+   assert.equal((await x.request('a',`restaurant/kitchen/${other.id}`,'PATCH',{branchId:'filial-a',status:'PREPARING'})).status,200);
+   assert.equal((await x.request('a',`restaurant/orders/${second.id}/cancel`,'POST',{branchId:'filial-a'})).status,409);
+   const report=await x.request('a','restaurant/reports/summary?branchId=filial-a&from=2026-01-01&to=2026-12-31');
+   assert.equal(report.status,200,JSON.stringify(report.body));
+   assert.equal(report.body.report.ordersCount,2);
+   assert.equal(report.body.report.cancelledCount,1);
+   assert.equal(report.body.report.orderedCents,1700);
+   assert.equal((await x.request('b','restaurant/reports/summary?branchId=filial-b&from=2026-01-01&to=2026-12-31','GET',undefined,{as:'b'})).body.report.ordersCount,0);
+   const csv=await x.request('a','restaurant/reports/csv?branchId=filial-a&from=2026-01-01&to=2026-12-31');
+   assert.equal(csv.status,200);assert.match(csv.body,/PICKUP/);assert.match(csv.body,/DELIVERY/);
+   assert.equal((await x.request('a','restaurant/reports/summary?branchId=filial-a&from=sem-data&to=2026-12-31')).status,400);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,0);
  }finally{x.close();}
 });
