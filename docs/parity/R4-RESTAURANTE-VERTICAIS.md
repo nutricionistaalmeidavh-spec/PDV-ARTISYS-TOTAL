@@ -83,3 +83,30 @@ Os contratos novos ampliam o R4, mas não equivalem automaticamente à certifica
 **Ambiente obrigatório:** R$ 0, open source, SQLite local e self-hosted. D1/nuvem são opcionais; nenhum serviço pago é dependência.
 
 **Sem declaração 13/13:** a paridade integral permanece pendente de evidência independente por capacidade e validação de dispositivos. A PR mantém as implementações existentes de atacado/R1 ao integrar a `main`.
+
+## PR #62 — fechamento do fluxo de pizza e impressão local
+
+- Pedidos de alimentação com **múltiplos itens e configurações distintas da mesma pizza/SKU**, preço registrado no snapshot imutável por linha configurada, mas **uma única venda, uma linha de produto agregada para estoque e caixa único**. Os filhos de `sale_configured_lines` preservam cada preço e sabor para recibos e devoluções.
+- Reabertura/recuperação da venda mostra o valor das linhas configuradas, não o preço aproximado da linha agregada.
+- Fila KDS de impressão persistente `0024_r4_print_outbox.sql`, inserida na mesma transação de pedido/tickets. Reserva temporária de 120 s, confirmação com token, até oito tentativas, reinício após queda e cancelamento da impressão pendente quando o pedido não chegou à produção.
+- Agente local opcional: `scripts/r4-print-agent.mjs` (somente Node.js, sem npm adicional; `lp` no Linux/macOS ou `Out-Printer` no Windows).
+- A PWA oferece escolha de segmento no primeiro login de quem pode editar configurações, editor de itens múltiplos e o estado das impressões. A escolha não habilita módulos nem autoriza pagamentos.
+- Testes automáticos comprovam SQL local, Worker D1, concorrência de reservas de impressão, precificação de pizza e navegação Chromium; **não substituem prova física de papel, conectividade ou balança**.
+
+### Operação da impressora self-hosted
+
+1. Configure uma estação KDS com `printEnabled=true` e a identificação **exata** da fila instalada no sistema operacional; vincule produtos à estação.
+2. Utilize um **operador de cozinha próprio**, com acesso `kitchen.view` e `kitchen.update_status`, em vez de credenciais administrativas.
+3. No computador ligado à impressora, configure as variáveis de ambiente `PDV_PRINT_API_ORIGIN`, `PDV_PRINT_TENANT`, `PDV_PRINT_BRANCH`, `PDV_PRINT_EMAIL`, `PDV_PRINT_PASSWORD` e `PDV_PRINTER_ALLOWLIST` (filas separadas por vírgula). Mantenha a senha em um gerenciador de segredos local; nunca a envie para o Git ou para o histórico do terminal.
+4. Execute `node scripts/r4-print-agent.mjs` para monitoramento ou `node scripts/r4-print-agent.mjs --once` para uma rodada. Só aceita HTTPS ou HTTP no próprio loopback. O processo envia o trabalho à fila nativa sem comandos de shell. Não há dependência externa/paga.
+
+**Modelo de entrega:** pelo menos uma tentativa de impressão. Uma falha depois da fila local aceitar o ticket, mas antes da confirmação na API, pode produzir reimpressão; o UUID do job aparece em cada ticket para identificar repetições. `PRINTED` significa **aceito pelo spool local**, não que o papel saiu. A confirmação física exige homologação pelo operador.
+
+### Checklist ainda bloqueado por evidência externa
+
+- Impressoras reais Windows e CUPS, corte e papel, desligamento antes/depois do spool, retomada, tentativa dupla e filas compartilhadas.
+- Balanças homologadas, leitura EAN/etiquetas, modelo/protocolo real e comparação de quantidades.
+- Importação do histórico de pedidos do desktop somente se houver uma base anterior real; um sistema novo vazio não precisa de migração fictícia.
+- Teste assistido em PC/tablet/celular e revisão funcional com a referência desktop dos modos restantes de rateio.
+
+**R4 continua sem certificação de 13/13 integral** até fechar esses aceites; manter a matriz canônica honesta e não bloquear o uso dos fluxos já testados.
