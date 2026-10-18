@@ -20,6 +20,7 @@ const notesMigration=readFileSync(new URL('../migrations/0012_sale_item_notes.sq
 const cashTerminalMigration=readFileSync(new URL('../migrations/0013_cash_terminals.sql',import.meta.url),'utf8');
 const checkoutConfigurationMigration=readFileSync(new URL('../migrations/0014_checkout_configurations.sql',import.meta.url),'utf8');
 const salesTargetsMigration=readFileSync(new URL('../migrations/0015_seller_sales_targets.sql',import.meta.url),'utf8');
+const lotReceiptMigration=readFileSync(new URL('../migrations/0016_inventory_lot_receipts.sql',import.meta.url),'utf8');
 // A fixed business date must reach the commerce adapter, not only session authentication.
 // Otherwise UTC midnight makes period-filtered reports silently disappear in CI.
 const NOW=Date.parse('2026-10-17T14:00:00Z');
@@ -28,7 +29,7 @@ const password='SafeTestPasswordForPdv2026!';
 let num=0;
 const next=()=>('mutation-'+(++num)+'-long');
 async function setup(){
-  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);db.exec(checkoutConfigurationMigration);db.exec(salesTargetsMigration);
+  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);db.exec(checkoutConfigurationMigration);db.exec(salesTargetsMigration);db.exec(lotReceiptMigration);
   const pass=await hashPassword(password);
   for(const [id,email] of [['owner','owner@test.com'],['other','other@test.com'],['viewer','viewer@test.com']])
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
@@ -83,6 +84,82 @@ test('P3 commerce: tenant isolation, canonical permissions, unique SKU and no am
     assert.equal((await x.write('a','products',{branchId:'branch-a',name:'X',sku:'NO',salePriceCents:123}, {who:x.viewer})).status,403);
     assert.equal((await x.write('a','products',{branchId:'branch-a',name:'Teclado Novo',sku:'T1',salePriceCents:300})).status,409);
     assert.equal((await x.get('a','products?branchId=branch-a',x.viewer)).status,200);
+  }finally{x.close();}
+});
+
+test('P2 lot receipts annotate only canonical immutable movements, with idempotency and tenant isolation',async()=>{
+  const x=await setup();try{
+    const productId=await x.id('Leite pasteurizado','MILK-LOT',1),key=next();
+    const data={branchId:'branch-a',productId,quantity:5,type:'purchase',
+      lotCode:'out-2026/10',manufacturedAt:'2026-10-01',expiresAt:'2026-11-10'};
+    const first=await x.write('a','inventory/receipts',data,{key});
+    assert.equal(first.status,201,first.body.error);
+    assert.equal(first.body.movement.lot.code,'OUT-2026/10');
+    assert.deepEqual((await x.write('a','inventory/receipts',data,{key})).body,first.body);
+    const result=await x.get('a','inventory/lots?branchId=branch-a');
+    assert.equal(result.status,200,result.body.error);
+    assert.equal(result.body.lots.length,1);
+    assert.equal(result.body.lots[0].receivedQuantity,5);
+    assert.equal(result.body.lots[0].lotCode,'OUT-2026/10');
+    assert.equal(result.body.lots[0].expiresAt,'2026-11-10');
+    const movement=await x.db.prepare('SELECT delta_milli FROM inventory_movements WHERE id=?').bind(first.body.movement.movementId).first();
+    assert.equal(movement.delta_milli,5000);
+    const count=await x.db.prepare('SELECT COUNT(*) AS n FROM inventory_lot_receipts WHERE movement_id=?').bind(first.body.movement.movementId).first();
+    assert.equal(count.n,1,'lot record must not cause another inventory entry');
+    await assert.rejects(x.db.prepare('DELETE FROM inventory_lot_receipts WHERE movement_id=?').bind(first.body.movement.movementId).run(),/IMMUTABLE/);
+    assert.equal((await x.get('b','inventory/lots?branchId=branch-b',x.other)).body.lots.length,0);
+    assert.equal((await x.get('a','inventory/lots?branchId=branch-a',x.viewer)).status,200);
+    assert.equal((await x.write('a','inventory/receipts',data,{who:x.viewer})).status,403);
+    assert.equal((await x.write('a','inventory/receipts',{...data,expiresAt:'2026-09-20'})).status,400);
+    assert.equal((await x.write('a','inventory/receipts',{...data,lotCode:'',expiresAt:'2026-11-10'})).status,400);
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock.find(x=>x.productId===productId).quantity,6);
+  }finally{x.close();}
+});
+
+test('P2 inventory count is tenant-scoped, idempotent, zero-aware and rejects stale stock',async()=>{
+  const x=await setup();try{
+    const productId=await x.id('Inventário físico','COUNT-1',5);
+    const path='inventory/counts',key=next();
+    const count={branchId:'branch-a',productId,expectedQuantity:5,countedQuantity:3,
+      reason:'Contagem física conferida'};
+    const first=await x.write('a',path,count,{key});
+    assert.equal(first.status,201,first.body.error);
+    assert.equal(first.body.count.quantityDelta,-2);
+    assert.deepEqual((await x.write('a',path,count,{key})).body,first.body,
+      'retry of the same mutation must return the prior result');
+    const balance=async()=>((await x.get('a','inventory?branchId=branch-a')).body.stock
+      .find(s=>s.productId===productId)?.quantity??0);
+    assert.equal(await balance(),3);
+    const movements=await x.db.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE tenant_id='a' AND product_id=? AND type='adjustment'").bind(productId).first();
+    assert.equal(movements.n,1,'no duplicate ledger effects');
+    assert.equal((await x.write('a',path,{...count,countedQuantity:0})).status,409,
+      'stale expected balance must be rejected');
+    assert.equal(await balance(),3);
+    assert.equal((await x.write('a',path,{...count,expectedQuantity:3,countedQuantity:0})).status,201);
+    assert.equal(await balance(),0,'physical zero is valid');
+    const zero=await x.write('a',path,{...count,expectedQuantity:0,countedQuantity:0});
+    assert.equal(zero.status,201,zero.body.error);
+    assert.equal(zero.body.count.movementId,null,'no fake zero-delta ledger entry');
+    assert.equal((await x.write('a',path,{...count,expectedQuantity:0,countedQuantity:2})).status,201);
+    assert.equal(await balance(),2);
+    assert.equal((await x.write('a',path,{...count,expectedQuantity:2,countedQuantity:1.0001})).status,400);
+    assert.equal((await x.write('a',path,{...count,expectedQuantity:2,countedQuantity:1},{who:x.viewer})).status,403);
+    assert.equal((await x.write('b',path,{...count,branchId:'branch-b',expectedQuantity:0,countedQuantity:1},{who:x.other})).status,404);
+    assert.equal((await x.get('b','inventory?branchId=branch-b',x.other)).body.stock.length,0);
+    // Distinct terminals reading the same snapshot must never both post
+    // an adjustment for that snapshot, even with distinct mutation IDs.
+    const competing=await Promise.all([
+      x.write('a',path,{...count,expectedQuantity:2,countedQuantity:1},{key:next()}),
+      x.write('a',path,{...count,expectedQuantity:2,countedQuantity:0},{key:next()})
+    ]);
+    assert.deepEqual(competing.map(r=>r.status).sort(),[201,409],
+      'exactly one stale-snapshot adjustment can commit');
+    assert.ok([0,1].includes(await balance()));
+    const finalMovements=await x.db.prepare(
+      "SELECT COUNT(*) AS n FROM inventory_movements WHERE tenant_id='a' AND product_id=? AND type='adjustment'"
+    ).bind(productId).first();
+    assert.equal(finalMovements.n,4,'one count per committed stock movement');
+
   }finally{x.close();}
 });
 
