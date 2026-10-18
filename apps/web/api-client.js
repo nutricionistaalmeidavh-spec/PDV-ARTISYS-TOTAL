@@ -120,6 +120,7 @@
       if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
       if(operation==='products/categories')return method==='GET'?value.categories:value.category;
+      if(/^products\/categories\/[^/]+$/.test(operation))return value.category;
       if(/^products\/[^/]+\/configuration$/.test(operation))return value.configuration;
       if(/^products\/[^/]+\/configuration\/price$/.test(operation))return value.quote;
       if(operation==='products/import/preview')return value.preview;
