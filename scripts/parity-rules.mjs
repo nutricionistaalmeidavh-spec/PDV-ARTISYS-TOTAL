@@ -75,7 +75,12 @@ export function verifyCapabilityInventory(matrix,inventory,publishedCapabilities
         requireProof(typeof readSource==='function' && implementation.file && implementation.contains &&
           implementation.testFile && implementation.testContains,
           'partial implementation requires source and test '+row.id);
-        requireProof(/^((apps\\/api\\/test|packages\\/core\\/test|scripts)\\/)[a-zA-Z0-9_.-]+\\.test\\.(mjs|js)$/.test(implementation.testFile),
+        const parts=implementation.testFile.split('/');
+        const fileName=parts.at(-1);
+        const directory=parts.slice(0,-1).join('/');
+        const validDirectory=['apps/api/test','packages/core/test','scripts'].includes(directory);
+        const validFile=/^[A-Za-z0-9_.-]+[.]test[.](mjs|js)$/.test(fileName||'');
+        requireProof(validDirectory && validFile && !parts.includes('..'),
           'partial implementation test path invalid '+row.id);
         requireProof(readSource(implementation.file).includes(implementation.contains),
           'partial implementation source not found '+row.id);
