@@ -1251,6 +1251,9 @@ async function p5Home003Setup(x){
  const saved=await x.write('a','reports/stock-minimum',{
    branchId:'branch-a',productId,minimumQuantity:2},{method:'PUT'});
  assert.equal(saved.status,200,JSON.stringify(saved.body));
+ const depleted=await x.write('a','inventory/adjustments',{
+   branchId:'branch-a',productId,quantityDelta:-1,reason:'Alerta de ruptura documentado'});
+ assert.equal(depleted.status,201,JSON.stringify(depleted.body));
  const opened=await x.write('a','cash/open',{branchId:'branch-a',openingCents:500});
  assert.equal(opened.status,201,JSON.stringify(opened.body));
  const closed=await x.write('a','cash/sessions/'+opened.body.session.id+'/close',{
@@ -1274,7 +1277,7 @@ test('home-003/nominal p5-home003-desktop-alerts-v1 original desktop alert predi
   assert.equal(home.divergentCashCount,1);
   assert.equal(home.divergentCashCents,-10);
   assert.equal(home.belowMinimumCount,1);
-  assert.equal(home.outOfStockCount,0,'physical inventory remains nonzero');
+  assert.equal(home.outOfStockCount,1,'zero available stock matches the desktop alert');
   assert.equal(home.negativeMarginCount,0,'unknown costs do not invent a negative margin');
  }finally{x.close();}
 });
@@ -1289,7 +1292,7 @@ test('home-003/authorization p5-home003-desktop-alerts-v1 authorized read-only v
   assert.equal((await x.write('a','cash/open',{
     branchId:'branch-a',openingCents:1},{who:x.viewer})).status,403);
   assert.deepEqual((await x.get('a',p5Home003Path)).body.home.alerts.map(a=>a.code),
-    ['BELOW_MINIMUM','CASH_DIVERGENCE']);
+    ['ZERO_STOCK','BELOW_MINIMUM','CASH_DIVERGENCE']);
  }finally{x.close();}
 });
 
