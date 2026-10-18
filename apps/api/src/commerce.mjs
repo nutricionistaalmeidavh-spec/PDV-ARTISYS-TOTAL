@@ -376,6 +376,7 @@ export function createCommerceService(db,{now=nowISO}={}){
           VALUES(?,?,?,?,?,?,?,?,?,?)`,
           result.movementId,tenant,branch,p.id,delta,'adjustment',null,key,at,reason),
         ...lotLedger.statements(tenant,branch,p.id,result.movementId,chosen,-1,at),
+        lotLedger.check(tenant,branch,p.id,result.movementId,at),
         audit(tenant,scope,key,result)
       ]);
       return result;
@@ -420,6 +421,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         const chosen=await lotLedger.consume(tenant,branch,p.id,-delta);
         commands.push(...lotLedger.statements(tenant,branch,p.id,result.movementId,chosen,-1,at));
       }
+      if(delta)commands.push(lotLedger.check(tenant,branch,p.id,result.movementId,at));
       commands.push(audit(tenant,scope,key,result));
       await batch(commands);
       return result;
@@ -454,12 +456,14 @@ export function createCommerceService(db,{now=nowISO}={}){
           sourceMovementId,tenant,branch,item.id,-milli,'adjustment',null,key,at,
           'Transferência '+id+' para '+target+': '+reason),
         ...lotLedger.statements(tenant,branch,item.id,sourceMovementId,chosen,-1,at),
+        lotLedger.check(tenant,branch,item.id,sourceMovementId,at),
         q(`INSERT INTO inventory_movements
           (id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at,reason)
           VALUES(?,?,?,?,?,?,?,?,?,?)`,
           destinationMovementId,tenant,target,item.id,milli,'adjustment',null,key,at,
           'Transferência '+id+' de '+branch+': '+reason),
         ...lotLedger.statements(tenant,target,item.id,destinationMovementId,chosen,1,at),
+        lotLedger.check(tenant,target,item.id,destinationMovementId,at),
         q(`INSERT INTO inventory_transfers
           (id,tenant_id,from_branch_id,to_branch_id,product_id,quantity_milli,reason,
            source_movement_id,destination_movement_id,operator_id,mutation_id,created_at)
@@ -629,6 +633,7 @@ export function createCommerceService(db,{now=nowISO}={}){
           manufacturedAt,expiresAt,milli,at));
         statements.push(...lotLedger.statements(tenant,branch,row.id,result.movementId,
           [{lotId,quantityMilli:milli}],1,at));
+        statements.push(lotLedger.check(tenant,branch,row.id,result.movementId,at));
       }
       statements.push(audit(tenant,scope,key,result));
       await batch(statements);
@@ -1418,6 +1423,8 @@ export function createCommerceService(db,{now=nowISO}={}){
         statements.push(...lotLedger.statements(tenant,branch,allocation.productId,
           movementIds.get(allocation.productId),allocation.picked,-1,completedAt,allocation.itemId));
       }
+      for(const [productId,movementId] of movementIds)
+        statements.push(lotLedger.check(tenant,branch,productId,movementId,completedAt));
       for(const p of groupedPayments){
         if(p.method==='STORE_CREDIT'){
           statements.push(q(`INSERT INTO customer_credit_ledger(id,tenant_id,branch_id,customer_id,sale_id,type,amount_cents,reference_key,occurred_at) VALUES(?,?,?,?,?,?,?,?,?)`,
