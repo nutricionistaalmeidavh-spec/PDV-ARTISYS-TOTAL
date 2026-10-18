@@ -46,8 +46,8 @@
   // authoritative tenant/branch API. No parallel inventory state or IPC fallback.
   async function renderWebInventory(){
     await ready();
-    const [positions,movementResult]=await Promise.all([
-      api.inventoryBalances(),api.inventoryMovements({limit:30})
+    const [positions,movementResult,lots]=await Promise.all([
+      api.inventoryBalances(),api.inventoryMovements({limit:30}),api.inventoryLotReceipts({limit:30})
     ]);
     const balances=Array.isArray(positions)?positions:positions?.stock||[];
     const recent=Array.isArray(movementResult)?movementResult:
@@ -62,11 +62,21 @@
         <label>Operação<select class="ops-input" name="operation"><option value="count">Inventário contado</option><option value="purchase">Recebimento</option><option value="increase">Ajuste de entrada</option><option value="decrease">Ajuste de saída</option></select></label>
         <label>Quantidade <input class="ops-input" name="quantity" type="number" min="0" max="100000" step="0.001" required placeholder="0"></label>
         <label>Motivo <input class="ops-input" name="reason" maxlength="240" minlength="3" required placeholder="Explique a conferência ou o ajuste"></label>
+        <label>Lote (opcional, somente recebimento) <input class="ops-input" name="lotCode" maxlength="64" placeholder="Ex.: FAB-2026-10"></label>
+        <label>Fabricação (opcional) <input class="ops-input" name="manufacturedAt" type="date"></label>
+        <label>Validade (opcional) <input class="ops-input" name="expiresAt" type="date"></label>
         <button class="ops-primary" type="submit" ${balances.length?'':'disabled'}>Confirmar operação</button>
       </form></section>
       <section class="ops-card"><h2>Últimas movimentações registradas</h2>
       <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Data</th><th>Produto</th><th>Movimento</th><th>Motivo</th></tr></thead><tbody>
       ${recent.map(m=>`<tr><td>${when(m.occurredAt||m.occurred_at)}</td><td>${escapeHtml(balances.find(p=>p.productId===(m.productId||m.product_id))?.name||m.productId||m.product_id)}</td><td>${qty(m.quantityDelta??m.delta_milli/1000)}</td><td>${escapeHtml(m.reason||'—')}</td></tr>`).join('')||'<tr><td colspan="4">Nenhuma movimentação.</td></tr>'}
+      </tbody></table></div></section>
+      <section class="ops-card"><h2>Recebimentos identificados por lote</h2>
+      <p>Histórico de entrada e validade. O saldo disponível continua sendo por produto;
+      ainda não existe baixa por lote ou cálculo de saldo individual.</p>
+      <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Produto</th><th>Lote</th><th>Recebido</th><th>Validade</th></tr></thead>
+      <tbody>${lots.map(l=>`<tr><td>${escapeHtml(l.productName)}</td><td>${escapeHtml(l.lotCode)}</td>
+        <td>${qty(l.receivedQuantity)}</td><td>${escapeHtml(l.expiresAt||'—')}</td></tr>`).join('')||'<tr><td colspan="4">Nenhum recebimento com lote cadastrado.</td></tr>'}
       </tbody></table></div></section>`;
     if(!routeActive('inventory'))return;
     content.innerHTML=page('Estoque','Movimentações e inventário contados no banco autoritativo.',body);
@@ -84,7 +94,12 @@
         if(operation==='count')await api.inventoryCount({
           productId:id,expectedQuantity:Number(current.quantity),countedQuantity:quantity,reason
         });
-        else if(operation==='purchase')await api.inventoryReceipt({productId:id,quantity,type:'purchase'});
+        else if(operation==='purchase')await api.inventoryReceipt({
+          productId:id,quantity,type:'purchase',
+          lotCode:String(values.get('lotCode')||'').trim(),
+          manufacturedAt:String(values.get('manufacturedAt')||''),
+          expiresAt:String(values.get('expiresAt')||'')
+        });
         else await api.inventoryAdjust({productId:id,quantityDelta:operation==='decrease'?-quantity:quantity,reason});
         showToast('Operação registrada no estoque.','success');
         await renderWebInventory();
