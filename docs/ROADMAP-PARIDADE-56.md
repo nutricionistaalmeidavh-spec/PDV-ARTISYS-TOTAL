@@ -18,14 +18,14 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 
 **Precisão obrigatória:** gap NÃO comprova ausência de código. O terceiro estado inclui casos ainda não investigados. Não promover a pronto por nome de arquivo, CI verde ou um cenário isolado. Auditoria de código exige revisão explícita e evidências executáveis. Testes em equipamento real não bloqueiam código pronto.
 
-**Fotografia revisada em 18/10/2026 (base `1d757d5` + evidências desta auditoria):** 56 capacidades: **33 cobertas, 21 parciais e 2 não demonstradas**. Por onda: R1 **21 cobertas**; R2 **11 cobertas / 3 parciais**; R3 **6 parciais / 2 sem prova suficiente** (cap-030 e cap-043); R4 **1 coberta / 12 parciais**. Os 68 contratos subordinados registram **43 cobertos e 25 parciais**. Execute `npm run report:parity` para obter os valores do inventário versionado. A existência de testes de subconjunto não equivale à certificação integral; testes físicos não bloqueiam código.
+**Fotografia documentada em 18/10/2026 (inventário da `main` no SHA `b2f2a66`; confira o SHA atual antes de usar):** 56 capacidades: **33 cobertas, 21 parciais e 2 não demonstradas**. Por onda: R1 **21 cobertas**; R2 **11 cobertas / 3 parciais**; R3 **6 parciais / 2 sem prova suficiente** (cap-030 e cap-043); R4 **1 coberta / 12 parciais**. Os 68 contratos subordinados registram **43 cobertos e 25 parciais**. Execute `npm run report:parity` para obter os valores do inventário versionado. A existência de testes de subconjunto não equivale à certificação integral; testes físicos não bloqueiam código.
 
 ## Ondas de implementação — 56 sem duplicação
 
 | Onda | Capacidades | Conteúdo e gate |
 |---|---|---|
 | **R0 — Diagnóstico e gestão** | Transversal; nenhum ID adicional | Painel de 56, 68 contratos internos, rastreabilidade e estado verificável de código pronto |
-| **R1 — PDV comercial e gestão** | cap-004–008, cap-011–024, cap-040, cap-052 (**21**) | Venda, cliente, vendedor, desconto, devoluções, variações, kits, estoque, compras, caixa, financeiro, relatórios, atacado/importações. Aceite: jornada real completa na UI, resultados iguais ao desktop e lançamentos reconciliados |
+| **R1 — PDV comercial e gestão** | cap-004–008, cap-011–024, cap-040, cap-052 (**21**) | **21/21 cobertas no inventário auditado**. Somente manutenção, regressão e correções comprovadas; não reabrir como implementação pendente |
 | **R2 — Self-hosted e rede local** | cap-001–003, cap-010, cap-042, cap-044–047, cap-051, cap-053–056 (**14**) | API SQLite, HTTPS LAN, terminais independentes, credenciais revogáveis, backup/restauração, diagnósticos. Aceite de código: suíte LAN automatizada com sessões simultâneas, segurança, revogação, backup/restore isolado e falhas simuladas; sem SaaS obrigatório |
 | **R3 — Periféricos e protocolos (teste emulado)** | cap-025–030, cap-043, cap-050 (**8**) | Impressão, reimpressão, filas, balanças, gavetas e serial. Aceite de código: bridge local open source, drivers/protocolos com mocks e emuladores, fila, retry, reconexão simulada; impressão não determina sucesso da venda |
 | **R4 — Alimentação e verticais** | cap-009, cap-031–039, cap-041, cap-048–049 (**13**) | Mesas, comandas, atendimento, KDS, pizza, delivery/retirada, padaria e relatórios específicos. Aceite: fluxo completo por perfil e segmento sem criar outra autoridade de vendas/estoque |
@@ -33,13 +33,17 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 
 **Total exclusivo de R1–R4: 21 + 14 + 8 + 13 = 56.** R0 e R5 são gates de software, não novos itens.
 
-### Fila prioritária antes de abrir novas frentes
+### Fila prioritária atual — não reabrir a R1 concluída
 
-**Fechar R1:** venda completa (desconto/perfis, múltiplas configurações do mesmo SKU, suspensão, retomada, pagamento), cliente/vendedor, devolução/cancelamento com efeitos corretos, estoque por filial, caixa por terminal, relatórios/CSV e reconciliação financeira. Reaproveitar implementação e testes atuais; não reescrever o que já existe.
+**R1: manutenção e regressão, não nova implementação.** As 21 capacidades do R1 estão `covered` no inventário da `main` auditada. Não criar um segundo backlog de vendas, financeiro ou estoque; reabrir um ID apenas por regressão reproduzida, prova inválida ou requisito comprovadamente novo, com teste antes da correção.
 
-**R2 em paralelo:** LAN segura, sessões de dois terminais em integração HTTPS local, credenciais, backup/restore automatizados em SQLite; manter core R$ 0.
+**R2: fechar apenas as três capacidades parciais** (`cap-001`, `cap-047`, `cap-056`): inicialização/reinício do servidor local e perfil de instalação, jornada mobile na LAN e distribuição servidor/terminal. Preservar as 11 cobertas, reaproveitar autenticação, credenciais, revogação e backup existentes. Reconciliar a PR #68 com o snapshot já integrado pela #73; não fazer merge integral de branch divergente nem rebaixar provas válidas.
 
-**R3 e R4 conforme dependências:** provar fluxos com testes automatizados, protocolos emulados e falhas injetadas; marcar o código como integral quando equivalência e regressão de **software** forem demonstradas. **Nenhum periférico físico é um gate**; verificação em campo pertence a checklist pós-entrega opcional.
+**R3: completar protocolos e provas dos seis itens parciais** (`cap-025` a `cap-029`, `cap-050`) e investigar primeiro se `cap-030` (personalização de comprovante) e `cap-043` (compatibilidade versionada) exigem código ou evidência. Reaproveitar `tools/local-hardware-bridge/`; simular spooler, serial, balança, falhas e recuperação, sem exigir periférico físico.
+
+**R4: concluir os 12 itens parciais** (cap-009, cap-031, cap-032, cap-034–039, cap-041, cap-048 e cap-049), sem duplicar pedidos, caixa ou ledger. Priorizar divisão individual por pagador/item, corridas entre operadores, roteamento e recuperação do KDS, insumos da pizzaria, delivery, onboarding e relatórios; usar comparações executáveis com o desktop fixado.
+
+**R5:** somente após provas por ID, rodar CI no SHA candidato e revisão independente de equivalência; não marcar paridade sistêmica como completa antes de **56/56 capacidades e 68/68 contratos**. Equipamento físico é etapa opcional de campo, fora do gate de código.
 
 ### Regra definitiva de pronto
 
