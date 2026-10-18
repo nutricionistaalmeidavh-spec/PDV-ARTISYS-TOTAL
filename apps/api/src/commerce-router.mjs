@@ -71,6 +71,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
         if(method==='GET'){requireAccess(member,'products.view',user);return json({categories:await service.categories(tenant,branch)});}
         if(method==='POST'){requireAccess(member,'products.manage',user);return json({category:await service.createCategory(tenant,branch,user,body,key)},201);}
       }
+      if(parts[1]==='categories'&&parts.length===3&&method==='PATCH'){
+        requireAccess(member,'products.manage',user);
+        return json({category:await service.renameCategory(tenant,branch,user,parts[2],body,key)});
+      }
       if(parts.length===3&&parts[2]==='configuration'){
         if(method==='GET'){
           requireAccess(member,'products.view',user);
