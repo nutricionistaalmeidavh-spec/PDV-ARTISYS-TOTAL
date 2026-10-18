@@ -134,10 +134,10 @@ function partialEvidence(id){
    const env={...process.env};delete env.NODE_TEST_CONTEXT;
    const output=execFileSync(process.execPath,['--experimental-sqlite','--test','--test-name-pattern='+matcher,resolve(ROOT,file)],
     {cwd:ROOT,env,encoding:'utf8',timeout:180000,maxBuffer:16*1024*1024});
-   assert.match(output,/# fail 0(?:\\r?\\n|$)/,'Business regression failed '+file);
+   assert.match(output,/# fail 0(?:\r?\n|$)/,'Business regression failed '+file);
    ran.set(file,output);
   }
-  assert.ok(ran.get(file).split(/\\r?\\n/).some(line=>new RegExp('^ok \\\\d+ - '+escapeRegex(name)+'$').test(line)),
+  assert.ok(ran.get(file).split(/\r?\n/).some(line=>new RegExp('^ok \\d+ - '+escapeRegex(name)+'$').test(line)),
    'Missing, skipped or failed real test '+file+': '+name);
  }
  return examples.length;
