@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "p5-home-roles-desktop-pinned-v1",
+  "desktop": {
+    "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+    "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+    "modelPath": "desktop/renderer/home-role-model.js",
+    "modelBlob": "d5fd4d207a1a7e12f5a7ab37b9d34e2c5a461051",
+    "policyPath": "desktop/renderer/access-policy.js",
+    "policyBlob": "d6c1db4cc69c663bda029f191c596a46f49445a0",
+    "testPath": "test/home-role-model.test.js"
+  },
+  "profiles": [
+    {
+      "label": "operador",
+      "permissions": [
+        "sales.create",
+        "sales.view",
+        "returns.view",
+        "cash.view",
+        "customers.view",
+        "products.view"
+      ],
+      "tiles": [
+        "checkout",
+        "cash",
+        "post-sale",
+        "catalog"
+      ],
+      "reports": false
+    },
+    {
+      "label": "gestor",
+      "permissions": [
+        "sales.create",
+        "sales.view",
+        "returns.view",
+        "cash.view",
+        "customers.view",
+        "products.view",
+        "inventory.view",
+        "finance.view",
+        "reports.view",
+        "management.view"
+      ],
+      "tiles": [
+        "checkout",
+        "cash",
+        "post-sale",
+        "catalog",
+        "financial-management"
+      ],
+      "reports": true
+    },
+    {
+      "label": "administrador-parcial",
+      "permissions": [
+        "users.view",
+        "settings.view"
+      ],
+      "tiles": [
+        "access",
+        "settings"
+      ],
+      "reports": false
+    },
+    {
+      "label": "sem-permissao",
+      "permissions": [],
+      "tiles": [],
+      "reports": false
+    }
+  ]
+}
