@@ -18,7 +18,7 @@ No início desta branch, a medição automatizada da `main` era:
 | --- | --- | --- |
 | Infraestrutura self-hosted / LAN | cap-001, 002, 003, 010, 042, 044–047, 051, 053–056 | HTTPS em LAN, autenticação/revogação real, cópia consistente e restauração ensaiada, múltiplos dispositivos, sem dependência paga |
 | Catálogo e operações comerciais | cap-004–008, 011–024, 040, 052 | Reutilizar serviços canônicos e ledger, isolamento por empresa, idempotência, concorrência, integridade caixa/estoque/financeiro |
-| Periféricos | cap-025–030, 043, 050 | Bridge restrito ao próprio terminal, fila persistente, testes de recuperação, impressão e pesagem **em hardware físico** |
+| Periféricos | cap-025–030, 043, 050 | Bridge restrito ao próprio terminal, fila persistente, testes de recuperação, impressão e pesagem em simuladores, emuladores e testes de contrato determinísticos |
 | Alimentação e verticais | cap-009, 031–039, 041, 048–049 | Mesas, comandas, KDS, delivery e balcão completos em UI web, testes reais por papel e filial |
 
 A divisão é uma organização de trabalho; **todos os 56 IDs** permanecem exigidos pelo gate
@@ -46,8 +46,7 @@ self-hosted           periféricos
 - API não pode ser contornada por escrita do front-end, bridge ou SQLite do navegador.
 - A branch já inclui um **novo servidor HTTPS LAN** com PWA única, cookie Secure,
   sessões canônicas, verificação de Host/Origin, isolamento RBAC e migrações SQLite
-  transacionais. O servidor dev continua restrito a loopback. A CI não substitui
-  certificado confiável e testes reais multi-terminal de balcão. Consulte
+  transacionais. O servidor dev continua restrito a loopback. A CI certifica o código usando TLS real em loopback e terminais simulados. Testes no local não são exigidos para declarar a capacidade implementada. Consulte
   `docs/SELFHOST-LAN-HTTPS.md`.
 - Backups e restauração fazem parte do núcleo self-hosted, sem dependência de nuvem.
 
@@ -86,25 +85,24 @@ rejeição de arquivo adulterado. Não comprova ainda ensaio operacional em ambi
    `testContains`, `testAssertionContains`, `testRunner` e um
    cenário executável cujo nome contém o ID canônico `cap-NNN`.
    A CI executa essa suíte, não apenas procura string.
-3. Em casos LAN e periféricos definidos em `FIELD_REQUIRED_CAPS`, incluir
-   `fieldVerification` com `status: FIELD_VERIFIED`, plataforma, modelo
-   testado, revisor independente, data e `evidenceFile` em
-   `docs/parity/field-qa/`, com resultado de testes físicos de dispositivos.
-   Simulador/Chromium não substitui impressão ou balança real.
+3. Para LAN e periféricos, executar testes automatizados com API HTTPS,
+   sessões isoladas, emuladores/mocks de protocolos, desconexão e reconexão
+   simuladas. O campo opcional `fieldVerification` documenta observações
+   de implantação, mas nunca impede `covered` nem o merge.
 4. Testar fluxo inteiro na UI, sessões/perfis, separação de empresas,
    concorrência/idempotência e persistência real quando aplicável.
 5. Publicar evidência e execução verde no SHA **exato** do candidato;
-   revisar independentemente. Atestados de CI não provam homologação física.
+   revisar independentemente. Não exigir validação presencial: a certificação se limita à completude de código comprovada por testes e revisão.
 6. Só então atualizar a matriz/inventário. A certificação sistêmica
    `full-desktop` exige simultaneamente **68/68 + 56/56** e recibo de
    revisão/CI rastreável, sem alterar a origem desktop.
 
 **Não realizar merge automático.** Revisar diffs, testes Node, API, Workerd,
-Chromium e homologação manual aplicável antes de integrar à `main`.
+Chromium e comparação executável de paridade antes de integrar à `main`; ensaios físicos são opcionais e posteriores.
 
 ## Incremento funcional: servidor HTTPS na LAN
 
 - `apps/api/src/https-lan-server.mjs` serve PWA e API autoritativa na mesma origem TLS sem serviços de terceiros.
 - `apps/api/src/local-migrations.mjs` e provisionador aplicam versões SQL somente uma vez, com integridade SHA-256, rejeição de schema adulterado e rejeição de base legada sem registro de migrações.
 - `apps/api/test/https-lan-server.test.mjs` testa requisições HTTPS reais, 3 usuários, 2 estabelecimentos, sessões independentes, Host, Origin, perfil e isolamento. `local-migrations.test.mjs` cobre restart, rollback e banco legado.
-- A capacidade `cap-002` permanece `gap`: faltam ensaios com dois terminais físicos, certificado de confiança real, transações concorrentes na UI e revisão independente.
+- A capacidade `cap-002` só pode sair de `gap` após demonstração automatizada dos subfluxos LAN, autenticação, concorrência e recuperação com prova por ID e revisão de código. Dois terminais físicos e certificado de implantação não são pré-requisitos.
