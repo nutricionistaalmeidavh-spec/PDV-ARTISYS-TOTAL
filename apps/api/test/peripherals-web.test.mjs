@@ -96,3 +96,41 @@ test('Urano POP-S rejeita frames incompletos, resposta numérica solta e tara',(
     assert.throws(()=>parse(new TextEncoder().encode(frame)),/Urano|frame/i);
   }
 });
+
+test('cap-027 serial printer disconnect invalidates handle and only explicit reconnect resumes',async()=>{
+  const {window:w}=browser();
+  let opened=0,writes=0,closed=0;
+  const serialPort=()=>{
+    const number=++opened;
+    return {
+      open:async()=>{},
+      close:async()=>{closed++;},
+      writable:{getWriter:()=>({
+        write:async()=>{writes++;if(number===1)throw Error('EIO simulated disconnect');},
+        releaseLock(){}
+      })}
+    };
+  };
+  w.navigator.serial={requestPort:async()=>serialPort()};
+  w.PdvWebHardware.saveSettings({printerMode:'serial',printerBaud:9600});
+  const sale={id:'serial-sim-1',status:'COMPLETED',saleNumber:'R3',items:[],payments:[],totalCents:100,changeCents:0};
+  await w.PdvWebHardware.connect('printer');
+  await assert.rejects(w.PdvWebHardware.printSale(sale),/EIO simulated disconnect/);
+  await assert.rejects(w.PdvWebHardware.printSale(sale),/Conecte este dispositivo/);
+  assert.equal(opened,1,'browser must never silently re-request USB/serial permission');
+  await w.PdvWebHardware.connect('printer');
+  const result=await w.PdvWebHardware.printSale(sale);
+  assert.equal(result.sentToSerial,true);
+  assert.equal(opened,2);assert.equal(writes,2);assert.equal(closed,2);
+});
+
+test('cap-026 web renderer preserves frozen branding for browser and textual transports',()=>{
+  const {window:w}=browser();
+  const sale={id:'sale-immut',status:'COMPLETED',saleNumber:'7',items:[],payments:[],totalCents:0,changeCents:0};
+  const oldBrand={name:'Loja Antiga',address:'Rua Antiga',phone:'(16)5555',logoDataUrl:null};
+  const text=w.PdvWebHardwareUtils.receiptText(sale,{branding:oldBrand});
+  const html=w.PdvWebHardwareUtils.receiptHtml(sale,{paperMm:80,branding:oldBrand});
+  assert.match(text,/Loja Antiga/);assert.match(text,/Rua Antiga/);
+  assert.match(html,/Loja Antiga/);assert.match(html,/Rua Antiga/);
+  assert.doesNotMatch(text,/PDV TOTAL/);
+});
