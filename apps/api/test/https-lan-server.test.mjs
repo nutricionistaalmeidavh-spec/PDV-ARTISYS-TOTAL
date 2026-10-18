@@ -90,6 +90,9 @@ test('cap-002 LAN: two authenticated HTTPS terminals, strict host/CSRF, RBAC and
     assert.match(res.headers['set-cookie'][0],/HttpOnly/);
     return res.headers['set-cookie'][0].split(';')[0];
   }
+  // cap-002: the actual TLS listener serves both UI and authenticated API
+  // without an external SaaS, and both sessions remain isolated.
+  assert.equal((await send('/api/v1/health')).status,200);
   const ownerCookie=await login('owner@example.test');
   const cashierCookie=await login('cashier@example.test');
   const otherCookie=await login('other@example.test');
