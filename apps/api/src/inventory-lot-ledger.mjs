@@ -37,5 +37,8 @@ export function createLotLedger({all,q,randomId,error}){
      (id,tenant_id,branch_id,product_id,lot_receipt_id,movement_id,sale_item_id,delta_milli,created_at)
      VALUES(?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,productId,
      c.lotId,movementId,saleItemId,sign*c.quantityMilli,at));
- return {consume,statements};
+ const check=(tenant,branch,productId,movementId,at)=>q(`INSERT INTO inventory_lot_integrity_checks
+   (id,tenant_id,branch_id,product_id,movement_id,created_at)
+   VALUES(?,?,?,?,?,?)`,randomId(),tenant,branch,productId,movementId,at);
+ return {consume,statements,check};
 }
