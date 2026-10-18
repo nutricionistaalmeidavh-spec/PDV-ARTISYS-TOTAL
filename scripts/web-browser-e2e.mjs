@@ -407,6 +407,26 @@ try{
   assert.match(await page.locator('#report-v2-body').innerText(),/Metas e vendas líquidas|Metas e ranking|Meta mensal/);
   await page.screenshot({path:'qa-artifacts/pdv-seller-targets.png',fullPage:true});
   await page.locator('[data-report-web=overview]').click();
+  // P5 comparisons have their own audited UI; no invented percentage for an empty base.
+  await page.locator('#web-report-filter [name=from]').fill('2026-10-17');
+  await page.locator('#web-report-filter [name=to]').fill('2026-10-17');
+  await page.locator('#web-report-filter button[type=submit]').click();
+  await page.locator('[data-report-web=overview][aria-selected=true]').waitFor();
+  await page.locator('[data-report-web=comparison]').click();
+  await page.locator('[data-report-web=comparison][aria-selected=true]').waitFor();
+  assert.match(await page.locator('#report-v2-body').innerText(),/Receita líquida|Variação de receita/);
+  assert.match(await page.locator('#report-v2-body').innerText(),/Sem base comparativa anterior/);
+  await page.locator('[data-report-web=comparison]').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.locator('[data-report-web=products][aria-selected=true]').waitFor();
+  assert.equal(await page.evaluate(()=>document.activeElement?.dataset.reportWeb),'products',
+    'keyboard tab navigation must restore focus after asynchronous report render');
+  await page.locator('#app-sidebar [data-route=checkout]').click();
+  await page.locator('#app-sidebar [data-route=reports]').click();
+  await page.locator('[data-report-web=products][aria-selected=true]').waitFor();
+  assert.equal(await page.locator('#web-report-filter [name=from]').inputValue(),'2026-10-17');
+  assert.equal(await page.locator('#web-report-filter [name=to]').inputValue(),'2026-10-17');
+  await page.locator('[data-report-web=overview]').click();
   const downloadEvent=page.waitForEvent('download');
   await page.locator('#web-report-export').click();
   const download=await downloadEvent;
