@@ -16,6 +16,7 @@ on:
       - 'scripts/check-desktop-parity.mjs'
       - 'scripts/parity-rules.mjs'
       - 'scripts/parity-rules.test.mjs'
+      - 'scripts/report-xlsx.test.mjs'
       - 'scripts/web-browser-e2e.mjs'
       - '.github/workflows/verify-saas-foundation.yml'
   workflow_dispatch:
