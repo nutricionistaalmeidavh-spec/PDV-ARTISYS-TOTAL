@@ -100,6 +100,8 @@
       '<div class="restaurant-list">'+model.profiles.map(p=>'<div class="restaurant-row">'+esc(model.products.find(x=>x.id===p.productId)?.name||p.productId)+' · '+esc(p.policy)+'</div>').join('')+'</div>'+
       (can('products.manage')?'<form data-r4-advanced="pizza" class="vertical-form"><label class="field"><span>Produto base</span>'+select('productId',model.products)+'</label>'+
       '<label class="field"><span>Política</span><select name="policy"><option value="HIGHEST_FLAVOR">Cobrar sabor mais caro</option><option value="PROPORTIONAL_AVERAGE">Média dos sabores</option></select></label>'+
+      '<label class="field"><span>Como os preços são definidos?</span><select name="pricingMode"><option value="DESKTOP_DELTAS">Preço base do produto + acréscimos</option><option value="ABSOLUTE_OPTIONS">Tabela de preços finais por opção</option></select></label>'+
+      '<p>Em acréscimos, cadastre nos campos abaixo somente a diferença de preço; em tabela final, informe o preço completo.</p>'+
       field('maxFlavors','Máximo de sabores','number','min="1" max="8" value="4"')+
       '<label class="field"><span>Tamanhos</span><textarea name="sizes" required rows="3" placeholder="Média=30,00"></textarea></label>'+
       '<label class="field"><span>Sabores</span><textarea name="flavors" required rows="3" placeholder="Calabresa=42,00"></textarea></label>'+
@@ -155,7 +157,7 @@
       if(kind==='station')await r4('/kitchen/stations','POST',{name:v.name,printerName:v.printerName,printEnabled:!!v.printEnabled});
       if(kind==='route')await r4('/kitchen/routes','POST',{productId:v.productId,mode:v.mode,
         stationId:v.mode==='PRODUCTION'?v.stationId:null});
-      if(kind==='pizza')await r4('/pizzeria/profiles','POST',{productId:v.productId,policy:v.policy,maxFlavors:Number(v.maxFlavors),
+      if(kind==='pizza')await r4('/pizzeria/profiles','POST',{productId:v.productId,policy:v.policy,pricingMode:v.pricingMode,maxFlavors:Number(v.maxFlavors),
         sizes:parseCatalog(v.sizes),flavors:parseCatalog(v.flavors),crusts:parseCatalog(v.crusts)});
       if(kind==='pizza-quote'){
         const result=await r4('/pizzeria/products/'+uid(v.productId));
