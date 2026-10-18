@@ -69,6 +69,7 @@
         else if(original==='/api/v1/inventory')operation='inventory';
         else if(original==='/api/v1/inventory/movements')operation=method==='GET'?'inventory/movements':'inventory/receipts';
         else if(original==='/api/v1/inventory/adjustments')operation='inventory/adjustments';
+        else if(original==='/api/v1/inventory/lots')operation='inventory/lots';
         else if(original==='/api/v1/inventory/counts')operation='inventory/counts';
         else if(original==='/api/v1/inventory/transfers')operation='inventory/transfers';
         else if(original.startsWith('/api/v1/inventory/reservations'))operation=original.slice(apiRoot.length);
@@ -287,6 +288,7 @@
     inventoryAdjust(body,mutationId=this.mutationId()){return this.request('/api/v1/inventory/adjustments',{method:'POST',body,mutationId});}
     inventoryReceipt(body,mutationId=this.mutationId()){return this.request('/api/v1/inventory/receipts',{method:'POST',body,mutationId});}
     inventoryCount(body,mutationId=this.mutationId()){return this.request('/api/v1/inventory/counts',{method:'POST',body,mutationId});}
+    inventoryLotReceipts(filters={}){return this.request('/api/v1/inventory/lots'+this.params(filters));}
     stockTransfers(filters = {}) { return this.request(`/api/v1/inventory/transfers${this.params(filters)}`); }
     transferStock(body,mutationId) { return this.request('/api/v1/inventory/transfers',{method:'POST',body,mutationId}); }
     tenantBranches(){if(!this.webMode||!this.tenantId)throw new Error('Selecione o estabelecimento.');return this.webRequest('/api/v1/tenants/'+encodeURIComponent(this.tenantId)+'/branches');}
