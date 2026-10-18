@@ -142,6 +142,21 @@ try{
   await countForm.locator('[name=reason]').fill('Conferência física no navegador QA');
   await countForm.locator('button[type=submit]').click();
   await page.locator('table tbody tr').filter({hasText:sku}).first().getByText('2,25',{exact:true}).waitFor({timeout:12000});
+  // P1 bin/shelf address E2E. The assignment never adds or subtracts stock.
+  await page.locator('#web-storage-location-create [name=code]').fill('SHELF-QA-01');
+  await page.locator('#web-storage-location-create [name=name]').fill('Prateleira de testes');
+  await page.locator('#web-storage-location-create button[type=submit]').click();
+  await page.locator('#web-storage-location-assign select[name=locationId] option')
+    .filter({hasText:'SHELF-QA-01'}).waitFor({timeout:12000});
+  await page.locator('#web-storage-location-assign select[name=productId]').selectOption(productChoice);
+  const locationId=await page.locator('#web-storage-location-assign select[name=locationId] option')
+    .filter({hasText:'SHELF-QA-01'}).getAttribute('value');
+  assert.ok(locationId,'new shelf belongs to the branch');
+  await page.locator('#web-storage-location-assign select[name=locationId]').selectOption(locationId);
+  await page.locator('#web-storage-location-assign button[type=submit]').click();
+  await page.locator('#web-storage-locations table tbody tr')
+    .filter({hasText:'SHELF-QA-01'}).first().waitFor({timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-parity-storage-address.png',fullPage:true});
   await page.screenshot({path:'qa-artifacts/pdv-parity-inventory-count.png',fullPage:true});
 
   await page.locator('#app-sidebar [data-route=checkout]').click();
