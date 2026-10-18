@@ -68,7 +68,22 @@ export function verifyCapabilityInventory(matrix,inventory,publishedCapabilities
       // A named API/Chromium test is valid partial evidence even if a parent
       // seven-screen contract remains partial; it cannot certify full parity.
       const direct=row.independentEvidence;
-      requireProof(tested.length>0||direct,'partial capability needs covered subset or executable proof '+row.id);
+      const implementation=row.implementationEvidence;
+      requireProof(tested.length>0||direct||implementation,
+        'partial capability needs covered subset or executable proof '+row.id);
+      if(implementation){
+        requireProof(typeof readSource==='function' && implementation.file && implementation.contains &&
+          implementation.testFile && implementation.testContains,
+          'partial implementation requires source and test '+row.id);
+        requireProof(/^((apps\\/api\\/test|packages\\/core\\/test|scripts)\\/)[a-zA-Z0-9_.-]+\\.test\\.(mjs|js)$/.test(implementation.testFile),
+          'partial implementation test path invalid '+row.id);
+        requireProof(readSource(implementation.file).includes(implementation.contains),
+          'partial implementation source not found '+row.id);
+        const testSource=readSource(implementation.testFile);
+        requireProof(testSource.includes('test(') && implementation.testContains.startsWith("test('") &&
+          testSource.includes(implementation.testContains),
+          'partial implementation test not found '+row.id);
+      }
       if(direct){
         requireProof(typeof readSource==='function','partial direct evidence requires checked source '+row.id);
         requireProof(direct.testContains?.includes(row.id),'partial evidence needs an ID-specific scenario '+row.id);
