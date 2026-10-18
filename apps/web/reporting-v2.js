@@ -468,8 +468,8 @@
         table(['Venda','Data','Vendedor','Cliente','Itens','Pagamento','Total','Situação'],
           (detail.items||[]).map(sale=>`<tr>
           <td>${escapeHtml(sale.saleNumber)}</td><td>${when(sale.completedAt)}</td>
-          <td>${escapeHtml(sale.sellerId||'—')}</td>
-          <td>${escapeHtml(sale.customerId||'Consumidor')}</td>
+          <td>${escapeHtml(sale.sellerName||sale.sellerId||'—')}</td>
+          <td>${escapeHtml(sale.customerName||sale.customerId||'Consumidor não identificado')}</td>
           <td>${escapeHtml((sale.items||[]).map(i=>[i.sku+' × '+qty(i.quantity),i.configuration?.variant?.name,...(i.configuration?.options||[]).map(o=>o.name),i.note||''].filter(Boolean).join(' / ')).join(' · '))}</td>
           <td>${escapeHtml((sale.payments||[]).map(x=>paymentLabel(x.method)).join(' + '))}</td>
           <td>${value(sale.netTotalCents??sale.totalCents)}</td>
