@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "p5-stock-shortage-desktop-2026-09-09",
+  "contractId": "reports-066",
+  "dimension": "nominal",
+  "desktop": {
+    "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+    "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+    "source": "js/domains/reports/reporting-service.js",
+    "sourceGitBlob": "a5ffc3e9e467e5475bd250fa46f77d80ff0a017d",
+    "sourceTest": "test/e17-reporting.test.js",
+    "sourceTestGitBlob": "fd987c63c76b28a82db11f0c27590165122549a0"
+  },
+  "scope": "stock at one location/branch with a positive last recorded cost and no reservations",
+  "products": [
+    {
+      "sku": "P5-STOCK-A",
+      "name": "Café",
+      "quantity": 3,
+      "minimumStock": 2,
+      "costCents": 600
+    },
+    {
+      "sku": "P5-STOCK-B",
+      "name": "Leite",
+      "quantity": 1,
+      "minimumStock": 2,
+      "costCents": 400
+    }
+  ],
+  "expected": {
+    "lowStockCount": 1,
+    "belowMinimumCount": 1,
+    "zeroStockCount": 0,
+    "suggestedPurchaseCostCents": 400,
+    "purchaseList": [
+      {
+        "sku": "P5-STOCK-B",
+        "quantity": 1,
+        "minimumStock": 2,
+        "shortageToMinimum": 1,
+        "suggestedPurchaseCostCents": 400
+      }
+    ]
+  },
+  "interpretation": "Compare exact numeric stock shortage and restock cost for matching fixtures. Web branch-reserved availability and unknown cost are additional safety behavior and not a claim of full desktop feature or fiscal equivalence.",
+  "review": {
+    "independentReviewed": false,
+    "physicalHomologation": false
+  }
+}
