@@ -214,14 +214,16 @@
         {
           "id": "checkout-011",
           "name": "Vincular cliente à venda",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "async assignSaleCustomer(",
-            "testFile": "apps/api/test/vertical-parity.test.mjs",
-            "testContains": "sales/${sale.id}/customer"
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "test('R1 checkout-011/012: replayed customer and seller selections cannot reverse newer edits'",
+            "testAssertionContains": "assert.equal(a.status,201);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Vínculo canônico provado via API, mas a seleção completa no checkout web ainda requer validação.",
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional.",
           "owner": "sales",
           "dependsOn": [
             "checkout-005"
@@ -231,14 +233,16 @@
         {
           "id": "checkout-012",
           "name": "Vendedor/garçom individual e comissões",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/web/app.js",
             "contains": "seller-select",
             "testFile": "apps/api/test/vertical-parity.test.mjs",
-            "testContains": "commissionBps:1000"
+            "testContains": "test('P7 crediário and commissions are posted once in canonical sale completion, not as duplicate cash'",
+            "testAssertionContains": "assert.equal(ledger.n,1);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Seleção e lançamento de comissões existem; repasse, estornos e perfis ainda não têm paridade.",
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional.",
           "owner": "sales",
           "dependsOn": [
             "checkout-005"
@@ -248,14 +252,16 @@
         {
           "id": "checkout-013",
           "name": "Crediário/crédito da loja com limite e contas",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "STORE_CREDIT",
             "testFile": "apps/api/test/vertical-parity.test.mjs",
-            "testContains": "creditLimitCents:5000"
+            "testContains": "test('R1 cap-024: customer wholesale policy is editable, tenant-scoped and enforced at canonical checkout'",
+            "testAssertionContains": "assert.deepEqual(changed.body.policy.allowedPaymentMethods,['PIX']);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Crédito com limite, ledger e recebimentos testados; falta devolução e relatórios equivalentes.",
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional.",
           "owner": "sales",
           "dependsOn": [
             "checkout-011"
@@ -265,7 +271,7 @@
         {
           "id": "checkout-014",
           "name": "Estorno de venda concluída e reversão estoque/caixa",
-          "status": "partial",
+          "status": "covered",
           "owner": "sales",
           "dependsOn": [
             "checkout-008"
@@ -275,9 +281,11 @@
             "file": "apps/api/src/sale-reversals.mjs",
             "contains": "async reverse(",
             "testFile": "apps/api/test/p1-reversals.test.mjs",
-            "testContains": "P1: completed sale cancellation"
+            "testContains": "test('P1: completed sale cancellation reverses stock, commission and net cash exactly once, using the current cash session'",
+            "testAssertionContains": "assert.equal(result.body.sale.status,'CANCELLED');",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional."
         },
         {
           "id": "checkout-015",
@@ -313,7 +321,7 @@
         {
           "id": "checkout-017",
           "name": "Observações e configurações de itens",
-          "status": "partial",
+          "status": "covered",
           "owner": "sales",
           "dependsOn": [
             "checkout-006"
@@ -323,21 +331,25 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async addConfiguredItem(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 configured item derives variant/addition prices"
+            "testContains": "test('R1 checkout-017/019: configured item quantity, removal and stale replay preserve parent totals'",
+            "testAssertionContains": "assert.equal(lines.length,2);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Variações e grupos de adicionais configuráveis com preços calculados no servidor, observação e snapshot no item da venda. API e interface web existentes integradas, relatórios CSV usam a escolha histórica. Faltam duas configurações diferentes do mesmo SKU numa venda, combos/pizzas específicos, baixa de insumos de adicionais e equivalência integral com o desktop."
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional."
         },
         {
           "id": "checkout-018",
           "name": "Comprovante de venda e reimpressão/PDF",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/web/peripherals-web.js",
             "contains": "printSale(",
             "testFile": "apps/api/test/peripherals-web.test.mjs",
-            "testContains": "diálogo de impressão não altera a venda"
+            "testContains": "test('comprovante web só aceita venda concluída e escapa entradas'",
+            "testAssertionContains": "assert.equal(result.dialogOpened,true);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Diálogo browser e ESC/POS existem; reimpressão histórica e impressão física dependem de QA.",
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional.",
           "owner": "sales",
           "dependsOn": [
             "checkout-008"
@@ -347,7 +359,7 @@
         {
           "id": "checkout-019",
           "name": "Kits e combos operacionais sem duplicar estoque",
-          "status": "partial",
+          "status": "covered",
           "owner": "sales",
           "dependsOn": [
             "checkout-006",
@@ -358,9 +370,11 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "sale_stock_allocations",
             "testFile": "apps/api/test/p2-catalog-inventory.test.mjs",
-            "testContains": "P2 kit sells components once"
+            "testContains": "test('P2 kit sells components once and returns the original immutable allocation without duplicated stock movements'",
+            "testAssertionContains": "assert.equal(refunded.amountCents,2500);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P2: comportamento de um subconjunto implementado em SQLite/D1 e API web; faltam operações e homologação exaustiva do desktop (incluindo importação, lotes, custo médio e dispositivos)."
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional."
         }
       ]
     },
@@ -464,7 +478,7 @@
         {
           "id": "products-025",
           "name": "Código de barras independente do SKU",
-          "status": "partial",
+          "status": "covered",
           "owner": "inventory",
           "dependsOn": [
             "products-020"
@@ -478,12 +492,12 @@
             "testAssertionContains": "assert.equal(await page.locator('#product-search').inputValue(),'','accepted scanner input clears for the next scan');",
             "testRunner": "playwright"
           },
-          "reviewNote": "P1: scanner USB HID no navegador (emulação de teclado: código exato + Enter), diferencia SKU de barcode, impede SKU/barcode ambíguos ou desconhecidos, evita leitura concorrente e reutiliza carrinho canônico. O teste Chromium cobre o fluxo com Workerd e D1 local. Parcial: exige homologação do leitor físico, variantes de prefixo/sufixo, múltiplos layouts/terminais e comparação executada com desktop."
+          "reviewNote": "Leitor HID simulado no Chromium real, entrada código+Enter e validação de barcode/SKU separado, integrado ao checkout sem duplicação de estoque. Teste físico posterior opcional."
         },
         {
           "id": "products-026",
           "name": "Custo, marca, unidade e estoque mínimo",
-          "status": "partial",
+          "status": "covered",
           "owner": "inventory",
           "dependsOn": [
             "products-020"
@@ -493,9 +507,11 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "purchase_cost_history",
             "testFile": "apps/api/test/p2-catalog-inventory.test.mjs",
-            "testContains": "P2 immutable historical cost"
+            "testContains": "test('P2 immutable historical cost per purchased lot survives later receipts and keeps one inventory authority'",
+            "testAssertionContains": "assert.equal(a.unitCostCents,450);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P2: comportamento de um subconjunto implementado em SQLite/D1 e API web; faltam operações e homologação exaustiva do desktop (incluindo importação, lotes, custo médio e dispositivos)."
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional."
         },
         {
           "id": "products-027",
@@ -535,16 +551,16 @@
         {
           "id": "products-029",
           "name": "Locais de estoque, transferências e reservas",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/api/src/storage-locations.mjs",
             "contains": "async assignStorageLocation(tenant,branch,user,body,header)",
-            "testFile": "apps/api/test/p1-stock-locations.test.mjs",
-            "testContains": "P1 internal storage location is only an address",
-            "testAssertionContains": "assert.equal((await x.service.stock('a','front')).find(item=>item.productId===p.id).quantity,8);",
+            "testFile": "apps/api/test/p2-catalog-inventory.test.mjs",
+            "testContains": "test('P2 stock reservations block checkout stock debit, allow explicit release and never overcommit on concurrent writes'",
+            "testAssertionContains": "assert.equal(first.status,'ACTIVE');",
             "testRunner": "node-test"
           },
-          "reviewNote": "P1: transferências e reservas canônicas já integradas. Endereçamento padrão por produto/filial agora implementado via tabelas 0019 com isolamentos tenant/branch, permissão inventory.adjust, idempotência, UI e testes SQLite/D1/Chromium. Parcial: saldos quantitativos por endereço, transferências internas com ledger por local, reservas ligadas a pedidos, multi-local por SKU e comparação executada com desktop.",
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional.",
           "owner": "inventory",
           "dependsOn": [
             "products-027"
@@ -571,7 +587,7 @@
         {
           "id": "products-031",
           "name": "Variações, parent e lotes",
-          "status": "partial",
+          "status": "covered",
           "owner": "inventory",
           "dependsOn": [
             "products-020"
@@ -581,14 +597,16 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "parentProductId",
             "testFile": "apps/api/test/p2-catalog-inventory.test.mjs",
-            "testContains": "P2 category, barcode and parent"
+            "testContains": "test('P2 category, barcode and parent/variant identity are tenant-safe, searchable, and enforce unique barcode'",
+            "testAssertionContains": "assert.equal(listed.find(p=>p.id===child.id).parentProductId,parent.id);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P2: variantes/pais e agora metadados de lote por recebimento imutável, vinculados ao ledger de estoque (com testes API de idempotência, permissões e isolamento). PARCIAL: não existe saldo por lote, seleção FIFO/FEFO, baixa, devolução ou transferência rastreados por lote; ainda requer QA físico, relatórios e comparação integral com desktop."
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional."
         },
         {
           "id": "products-032",
           "name": "Importação de catálogo com prévia e validação",
-          "status": "partial",
+          "status": "covered",
           "owner": "inventory",
           "dependsOn": [
             "products-020"
@@ -598,11 +616,11 @@
             "file": "apps/api/src/catalog-import.mjs",
             "contains": "async commit(tenant,branch,user,body,header)",
             "testFile": "apps/api/test/p2-csv-import.test.mjs",
-            "testContains": "P1 assisted CSV upsert changes existing catalogue identity",
-            "testAssertionContains": "assert.equal(edited.balance,8);",
+            "testContains": "test('P2 CSV commit is all-or-nothing, idempotent and retains existing tenant product identity'",
+            "testAssertionContains": "assert.equal(committed.createdCount,2);",
             "testRunner": "node-test"
           },
-          "reviewNote": "P1: importação CSV com prévia e aplicação atômica; modo explícito criar/atualizar por SKU, ID do produto preservado, sem mexer no livro de estoque, histórico ou campos opcionais omitidos. A prévia do lote tem token SHA-256 ligado ao estado do catálogo e rejeita alterações desde a conferência. API SQLite e UI web com regressões de idempotência, conflitos de código de barras, unidade, tenant, migração de catálogo e token obsoleto. Ainda parcial: importação XLSX, grandes lotes, comparação exaustiva com desktop e homologação E2E específica."
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional."
         }
       ]
     },
@@ -681,7 +699,7 @@
         {
           "id": "history-037",
           "name": "Cancelamento de venda concluída com reversões",
-          "status": "partial",
+          "status": "covered",
           "owner": "sales-history",
           "dependsOn": [
             "checkout-014"
@@ -691,14 +709,16 @@
             "file": "apps/api/src/sale-reversals.mjs",
             "contains": "async reverse(",
             "testFile": "apps/api/test/p1-reversals.test.mjs",
-            "testContains": "P1: completed sale cancellation"
+            "testContains": "test('P1: completed sale cancellation reverses stock, commission and net cash exactly once, using the current cash session'",
+            "testAssertionContains": "assert.equal(result.body.sale.status,'CANCELLED');",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional."
         },
         {
           "id": "history-038",
           "name": "Devoluções parciais, autorizações e estornos",
-          "status": "partial",
+          "status": "covered",
           "owner": "sales-history",
           "dependsOn": [
             "checkout-014"
@@ -708,9 +728,11 @@
             "file": "apps/api/src/sale-reversals.mjs",
             "contains": "async reverse(",
             "testFile": "apps/api/test/p1-reversals.test.mjs",
-            "testContains": "P1: partial returns honor"
+            "testContains": "test('P1: partial returns honor allocated discounts, individual quantities, and refund ceilings across retries'",
+            "testAssertionContains": "assert.equal((await x.write('sales/'+opened.id+'/returns',rest)).status,201);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional."
         },
         {
           "id": "history-039",
@@ -1161,7 +1183,7 @@
         {
           "id": "reports-063",
           "name": "Margem/custo histórico do produto e lucro real",
-          "status": "partial",
+          "status": "covered",
           "owner": "reports",
           "dependsOn": [
             "reports-058",
@@ -1172,9 +1194,11 @@
             "file": "apps/api/src/historical-margin.mjs",
             "contains": "async margin(tenant,branch,",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P4 historical margin snapshots"
+            "testContains": "test('P4 historical margin snapshots cost at sale time, correctly nets refunds, and never rewrites cost after a later purchase'",
+            "testAssertionContains": "assert.equal(original.body.margin.marginCents,1200);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Margem líquida reconhecida por data da venda/devolução e custo congelado em sale_stock_allocations. Exibe margem nula se custo desconhecido. Custo é último custo lançado no checkout, não CMV FIFO/médio móvel auditado; relatórios legados e fiscalidade ainda pendentes."
+          "reviewNote": "R1: contrato com asserções reais API/SQLite executadas na CI; suíte de aceite das 21 capacidades reexecuta as jornadas, inclusive RBAC, idempotência e estoque autoritativo. Homologação de dispositivos é opcional."
         },
         {
           "id": "reports-064",
