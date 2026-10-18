@@ -10,7 +10,7 @@ import {DESKTOP_SHA,DESKTOP_REPO} from './parity-rules.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const baseline=JSON.parse(readFileSync(resolve(root,'docs/parity/fixtures/pricing-desktop-v2.json'),'utf8'));
 const source=readFileSync(resolve(root,'packages/core/js/domains/sales/pricing.js'));
-const hash=createHash('sha1').update('blob '+source.length+'\\0').update(source).digest('hex');
+const hash=createHash('sha1').update('blob '+source.length+'\0').update(source).digest('hex');
 const require=createRequire(import.meta.url);
 const functions=require('../packages/core/js/domains/sales/pricing.js');
 
