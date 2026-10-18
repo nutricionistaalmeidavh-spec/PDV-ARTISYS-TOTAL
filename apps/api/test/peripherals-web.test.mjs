@@ -126,6 +126,7 @@ test('cap-027 serial printer disconnect invalidates handle and only explicit rec
 
 test('cap-026 web renderer preserves frozen branding for browser and textual transports',()=>{
   const {window:w}=browser();
+  w.PdvReceiptBranding={normalize:value=>value};
   const sale={id:'sale-immut',status:'COMPLETED',saleNumber:'7',items:[],payments:[],totalCents:0,changeCents:0};
   const oldBrand={name:'Loja Antiga',address:'Rua Antiga',phone:'(16)5555',logoDataUrl:null};
   const text=w.PdvWebHardwareUtils.receiptText(sale,{branding:oldBrand});
