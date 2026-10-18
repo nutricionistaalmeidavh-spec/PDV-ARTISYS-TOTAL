@@ -64,8 +64,9 @@ export function createVerticalService(db){
    if(!Array.isArray(items)||items.length<1||items.length>80)throw err(400,'Informe de 1 a 80 itens.');
    const keys=new Set(),result=[];
    for(const item of items){
-     if(keys.has(item.productId))throw err(400,'Produto repetido. Agrupe a quantidade.');
-     keys.add(item.productId);
+     const itemKey=item?.pizza?JSON.stringify([item.productId,item.pizza.sizeCode,item.pizza.flavorCodes,item.pizza.crustCode||null]):item?.productId;
+     if(keys.has(itemKey))throw err(400,'Configuração de produto repetida. Agrupe a quantidade.');
+     keys.add(itemKey);
      const p=await product(t,item.productId),milli=qty(item.quantity);
      const pizza=item.pizza?await createR4ExtendedService(db).quotePizza(t,b,{productId:p.id,...item.pizza}):null;
      result.push({productId:p.id,name:p.name,quantity:milli/1000,milli,
