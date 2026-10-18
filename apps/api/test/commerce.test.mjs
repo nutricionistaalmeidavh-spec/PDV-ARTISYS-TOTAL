@@ -650,6 +650,37 @@ test('P6 weighted product uses canonical KG line, precise payment and stock',asy
   }finally{x.close();}
 });
 
+test('R1 checkout-017: removing a weighed line is retry safe and does not affect stock until payment',async()=>{
+ const x=await setup();try{
+  const created=await x.write('a','products',{branchId:'branch-a',name:'Café a granel',sku:'CAFE-KG-R1',unit:'KG',salePriceCents:2000,trackStock:true});
+  assert.equal(created.status,201);
+  const pid=created.body.product.id;
+  await x.write('a','inventory/receipts',{branchId:'branch-a',productId:pid,quantity:3,type:'opening'});
+  const opened=await x.write('a','sales',{branchId:'branch-a'});
+  const id=opened.body.sale.id;
+  const added=await x.write('a',`sales/${id}/items/weighted`,{branchId:'branch-a',productId:pid,grams:500,source:'MANUAL'});
+  assert.equal(added.status,200,JSON.stringify(added.body));
+  assert.equal(added.body.sale.items.length,1);
+  const itemId=added.body.sale.items[0].id,mutation=next();
+  assert.ok(itemId,'weighted sale line needs a stable ID for removal');
+  const route=`sales/${id}/weight-items/${itemId}`;
+  const removed=await x.write('a',route,{branchId:'branch-a'},{method:'DELETE',key:mutation});
+  assert.equal(removed.status,200,JSON.stringify(removed.body));
+  assert.equal(removed.body.sale.items.length,0);
+  assert.equal((await x.write('a',route,{branchId:'branch-a'},{method:'DELETE',key:mutation})).status,200);
+  const readded=await x.write('a',`sales/${id}/items/weighted`,{branchId:'branch-a',productId:pid,grams:750,source:'MANUAL'});
+  assert.equal(readded.status,200);
+  assert.equal(readded.body.sale.items[0].quantity,0.75);
+  assert.equal((await x.write('a',route,{branchId:'branch-a'},{method:'DELETE',key:mutation})).status,200);
+  assert.equal((await x.get('a',`sales/${id}?branchId=branch-a`)).body.sale.items[0].quantity,0.75,
+    'replayed removal must not delete a newer weighing of same product');
+  assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock.find(p=>p.productId===pid).quantity,3,
+    'editing the open basket never changes the canonical stock ledger');
+  assert.equal((await x.write('b',route,{branchId:'branch-b'},{method:'DELETE',who:x.other})).status,404);
+  assert.equal((await x.write('a',route,{branchId:'branch-a'},{method:'DELETE',who:x.viewer})).status,403);
+ }finally{x.close();}
+});
+
 test('P6 invalid weights, non-KG items and other-tenant users are rejected',async()=>{
   const x=await setup();try{
     const kg=await x.write('a','products',{branchId:'branch-a',name:'Tomate',sku:'TOMATE-KG',unit:'KG',salePriceCents:1000});
