@@ -51,8 +51,15 @@ export function createReportDepthService(h){
    period({from:end,to:end});
    const start=new Date(Date.parse(end+'T00:00:00.000Z')-(span-1)*86400000)
      .toISOString().slice(0,10);
+   // A code deployment may precede the additive D1 migration.
+   // Keep existing reports available while new minimum editing stays disabled.
+   const minimumPoliciesAvailable=Boolean((await all(
+     "SELECT name FROM sqlite_master WHERE type='table' AND name='inventory_minimum_levels'")).length);
+   const minimumColumn=minimumPoliciesAvailable?'ml.minimum_milli':'NULL';
+   const minimumJoin=minimumPoliciesAvailable?
+     'LEFT JOIN inventory_minimum_levels ml ON ml.tenant_id=p.tenant_id AND ml.branch_id=? AND ml.product_id=p.id':'';
    const rows=await all(`SELECT p.id AS productId,p.sku,p.name,p.unit,
-      ml.minimum_milli AS minimumMilli,
+      ${minimumColumn} AS minimumMilli,
       COALESCE(s.balance_milli,0) AS quantityMilli,
       COALESCE((SELECT SUM(r.quantity_milli) FROM inventory_reservations r
         WHERE r.tenant_id=p.tenant_id AND r.branch_id=? AND r.product_id=p.id
@@ -70,14 +77,13 @@ export function createReportDepthService(h){
           AND t.created_at BETWEEN ? AND ?),0) AS outgoingMilli
     FROM products p LEFT JOIN stock_positions s ON s.tenant_id=p.tenant_id
       AND s.branch_id=? AND s.product_id=p.id
-    LEFT JOIN inventory_minimum_levels ml ON ml.tenant_id=p.tenant_id
-      AND ml.branch_id=? AND ml.product_id=p.id
+    ${minimumJoin}
     WHERE p.tenant_id=? AND p.track_stock=1 AND p.active=1
     ORDER BY p.name,p.id LIMIT 1001`,
     branch,branch,start+'T00:00:00.000Z',end+'T23:59:59.999Z',
     branch,start+'T00:00:00.000Z',end+'T23:59:59.999Z',
     branch,start+'T00:00:00.000Z',end+'T23:59:59.999Z',
-    branch,branch,tenant);
+    branch,...(minimumPoliciesAvailable?[branch]:[]),tenant);
    if(rows.length>1000)
      throw error(413,'Mais de 1000 produtos. Filtre ou exporte o cadastro por lotes.');
    const products=rows.map(row=>{
@@ -97,7 +103,7 @@ export function createReportDepthService(h){
       depleted:available<=0
     };
    });
-   return {period:{from:start,to:end,days:span},products,
+   return {period:{from:start,to:end,days:span},minimumPoliciesAvailable,products,
     zeroOrReservedOut:products.filter(x=>x.depleted).length,
     unknownMinimum:products.filter(x=>x.minimumQuantity===null).length,
     belowMinimum:products.filter(x=>x.minimumStatus==='BELOW_MINIMUM').length,
