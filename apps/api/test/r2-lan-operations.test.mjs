@@ -107,3 +107,31 @@ test('R2: pilot readiness stays incomplete until explicit evidence, with isolate
   assert.equal(audit.status,200);
   assert.ok((await audit.json()).events.some(x=>x.action==='readiness.update'));
 });
+
+
+test('R2: support diagnostics ZIP contains no password, cookie, email or credentials',async t=>{
+  const db=openLocalDatabase(':memory:');
+  t.after(()=>db.close());
+  await applyLocalMigrations(db);
+  const stamp=new Date().toISOString();
+  await db.prepare('INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)').bind('a','diagnostic-a','Diagnostics store',stamp).run();
+  await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
+    .bind('secret-operator','private.person@shop.test','Highly Private Operator','SENSITIVE_PASSWORD_HASH',stamp).run();
+  await db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)')
+    .bind('a','secret-operator','OWNER',stamp).run();
+  const {r2LanRoute}=await import('../src/r2-lan-router.mjs');
+  const url='https://localhost:8443/api/v1/tenants/a/lan/diagnostics.zip';
+  const unauth=await r2LanRoute(new Request(url),db,{userId:'secret-operator'},{profileKey:'CASHIER'},'a','lan/diagnostics.zip');
+  assert.equal(unauth.status,403);
+  const res=await r2LanRoute(new Request(url),db,{userId:'secret-operator'},{profileKey:'OWNER'},'a','lan/diagnostics.zip');
+  assert.equal(res.status,200);
+  assert.equal(res.headers.get('content-type'),'application/zip');
+  const bytes=new Uint8Array(await res.arrayBuffer()),raw=new TextDecoder().decode(bytes);
+  assert.equal(raw.slice(0,2),'PK');
+  assert.ok(raw.includes('health.json'));
+  assert.ok(raw.includes('manifest.json'));
+  assert.ok(raw.includes('audit.json'));
+  for(const secret of ['private.person@shop.test','SENSITIVE_PASSWORD_HASH','__Host-pdvtotal_session','credential_hash'])
+    assert.ok(!raw.includes(secret),secret+' cannot be in ZIP');
+  assert.ok(bytes.length>300);
+});
