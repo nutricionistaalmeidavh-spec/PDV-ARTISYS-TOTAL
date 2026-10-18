@@ -147,6 +147,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
           return json({location:await service.createStorageLocation(tenant,branch,user,body,key)},201);
         }
       }
+      if(parts[1]==='locations'&&parts[2]==='assign'&&parts.length===3&&method==='GET'){
+        requireAccess(member,'inventory.view',user);
+        return json({assignments:await service.storageAssignments(tenant,branch)});
+      }
       if(parts[1]==='locations'&&parts[2]==='assign'&&parts.length===3&&method==='POST'){
         requireAccess(member,'inventory.adjust',user);
         return json({assignment:await service.assignStorageLocation(tenant,branch,user,body,key)});
