@@ -42,19 +42,19 @@
       // Delayed renderers can mount after this callback; never jump if route changed.
       if(surface!==next||document.body.dataset.activeRoute!==route)return;
       moveTo(top);
-      if(restoreReport){
-        // app.navigate focuses its route container once renderRoute resolves.
-        // Restore the tab on the following frame, after that default focus.
-        requestAnimationFrame(()=>{
-          if(surface!==next||document.body.dataset.activeRoute!==route)return;
-          const tabId=focusTargets.get(next);
-          const tabs=[...content.querySelectorAll('[data-report-web]')];
-          const tab=tabs.find(item=>item.dataset.reportWeb===tabId)||
-            tabs.find(item=>item.getAttribute?.('aria-selected')==='true');
-          tab?.focus?.({preventScroll:true});
-        });
-      }
+
     });
+  });
+  // Restore only after the app has completed its default route-container focus.
+  lifecycle.on('route:focus-ready',({route,scope:readyScope=''})=>{
+    if(route!=='reports'||scope!==readyScope)return;
+    const key=surfaceKey(route);
+    if(surface!==key||!positions.has(key)||document.body.dataset.activeRoute!==route)return;
+    const selectedId=focusTargets.get(key);
+    const tabs=[...content.querySelectorAll('[data-report-web]')];
+    const tab=tabs.find(item=>item.dataset.reportWeb===selectedId)||
+      tabs.find(item=>item.getAttribute?.('aria-selected')==='true');
+    tab?.focus?.({preventScroll:true});
   });
   if(document.body.dataset.activeRoute)surface=surfaceKey(document.body.dataset.activeRoute);
 })();
