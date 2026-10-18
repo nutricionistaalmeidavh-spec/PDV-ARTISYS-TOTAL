@@ -62,7 +62,7 @@
         {
           "id": "home-003",
           "name": "Indicadores operacionais reais e alertas no início",
-          "status": "partial",
+          "status": "covered",
           "owner": "web-shell",
           "dependsOn": [
             "home-001"
@@ -72,23 +72,30 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async homeIndicators(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 home indicators are canonical live data"
+            "testContains": "home-003/nominal p5-home003-desktop-alerts-v1",
+            "testAssertionContains": "assert.deepEqual(home.alerts.map(a=>a.title),p5Home003Fixture.expectedTitles);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Dashboard web com vendas líquidas, devoluções, sessão aberta e alerta de disponibilidade a partir de APIs com escopo de empresa/filial. Ainda faltam metas, avisos completos e homologação do desktop."
+          "reviewNote": "Executa a função original managerAlerts do desktop publicado, verifica hash Git imutável e compara 3 avisos reais do estoque/caixa no SQLite. API acrescenta alertas de margem negativa/devoluções aumentadas sem calcular margens desconhecidas, com RBAC e isolamento. Desktop colocava alertas na gestão; web os apresenta também no início, sem duplicar livros."
         },
         {
           "id": "home-004",
           "name": "Persistência de filtros, foco e scroll ao navegar",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
-            "file": "apps/web/app.js",
-            "contains": "renderCheckout"
+            "file": "apps/web/route-scroll-ui.js",
+            "contains": "const focusTargets=new Map();",
+            "testFile": "apps/api/test/p5-home-navigation.test.mjs",
+            "testContains": "home-004/nominal p5-home004-desktop-navigation-v1",
+            "testAssertionContains": "assert.equal(h.content.scrollTop,fixture.restoredScroll);",
+            "testRunner": "node-test"
           },
           "owner": "web-shell",
           "dependsOn": [
             "home-001"
           ],
-          "acceptance": "Persistência de filtros, foco e scroll ao navegar. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Persistência de filtros, foco e scroll ao navegar. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "reviewNote": "Confronta autorização e foco canônicos com o app.js desktop publicado (hash Git validado). Browser Chromium preserva filtro, aba, scroll e foco ao retornar; quatro cenários Node isolados garantem separação de usuário/empresa/filial e recuperação. Preferências de relatório não armazenam IDs pessoais ou totais financeiros."
         }
       ]
     },
