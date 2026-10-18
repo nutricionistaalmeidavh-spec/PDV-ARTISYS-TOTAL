@@ -31,9 +31,13 @@ test('published desktop manifest prevents silently dropping a capability from th
     testedContractRefs:['home-001'],sourceEvidence:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
       file:'release/capabilities.json',manifestIndex:0},
     acceptance:'Validate canonical catalog changes in executed integration and browser QA'};
+  const pending={id:'cap-002',capability:published[1],owner:'operations',dependsOn:[],
+    status:'gap',testedContractRefs:[],sourceEvidence:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
+      file:'release/capabilities.json',manifestIndex:1},
+    acceptance:'Second capability not yet proven by an independent browser test'};
   const inventory={schemaVersion:1,baseline:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
-      manifest:'release/capabilities.json',publishedCapabilities:published,sourceManifestCount:1},
-    web:{repo:WEB_REPO},contracts:[row],fullSystemClaim:'incomplete'};
+      manifest:'release/capabilities.json',publishedCapabilities:published,sourceManifestCount:2},
+    web:{repo:WEB_REPO},contracts:[row,pending],fullSystemClaim:'incomplete'};
   assert.equal(verifyCapabilityInventory(matrix,inventory,published).partial,1);
   assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[]},published),/every published capability/);
   assert.throws(()=>verifyCapabilityInventory(matrix,inventory,[...published,'new-published-capability']),/missing published desktop capabilities/);
@@ -41,7 +45,7 @@ test('published desktop manifest prevents silently dropping a capability from th
 
 
 test('P6 covered LAN capability fails closed without a specific executable test and physical field report',()=>{
-  const published=['desktop-windows-local-first'];
+  const published=['desktop-windows-local-first','other-published-capability'];
   const row={id:'cap-001',capability:published[0],owner:'operations',dependsOn:[],status:'covered',
     testedContractRefs:[],sourceEvidence:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
       file:'release/capabilities.json',manifestIndex:0},
@@ -61,11 +65,11 @@ test('P6 covered LAN capability fails closed without a specific executable test 
   const withField={...row,fieldVerification:{status:'FIELD_VERIFIED',platform:'Linux',
     deviceModel:'physical laptop',independentReviewer:'Independent QA',verifiedAt:'2026-10-17',
     evidenceFile:'docs/parity/field-qa/cap-001.md'}};
-  assert.equal(verifyCapabilityInventory(matrix,{...inventory,contracts:[withField]},published,readSource).covered,1);
+  assert.equal(verifyCapabilityInventory(matrix,{...inventory,contracts:[withField,pending]},published,readSource).covered,1);
   assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[
     {...withField,independentEvidence:{...row.independentEvidence,
-      testContains:"test('unrelated'"}}]},published,readSource),/canonical ID/);
+      testContains:"test('unrelated'"}},pending]},published,readSource),/canonical ID/);
   assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[
     {...withField,independentEvidence:{...row.independentEvidence,
-      testAssertionContains:'assert.equal(result, false)'}}]},published,readSource),/assertion not attached/);
+      testAssertionContains:'assert.equal(result, false)'}},pending]},published,readSource),/assertion not attached/);
 });
