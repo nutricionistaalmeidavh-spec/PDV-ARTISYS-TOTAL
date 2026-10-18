@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS r4_station_tickets (
  FOREIGN KEY(tenant_id,branch_id,station_id) REFERENCES r4_kitchen_stations(tenant_id,branch_id,id)
 );
 CREATE INDEX IF NOT EXISTS idx_r4_station_queue ON r4_station_tickets(tenant_id,branch_id,status,created_at);
+ALTER TABLE restaurant_order_items ADD COLUMN configuration_json TEXT;
 -- A catalog pizza is still a canonical product: option prices are snapshots, not separate sales.
 CREATE TABLE IF NOT EXISTS r4_pizza_profiles (
  tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,product_id TEXT NOT NULL,
