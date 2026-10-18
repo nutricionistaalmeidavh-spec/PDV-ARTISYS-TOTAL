@@ -802,6 +802,8 @@ export function createCommerceService(db,{now=nowISO}={}){
     },
     async saveInventoryMinimum(tenant,branch,user,body,header){
       await branchExists(tenant,branch);
+      if(!await first("SELECT 1 AS ready FROM sqlite_master WHERE type='table' AND name='inventory_minimum_levels'"))
+        throw error(503,'A atualização de estoque mínimo ainda não foi aplicada no banco desta instalação.');
       const productId=body?.productId;
       if(typeof productId!=='string'||!productId||productId.length>128)
         throw error(400,'Informe o produto.');
