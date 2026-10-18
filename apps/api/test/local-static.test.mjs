@@ -29,7 +29,7 @@ test('PWA shell is served on the same local origin without exposing source files
     assert.equal((await serveLocalPwa('/%2e%2e/private.js',{rootDir:root})).status,400);
     assert.equal((await serveLocalPwa('/%5csecret.js',{rootDir:root})).status,400);
     assert.equal((await serveLocalPwa('/secret.sqlite',{rootDir:root})).status,404);
-    const outside=join(root,'..','outside-pdv-test.js');
+    const outside=root+'-outside.js';
     await writeFile(outside,'secret');
     await symlink(outside,join(root,'escape.js'));
     const escape=await serveLocalPwa('/escape.js',{rootDir:root});
