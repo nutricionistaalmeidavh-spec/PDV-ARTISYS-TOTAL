@@ -540,9 +540,17 @@ try{
   await page.locator('[data-report-web=products][aria-selected=true]').waitFor();
   assert.equal(await page.evaluate(()=>document.activeElement?.dataset.reportWeb),'products',
     'keyboard tab navigation must restore focus after asynchronous report render');
+  // home-004: Reports scroll and selected period survive a round trip through checkout.
+  const reportScroll=await page.evaluate(()=>{
+    const e=document.querySelector('#route-content');
+    e.scrollTop=Math.min(250,e.scrollHeight-e.clientHeight);
+    return e.scrollTop;
+  });
+  assert.ok(reportScroll>0,'mobile reports must be scrollable to verify restoration');
   await page.locator('#app-sidebar [data-route=checkout]').click();
   await page.locator('#app-sidebar [data-route=reports]').click();
   await page.locator('[data-report-web=products][aria-selected=true]').waitFor();
+  await page.waitForFunction(top=>document.querySelector('#route-content').scrollTop>=top-8,reportScroll,{timeout:12000});
   assert.equal(await page.locator('#web-report-filter [name=from]').inputValue(),'2026-10-17');
   assert.equal(await page.locator('#web-report-filter [name=to]').inputValue(),'2026-10-17');
   await page.locator('[data-report-web=overview]').click();
