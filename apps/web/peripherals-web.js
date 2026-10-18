@@ -163,7 +163,7 @@
     if(!sale?.id||(prebill?!['OPEN','SUSPENDED'].includes(sale.status):sale.status!=='COMPLETED'))
       throw new Error(prebill?'Pré-conta exige venda em aberto.':'Somente venda concluída pode ser impressa.');
     const prefs=normalizeSettings(options);
-    const branding=root.PdvReceiptBranding?.normalize(options.branding||root.PdvReceiptBranding.read())||{name:'PDV TOTAL',address:'',phone:'',logoDataUrl:null};
+    const branding=root.PdvReceiptBranding?.normalize(options.branding||root.PdvReceiptBranding.read())||options.branding||{name:'PDV TOTAL',address:'',phone:'',logoDataUrl:null};
     const amount=n=>(Number(n||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
     const qty=n=>Number(n||0).toLocaleString('pt-BR',{maximumFractionDigits:3});
     const items=(sale.items||[]).map(item=>
@@ -185,7 +185,7 @@
   }
   function receiptText(sale,options={}) {
     if(!sale||sale.status!=='COMPLETED'||!sale.id)throw new Error('Somente venda concluída pode ser impressa.');
-    const branding=root.PdvReceiptBranding?.normalize(options.branding||root.PdvReceiptBranding.read())||{name:'PDV TOTAL',address:'',phone:''};
+    const branding=root.PdvReceiptBranding?.normalize(options.branding||root.PdvReceiptBranding.read())||options.branding||{name:'PDV TOTAL',address:'',phone:''};
     const fmt=n=>(Number(n||0)/100).toFixed(2);
     return [branding.name,...(branding.address?[branding.address]:[]),...(branding.phone?['Telefone: '+branding.phone]:[]),'CUPOM NAO FISCAL','Venda '+String(sale.saleNumber||sale.id),String(sale.completedAt||''),...((sale.items||[]).map(i=>String(i.productName||i.sku||i.productId||'Produto')+'  '+String(i.quantity)+' x '+fmt(i.unitPriceCents)+' = '+fmt(i.totalCents??Math.round(i.quantity*i.unitPriceCents)))),'TOTAL: '+fmt(sale.totalCents),...((sale.payments||[]).map(p=>String(p.method)+': '+fmt(p.amountCents))),'Troco: '+fmt(sale.changeCents),'Obrigado pela preferencia.','',''].join('\n');
   }
