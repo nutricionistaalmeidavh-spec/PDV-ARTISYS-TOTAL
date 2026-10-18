@@ -187,14 +187,18 @@ export function createVerticalService(db){
      if(body.customerId)await customer(t,body.customerId);
      const lines=await orderItems(t,b,body.items);
      const totals=calculateSaleTotals({items:lines});
-     const routed=[];let directCount=0;
+     const routed=[],printStations=new Map();let directCount=0;
      for(const line of lines){
        const route=await first('SELECT mode,station_id AS stationId FROM r4_product_kitchen_routes WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,line.productId);
        if(route?.mode==='DIRECT')directCount++;
        if(route?.mode==='PRODUCTION'){
-         const station=await first('SELECT id FROM r4_kitchen_stations WHERE tenant_id=? AND branch_id=? AND id=? AND active=1',t,b,route.stationId);
+         const station=await first('SELECT id,printer_name AS printerName,print_enabled AS printEnabled FROM r4_kitchen_stations WHERE tenant_id=? AND branch_id=? AND id=? AND active=1',t,b,route.stationId);
          if(!station)throw err(409,'Estação de produção inativa; reconfigure o destino do produto.');
          routed.push(route.stationId);
+         if(station.printEnabled&&station.printerName){
+           if(!printStations.has(route.stationId))printStations.set(route.stationId,{printerName:station.printerName,items:[]});
+           printStations.get(route.stationId).items.push({name:line.name,quantity:line.quantity,configuration:line.configuration||null});
+         }
        }
      }
      const stations=[...new Set(routed)];
@@ -210,9 +214,20 @@ export function createVerticalService(db){
          id,t,b,sid,body.customerId||null,fulfillment,allDirect?'READY':'OPEN',clean(body.address,300)||null,clean(body.contact,120)||null,clean(body.note,500)||null,totals.totalCents,user,stamp,stamp,serviceChannel,day,ticketNumber)];
        for(const l of lines)statements.push(q('INSERT INTO restaurant_order_items(id,tenant_id,branch_id,order_id,product_id,product_name,quantity_milli,unit_price_cents,configuration_json) VALUES(?,?,?,?,?,?,?,?,?)',uuid(),t,b,id,l.productId,l.name,l.milli,l.unitPriceCents,l.configuration?JSON.stringify(l.configuration):null));
        statements.push(q('INSERT INTO restaurant_kitchen_tickets(id,tenant_id,branch_id,order_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',uuid(),t,b,id,allDirect?'READY':'NEW',stamp,stamp));
-       for(const stationId of stations)statements.push(q(
-         'INSERT INTO r4_station_tickets(id,tenant_id,branch_id,order_id,station_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
-         uuid(),t,b,id,stationId,'NEW',stamp,stamp));
+       for(const stationId of stations){
+         const ticketId=uuid();
+         statements.push(q(
+           'INSERT INTO r4_station_tickets(id,tenant_id,branch_id,order_id,station_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
+           ticketId,t,b,id,stationId,'NEW',stamp,stamp));
+         const printer=printStations.get(stationId);
+         if(printer){
+           const payload=JSON.stringify({jobFormat:'R4_KITCHEN_V1',stationTicketId:ticketId,orderId:id,ticketNumber,items:printer.items,orderedAt:stamp});
+           if(payload.length>16000)throw err(400,'Conteúdo do ticket excede o limite de impressão.');
+           statements.push(q(`INSERT INTO r4_kitchen_print_jobs
+             (id,tenant_id,branch_id,station_ticket_id,printer_name,payload_json,status,created_at,updated_at)
+             VALUES(?,?,?,?,?,?,'PENDING',?,?)`,uuid(),t,b,ticketId,printer.printerName,payload,stamp,stamp));
+         }
+       }
        return {statements,result};
      });
    },
