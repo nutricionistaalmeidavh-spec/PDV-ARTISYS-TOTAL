@@ -7,7 +7,7 @@
   },
   "web": {
     "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL",
-    "mainAtAudit": "ad036a2095c863aebbdd3b3282957133466a8bd4"
+    "mainAtAudit": "678975d544373aac141aa2b041796effc057d453"
   },
   "parityClaim": "incomplete",
   "definitions": {
@@ -1300,7 +1300,16 @@
       ]
     }
   ],
-  "reviewedAt": "2026-10-17",
+  "reviewedAt": "2026-10-18",
   "scope": "seven-screen-operations",
-  "certification": null
+  "certification": null,
+  "deliveryAudit": {
+    "reviewedAt": "2026-10-18",
+    "auditedMainCommit": "678975d544373aac141aa2b041796effc057d453",
+    "contractTotals": {
+      "covered": 43,
+      "partial": 25
+    },
+    "explanation": "Seven-screen contracts are internal diagnostics for the same 56 desktop capabilities, not a second feature backlog. 56 capability status is read from desktop-capability-inventory.json. Audited main SHA is an historical anchor; run report:parity for versioned up-to-date status."
+  }
 }
