@@ -64,3 +64,14 @@ A mesma proteção foi aplicada a **alterar quantidade de item**, **remover item
 Os testes usam a API real e SQLite: alteração de 1→2→3 com repetição atrasada de 2; desconto de 100→300 centavos com replay de 100; remoção/reinclusão do produto com replay da remoção. Eles também verificam as entradas de deduplicação persistidas. Nenhum segundo estado de carrinho nem migration SQL foi criado.
 
 **Limite:** replay de requisição com mesma chave está coberto, mas a certificação completa de todas as capacidades R1 continua exigindo os demais cenários do desktop, testes de dispositivo/conectividade onde pertinentes e revisão.
+
+
+## Incremento R1 — importação XLSX confiável e identidade do lote (cap-052)
+
+- **Falha comprovada:** o conversor local importava sempre `xl/worksheets/sheet1.xml`, que nem sempre representa a primeira aba lógica no Excel; uma planilha reordenada podia exibir/propor produtos incorretos.
+- **Correção:** relacionamento do workbook define a primeira aba real; caminhos externos ou fora do ZIP de worksheets são recusados. Nada é carregado de URL externa e não há upload para serviço de terceiros.
+- **Jornada verificada na suíte:** o Chromium abre um XLSX com `sheet2.xml` como primeira aba lógica, recusa `sheet1.xml` residual, executa prévia real com a API, confirma e persiste no catálogo autoritativo. Teste negativo recusa relação externa.
+- **Importação idempotente:** SHA-256 do conteúdo/modo/empresa/filial fica no recibo da operação. Mesmo ID com outro arquivo gera 409, nunca sucesso falso; importações antigas permanecem reexecutáveis para preservar o resultado já aplicado. Teste SQLite assegura que o segundo produto não foi criado.
+- **Escopo ainda parcial:** arquivo limitado a 100 produtos, XLSX de até 512 KiB e CSV de até 13.500 caracteres; a comparação exaustiva com todas as variantes do desktop ainda está aberta. Portanto `cap-052` permanece `gap` de paridade total, embora o fluxo descrito esteja implementado e testado.
+
+**Não afirmar R1 completo:** as 21 capacidades dependem de revisão específica do comportamento original e de testes independentes; este incremento não certifica magicamente as outras 20. A CI do PR é regressão técnica, não homologação do desktop.
