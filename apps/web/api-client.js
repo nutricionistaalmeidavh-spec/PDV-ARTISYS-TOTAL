@@ -415,6 +415,13 @@
     validateBackup(id) { return this.request(`/api/v1/backups/${encodeURIComponent(id)}/validate`, { method:'POST', body:{} }); }
     prepareRestore(id) { return this.request(`/api/v1/backups/${encodeURIComponent(id)}/restore`, { method:'POST', body:{} }); }
 
+    async modules(){
+      if(!this.webMode)return this.request('/api/v1/modules');
+      if(!this.tenantId)return [];
+      const result=await this.request('/api/v1/tenants/'+encodeURIComponent(this.tenantId)+'/lan/modules');
+      return result.modules||[];
+    }
+
     settings(filters={}) { return this.request(`/api/v1/settings${this.params(filters)}`); }
     saveSetting(key,value,scope='global') { return this.request(`/api/v1/settings/${encodeURIComponent(key)}`, { method:'PUT', body:{value,scope} }); }
     removeSetting(key,scope='global') { return this.request(`/api/v1/settings/${encodeURIComponent(key)}${this.params({scope})}`, { method:'DELETE' }); }
