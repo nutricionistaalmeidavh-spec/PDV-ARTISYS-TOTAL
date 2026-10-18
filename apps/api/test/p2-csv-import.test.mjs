@@ -80,3 +80,88 @@ test('P2 CSV importer uses tenant scoped categories and same code cannot select 
   assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM products WHERE tenant_id=?','b'),0);
  }finally{x.close();}
 });
+
+test('P1 assisted CSV upsert changes existing catalogue identity without recreating stock or sales snapshots',async()=>{
+ const x=await setup();try{
+  const old=await x.service.createProduct('a','user',{sku:'KEEP-01',name:'Sabonete antigo',salePriceCents:500,unit:'UN',barcode:'7890001112223',brand:'Marca legada',trackStock:true},key());
+  await x.service.receipt('a','x','user',{productId:old.id,quantity:8,type:'opening',unitCostCents:200},key());
+  const csv='sku;name;salePriceCents;barcode;brand\\nKEEP-01;Sabonete novo;650;7890001112223;Marca nova\\nNEW-02;Creme vegetal;430;7890001112224;Marca nova\\n';
+  const preview=await x.service.previewCatalogImport('a','x',{csv,mode:'upsert'});
+  assert.equal(preview.invalidRows,0);
+  assert.equal(preview.updateCount,1);
+  assert.equal(preview.createCount,1);
+  assert.equal(preview.rows[0].action,'update');
+  assert.equal(preview.rows[0].productId,old.id);
+  assert.equal(preview.rows[1].action,'create');
+  assert.equal(typeof preview.previewToken,'string');
+  const mutation=key(),result=await x.service.commitCatalogImport('a','x','user',{csv,mode:'upsert',previewToken:preview.previewToken},mutation);
+  assert.equal(result.createdCount,1);
+  assert.equal(result.updatedCount,1);
+  assert.deepEqual(result.updatedProductIds,[old.id]);
+  assert.deepEqual(await x.service.commitCatalogImport('a','x','user',{csv,mode:'upsert',previewToken:preview.previewToken},mutation),result,'retry must not apply the batch again');
+  assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM products WHERE tenant_id=?','a'),2);
+  assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM inventory_movements WHERE tenant_id=? AND product_id=?','a',old.id),1);
+  const products=await x.service.products('a','x');
+  const edited=products.find(p=>p.id===old.id);
+  assert.equal(edited.name,'Sabonete novo');
+  assert.equal(edited.salePriceCents,650);
+  assert.equal(edited.balance,8);
+  assert.equal(edited.lastCostCents,200);
+  assert.equal(edited.trackStock,true);
+ }finally{x.close();}
+});
+
+test('P1 assisted upsert never erases unspecified stock/unit/category/barcode and rejects unsafe unit change',async()=>{
+ const x=await setup();try{
+  const category=await x.service.createCategory('a','x','user',{name:'Categoria atual'},key());
+  const existing=await x.service.createProduct('a','user',{sku:'SAFE-01',name:'Produto velho',salePriceCents:400,unit:'KG',brand:'Marca',barcode:'7890007771000',categoryId:category.id,trackStock:false},key());
+  const csv='sku;name;salePriceCents\\nSAFE-01;Produto novo;555\\n';
+  const preview=await x.service.previewCatalogImport('a','x',{csv,mode:'upsert'});
+  assert.equal(preview.validRows,1);
+  await x.service.commitCatalogImport('a','x','user',{csv,mode:'upsert',previewToken:preview.previewToken},key());
+  const products=await x.service.products('a','x');
+  const updated=products.find(p=>p.id===existing.id);
+  assert.equal(updated.unit,'KG');
+  assert.equal(updated.brand,'Marca');
+  assert.equal(updated.barcode,'7890007771000');
+  assert.equal(updated.categoryId,category.id);
+  assert.equal(updated.trackStock,false);
+  const wrong='sku;name;salePriceCents;unit\\nSAFE-01;Produto novo;555;UN\\n';
+  const invalid=await x.service.previewCatalogImport('a','x',{csv:wrong,mode:'upsert'});
+  assert.equal(invalid.invalidRows,1);
+  assert.match(invalid.rows[0].errors.join(' '),/unidade/i);
+  await assert.rejects(x.service.commitCatalogImport('a','x','user',{csv:wrong,mode:'upsert',previewToken:invalid.previewToken},key()),e=>e.status===409);
+ }finally{x.close();}
+});
+
+test('P1 upsert previews are optimistic: stale catalog modification cancels every row atomically',async()=>{
+ const x=await setup();try{
+  const product=await x.service.createProduct('a','user',{sku:'LOCK-01',name:'Produto inicial',salePriceCents:100},key());
+  const csv='sku;name;salePriceCents\\nLOCK-01;Mudança proposta;200\\nNEW-LOCK;Novo item;300\\n';
+  const preview=await x.service.previewCatalogImport('a','x',{csv,mode:'upsert'});
+  await x.service.updateProduct('a','x',product.id,{salePriceCents:125},key());
+  await assert.rejects(x.service.commitCatalogImport('a','x','user',{csv,mode:'upsert',previewToken:preview.previewToken},key()),e=>e.status===409);
+  assert.equal(await x.scalar('SELECT sale_price_cents AS n FROM products WHERE id=?',product.id),125);
+  assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM products WHERE tenant_id=?','a'),1);
+  const refreshed=await x.service.previewCatalogImport('a','x',{csv,mode:'upsert'});
+  assert.notEqual(refreshed.previewToken,preview.previewToken);
+  assert.equal(refreshed.invalidRows,0);
+ }finally{x.close();}
+});
+
+test('P1 assisted upsert rejects barcode collisions in whole batch and isolates same SKU between companies',async()=>{
+ const x=await setup();try{
+  await x.service.createProduct('a','user',{sku:'OWNER-01',name:'Owner one',salePriceCents:100,barcode:'7890000000999'},key());
+  const existing=await x.service.createProduct('a','user',{sku:'OWNER-02',name:'Owner two',salePriceCents:200,barcode:'7890000000888'},key());
+  const conflict='sku;name;salePriceCents;barcode\\nOWNER-02;Wrong owner;999;7890000000999\\nEXTRA-03;Extra;300;7890000000777\\n';
+  const invalid=await x.service.previewCatalogImport('a','x',{csv:conflict,mode:'upsert'});
+  assert.equal(invalid.invalidRows,1);
+  await assert.rejects(x.service.commitCatalogImport('a','x','user',{csv:conflict,mode:'upsert',previewToken:invalid.previewToken},key()),e=>e.status===409);
+  assert.equal(await x.scalar('SELECT sale_price_cents AS n FROM products WHERE id=?',existing.id),200);
+  assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM products WHERE tenant_id=?','a'),2);
+  const isolated=await x.service.previewCatalogImport('b','y',{csv:'sku;name;salePriceCents\\nOWNER-02;Empresa B;700\\n',mode:'upsert'});
+  assert.equal(isolated.createCount,1);
+  assert.equal(isolated.updateCount,0);
+  assert.equal(isolated.rows[0].action,'create');
+ }finally{x.close();}
+});
