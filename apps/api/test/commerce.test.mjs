@@ -1110,6 +1110,49 @@ test('P3 home indicators are canonical live data, tenant-isolated and authorizat
  }finally{x.close();}
 });
 
+test('P5 home-003 commercial targets use only sellers with goals, with RBAC and branch isolation',async()=>{
+ const x=await setup();try{
+  const p=await x.id('Meta dashboard','HOME-GOAL-P5',5);
+  await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+  const first=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
+  await x.write('a','sales/'+first+'/items',{branchId:'branch-a',productId:p,quantity:1});
+  assert.equal((await x.write('a','sales/'+first+'/complete',{
+    branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]
+  })).status,200);
+  const homePath='reports/home?branchId=branch-a&asOf=2026-10-17';
+  const without=(await x.get('a',homePath)).body.home;
+  assert.equal(without.monthToDateNetSalesCents,1000);
+  assert.equal(without.monthlyTargetCents,null);
+  assert.equal(without.targetProgressPercent,null);
+  const rule=await x.write('a','reports/commission-targets',{
+    branchId:'branch-a',sellerId:'viewer',month:'2026-10',targetCents:6000
+  },{method:'PUT'});
+  assert.equal(rule.status,200,JSON.stringify(rule.body));
+  let home=(await x.get('a',homePath)).body.home;
+  assert.equal(home.monthlyTargetCents,6000);
+  assert.equal(home.targetedSellerNetCents,0,'unrelated owner sales cannot inflate seller goals');
+  assert.equal(home.targetProgressPercent,0);
+  const second=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
+  await x.write('a','sales/'+second+'/seller',{branchId:'branch-a',sellerId:'viewer'});
+  await x.write('a','sales/'+second+'/items',{branchId:'branch-a',productId:p,quantity:1});
+  assert.equal((await x.write('a','sales/'+second+'/complete',{
+    branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]
+  })).status,200);
+  home=(await x.get('a',homePath)).body.home;
+  assert.equal(home.monthToDateNetSalesCents,2000);
+  assert.equal(home.targetedSellerNetCents,1000);
+  assert.equal(home.targetProgressPercent,16.67);
+  assert.equal(home.targetedSellers,1);
+  assert.equal((await x.get('a',homePath,x.viewer)).status,200);
+  const outside=(await x.get('b','reports/home?branchId=branch-b&asOf=2026-10-17',x.other)).body.home;
+  assert.equal(outside.monthlyTargetCents,null);
+  assert.equal(outside.targetedSellerNetCents,null);
+  assert.equal((await x.write('a','reports/commission-targets',{
+    branchId:'branch-a',sellerId:'viewer',month:'2026-10',targetCents:1
+  },{who:x.viewer,method:'PUT'})).status,403);
+ }finally{x.close();}
+});
+
 test('P3 independent terminal drawers link every sale to its originating open cash session',async()=>{
  const x=await setup();try{
   const product=await x.id('Item independente','TERMINAL-CASH',8);
