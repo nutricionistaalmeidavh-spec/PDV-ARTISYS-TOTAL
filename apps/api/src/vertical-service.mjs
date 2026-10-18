@@ -2,6 +2,7 @@
 // Documents never debit stock or create a second sale; checkout remains the sole sale authority.
 import canonicalPricing from '../../../packages/core/js/domains/sales/pricing.js';
 import inventoryRules from '../../../packages/core/js/domains/inventory/inventory-rules.js';
+import {createR4ExtendedService} from './r4-extended-service.mjs';
 const {calculateSaleTotals}=canonicalPricing;
 const {roundQuantity}=inventoryRules;
 const err=(status,message)=>Object.assign(new Error(message),{status});
@@ -66,7 +67,10 @@ export function createVerticalService(db){
      if(keys.has(item.productId))throw err(400,'Produto repetido. Agrupe a quantidade.');
      keys.add(item.productId);
      const p=await product(t,item.productId),milli=qty(item.quantity);
-     result.push({productId:p.id,name:p.name,quantity:milli/1000,milli,unitPriceCents:p.sale_price_cents});
+     const pizza=item.pizza?await createR4ExtendedService(db).quotePizza(t,b,{productId:p.id,...item.pizza}):null;
+     result.push({productId:p.id,name:p.name,quantity:milli/1000,milli,
+       unitPriceCents:pizza?.unitPriceCents??p.sale_price_cents,
+       configuration:pizza?.configuration||null});
    }
    return result;
  }
@@ -199,7 +203,7 @@ export function createVerticalService(db){
          ticketDay:day,ticketNumber,items:lines};
        const statements=[q(`INSERT INTO restaurant_orders(id,tenant_id,branch_id,table_session_id,customer_id,fulfillment,status,address,contact,note,total_cents,created_by,created_at,updated_at,service_channel,ticket_day,ticket_number) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
          id,t,b,sid,body.customerId||null,fulfillment,'OPEN',clean(body.address,300)||null,clean(body.contact,120)||null,clean(body.note,500)||null,totals.totalCents,user,stamp,stamp,serviceChannel,day,ticketNumber)];
-       for(const l of lines)statements.push(q('INSERT INTO restaurant_order_items(id,tenant_id,branch_id,order_id,product_id,product_name,quantity_milli,unit_price_cents) VALUES(?,?,?,?,?,?,?,?)',uuid(),t,b,id,l.productId,l.name,l.milli,l.unitPriceCents));
+       for(const l of lines)statements.push(q('INSERT INTO restaurant_order_items(id,tenant_id,branch_id,order_id,product_id,product_name,quantity_milli,unit_price_cents,configuration_json) VALUES(?,?,?,?,?,?,?,?,?)',uuid(),t,b,id,l.productId,l.name,l.milli,l.unitPriceCents,l.configuration?JSON.stringify(l.configuration):null));
        statements.push(q('INSERT INTO restaurant_kitchen_tickets(id,tenant_id,branch_id,order_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',uuid(),t,b,id,'NEW',stamp,stamp));
        for(const stationId of stations)statements.push(q(
          'INSERT INTO r4_station_tickets(id,tenant_id,branch_id,order_id,station_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
