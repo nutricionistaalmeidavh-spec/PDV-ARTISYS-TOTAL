@@ -1202,6 +1202,8 @@ export function createCommerceService(db,{now=nowISO}={}){
               WHERE oi.tenant_id=? AND oi.branch_id=? AND oi.order_id=? ORDER BY oi.rowid`,tenant,branch,restaurantOrderId);
         const grouped=new Map();
         for(const line of restaurantLines){
+          if(line.milli<0)throw error(409,'Transferência excede o item original.');
+          if(line.milli===0)continue;
           const existing=grouped.get(line.productId);
           if(existing&&existing.unitPriceCents!==line.unitPriceCents)
             throw error(409,'O mesmo produto possui preços diferentes na comanda. Revise antes de consolidar.');
