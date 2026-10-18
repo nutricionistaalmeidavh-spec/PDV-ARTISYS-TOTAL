@@ -50,3 +50,14 @@ CREATE TABLE IF NOT EXISTS r2_audit (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_r2_audit_tenant ON r2_audit(tenant_id,created_at DESC);
+
+-- R2 local optional-module state, separate from operational records.
+-- Disabling hides access; it NEVER deletes sales, tickets, stock or audit history.
+CREATE TABLE IF NOT EXISTS r2_tenant_modules (
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  module_id TEXT NOT NULL CHECK(module_id IN ('FOOD','WHOLESALE')),
+  enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+  updated_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (tenant_id,module_id)
+);
