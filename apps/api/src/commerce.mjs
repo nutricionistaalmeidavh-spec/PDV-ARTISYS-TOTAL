@@ -348,7 +348,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         type,delta_milli/1000.0 AS quantityDelta,reason,mutation_id AS mutationId,
         sale_id AS saleId,occurred_at AS occurredAt
         FROM inventory_movements WHERE ${where}
-        ORDER BY occurred_at DESC,id DESC LIMIT ? OFFSET ?`,...args,limit,offset);
+        ORDER BY occurred_at DESC,rowid DESC LIMIT ? OFFSET ?`,...args,limit,offset);
       return {items:rows,total:total.total,limit,offset};
     },
     async adjustStock(tenant,branch,body,header){
