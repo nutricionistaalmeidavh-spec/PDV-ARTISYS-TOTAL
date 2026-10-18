@@ -135,7 +135,7 @@ try{
   await countForm.locator('button[type=submit]').click();
   await page.getByText('QA-LOTE-01',{exact:true}).waitFor({timeout:12000});
   // Historical lot intake must not display a fabricated per-lot balance.
-  assert.match(await page.getByText(/ainda não existe baixa por lote/).innerText(),/saldo individual/);
+  assert.match(await page.getByText(/Entradas anteriores à migração continuam históricas/).innerText(),/conciliação física/);
   await countForm.locator('select[name=productId]').selectOption(productChoice);
   await countForm.locator('select[name=operation]').selectOption('count');
   await countForm.locator('[name=quantity]').fill('2.25');

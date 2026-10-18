@@ -10,7 +10,7 @@ async function setup(){
   const db=openLocalDatabase();
   for(const x of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql',
     '0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql',
-    '0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0017_inventory_minimum_levels.sql'])db.exec(sql(x));
+    '0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql'])db.exec(sql(x));
   await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
     .bind('u','u@test.example','Operador','unused',now).run();
   for(const [t,b] of [['a','x'],['b','y']]){

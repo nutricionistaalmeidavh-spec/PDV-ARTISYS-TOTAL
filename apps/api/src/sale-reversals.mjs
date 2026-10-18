@@ -2,7 +2,7 @@
 // pricing, inventory ledger and cash rules injected by commerce.mjs.
 export function createSaleReturnAdapter(helpers){
   const {q,first,all,batch,applied,audit,stamp,tenantSale,requiredMutation,quantityMilli,
-    normalizeMethod,allocateSaleDiscount,getCash,error,text,randomId}=helpers;
+    normalizeMethod,allocateSaleDiscount,getCash,error,text,randomId,lotLedger}=helpers;
   const refundMethods=new Set(['CASH','PIX','DEBIT_CARD','CREDIT_CARD','OTHER','STORE_CREDIT']);
   async function prepare(tenant,branch,id,body,mode){
       const sale=await tenantSale(tenant,branch,id);
@@ -103,7 +103,7 @@ export function createSaleReturnAdapter(helpers){
         items:computed.map(x=>({saleItemId:x.saleItemId,quantity:x.quantityMilli/1000,netCents:x.netCents})),
         refunds:grouped,status:mode==='CANCEL'?'CANCELLED':'COMPLETED',createdAt
       };
-      const stockRestores=new Map();
+      const stockRestores=new Map(),lotRestores=new Map();
       const statements=[
         q(`INSERT INTO sale_returns(id,tenant_id,branch_id,sale_id,kind,reason,amount_cents,
           original_cash_session_id,operator_id,mutation_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
@@ -127,6 +127,25 @@ export function createSaleReturnAdapter(helpers){
           const direct=await first("SELECT id FROM inventory_movements WHERE tenant_id=? AND branch_id=? AND sale_id=? AND product_id=? AND type='sale'",tenant,branch,id,line.source.product_id);
           if(direct)stockRestores.set(line.source.product_id,(stockRestores.get(line.source.product_id)||0)+line.quantityMilli);
         }
+        // Restore precisely the sale's original lot allocations, proportionally
+        // to this item's cumulative returned quantity (no duplicate refund lots).
+        const originalLots=await all(`SELECT e.product_id AS productId,
+          e.lot_receipt_id AS lotId, -SUM(e.delta_milli) AS soldMilli
+          FROM inventory_lot_entries e JOIN inventory_movements m ON m.id=e.movement_id
+          WHERE e.tenant_id=? AND e.branch_id=? AND e.sale_item_id=?
+            AND m.sale_id=? AND m.type='sale' AND e.delta_milli<0
+          GROUP BY e.product_id,e.lot_receipt_id`,
+          tenant,branch,line.saleItemId,id);
+        for(const lot of originalLots){
+          const already=returned.get(line.saleItemId)||0;
+          const target=Math.round(lot.soldMilli*(already+line.quantityMilli)/line.source.quantity_milli);
+          const prior=Math.round(lot.soldMilli*already/line.source.quantity_milli);
+          const quantity=target-prior;
+          if(quantity<=0)continue;
+          const key=lot.productId+'\\u0000'+lot.lotId;
+          const last=lotRestores.get(key);
+          lotRestores.set(key,{productId:lot.productId,lotId:lot.lotId,quantityMilli:quantity+(last?.quantityMilli||0)});
+        }
         const earned=await first(`SELECT COALESCE(SUM(amount_cents),0) AS cents,MAX(seller_id) AS sellerId
           FROM seller_commission_ledger WHERE tenant_id=? AND branch_id=? AND sale_id=? AND sale_item_id=? AND kind='EARNED'`,
           tenant,branch,id,line.saleItemId);
@@ -141,9 +160,14 @@ export function createSaleReturnAdapter(helpers){
         }
       }
       for(const [productId,quantityMilli] of stockRestores){
+        const movementId=randomId();
         statements.push(q(`INSERT INTO inventory_movements(id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at,reason)
-          VALUES(?,?,?,?,?,'return',NULL,?,?,?)`,randomId(),tenant,branch,productId,quantityMilli,
+          VALUES(?,?,?,?,?,'return',NULL,?,?,?)`,movementId,tenant,branch,productId,quantityMilli,
           key,createdAt,'Devolução '+returnId+': '+reason));
+        const chosen=[...lotRestores.values()].filter(row=>row.productId===productId)
+          .map(row=>({lotId:row.lotId,quantityMilli:row.quantityMilli}));
+        statements.push(...lotLedger.statements(tenant,branch,productId,movementId,chosen,1,createdAt));
+        statements.push(lotLedger.check(tenant,branch,productId,movementId,createdAt));
       }
       for(const p of grouped){
         const refundId=randomId();
