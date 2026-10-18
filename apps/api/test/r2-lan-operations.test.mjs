@@ -88,6 +88,9 @@ test('R2: pilot readiness stays incomplete until explicit evidence, with isolate
     method,headers:{origin,'content-type':'application/json'},...(body===null?{}:{body:JSON.stringify(body)})});
   await db.prepare('INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)').bind('a','pilot-a','Store A',new Date().toISOString()).run();
   await db.prepare('INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)').bind('b','pilot-b','Store B',new Date().toISOString()).run();
+  for(const [id,email] of [['u-1','owner@pilot.test'],['u-2','cashier@pilot.test']])
+    await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
+      .bind(id,email,id,'test-only-fixture',new Date().toISOString()).run();
   const list=await r2LanRoute(mk('lan/readiness'),db,owner,membership,'a','lan/readiness');
   assert.equal(list.status,200);
   assert.equal((await list.json()).ready,false);
