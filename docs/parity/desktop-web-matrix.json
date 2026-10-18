@@ -137,13 +137,18 @@
           "status": "partial",
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
-            "contains": "async discount("
+            "contains": "async discount(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P3 discount matches desktop clamping",
+            "testAssertionContains": "assert.equal(stored.discountCents,1000,'Never retain unapplied discount that could leak into subsequent items');",
+            "testRunner": "node-test"
           },
           "owner": "sales",
           "dependsOn": [
             "checkout-005"
           ],
-          "acceptance": "Desconto de venda com permissão. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Desconto de venda com permissão. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "reviewNote": "P3: desconto autorizado por sales.discount; mesma regra canônica do desktop fixado (limitar ao subtotal), com valor aplicado persistido e recálculo após alteração de quantidade, remoção, adição ou mudança de preço. Regressão SQLite cobre desconto integral, limites, mutações posteriores, perfil somente leitura e isolamento de empresas. Ainda parcial: homologação funcional E2E com perfis, rastreabilidade de auditoria e equivalência de todos os fluxos desktop."
         },
         {
           "id": "checkout-008",

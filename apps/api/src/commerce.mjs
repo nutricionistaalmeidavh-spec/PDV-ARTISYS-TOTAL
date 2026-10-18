@@ -202,6 +202,16 @@ export function createCommerceService(db,{now=nowISO}={}){
     }
     return view;
   };
+  const snapshotAfterCartChange=async(tenant,branch,id)=>{
+    // The original desktop recalculate() caps persisted discounts whenever a
+    // line is added, removed, re-priced, or its quantity changes. Keep the
+    // original single-sale ledger and avoid a latent over-discount on re-add.
+    await run(`UPDATE sales SET discount_cents=MIN(discount_cents,COALESCE((
+        SELECT SUM(ROUND(unit_price_cents*quantity_milli/1000.0)) FROM sale_items
+        WHERE sale_id=sales.id AND tenant_id=sales.tenant_id AND branch_id=sales.branch_id
+      ),0)) WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'`,id,tenant,branch);
+    return snapshot(tenant,branch,id);
+  };
   const listing=async(tenant,branch,limit=25,status=null)=>{
     await branchExists(tenant,branch);
     const n=Number.isInteger(limit)?Math.min(50,Math.max(1,limit)):25;
@@ -978,7 +988,7 @@ export function createCommerceService(db,{now=nowISO}={}){
           itemId,tenant,branch,id,row.id,row.name,row.sku,milli,row.sale_price_cents,stamp(),row.sale_price_cents),
         audit(tenant,scope,key,safe)
       ]);
-      return snapshot(tenant,branch,id);
+      return snapshotAfterCartChange(tenant,branch,id);
     },
     async addConfiguredItem(tenant,branch,id,body,header){
       const key=requiredMutation(body,header),scope='sale.add-configured:'+id;
@@ -1018,7 +1028,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         audit(tenant,scope,key,{saleId:id,productId:p.id,quantity:milli/1000,
           priceCents:quote.unitPriceCents,configuration:quote.configurationSnapshot})
       ]);
-      return snapshot(tenant,branch,id);
+      return snapshotAfterCartChange(tenant,branch,id);
     },
     async changeConfiguredItemQuantity(tenant,branch,id,itemId,quantity){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
@@ -1028,14 +1038,14 @@ export function createCommerceService(db,{now=nowISO}={}){
         WHERE sale_id=? AND tenant_id=? AND branch_id=? AND id=?
           AND configuration_json IS NOT NULL`,milli,id,tenant,branch,itemId);
       if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
-      return snapshot(tenant,branch,id);
+      return snapshotAfterCartChange(tenant,branch,id);
     },
     async removeConfiguredItem(tenant,branch,id,itemId){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const result=await run(`DELETE FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=?
         AND id=? AND configuration_json IS NOT NULL`,id,tenant,branch,itemId);
       if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
-      return snapshot(tenant,branch,id);
+      return snapshotAfterCartChange(tenant,branch,id);
     },
     async changeItemNote(tenant,branch,id,itemId,user,body,header){
       const key=requiredMutation(body,header),scope='sale.item-note:'+branch+':'+id+':'+itemId;
@@ -1099,7 +1109,7 @@ export function createCommerceService(db,{now=nowISO}={}){
           price,itemId,id,tenant,branch),
         audit(tenant,scope,key,{saleId:id,itemId,unitPriceCents:price,reason})
       ]);
-      return snapshot(tenant,branch,id);
+      return snapshotAfterCartChange(tenant,branch,id);
     },
     async changeItem(tenant,branch,id,productId,quantity){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
@@ -1108,20 +1118,29 @@ export function createCommerceService(db,{now=nowISO}={}){
       const result=await run('UPDATE sale_items SET quantity_milli=? WHERE sale_id=? AND tenant_id=? AND branch_id=? AND product_id=?',
         milli,id,tenant,branch,productId);
       if(!result.meta?.changes)throw error(404,'Item não encontrado.');
-      return snapshot(tenant,branch,id);
+      return snapshotAfterCartChange(tenant,branch,id);
     },
     async removeItem(tenant,branch,id,productId){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const result=await run('DELETE FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=? AND product_id=?',
         id,tenant,branch,productId);
       if(!result.meta?.changes)throw error(404,'Item não encontrado.');
-      return snapshot(tenant,branch,id);
+      return snapshotAfterCartChange(tenant,branch,id);
     },
     async discount(tenant,branch,id,discountCents){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const value=requiredNumber(discountCents,'Desconto');
-      await run('UPDATE sales SET discount_cents=? WHERE id=? AND tenant_id=? AND branch_id=? AND status=?',
-        value,id,tenant,branch,'OPEN');
+      // The pinned desktop calculates MIN(requested discount, live subtotal).
+      // Persist the applied value, not the larger request: a later cart change
+      // must not resurrect a discount that was never authorized against its total.
+      // The subquery rounds each positive item in cents just like pricing.js.
+      const result=await run(`UPDATE sales SET discount_cents=MIN(?,COALESCE((
+          SELECT SUM(ROUND(unit_price_cents*quantity_milli/1000.0)) FROM sale_items
+          WHERE sale_id=sales.id AND tenant_id=sales.tenant_id AND branch_id=sales.branch_id
+        ),0))
+        WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'`,
+        value,id,tenant,branch);
+      if(result.meta?.changes!==1)throw error(409,'A venda mudou de estado. Atualize antes de aplicar o desconto.');
       return snapshot(tenant,branch,id);
     },
     async transition(tenant,branch,id,to){
