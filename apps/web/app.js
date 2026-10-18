@@ -503,9 +503,29 @@
     return `<div class="cart-line ${state.selectedProductId === item.productId ? 'selected' : ''}" data-select-product="${item.productId}"><div><strong>${escapeHtml(item.productName)}</strong>${configurationSummary?`<small>${escapeHtml(configurationSummary)}</small>`:''}${noteLabel}${priceDetails}${priceButton}${noteButton}</div>${quantityControl}<div class="line-total">${ui.formatCents(item.totalCents)} ${remove}</div></div>`;
   }
 
+  let checkoutBarcodeBusy=false;
   function bindCheckoutEvents() {
     const search = document.getElementById('product-search');
     search?.addEventListener('input', (event) => { state.productQuery = event.target.value; renderCheckoutProductGrid(); });
+    // USB-HID readers behave like keyboards: scan the barcode then press Enter.
+    // Match the exact barcode/SKU, never guess from a fuzzy name search. A
+    // collision between a barcode and another product's SKU must not charge.
+    search?.addEventListener('keydown',event=>{
+      if(!api.webMode||event.key!=='Enter'||event.isComposing)return;
+      event.preventDefault();
+      if(checkoutBarcodeBusy){showToast('Conclua a leitura anterior antes de escanear novamente.','error');return;}
+      const code=String(search.value||'').trim().toLowerCase();
+      if(!code)return;
+      const matches=state.products.filter(p=>p.active!==false&&
+        [p.barcode,p.sku].some(value=>value&&String(value).trim().toLowerCase()===code));
+      if(matches.length!==1){
+        showToast(matches.length?'Código ambíguo: corrija os códigos duplicados no catálogo.':'Código não encontrado no catálogo.','error');
+        return;
+      }
+      checkoutBarcodeBusy=true;
+      state.productQuery='';search.value='';renderCheckoutProductGrid();
+      Promise.resolve(addProduct(matches[0].id)).finally(()=>{checkoutBarcodeBusy=false;});
+    });
     document.getElementById('scan-focus')?.addEventListener('click', () => document.getElementById('product-search')?.focus());
     document.getElementById('checkout-documents')?.addEventListener('click', openCheckoutDocuments);
     content.querySelectorAll('[data-category]').forEach((button) => button.addEventListener('click', () => { state.categoryId = button.dataset.category; renderCheckout(); }));
@@ -835,7 +855,7 @@
     saleCompletionInFlight = true;
     const confirmButton=document.getElementById('confirm-payment');
     if(confirmButton)confirmButton.disabled=true;
-    try { const result = await api.completeSale(state.sale.id, state.paymentDraft); const completed = result.sale; closeModal(); state.sale = null; clearCheckoutDocumentContext(); state.selectedProductId = null; state.discountPercent = 0; state.paymentDraft = []; state.products = await api.products(); showToast(`Venda ${completed.saleNumber} finalizada. Troco: ${ui.formatCents(completed.changeCents)}`, 'success'); renderCheckout(); } catch (error) { showToast(error.message, 'error'); }
+    try { const result = await api.completeSale(state.sale.id, state.paymentDraft); const completed = result.sale; closeModal(); state.sale = null; clearCheckoutDocumentContext(); state.selectedProductId = null; state.discountPercent = 0; state.paymentDraft = []; state.products = await api.products(); if(api.webMode)window.PdvToast?.clear?.(); showToast(`Venda ${completed.saleNumber} finalizada. Troco: ${ui.formatCents(completed.changeCents)}`, 'success'); renderCheckout(); } catch (error) { showToast(error.message, 'error'); }
     finally { saleCompletionInFlight = false; if(confirmButton?.isConnected)confirmButton.disabled=false; }
   }
 
@@ -1049,11 +1069,13 @@
 
   let inactiveWebProducts=[];
   let showInactiveWebProducts=false;
+  let webCategoryFilter='';
   function renderWebProducts(){
     const canManage=window.PdvAccessPolicy?.hasCapability(state.user,'products.manage');
     const canStock=window.PdvAccessPolicy?.hasCapability(state.user,'inventory.adjust');
     const catalogItems=showInactiveWebProducts?[...state.products,...inactiveWebProducts]:state.products;
-    const listed=catalogItems.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku+' '+(p.barcode||'')+' '+(p.brand||'')+' '+(p.variantLabel||'')).includes(ui.normalizeSearch(state.productQuery)));
+    const listed=catalogItems.filter(p=>(!webCategoryFilter||(webCategoryFilter==='uncategorized'?!p.categoryId:p.categoryId===webCategoryFilter))&&
+      (!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku+' '+(p.barcode||'')+' '+(p.brand||'')+' '+(p.variantLabel||'')).includes(ui.normalizeSearch(state.productQuery))));
     content.innerHTML=`<section class="page web-products-page"><header class="page-head">
       <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
       <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
@@ -1061,7 +1083,14 @@
       ${canStock?'<button id="web-purchase-orders" class="secondary-button" type="button">Pedidos de compra</button>':''}
       ${canManage?`<button id="web-toggle-inactive" class="secondary-button" type="button">${showInactiveWebProducts?'Ocultar inativos':'Mostrar inativos'}</button>`:''}</header>
       <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
-        placeholder="Buscar produto, SKU ou código de barras" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
+        placeholder="Buscar produto, SKU ou código de barras" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label>
+      <label for="web-products-category-filter">Categoria
+        <select id="web-products-category-filter" class="secondary-button" aria-label="Filtrar produtos por categoria">
+          <option value="">Todas as categorias</option>
+          <option value="uncategorized" ${webCategoryFilter==='uncategorized'?'selected':''}>Sem categoria</option>
+          ${state.categories.map(c=>`<option value="${escapeHtml(c.id)}" ${webCategoryFilter===c.id?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}
+        </select>
+      </label></div>
       <div class="data-card web-product-table" id="web-products-list">
         ${listed.length?listed.map(p=>`<div class="data-row web-product-row">
           <div class="web-product-identity">${p.photo?`<img src="${escapeHtml(api.webProductPhotoUrl(p.id))}" alt="Foto de ${escapeHtml(p.name)}" loading="lazy" style="width:42px;height:42px;border-radius:9px;object-fit:cover">`:`<span class="web-product-monogram">${escapeHtml(initials(p.name))}</span>`}
@@ -1080,7 +1109,10 @@
         </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
       </div></section>`;
     content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
-    content.querySelector('#web-new-category')?.addEventListener('click',openWebCategoryForm);
+    content.querySelector('#web-new-category')?.addEventListener('click',()=>openWebCategoryForm());
+    content.querySelector('#web-products-category-filter')?.addEventListener('change',event=>{
+      webCategoryFilter=event.currentTarget.value;renderWebProducts();
+    });
     content.querySelector('#web-import-csv')?.addEventListener('click',()=>void openWebCsvImport());
     content.querySelector('#web-purchase-orders')?.addEventListener('click',()=>void openWebPurchaseOrders());
     content.querySelector('#web-toggle-inactive')?.addEventListener('click',async event=>{
@@ -1456,21 +1488,35 @@
     }catch(e){showToast(e.message,'error');}
   }
 
-  function openWebCategoryForm(){
-    openModal('Nova categoria',`<form id="web-category-form"><div class="field">
-      <label>Nome<input name="name" minlength="2" maxlength="100" required placeholder="Ex.: Bebidas"></label></div>
-      <p role="status" class="web-form-feedback"></p>
-      <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Cancelar</button>
-      <button type="submit" class="primary-button">Salvar categoria</button></div></form>`,{onMount(root){
+  function openWebCategoryForm(category=null){
+    const catalog=category?'':`<div class="web-stock-history"><h3>Categorias cadastradas</h3>
+      <div class="data-card">${state.categories.map(c=>`<div class="data-row">
+        <strong>${escapeHtml(c.name)}</strong>
+        <button type="button" class="secondary-button" data-edit-web-category="${escapeHtml(c.id)}">Renomear</button>
+      </div>`).join('')||'<div class="empty-state">Nenhuma categoria cadastrada.</div>'}</div></div>`;
+    openModal(category?'Renomear categoria':'Gerenciar categorias',`${catalog}<form id="web-category-form"><div class="field">
+      <label>${category?'Novo nome':'Nova categoria'}<input name="name" minlength="2" maxlength="100" required
+        placeholder="Ex.: Bebidas" value="${escapeHtml(category?.name||'')}"></label></div>
+      <p role="status" class="web-form-feedback" aria-live="polite"></p>
+      <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal">Cancelar</button>
+      <button type="submit" class="primary-button">${category?'Salvar novo nome':'Criar categoria'}</button></div></form>`,{wide:true,onMount(root){
+      root.querySelectorAll('[data-edit-web-category]').forEach(button=>button.addEventListener('click',()=>{
+        const selected=state.categories.find(c=>c.id===button.dataset.editWebCategory);
+        if(selected)openWebCategoryForm(selected);
+      }));
       const form=root.querySelector('form');
       form.addEventListener('submit',async event=>{
         event.preventDefault();if(form.dataset.pending)return;
         form.dataset.pending='1';form.querySelector('[type=submit]').disabled=true;
         try{
-          await api.saveCategory({name:form.elements.name.value.trim()});
-          state.categories=await api.categories();closeModal();renderWebProducts();
-          showToast('Categoria salva.','success');
-        }catch(e){form.querySelector('[role=status]').textContent=e.message;}
+          const name=form.elements.name.value.trim();
+          if(category)await api.renameCategory(category.id,name,api.mutationId());
+          else await api.saveCategory({name});
+          state.categories=await api.categories();
+          closeModal();renderWebProducts();
+          showToast(category?'Categoria renomeada.':'Categoria criada.','success');
+        }catch(e){form.querySelector('[role=status]').textContent=e.message;
+          form.querySelector('[type=submit]').disabled=false;}
         finally{form.dataset.pending='';}
       });
     }});
@@ -1624,6 +1670,7 @@
           if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
           const result=await api.updateProduct(product.id,{
             name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
+            expectedVersion:product.editVersion,
             salePriceCents:centsFromInput(form.elements.price.value),unit:form.elements.unit.value,
             active:form.elements.active.checked,brand:form.elements.brand.value.trim(),
             barcode:form.elements.barcode.value.trim(),categoryId:form.elements.categoryId.value||null,

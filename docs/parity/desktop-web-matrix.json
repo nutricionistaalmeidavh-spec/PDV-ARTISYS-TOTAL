@@ -32,7 +32,7 @@
             "file": "apps/web/app.js",
             "contains": "const WEB_ROUTES",
             "testFile": "scripts/web-browser-e2e.mjs",
-            "testContains": "data-route",
+            "testContains": "await page.locator('#product-search').fill('Web QA');",
             "testAssertionContains": "assert.equal(await page.locator('#product-search').inputValue(),'Web QA','search query survives cart mutation');",
             "testRunner": "playwright"
           },
@@ -461,12 +461,14 @@
           ],
           "acceptance": "Código de barras independente do SKU. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
           "webEvidence": {
-            "file": "apps/api/src/commerce.mjs",
-            "contains": "const brand=text(body?.brand",
-            "testFile": "apps/api/test/p2-catalog-inventory.test.mjs",
-            "testContains": "P2 category, barcode and parent"
+            "file": "apps/web/app.js",
+            "contains": "let checkoutBarcodeBusy=false;",
+            "testFile": "scripts/web-browser-e2e.mjs",
+            "testContains": "USB HID scanners normally send",
+            "testAssertionContains": "assert.equal(await page.locator('#product-search').inputValue(),'','accepted scanner input clears for the next scan');",
+            "testRunner": "playwright"
           },
-          "reviewNote": "P2: comportamento de um subconjunto implementado em SQLite/D1 e API web; faltam operações e homologação exaustiva do desktop (incluindo importação, lotes, custo médio e dispositivos)."
+          "reviewNote": "P1: scanner USB HID no navegador (emulação de teclado: código exato + Enter), diferencia SKU de barcode, impede SKU/barcode ambíguos ou desconhecidos, evita leitura concorrente e reutiliza carrinho canônico. O teste Chromium cobre o fluxo com Workerd e D1 local. Parcial: exige homologação do leitor físico, variantes de prefixo/sufixo, múltiplos layouts/terminais e comparação executada com desktop."
         },
         {
           "id": "products-026",
@@ -525,12 +527,14 @@
           "name": "Locais de estoque, transferências e reservas",
           "status": "partial",
           "webEvidence": {
-            "file": "apps/api/src/commerce.mjs",
-            "contains": "async transferStock(",
-            "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "inventory transfer moves one immutable"
+            "file": "apps/api/src/storage-locations.mjs",
+            "contains": "async assignStorageLocation(tenant,branch,user,body,header)",
+            "testFile": "apps/api/test/p1-stock-locations.test.mjs",
+            "testContains": "P1 internal storage location is only an address",
+            "testAssertionContains": "assert.equal((await x.service.stock('a','front')).find(item=>item.productId===p.id).quantity,8);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Transferência imutável entre filiais com saldo projetado, mutação idempotente, RBAC e interface web implementada; locais de estoque internos, reservas e CI final ainda pendentes.",
+          "reviewNote": "P1: transferências e reservas canônicas já integradas. Endereçamento padrão por produto/filial agora implementado via tabelas 0019 com isolamentos tenant/branch, permissão inventory.adjust, idempotência, UI e testes SQLite/D1/Chromium. Parcial: saldos quantitativos por endereço, transferências internas com ledger por local, reservas ligadas a pedidos, multi-local por SKU e comparação executada com desktop.",
           "owner": "inventory",
           "dependsOn": [
             "products-027"

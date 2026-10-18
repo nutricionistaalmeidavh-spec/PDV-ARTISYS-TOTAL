@@ -1,3 +1,4 @@
+import {catalogGuard,catalogGuardArgs} from './catalog-cas.mjs';
 // CSV catalogue import is a preview-then-commit adapter over products, not a
 // second catalogue. Explicit cents, no ambiguous locale-priced inputs.
 const UNIT_CODES=new Set(['UN','KG','G','L','M','M2','M3','CX','PCT']);
@@ -145,9 +146,17 @@ export function createCatalogImportService(h){
    for(const row of p.rows){
      if(row.action==='update'){
        updatedIds.push(row.productId);
-       statements.push(q(`UPDATE products SET name=?,sale_price_cents=?,brand=?,barcode=?,category_id=?,updated_at=?
+       // A concurrent write between preview and commit must abort ALL SKUs.
+       const baseline=await first('SELECT * FROM products WHERE tenant_id=? AND id=? AND sku=?',
+         tenant,row.productId,row.sku);
+       if(!baseline||!baseline.active)
+         throw error(409,'Produto alterado após a prévia. Atualize o catálogo.');
+       statements.push(q(`UPDATE products SET name=?,
+         sale_price_cents=CASE WHEN ${catalogGuard} THEN ? ELSE -1 END,
+         brand=?,barcode=?,category_id=?,updated_at=?
          WHERE tenant_id=? AND id=? AND sku=? AND active=1`,
-         row.name,row.salePriceCents,row.brand,row.barcode,row.categoryId,at,tenant,row.productId,row.sku));
+         row.name,...catalogGuardArgs(baseline),row.salePriceCents,
+         row.brand,row.barcode,row.categoryId,at,tenant,row.productId,row.sku));
      }else{
        const id=randomId();createdIds.push(id);
        statements.push(q(`INSERT INTO products(id,tenant_id,sku,name,sale_price_cents,unit,

@@ -1,6 +1,150 @@
 {
   "schemaVersion": 1,
   "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
-  "description": "Only independently verifiable executed scenarios go in results; blank deliberately means no completed cross-platform certification.",
-  "results": []
+  "description": "Evidence is strictly restricted to scenarios executing the pinned original Git blobs and comparing real web API + SQLite outcomes. Remaining comparisons and physical QA stay unverified.",
+  "results": [
+    {
+      "scenarioId": "checkout-007/nominal",
+      "desktopFixtureId": "checkout-discount-desktop-nominal-v1",
+      "testContains": "test('checkout-007/nominal checkout-discount-desktop-nominal-v1",
+      "testAssertionContains": "assert.deepEqual(observed,reference,'API/SQLite totals match the pinned desktop golden vector');",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-007/authorization",
+      "desktopFixtureId": "checkout-discount-desktop-authorization-v1",
+      "testContains": "test('checkout-007/authorization checkout-discount-desktop-authorization-v1",
+      "testAssertionContains": "assert.deepEqual(observed,reference,'API permissions and invariance match byte-pinned desktop roles');",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-008/nominal",
+      "desktopFixtureId": "checkout-payment-desktop-nominal-v1",
+      "testContains": "test('checkout-008/nominal checkout-payment-desktop-nominal-v1",
+      "testAssertionContains": "assert.deepEqual(observed,expected,'API payment and persisted ledger equal the pinned desktop golden vector');",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-007/tenant-isolation",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "desktopFixtureId": "discount-tenant-desktop-v2",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "testRunner": "node-test",
+      "testContains": "test('checkout-007/tenant-isolation discount-tenant-desktop-v2",
+      "testAssertionContains": "assert.deepEqual(saleTotals(own.body.sale),reference,'isolated tenant follows original desktop pricing');",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-007/failure-recovery",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "desktopFixtureId": "discount-recovery-desktop-v2",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "testRunner": "node-test",
+      "testContains": "test('checkout-007/failure-recovery discount-recovery-desktop-v2",
+      "testAssertionContains": "assert.deepEqual(saleTotals(first.body.sale),reference,'failed mutation leaves desktop-equivalent amount');",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-008/authorization",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "desktopFixtureId": "payment-authorization-desktop-v2",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "testRunner": "node-test",
+      "testContains": "test('checkout-008/authorization payment-authorization-desktop-v2",
+      "testAssertionContains": "assert.deepEqual({status:state.status,payments:count.n},{status:'OPEN',payments:0},",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-008/tenant-isolation",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "desktopFixtureId": "payment-tenant-desktop-v2",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "testRunner": "node-test",
+      "testContains": "test('checkout-008/tenant-isolation payment-tenant-desktop-v2",
+      "testAssertionContains": "assert.equal(count.n,0,'foreign settlement must not enter the original tenant ledger');",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-008/failure-recovery",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "desktopFixtureId": "payment-recovery-desktop-v2",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "testRunner": "node-test",
+      "testContains": "test('checkout-008/failure-recovery payment-recovery-desktop-v2",
+      "testAssertionContains": "assert.deepEqual(retry.body,initial.body,'idempotent payment returns the identical original confirmation');",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-005/nominal",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "desktopFixtureId": "sale-open-desktop-v2",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "testRunner": "node-test",
+      "testContains": "test('checkout-005/nominal sale-open-desktop-v2",
+      "testAssertionContains": "assert.deepEqual({subtotalCents:record.subtotalCents,discountCents:record.discountCents,totalCents:record.totalCents},",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-005/authorization",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "desktopFixtureId": "sale-open-authorization-desktop-v2",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "testRunner": "node-test",
+      "testContains": "test('checkout-005/authorization sale-open-authorization-desktop-v2",
+      "testAssertionContains": "assert.deepEqual({before:before.n,after:after.n},{before:0,after:1},",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-005/tenant-isolation",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "desktopFixtureId": "sale-open-tenant-desktop-v2",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "testRunner": "node-test",
+      "testContains": "test('checkout-005/tenant-isolation sale-open-tenant-desktop-v2",
+      "testAssertionContains": "assert.deepEqual({tenantId:persisted.tenantId,visible:owner.body.sale.id,foreignStatus:foreign.status},",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-005/failure-recovery",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "desktopFixtureId": "sale-open-recovery-desktop-v2",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "testRunner": "node-test",
+      "testContains": "test('checkout-005/failure-recovery sale-open-recovery-desktop-v2",
+      "testAssertionContains": "assert.deepEqual(retry.body,opened.body,'same request key reuses previously opened sale');",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "checkout-006/nominal",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "desktopFixtureId": "sale-items-desktop-v2",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "testRunner": "node-test",
+      "testContains": "test('checkout-006/nominal sale-items-desktop-v2",
+      "testAssertionContains": "assert.deepEqual(saleTotals(removed.body.sale),original.empty,'all item mutations match the desktop golden totals');",
+      "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    }
+  ]
 }

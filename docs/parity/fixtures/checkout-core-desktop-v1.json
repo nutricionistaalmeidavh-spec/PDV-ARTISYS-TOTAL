@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 1,
+  "desktop": {
+    "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+    "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+    "sourceBlobs": {
+      "js/domains/sales/pricing.js": "165bfb0af4aa4764474f421cc04f0c32f1b71fb8",
+      "js/core/auth/authorization-service.js": "2583c489ff600425dcc43505e6524cb9b868b24c",
+      "js/core/auth/default-profiles.js": "12d3ae6e6797b671e2a60daa24787ca1459f8278",
+      "js/domains/payments/payment-rules.js": "032be99080da9b311367858ec4510cf7d2afc260",
+      "js/domains/sales/sale-service.js": "7526948853df185d3e6f7277e2a165c7cbd527e6"
+    }
+  },
+  "description": "Golden inputs and expected outcomes computed from byte-pinned original desktop modules, compared with canonical web API + persisted SQLite state. Only named scenarios have proof; other P0 scenarios stay pending.",
+  "cases": [
+    {
+      "id": "checkout-discount-desktop-nominal-v1",
+      "scenarioId": "checkout-007/nominal",
+      "type": "pricing",
+      "input": {
+        "items": [
+          {
+            "unitPriceCents": 1000,
+            "quantity": 1
+          }
+        ],
+        "discountCents": 1500
+      },
+      "expected": {
+        "subtotalCents": 1000,
+        "discountCents": 1000,
+        "totalCents": 0
+      }
+    },
+    {
+      "id": "checkout-discount-desktop-authorization-v1",
+      "scenarioId": "checkout-007/authorization",
+      "type": "rbac",
+      "capability": "sales.discount",
+      "permittedProfile": "ADMINISTRATOR",
+      "deniedProfile": "READ_ONLY",
+      "expectedDeniedHttp": 403,
+      "expectedAllowedHttp": 200
+    },
+    {
+      "id": "checkout-payment-desktop-nominal-v1",
+      "scenarioId": "checkout-008/nominal",
+      "type": "payment",
+      "input": {
+        "totalCents": 1000,
+        "payments": [
+          {
+            "method": "CASH",
+            "amountCents": 700
+          },
+          {
+            "method": "PIX",
+            "amountCents": 500
+          }
+        ]
+      },
+      "expected": {
+        "status": "paid",
+        "totalCents": 1000,
+        "paidTotalCents": 1200,
+        "remainingTotalCents": 0,
+        "changeDueCents": 200,
+        "creditTotalCents": 0,
+        "immediateTotalCents": 1200
+      },
+      "expectedStoredPayments": 2,
+      "expectedCashMovementCents": 500
+    },
+    {
+      "id": "discount-tenant-desktop-v2",
+      "scenarioId": "checkout-007/tenant-isolation",
+      "type": "pricing",
+      "input": {
+        "items": [
+          {
+            "unitPriceCents": 1000,
+            "quantity": 1
+          }
+        ],
+        "discountCents": 250
+      },
+      "expected": {
+        "subtotalCents": 1000,
+        "discountCents": 250,
+        "totalCents": 750
+      },
+      "foreignTenantStatus": 404
+    },
+    {
+      "id": "discount-recovery-desktop-v2",
+      "scenarioId": "checkout-007/failure-recovery",
+      "type": "pricing",
+      "input": {
+        "items": [
+          {
+            "unitPriceCents": 1000,
+            "quantity": 1
+          }
+        ],
+        "discountCents": 300
+      },
+      "expected": {
+        "subtotalCents": 1000,
+        "discountCents": 300,
+        "totalCents": 700
+      },
+      "invalidDiscountCents": -1
+    },
+    {
+      "id": "payment-authorization-desktop-v2",
+      "scenarioId": "checkout-008/authorization",
+      "type": "rbac",
+      "capability": "sales.create",
+      "permittedProfile": "ADMINISTRATOR",
+      "deniedProfile": "READ_ONLY",
+      "expectedDeniedHttp": 403
+    },
+    {
+      "id": "payment-tenant-desktop-v2",
+      "scenarioId": "checkout-008/tenant-isolation",
+      "type": "payment",
+      "input": {
+        "totalCents": 1000,
+        "payments": [
+          {
+            "method": "PIX",
+            "amountCents": 1000
+          }
+        ]
+      },
+      "expected": {
+        "status": "paid",
+        "totalCents": 1000,
+        "paidTotalCents": 1000,
+        "remainingTotalCents": 0,
+        "changeDueCents": 0,
+        "creditTotalCents": 0,
+        "immediateTotalCents": 1000
+      },
+      "foreignTenantStatus": 404
+    },
+    {
+      "id": "payment-recovery-desktop-v2",
+      "scenarioId": "checkout-008/failure-recovery",
+      "type": "payment",
+      "input": {
+        "totalCents": 1000,
+        "payments": [
+          {
+            "method": "CASH",
+            "amountCents": 1200
+          }
+        ]
+      },
+      "expected": {
+        "status": "paid",
+        "totalCents": 1000,
+        "paidTotalCents": 1200,
+        "remainingTotalCents": 0,
+        "changeDueCents": 200,
+        "creditTotalCents": 0,
+        "immediateTotalCents": 1200
+      }
+    },
+    {
+      "id": "sale-open-desktop-v2",
+      "scenarioId": "checkout-005/nominal",
+      "type": "pricing",
+      "input": {
+        "items": [],
+        "discountCents": 0
+      },
+      "expected": {
+        "subtotalCents": 0,
+        "discountCents": 0,
+        "totalCents": 0
+      },
+      "expectedStatus": "OPEN"
+    },
+    {
+      "id": "sale-open-authorization-desktop-v2",
+      "scenarioId": "checkout-005/authorization",
+      "type": "rbac",
+      "capability": "sales.create",
+      "permittedProfile": "ADMINISTRATOR",
+      "deniedProfile": "READ_ONLY",
+      "expectedDeniedHttp": 403,
+      "expectedAllowedHttp": 201
+    },
+    {
+      "id": "sale-open-tenant-desktop-v2",
+      "scenarioId": "checkout-005/tenant-isolation",
+      "type": "rbac",
+      "capability": "sales.view",
+      "permittedProfile": "ADMINISTRATOR",
+      "deniedProfile": "READ_ONLY",
+      "foreignTenantStatus": 404
+    },
+    {
+      "id": "sale-open-recovery-desktop-v2",
+      "scenarioId": "checkout-005/failure-recovery",
+      "type": "pricing",
+      "input": {
+        "items": [],
+        "discountCents": 0
+      },
+      "expected": {
+        "subtotalCents": 0,
+        "discountCents": 0,
+        "totalCents": 0
+      },
+      "expectedPersistedRows": 1
+    },
+    {
+      "id": "sale-items-desktop-v2",
+      "scenarioId": "checkout-006/nominal",
+      "type": "pricing",
+      "initial": {
+        "items": [
+          {
+            "unitPriceCents": 1000,
+            "quantity": 2
+          }
+        ],
+        "discountCents": 0
+      },
+      "updated": {
+        "items": [
+          {
+            "unitPriceCents": 1000,
+            "quantity": 3
+          }
+        ],
+        "discountCents": 0
+      },
+      "empty": {
+        "items": [],
+        "discountCents": 0
+      },
+      "expected": {
+        "initial": {
+          "subtotalCents": 2000,
+          "discountCents": 0,
+          "totalCents": 2000
+        },
+        "updated": {
+          "subtotalCents": 3000,
+          "discountCents": 0,
+          "totalCents": 3000
+        },
+        "empty": {
+          "subtotalCents": 0,
+          "discountCents": 0,
+          "totalCents": 0
+        }
+      }
+    }
+  ]
+}

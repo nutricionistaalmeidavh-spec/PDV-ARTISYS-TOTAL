@@ -71,6 +71,7 @@
         else if(original==='/api/v1/inventory/adjustments')operation='inventory/adjustments';
         else if(original==='/api/v1/inventory/counts')operation='inventory/counts';
         else if(original==='/api/v1/inventory/lots')operation='inventory/lots';
+        else if(original.startsWith('/api/v1/inventory/locations'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/inventory/transfers')operation='inventory/transfers';
         else if(original.startsWith('/api/v1/inventory/reservations'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/inventory/purchase-costs')operation='inventory/purchase-costs';
@@ -120,6 +121,7 @@
       if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
       if(operation==='products/categories')return method==='GET'?value.categories:value.category;
+      if(/^products\/categories\/[^/]+$/.test(operation))return value.category;
       if(/^products\/[^/]+\/configuration$/.test(operation))return value.configuration;
       if(/^products\/[^/]+\/configuration\/price$/.test(operation))return value.quote;
       if(operation==='products/import/preview')return value.preview;
@@ -212,6 +214,7 @@
 
     categories(includeInactive = false) { return this.request(this.webMode?'/api/v1/products/categories':`/api/v1/categories${includeInactive ? '?includeInactive=true' : ''}`); }
     saveCategory(body) { return this.request(this.webMode?'/api/v1/products/categories':'/api/v1/categories', { method: 'POST', body }); }
+    renameCategory(id,name,mutationId){return this.request('/api/v1/products/categories/'+encodeURIComponent(id),{method:'PATCH',body:{name},mutationId});}
     previewCatalogCsv(csv,mode='create'){return this.request('/api/v1/products/import/preview',{method:'POST',body:{csv,mode}});}
     commitCatalogCsv(csv,mutationId,mode='create',previewToken=null){
       return this.request('/api/v1/products/import/commit',{method:'POST',body:{csv,mode,...(previewToken?{previewToken}:{})},mutationId});
@@ -287,6 +290,14 @@
     receivePurchaseOrder(id,items,mutationId){return this.request('/api/v1/purchasing/orders/'+encodeURIComponent(id)+'/receive',{method:'POST',body:{items},mutationId});}
     cancelPurchaseOrder(id,reason,mutationId){return this.request('/api/v1/purchasing/orders/'+encodeURIComponent(id)+'/cancel',{method:'POST',body:{reason},mutationId});}
     purchaseCostAverages(filters={}){return this.request('/api/v1/purchasing/cost-averages'+this.params(filters));}
+    storageLocations(){return this.request('/api/v1/inventory/locations').then(result=>result.locations);}
+    storageAssignments(){return this.request('/api/v1/inventory/locations/assign').then(result=>result.assignments);}
+    createStorageLocation(body,mutationId=this.mutationId()){
+      return this.request('/api/v1/inventory/locations',{method:'POST',body,mutationId}).then(result=>result.location);
+    }
+    assignStorageLocation(body,mutationId=this.mutationId()){
+      return this.request('/api/v1/inventory/locations/assign',{method:'POST',body,mutationId}).then(result=>result.assignment);
+    }
     inventoryBalances(filters = {}) { return this.request(`/api/v1/inventory${this.params(filters)}`); }
     inventoryLowStock() { return this.request('/api/v1/inventory/low-stock'); }
     inventoryMovements(filters = {}) { return this.request(`/api/v1/inventory/movements${this.params(filters)}`); }

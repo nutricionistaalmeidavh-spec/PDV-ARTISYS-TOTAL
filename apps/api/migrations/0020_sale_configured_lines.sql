@@ -1,4 +1,4 @@
--- 0019: additive, FK-safe configured sale lines; never rebuild sale_items.
+-- 0020: additive, FK-safe configured sale lines; never rebuild sale_items.
 -- sale_items stays the physical/financial parent identity referenced by old
 -- refunds, commissions and stock allocations. Each configured choice has a
 -- separate immutable-after-completion priced line under that same parent.

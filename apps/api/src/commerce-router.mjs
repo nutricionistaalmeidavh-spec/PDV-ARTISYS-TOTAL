@@ -71,6 +71,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
         if(method==='GET'){requireAccess(member,'products.view',user);return json({categories:await service.categories(tenant,branch)});}
         if(method==='POST'){requireAccess(member,'products.manage',user);return json({category:await service.createCategory(tenant,branch,user,body,key)},201);}
       }
+      if(parts[1]==='categories'&&parts.length===3&&method==='PATCH'){
+        requireAccess(member,'products.manage',user);
+        return json({category:await service.renameCategory(tenant,branch,user,parts[2],body,key)});
+      }
       if(parts.length===3&&parts[2]==='configuration'){
         if(method==='GET'){
           requireAccess(member,'products.view',user);
@@ -133,6 +137,24 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
       return null;
     }
     if(feature==='inventory'){
+      if(parts[1]==='locations'&&parts.length===2){
+        if(method==='GET'){
+          requireAccess(member,'inventory.view',user);
+          return json({locations:await service.storageLocations(tenant,branch)});
+        }
+        if(method==='POST'){
+          requireAccess(member,'inventory.adjust',user);
+          return json({location:await service.createStorageLocation(tenant,branch,user,body,key)},201);
+        }
+      }
+      if(parts[1]==='locations'&&parts[2]==='assign'&&parts.length===3&&method==='GET'){
+        requireAccess(member,'inventory.view',user);
+        return json({assignments:await service.storageAssignments(tenant,branch)});
+      }
+      if(parts[1]==='locations'&&parts[2]==='assign'&&parts.length===3&&method==='POST'){
+        requireAccess(member,'inventory.adjust',user);
+        return json({assignment:await service.assignStorageLocation(tenant,branch,user,body,key)});
+      }
       if(parts[1]==='lots'&&parts.length===2&&method==='GET'){
         requireAccess(member,'inventory.view',user);
         return json({lots:await service.lotReceipts(tenant,branch,{

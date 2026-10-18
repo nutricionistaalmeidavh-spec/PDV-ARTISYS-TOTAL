@@ -56,10 +56,33 @@ try{
   await page.locator('#web-new-product').click();
   await page.locator('#web-product-name').fill('Produto Web QA');
   const sku='BROWSER-'+Date.now();
+  const barcode='7891780213442';
   await page.locator('#web-product-sku').fill(sku);
+  await page.locator('#web-product-form [name=barcode]').fill(barcode);
   await page.locator('#web-product-price').fill('12,90');
   await page.locator('#web-product-form button[type=submit]').click();
   await page.locator('.web-product-row').filter({hasText:sku}).waitFor();
+  // P1 category management regression: category rename must stay operable in
+  // the canonical web UI and category filtering must not hide uncategorized goods.
+  await page.locator('#web-new-category').click();
+  await page.locator('#web-category-form input[name=name]').fill('Categoria QA');
+  await page.locator('#web-category-form button[type=submit]').click();
+  await page.locator('#web-category-form').waitFor({state:'detached',timeout:12000});
+  await page.locator('#web-new-category').click();
+  await page.locator('[data-edit-web-category]').filter({hasText:'Renomear'}).first().click();
+  await page.locator('#web-category-form input[name=name]').fill('Categoria testada');
+  await page.locator('#web-category-form button[type=submit]').click();
+  await page.locator('#web-category-form').waitFor({state:'detached',timeout:12000});
+  const category=page.locator('#web-products-category-filter option').filter({hasText:'Categoria testada'});
+  const categoryId=await category.getAttribute('value');
+  assert.ok(categoryId,'renamed category must be available to the filter');
+  await page.locator('#web-products-category-filter').selectOption(categoryId);
+  assert.equal(await page.locator('.web-product-row').filter({hasText:sku}).count(),0,
+    'unassigned product must not leak into a different category');
+  await page.locator('#web-products-category-filter').selectOption('uncategorized');
+  await page.locator('.web-product-row').filter({hasText:sku}).waitFor({timeout:12000});
+  await page.locator('#web-products-category-filter').selectOption('');
+
   const row=page.locator('.web-product-row').filter({hasText:sku});
   await row.locator('[data-web-edit]').click();
   await page.locator('#web-edit-product-form').waitFor({timeout:12000});
@@ -121,11 +144,37 @@ try{
   await countForm.locator('[name=reason]').fill('Conferência física no navegador QA');
   await countForm.locator('button[type=submit]').click();
   await page.locator('table tbody tr').filter({hasText:sku}).first().getByText('2,25',{exact:true}).waitFor({timeout:12000});
+  // P1 bin/shelf address E2E. The assignment never adds or subtracts stock.
+  await page.locator('#web-storage-location-create [name=code]').fill('SHELF-QA-01');
+  await page.locator('#web-storage-location-create [name=name]').fill('Prateleira de testes');
+  await page.locator('#web-storage-location-create button[type=submit]').click();
+  await page.locator('#web-storage-location-assign select[name=locationId] option')
+    .filter({hasText:'SHELF-QA-01'}).waitFor({state:'attached',timeout:12000});
+  await page.locator('#web-storage-location-assign select[name=productId]').selectOption(productChoice);
+  const locationId=await page.locator('#web-storage-location-assign select[name=locationId] option')
+    .filter({hasText:'SHELF-QA-01'}).getAttribute('value');
+  assert.ok(locationId,'new shelf belongs to the branch');
+  await page.locator('#web-storage-location-assign select[name=locationId]').selectOption(locationId);
+  await page.locator('#web-storage-location-assign button[type=submit]').click();
+  await page.locator('#web-storage-locations table tbody tr')
+    .filter({hasText:'SHELF-QA-01'}).first().waitFor({timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-parity-storage-address.png',fullPage:true});
   await page.screenshot({path:'qa-artifacts/pdv-parity-inventory-count.png',fullPage:true});
 
   await page.locator('#app-sidebar [data-route=checkout]').click();
   const product=page.locator('[data-add-product]').filter({hasText:'Produto Web QA'});
   await product.waitFor({timeout:12000});
+  // USB HID scanners normally send the barcode followed by Enter. Exercise
+  // that full browser flow without claiming physical reader certification.
+  await page.locator('#product-search').fill('0000000000000');
+  await page.locator('#product-search').press('Enter');
+  assert.equal(await page.locator('.cart-line').count(),0,'unknown barcode must never charge a different product');
+  await page.locator('#product-search').fill(barcode);
+  await page.locator('#product-search').press('Enter');
+  await page.locator('.cart-line').filter({hasText:'Produto Web QA'}).waitFor({timeout:12000});
+  assert.equal(await page.locator('#product-search').inputValue(),'','accepted scanner input clears for the next scan');
+  await page.locator('.cart-line').filter({hasText:'Produto Web QA'}).locator('[data-remove]').click();
+  await page.locator('.cart-line').filter({hasText:'Produto Web QA'}).waitFor({state:'detached',timeout:12000});
   await page.locator('#product-search').fill('Web QA');
   await product.click();
   const cart=page.locator('.cart-line').filter({hasText:'Produto Web QA'});
@@ -153,13 +202,16 @@ try{
   const completionResponse=page.waitForResponse(response=>
     response.request().method()==='POST'&&new URL(response.url()).pathname.endsWith('/complete')&&
     new URL(response.url()).pathname.includes('/sales/'),{timeout:12000});
+  // Arm the assertion before clicking: success notifications are ephemeral
+  // (2s) and can disappear before the API response body is parsed.
+  const completionToastWait=page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
   await page.locator('#confirm-payment').click();
   const completedPayload=await (await completionResponse).json();
   const completedSaleNumber=completedPayload.sale?.saleNumber;
   const expectedTerminalId=await page.evaluate(()=>localStorage.getItem('artisys.pdv.webTerminalId.v1'));
   assert.equal(completedPayload.sale?.terminalId,expectedTerminalId,'browser must never silently complete a draft inherited from another terminal');
   assert.ok(completedSaleNumber,'completion response must identify the exact sale for parity follow-up');
-  await page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
+  await completionToastWait;
   await page.waitForFunction(()=>document.querySelectorAll('.cart-line').length===0,null,{timeout:12000});
   // Post-sale receipt dialog is part of the original renderer. Dismiss it
   // through the same accessible close action an operator uses, not force-clicking

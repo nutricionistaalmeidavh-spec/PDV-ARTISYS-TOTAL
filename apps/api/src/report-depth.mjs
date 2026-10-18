@@ -59,6 +59,7 @@ export function createReportDepthService(h){
    const minimumJoin=minimumPoliciesAvailable?
      'LEFT JOIN inventory_minimum_levels ml ON ml.tenant_id=p.tenant_id AND ml.branch_id=? AND ml.product_id=p.id':'';
    const rows=await all(`SELECT p.id AS productId,p.sku,p.name,p.unit,
+      p.last_cost_cents AS lastRecordedCostCents,
       ${minimumColumn} AS minimumMilli,
       COALESCE(s.balance_milli,0) AS quantityMilli,
       COALESCE((SELECT SUM(r.quantity_milli) FROM inventory_reservations r
@@ -92,6 +93,14 @@ export function createReportDepthService(h){
     const consumed=Math.max(0,row.consumedMilli/1000);
     const daily=consumed/span;
     const minimum=row.minimumMilli==null?null:row.minimumMilli/1000;
+    // Desktop baseline: shortage=max(minimum-quantity,0), purchase cost=shortage*unit cost.
+    // Web adds branch reservations to availability and leaves a missing purchase cost unknown.
+    const shortageMilli=minimum===null?null:Math.max(0,row.minimumMilli-
+      Math.max(0,row.quantityMilli-row.reservedMilli));
+    const shortageToMinimum=shortageMilli===null?null:shortageMilli/1000;
+    const costKnown=Number(row.lastRecordedCostCents)>0;
+    const suggestedPurchaseCostCents=shortageMilli===null||!costKnown?null:
+      Math.round(shortageMilli*row.lastRecordedCostCents/1000);
     const minimumStatus=minimum===null?'NOT_CONFIGURED':
       available<minimum?'BELOW_MINIMUM':available===minimum?'AT_MINIMUM':'ABOVE_MINIMUM';
     return {productId:row.productId,sku:row.sku,name:row.name,unit:row.unit,
@@ -99,6 +108,8 @@ export function createReportDepthService(h){
       averageDailyConsumption:Number(daily.toFixed(4)),
       daysCoverage:daily>0?Number((available/daily).toFixed(1)):null,
       minimumQuantity:minimum,minimumStatus,
+      shortageToMinimum,suggestedPurchaseCostCents,
+      purchaseCostBasis:!costKnown?'NO_RECORDED_COST':'LAST_RECORDED_COST',
       transfersIn:row.incomingMilli/1000,transfersOut:row.outgoingMilli/1000,
       depleted:available<=0
     };
@@ -108,6 +119,12 @@ export function createReportDepthService(h){
     unknownMinimum:products.filter(x=>x.minimumQuantity===null).length,
     belowMinimum:products.filter(x=>x.minimumStatus==='BELOW_MINIMUM').length,
     atMinimum:products.filter(x=>x.minimumStatus==='AT_MINIMUM').length,
+    lowStockCount:products.filter(x=>x.minimumStatus==='AT_MINIMUM'||
+      x.minimumStatus==='BELOW_MINIMUM').length,
+    suggestedPurchaseCostCents:products.some(x=>x.shortageToMinimum>0&&
+      x.suggestedPurchaseCostCents==null)?null:products.reduce((sum,x)=>
+      sum+Number(x.suggestedPurchaseCostCents||0),0),
+    unpricedShortages:products.filter(x=>x.shortageToMinimum>0&&x.suggestedPurchaseCostCents==null).length,
     coverageUnknown:products.filter(x=>x.daysCoverage==null).length};
   }
  };
