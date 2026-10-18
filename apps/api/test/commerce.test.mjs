@@ -650,6 +650,37 @@ test('P6 weighted product uses canonical KG line, precise payment and stock',asy
   }finally{x.close();}
 });
 
+test('R1 checkout-017: removing a weighed line is retry safe and does not affect stock until payment',async()=>{
+ const x=await setup();try{
+  const created=await x.write('a','products',{branchId:'branch-a',name:'Café a granel',sku:'CAFE-KG-R1',unit:'KG',salePriceCents:2000,trackStock:true});
+  assert.equal(created.status,201);
+  const pid=created.body.product.id;
+  await x.write('a','inventory/receipts',{branchId:'branch-a',productId:pid,quantity:3,type:'opening'});
+  const opened=await x.write('a','sales',{branchId:'branch-a'});
+  const id=opened.body.sale.id;
+  const added=await x.write('a',`sales/${id}/items/weighted`,{branchId:'branch-a',productId:pid,grams:500,source:'MANUAL'});
+  assert.equal(added.status,200,JSON.stringify(added.body));
+  assert.equal(added.body.sale.items.length,1);
+  const itemId=added.body.sale.items[0].id,mutation=next();
+  assert.ok(itemId,'weighted sale line needs a stable ID for removal');
+  const route=`sales/${id}/weight-items/${itemId}`;
+  const removed=await x.write('a',route,{branchId:'branch-a'},{method:'DELETE',key:mutation});
+  assert.equal(removed.status,200,JSON.stringify(removed.body));
+  assert.equal(removed.body.sale.items.length,0);
+  assert.equal((await x.write('a',route,{branchId:'branch-a'},{method:'DELETE',key:mutation})).status,200);
+  const readded=await x.write('a',`sales/${id}/items/weighted`,{branchId:'branch-a',productId:pid,grams:750,source:'MANUAL'});
+  assert.equal(readded.status,200);
+  assert.equal(readded.body.sale.items[0].quantity,0.75);
+  assert.equal((await x.write('a',route,{branchId:'branch-a'},{method:'DELETE',key:mutation})).status,200);
+  assert.equal((await x.get('a',`sales/${id}?branchId=branch-a`)).body.sale.items[0].quantity,0.75,
+    'replayed removal must not delete a newer weighing of same product');
+  assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock.find(p=>p.productId===pid).quantity,3,
+    'editing the open basket never changes the canonical stock ledger');
+  assert.equal((await x.write('b',route,{branchId:'branch-b'},{method:'DELETE',who:x.other})).status,404);
+  assert.equal((await x.write('a',route,{branchId:'branch-a'},{method:'DELETE',who:x.viewer})).status,403);
+ }finally{x.close();}
+});
+
 test('P6 invalid weights, non-KG items and other-tenant users are rejected',async()=>{
   const x=await setup();try{
     const kg=await x.write('a','products',{branchId:'branch-a',name:'Tomate',sku:'TOMATE-KG',unit:'KG',salePriceCents:1000});
@@ -2420,4 +2451,85 @@ test('R1 cart mutations use operation receipts: delayed item, discount and remov
     const ledger=await x.db.prepare("SELECT scope,COUNT(*) AS n FROM commerce_mutations WHERE tenant_id=? AND scope LIKE ? GROUP BY scope").bind('a','sale.%:'+id+'%').all();
     assert.equal(ledger.results.length>=3,true);
   }finally{x.close();}
+});
+
+test('R1 checkout-011/012: replayed customer and seller selections cannot reverse newer edits',async()=>{
+ const x=await setup();try{
+  const a=await x.write('a','customers',{branchId:'branch-a',name:'Cliente Alpha'});
+  const b=await x.write('a','customers',{branchId:'branch-a',name:'Cliente Beta'});
+  assert.equal(a.status,201);assert.equal(b.status,201);
+  const first=a.body.customer.id,second=b.body.customer.id;
+  const opened=await x.write('a','sales',{branchId:'branch-a'});
+  assert.equal(opened.status,201);
+  const id=opened.body.sale.id;
+  const customerPath='sales/'+id+'/customer',sellerPath='sales/'+id+'/seller';
+  const customerKey=next(),sellerKey=next();
+  assert.equal((await x.write('a',customerPath,{branchId:'branch-a',customerId:first},{key:customerKey})).status,200);
+  assert.equal((await x.write('a',customerPath,{branchId:'branch-a',customerId:second})).status,200);
+  assert.equal((await x.write('a',customerPath,{branchId:'branch-a',customerId:first},{key:customerKey})).status,200);
+  assert.equal((await x.get('a','sales/'+id+'?branchId=branch-a')).body.sale.customerId,second,
+    'out-of-order HTTP replay must not reassign an older customer');
+  assert.equal((await x.write('a',sellerPath,{branchId:'branch-a',sellerId:'viewer'},{key:sellerKey})).status,200);
+  assert.equal((await x.write('a',sellerPath,{branchId:'branch-a',sellerId:'owner'})).status,200);
+  assert.equal((await x.write('a',sellerPath,{branchId:'branch-a',sellerId:'viewer'},{key:sellerKey})).status,200);
+  assert.equal((await x.get('a','sales/'+id+'?branchId=branch-a')).body.sale.sellerId,'owner',
+    'out-of-order HTTP replay must not overwrite the newest commission recipient');
+  assert.equal((await x.write('a',customerPath,{branchId:'branch-a',customerId:second},{key:customerKey})).status,409,
+    'same mutation ID with different customer is a conflict');
+  assert.equal((await x.write('a',sellerPath,{branchId:'branch-a',sellerId:'owner'},{key:sellerKey})).status,409,
+    'same mutation ID with different seller is a conflict');
+  assert.equal((await x.write('a',sellerPath,{branchId:'branch-a',sellerId:'viewer'},{who:x.viewer})).status,403,
+    'read-only user cannot change seller and commissions');
+  assert.equal((await x.write('b',sellerPath,{branchId:'branch-b',sellerId:'viewer'},{who:x.other})).status,404,
+    'other tenant must not access sale');
+  const noKey=await x.call(x.path('a',customerPath),{cookie:x.owner,body:{branchId:'branch-a',customerId:first},method:'POST'});
+  assert.equal(noKey.status,400,'every person/seller mutation must be traceable and retry-safe');
+  const receipts=await x.db.prepare("SELECT COUNT(*) AS n FROM commerce_mutations WHERE tenant_id=? AND scope IN (?,?)")
+    .bind('a','sale.customer:'+id,'sale.seller:'+id).first();
+  assert.equal(receipts.n,4,'each distinct accepted selection has one transaction receipt');
+ }finally{x.close();}
+});
+
+test('R1 checkout-017/019: configured item quantity, removal and stale replay preserve parent totals',async()=>{
+ const x=await setup();try{
+  const pid=await x.id('Crepe Personalizável','CREPE-R1',10);
+  const config={branchId:'branch-a',variants:[
+    {id:'normal',name:'Normal',priceDeltaCents:0},
+    {id:'large',name:'Grande',priceDeltaCents:300}
+  ],groups:[{id:'extras',name:'Extras',selectionType:'MULTIPLE',minSelections:1,maxSelections:1,
+    options:[{id:'cheese',name:'Queijo',priceDeltaCents:150}]}]};
+  assert.equal((await x.write('a','products/'+pid+'/configuration',config,{method:'PUT'})).status,200);
+  const sid=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
+  const addItem=variantId=>x.write('a',`sales/${sid}/items/configured`,{
+    branchId:'branch-a',productId:pid,quantity:1,variantId,selections:['cheese']});
+  assert.equal((await addItem('normal')).status,200);
+  const larger=await addItem('large');assert.equal(larger.status,200);
+  let lines=larger.body.sale.items;
+  assert.equal(lines.length,2);
+  const normal=lines.find(line=>line.configuration.variant.id==='normal');
+  const large=lines.find(line=>line.configuration.variant.id==='large');
+  assert.ok(normal?.id&&large?.id);
+  const route=`sales/${sid}/items/${normal.id}/configured`,oldKey=next();
+  assert.equal((await x.write('a',route,{branchId:'branch-a',quantity:2},{method:'PUT',key:oldKey})).status,200);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',quantity:3},{method:'PUT'})).status,200);
+  const replay=await x.write('a',route,{branchId:'branch-a',quantity:2},{method:'PUT',key:oldKey});
+  assert.equal(replay.status,200);
+  assert.equal(replay.body.sale.items.find(item=>item.id===normal.id).quantity,3);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',quantity:4},{method:'PUT',key:oldKey})).status,409,
+    'same request ID cannot apply a different configured quantity');
+  const largeRoute=`sales/${sid}/items/${large.id}/configured`,removeKey=next();
+  assert.equal((await x.write('a',largeRoute,{branchId:'branch-a'},{method:'DELETE',key:removeKey})).status,200);
+  const again=await addItem('large');assert.equal(again.status,200);
+  const newLarge=again.body.sale.items.find(line=>line.configuration.variant.id==='large');
+  assert.ok(newLarge?.id && newLarge.id!==large.id);
+  const stale=await x.write('a',largeRoute,{branchId:'branch-a'},{method:'DELETE',key:removeKey});
+  assert.equal(stale.status,200);
+  assert.equal(stale.body.sale.items.length,2);
+  assert.equal(stale.body.sale.items.find(item=>item.id===newLarge.id).quantity,1);
+  assert.equal(stale.body.sale.items.find(item=>item.id===normal.id).quantity,3);
+  const parent=await x.db.prepare('SELECT quantity_milli AS qty FROM sale_items WHERE sale_id=?').bind(sid).first();
+  assert.equal(parent.qty,4000,'shared physical parent mirrors its configured children exactly');
+  assert.equal((await x.write('b',route,{branchId:'branch-b',quantity:2},{method:'PUT',who:x.other})).status,404);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',quantity:2},{method:'PUT',who:x.viewer})).status,403);
+ }finally{x.close();}
 });
