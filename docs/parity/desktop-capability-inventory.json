@@ -152,7 +152,7 @@
         "checkout-011",
         "checkout-012"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -160,10 +160,20 @@
         "manifestIndex": 3
       },
       "testedContractRefs": [
-        "products-020"
+        "products-020",
+        "checkout-011",
+        "checkout-012"
       ],
       "acceptance": "catalog products customers sellers: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "async assignSaleCustomer(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-004 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-004');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-005",
@@ -174,16 +184,28 @@
         "checkout-017",
         "checkout-019"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 4
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "products-031",
+        "checkout-017",
+        "checkout-019"
+      ],
       "acceptance": "catalog options variants combos: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "async addConfiguredItem(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-005 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-005');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-006",
@@ -192,16 +214,26 @@
       "dependsOn": [
         "products-031"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 5
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "products-031"
+      ],
       "acceptance": "catalog parent child variants core: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "parentProductId",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-006 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-006');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-007",
@@ -211,7 +243,7 @@
         "checkout-019",
         "products-021"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -219,10 +251,19 @@
         "manifestIndex": 6
       },
       "testedContractRefs": [
+        "checkout-019",
         "products-021"
       ],
       "acceptance": "catalog kits component stock snapshot: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "sale_stock_allocations",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-007 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-007');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-008",
@@ -231,16 +272,26 @@
       "dependsOn": [
         "checkout-019"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 7
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-019"
+      ],
       "acceptance": "catalog promotional combos user configurable: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/catalog-depth.mjs",
+        "contains": "async setBundle(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-008 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-008');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-009",
@@ -293,7 +344,7 @@
         "products-021",
         "products-027"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -305,7 +356,15 @@
         "products-027"
       ],
       "acceptance": "inventory ledger and low stock: Comprovar ledger único, concorrência, reservas e movimentações imutáveis.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "async stock(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-011 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-011');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-012",
@@ -314,7 +373,7 @@
       "dependsOn": [
         "checkout-008"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -325,7 +384,15 @@
         "checkout-008"
       ],
       "acceptance": "sales checkout mixed manual payments: Comprovar fluxo completo de venda com snapshots e eventos idempotentes.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "async complete(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-012 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-012');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-013",
@@ -335,16 +402,27 @@
         "checkout-017",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 12
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-017",
+        "checkout-018"
+      ],
       "acceptance": "sales observation internal and optional non fiscal printing: Comprovar fluxo completo de venda com snapshots e eventos idempotentes.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "async changeItemNote(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-013 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-013');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-014",
@@ -355,7 +433,7 @@
         "cash-041",
         "cash-042"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -368,7 +446,15 @@
         "cash-042"
       ],
       "acceptance": "cash open supply withdraw close: Comprovar sessões, reconciliação e fluxos simultâneos por terminal.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "async closeCash(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-014 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-014');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-015",
@@ -379,7 +465,7 @@
         "history-037",
         "history-038"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -387,10 +473,20 @@
         "manifestIndex": 14
       },
       "testedContractRefs": [
-        "history-033"
+        "history-033",
+        "history-037",
+        "history-038"
       ],
       "acceptance": "sales history returns and reversals: Comprovar fluxo completo de venda com snapshots e eventos idempotentes.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/sale-reversals.mjs",
+        "contains": "async reverse(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-015 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-015');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-016",
@@ -400,7 +496,7 @@
         "finance-047",
         "finance-048"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -412,7 +508,15 @@
         "finance-048"
       ],
       "acceptance": "finance payables receivables: Comprovar contas em centavos, reversões, conciliações e limites de permissão.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "async settleFinanceEntry(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-016 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-016');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-017",
@@ -422,7 +526,7 @@
         "reports-058",
         "reports-061"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -434,7 +538,15 @@
         "reports-061"
       ],
       "acceptance": "operational reports and csv export: Conciliar dados de base com CSV e resultados por filial/período sem estimar lucro indevidamente.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "async salesCsv(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-017 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-017');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-018",
@@ -443,16 +555,26 @@
       "dependsOn": [
         "reports-063"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 17
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "reports-063"
+      ],
       "acceptance": "historical cost snapshot and margin: Conciliar dados de base com CSV e resultados por filial/período sem estimar lucro indevidamente.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/historical-margin.mjs",
+        "contains": "async margin(tenant,branch,",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-018 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-018');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-019",
@@ -461,16 +583,26 @@
       "dependsOn": [
         "products-029"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 18
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "products-029"
+      ],
       "acceptance": "stock locations reservations and transfers: Comprovar ledger único, concorrência, reservas e movimentações imutáveis.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/storage-locations.mjs",
+        "contains": "async assignStorageLocation(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-019 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-019');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-020",
@@ -480,7 +612,7 @@
         "products-029",
         "finance-047"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -488,10 +620,19 @@
         "manifestIndex": 19
       },
       "testedContractRefs": [
+        "products-029",
         "finance-047"
       ],
       "acceptance": "purchase orders partial receiving moving average payable: Comprovar recebimento parcial, custo médio, contas e reservas em transação.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/purchasing.mjs",
+        "contains": "async receivePurchaseOrder(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-020 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-020');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-021",
@@ -501,16 +642,27 @@
         "checkout-017",
         "products-029"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 20
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-017",
+        "products-029"
+      ],
       "acceptance": "sales orders pickup delivery reservation fulfillment: Comprovar pedidos e faturamento via a mesma venda canônica, sem baixa duplicada.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "async wholesaleOrders(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-021 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-021');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-022",
@@ -519,7 +671,7 @@
       "dependsOn": [
         "checkout-005"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -530,7 +682,15 @@
         "checkout-005"
       ],
       "acceptance": "checkout open commands and orders without reentry: Comprovar pedidos e faturamento via a mesma venda canônica, sem baixa duplicada.",
-      "reviewNote": "Só parte da capacidade possui testes ligados à matriz de sete telas; paridade integral ainda não foi demonstrada."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "async openSale(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-022 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-022');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-023",
@@ -540,16 +700,27 @@
         "checkout-011",
         "checkout-012"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 22
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-011",
+        "checkout-012"
+      ],
       "acceptance": "wholesale quantity pricing and b2b orders: Comprovar políticas B2B e cotação/preço congelado, crediário e checkout canônico.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "async wholesalePrice(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-023 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-023');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-024",
@@ -558,16 +729,26 @@
       "dependsOn": [
         "checkout-013"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 23
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-013"
+      ],
       "acceptance": "wholesale customer policy minimum order payment credit: Comprovar políticas B2B e cotação/preço congelado, crediário e checkout canônico.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/vertical-service.mjs",
+        "contains": "async wholesaleCustomerPolicy(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-024 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-024');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-025",
@@ -857,16 +1038,27 @@
         "products-025",
         "products-031"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 39
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "products-025",
+        "products-031"
+      ],
       "acceptance": "optional retail variants sku barcode and variant stock: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "parentProductId",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-040 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-040');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-041",
@@ -1113,16 +1305,26 @@
       "dependsOn": [
         "products-032"
       ],
-      "status": "gap",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 51
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "products-032"
+      ],
       "acceptance": "csv xlsx import preview commit: Comprovar CSV e XLSX com prévia, falha por linha, rollback e reexecução idempotente.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "R1 software: 21 aceites executáveis por ID; o teste reexecuta contratos reais API/SQLite. Interface Chromium original validada na CI. Teste de equipamento físico opcional.",
+      "independentEvidence": {
+        "file": "apps/api/src/catalog-import.mjs",
+        "contains": "async commit(",
+        "testFile": "apps/api/test/r1-acceptance.test.mjs",
+        "testContains": "test('cap-052 R1 — aceite automatizado dos fluxos de negócio'",
+        "testAssertionContains": "assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-052');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-053",

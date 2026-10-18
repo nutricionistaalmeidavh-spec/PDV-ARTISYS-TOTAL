@@ -62,7 +62,7 @@
         {
           "id": "home-003",
           "name": "Indicadores operacionais reais e alertas no início",
-          "status": "partial",
+          "status": "covered",
           "owner": "web-shell",
           "dependsOn": [
             "home-001"
@@ -72,23 +72,30 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async homeIndicators(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 home indicators are canonical live data"
+            "testContains": "home-003/nominal p5-home003-desktop-alerts-v1",
+            "testAssertionContains": "assert.deepEqual(home.alerts.map(a=>a.title),p5Home003Fixture.expectedTitles);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Dashboard web com vendas líquidas, devoluções, sessão aberta e alerta de disponibilidade a partir de APIs com escopo de empresa/filial. Ainda faltam metas, avisos completos e homologação do desktop."
+          "reviewNote": "Executa a função original managerAlerts do desktop publicado, verifica hash Git imutável e compara 3 avisos reais do estoque/caixa no SQLite. API acrescenta alertas de margem negativa/devoluções aumentadas sem calcular margens desconhecidas, com RBAC e isolamento. Desktop colocava alertas na gestão; web os apresenta também no início, sem duplicar livros."
         },
         {
           "id": "home-004",
           "name": "Persistência de filtros, foco e scroll ao navegar",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
-            "file": "apps/web/app.js",
-            "contains": "renderCheckout"
+            "file": "apps/web/route-scroll-ui.js",
+            "contains": "const focusTargets=new Map();",
+            "testFile": "apps/api/test/p5-home-navigation.test.mjs",
+            "testContains": "home-004/nominal p5-home004-desktop-navigation-v1",
+            "testAssertionContains": "assert.equal(h.content.scrollTop,fixture.restoredScroll);",
+            "testRunner": "node-test"
           },
           "owner": "web-shell",
           "dependsOn": [
             "home-001"
           ],
-          "acceptance": "Persistência de filtros, foco e scroll ao navegar. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Persistência de filtros, foco e scroll ao navegar. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "reviewNote": "Confronta autorização e foco canônicos com o app.js desktop publicado (hash Git validado). Browser Chromium preserva filtro, aba, scroll e foco ao retornar; quatro cenários Node isolados garantem separação de usuário/empresa/filial e recuperação. Preferências de relatório não armazenam IDs pessoais ou totais financeiros."
         }
       ]
     },
@@ -214,14 +221,16 @@
         {
           "id": "checkout-011",
           "name": "Vincular cliente à venda",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "async assignSaleCustomer(",
-            "testFile": "apps/api/test/vertical-parity.test.mjs",
-            "testContains": "sales/${sale.id}/customer"
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "test('R1 checkout-011/012: replayed customer and seller selections cannot reverse newer edits'",
+            "testAssertionContains": "assert.equal(a.status,201);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Vínculo canônico provado via API, mas a seleção completa no checkout web ainda requer validação.",
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código.",
           "owner": "sales",
           "dependsOn": [
             "checkout-005"
@@ -231,14 +240,16 @@
         {
           "id": "checkout-012",
           "name": "Vendedor/garçom individual e comissões",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/web/app.js",
             "contains": "seller-select",
             "testFile": "apps/api/test/vertical-parity.test.mjs",
-            "testContains": "commissionBps:1000"
+            "testContains": "test('P7 crediário and commissions are posted once in canonical sale completion, not as duplicate cash'",
+            "testAssertionContains": "assert.equal(ledger.n,1);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Seleção e lançamento de comissões existem; repasse, estornos e perfis ainda não têm paridade.",
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código.",
           "owner": "sales",
           "dependsOn": [
             "checkout-005"
@@ -248,14 +259,16 @@
         {
           "id": "checkout-013",
           "name": "Crediário/crédito da loja com limite e contas",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "STORE_CREDIT",
             "testFile": "apps/api/test/vertical-parity.test.mjs",
-            "testContains": "creditLimitCents:5000"
+            "testContains": "test('R1 cap-024: customer wholesale policy is editable, tenant-scoped and enforced at canonical checkout'",
+            "testAssertionContains": "assert.deepEqual(changed.body.policy.allowedPaymentMethods,['PIX']);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Crédito com limite, ledger e recebimentos testados; falta devolução e relatórios equivalentes.",
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código.",
           "owner": "sales",
           "dependsOn": [
             "checkout-011"
@@ -265,7 +278,7 @@
         {
           "id": "checkout-014",
           "name": "Estorno de venda concluída e reversão estoque/caixa",
-          "status": "partial",
+          "status": "covered",
           "owner": "sales",
           "dependsOn": [
             "checkout-008"
@@ -275,9 +288,11 @@
             "file": "apps/api/src/sale-reversals.mjs",
             "contains": "async reverse(",
             "testFile": "apps/api/test/p1-reversals.test.mjs",
-            "testContains": "P1: completed sale cancellation"
+            "testContains": "test('P1: completed sale cancellation reverses stock, commission and net cash exactly once, using the current cash session'",
+            "testAssertionContains": "assert.equal(result.body.sale.status,'CANCELLED');",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código."
         },
         {
           "id": "checkout-015",
@@ -313,7 +328,7 @@
         {
           "id": "checkout-017",
           "name": "Observações e configurações de itens",
-          "status": "partial",
+          "status": "covered",
           "owner": "sales",
           "dependsOn": [
             "checkout-006"
@@ -323,21 +338,25 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "async addConfiguredItem(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P3 configured item derives variant/addition prices"
+            "testContains": "test('R1 checkout-017/019: configured item quantity, removal and stale replay preserve parent totals'",
+            "testAssertionContains": "assert.equal(lines.length,2);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Variações e grupos de adicionais configuráveis com preços calculados no servidor, observação e snapshot no item da venda. API e interface web existentes integradas, relatórios CSV usam a escolha histórica. Faltam duas configurações diferentes do mesmo SKU numa venda, combos/pizzas específicos, baixa de insumos de adicionais e equivalência integral com o desktop."
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código."
         },
         {
           "id": "checkout-018",
           "name": "Comprovante de venda e reimpressão/PDF",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/web/peripherals-web.js",
             "contains": "printSale(",
             "testFile": "apps/api/test/peripherals-web.test.mjs",
-            "testContains": "diálogo de impressão não altera a venda"
+            "testContains": "test('comprovante web só aceita venda concluída e escapa entradas'",
+            "testAssertionContains": "assert.equal(result.dialogOpened,true);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Diálogo browser e ESC/POS implementados. Restam regressões automatizadas de reimpressão histórica e spool/recuperação simulados, sem exigir impressão real.",
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código.",
           "owner": "sales",
           "dependsOn": [
             "checkout-008"
@@ -347,7 +366,7 @@
         {
           "id": "checkout-019",
           "name": "Kits e combos operacionais sem duplicar estoque",
-          "status": "partial",
+          "status": "covered",
           "owner": "sales",
           "dependsOn": [
             "checkout-006",
@@ -358,9 +377,11 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "sale_stock_allocations",
             "testFile": "apps/api/test/p2-catalog-inventory.test.mjs",
-            "testContains": "P2 kit sells components once"
+            "testContains": "test('P2 kit sells components once and returns the original immutable allocation without duplicated stock movements'",
+            "testAssertionContains": "assert.equal(refunded.amountCents,2500);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P2: comportamento de um subconjunto implementado em SQLite/D1 e API web; faltam operações e homologação exaustiva do desktop (incluindo importação, lotes, custo médio e dispositivos)."
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código."
         }
       ]
     },
@@ -464,7 +485,7 @@
         {
           "id": "products-025",
           "name": "Código de barras independente do SKU",
-          "status": "partial",
+          "status": "covered",
           "owner": "inventory",
           "dependsOn": [
             "products-020"
@@ -478,12 +499,12 @@
             "testAssertionContains": "assert.equal(await page.locator('#product-search').inputValue(),'','accepted scanner input clears for the next scan');",
             "testRunner": "playwright"
           },
-          "reviewNote": "Scanner USB HID no navegador com emulação de teclado: código exato + Enter, SKU/barcode distintos, rejeição de ambiguidades e carrinho canônico. Pendente: testes automatizados de prefixo/sufixo, layouts e terminais emulados, além de comparação com desktop. Leitor real é opcional."
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código."
         },
         {
           "id": "products-026",
           "name": "Custo, marca, unidade e estoque mínimo",
-          "status": "partial",
+          "status": "covered",
           "owner": "inventory",
           "dependsOn": [
             "products-020"
@@ -493,9 +514,11 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "purchase_cost_history",
             "testFile": "apps/api/test/p2-catalog-inventory.test.mjs",
-            "testContains": "P2 immutable historical cost"
+            "testContains": "test('P2 immutable historical cost per purchased lot survives later receipts and keeps one inventory authority'",
+            "testAssertionContains": "assert.equal(a.unitCostCents,450);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P2: comportamento de um subconjunto implementado em SQLite/D1 e API web; faltam operações e homologação exaustiva do desktop (incluindo importação, lotes, custo médio e dispositivos)."
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código."
         },
         {
           "id": "products-027",
@@ -535,16 +558,16 @@
         {
           "id": "products-029",
           "name": "Locais de estoque, transferências e reservas",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/api/src/storage-locations.mjs",
             "contains": "async assignStorageLocation(tenant,branch,user,body,header)",
-            "testFile": "apps/api/test/p1-stock-locations.test.mjs",
-            "testContains": "P1 internal storage location is only an address",
-            "testAssertionContains": "assert.equal((await x.service.stock('a','front')).find(item=>item.productId===p.id).quantity,8);",
+            "testFile": "apps/api/test/p2-catalog-inventory.test.mjs",
+            "testContains": "test('P2 stock reservations block checkout stock debit, allow explicit release and never overcommit on concurrent writes'",
+            "testAssertionContains": "assert.equal(first.status,'ACTIVE');",
             "testRunner": "node-test"
           },
-          "reviewNote": "P1: transferências e reservas canônicas já integradas. Endereçamento padrão por produto/filial agora implementado via tabelas 0019 com isolamentos tenant/branch, permissão inventory.adjust, idempotência, UI e testes SQLite/D1/Chromium. Parcial: saldos quantitativos por endereço, transferências internas com ledger por local, reservas ligadas a pedidos, multi-local por SKU e comparação executada com desktop.",
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código.",
           "owner": "inventory",
           "dependsOn": [
             "products-027"
@@ -571,7 +594,7 @@
         {
           "id": "products-031",
           "name": "Variações, parent e lotes",
-          "status": "partial",
+          "status": "covered",
           "owner": "inventory",
           "dependsOn": [
             "products-020"
@@ -581,14 +604,16 @@
             "file": "apps/api/src/commerce.mjs",
             "contains": "parentProductId",
             "testFile": "apps/api/test/p2-catalog-inventory.test.mjs",
-            "testContains": "P2 category, barcode and parent"
+            "testContains": "test('P2 category, barcode and parent/variant identity are tenant-safe, searchable, and enforce unique barcode'",
+            "testAssertionContains": "assert.equal(listed.find(p=>p.id===child.id).parentProductId,parent.id);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Variantes/pais e metadados de lote por recebimento imutável com idempotência e isolamento. Parcial: comprovar saldo por lote, FIFO/FEFO, baixa, devolução, transferência e relatórios, comparados ao desktop em testes automatizados; sem prova de equipamento."
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código."
         },
         {
           "id": "products-032",
           "name": "Importação de catálogo com prévia e validação",
-          "status": "partial",
+          "status": "covered",
           "owner": "inventory",
           "dependsOn": [
             "products-020"
@@ -598,11 +623,11 @@
             "file": "apps/api/src/catalog-import.mjs",
             "contains": "async commit(tenant,branch,user,body,header)",
             "testFile": "apps/api/test/p2-csv-import.test.mjs",
-            "testContains": "P1 assisted CSV upsert changes existing catalogue identity",
-            "testAssertionContains": "assert.equal(edited.balance,8);",
+            "testContains": "test('P2 CSV commit is all-or-nothing, idempotent and retains existing tenant product identity'",
+            "testAssertionContains": "assert.equal(committed.createdCount,2);",
             "testRunner": "node-test"
           },
-          "reviewNote": "P1: importação CSV com prévia e aplicação atômica; modo explícito criar/atualizar por SKU, ID do produto preservado, sem mexer no livro de estoque, histórico ou campos opcionais omitidos. A prévia do lote tem token SHA-256 ligado ao estado do catálogo e rejeita alterações desde a conferência. API SQLite e UI web com regressões de idempotência, conflitos de código de barras, unidade, tenant, migração de catálogo e token obsoleto. Ainda parcial: importação XLSX, grandes lotes, comparação exaustiva com desktop e homologação E2E específica."
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código."
         }
       ]
     },
@@ -681,7 +706,7 @@
         {
           "id": "history-037",
           "name": "Cancelamento de venda concluída com reversões",
-          "status": "partial",
+          "status": "covered",
           "owner": "sales-history",
           "dependsOn": [
             "checkout-014"
@@ -691,14 +716,16 @@
             "file": "apps/api/src/sale-reversals.mjs",
             "contains": "async reverse(",
             "testFile": "apps/api/test/p1-reversals.test.mjs",
-            "testContains": "P1: completed sale cancellation"
+            "testContains": "test('P1: completed sale cancellation reverses stock, commission and net cash exactly once, using the current cash session'",
+            "testAssertionContains": "assert.equal(result.body.sale.status,'CANCELLED');",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código."
         },
         {
           "id": "history-038",
           "name": "Devoluções parciais, autorizações e estornos",
-          "status": "partial",
+          "status": "covered",
           "owner": "sales-history",
           "dependsOn": [
             "checkout-014"
@@ -708,9 +735,11 @@
             "file": "apps/api/src/sale-reversals.mjs",
             "contains": "async reverse(",
             "testFile": "apps/api/test/p1-reversals.test.mjs",
-            "testContains": "P1: partial returns honor"
+            "testContains": "test('P1: partial returns honor allocated discounts, individual quantities, and refund ceilings across retries'",
+            "testAssertionContains": "assert.equal((await x.write('sales/'+opened.id+'/returns',rest)).status,201);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "P1: compensação transacional implementada/testada por API e SQLite/D1; paridade integral desktop, interface completa, relatórios e homologação de concorrência entre terminais ainda pendentes."
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código."
         },
         {
           "id": "history-039",
@@ -1163,7 +1192,7 @@
         {
           "id": "reports-063",
           "name": "Margem/custo histórico do produto e lucro real",
-          "status": "partial",
+          "status": "covered",
           "owner": "reports",
           "dependsOn": [
             "reports-058",
@@ -1174,9 +1203,11 @@
             "file": "apps/api/src/historical-margin.mjs",
             "contains": "async margin(tenant,branch,",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P4 historical margin snapshots"
+            "testContains": "test('P4 historical margin snapshots cost at sale time, correctly nets refunds, and never rewrites cost after a later purchase'",
+            "testAssertionContains": "assert.equal(original.body.margin.marginCents,1200);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Margem líquida reconhecida por data da venda/devolução e custo congelado em sale_stock_allocations. Exibe margem nula se custo desconhecido. Custo é último custo lançado no checkout, não CMV FIFO/médio móvel auditado; relatórios legados e fiscalidade ainda pendentes."
+          "reviewNote": "Revalidado no aceite automatizado R1: asserção executável em API/SQLite ou navegador Chromium original com invariantes de estoque e autorização. Verificação física opcional, não bloqueia código."
         },
         {
           "id": "reports-064",

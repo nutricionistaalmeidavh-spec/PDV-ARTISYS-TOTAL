@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "p5-home004-desktop-navigation-v1",
+  "desktop": {
+    "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+    "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+    "file": "desktop/renderer/app.js",
+    "anchors": [
+      "if (!canAccessRoute(route)) route = 'home';",
+      "await renderRoute(); content.focus({ preventScroll: true });"
+    ],
+    "reportFile": "desktop/renderer/reporting-v2.js",
+    "reportBlob": "1d94a45df9bb6eff2082abeb9536ced2a559606a"
+  },
+  "contextA": "tenant-a|branch-a|user-a",
+  "contextB": "tenant-b|branch-b|user-b",
+  "route": "reports",
+  "selectedTab": "products",
+  "restoredScroll": 185,
+  "excludedPrivateKeys": [
+    "customerId",
+    "sellerId",
+    "sale",
+    "token",
+    "netSalesCents"
+  ],
+  "expected": {
+    "restoreSameContext": true,
+    "restoreOtherContext": false,
+    "focusSelectedTab": true,
+    "retainDateRangeAfterRouteReturn": true
+  },
+  "limitations": "Desktop preserved canonical route authorization, focus and report filters. Web provides scoped scroll persistence without cross-context leakage; no stateful desktop database is copied."
+}

@@ -50,14 +50,16 @@
 
     const sequence = ++renderSequence;
     const previousRoute = activeRoute;
+    // Only public session context IDs, never tokens or sales data, reach lifecycle handlers.
+    const scope=typeof context.navigationScope==='string'?context.navigationScope:'';
     if (previousRoute && previousRoute !== id) lifecycle.unmounted(previousRoute, { nextRoute:id });
-    lifecycle.beforeRoute(id, { previousRoute, owner:entry.owner });
+    lifecycle.beforeRoute(id, { previousRoute, owner:entry.owner, scope });
 
     try {
       const result = await entry.render(context);
       if (sequence !== renderSequence) return result;
       activeRoute = id;
-      lifecycle.mounted(id, { previousRoute, owner:entry.owner });
+      lifecycle.mounted(id, { previousRoute, owner:entry.owner, scope });
       return result;
     } catch (error) {
       if (sequence === renderSequence) lifecycle.emit('route:error', { route:id, previousRoute, owner:entry.owner, error });

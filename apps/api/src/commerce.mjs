@@ -963,7 +963,9 @@ export function createCommerceService(db,{now=nowISO}={}){
     async homeIndicators(tenant,branch,{asOf=stamp().slice(0,10)}={}){
       period({from:asOf,to:asOf});
       const month=asOf.slice(0,7);
-      const [report,open,coverage,monthlyReport,goal,targetedGross,targetedRefunds]=await Promise.all([
+      const previousDay=new Date(Date.parse(asOf+'T00:00:00.000Z')-86400000)
+        .toISOString().slice(0,10);
+      const [report,open,coverage,monthlyReport,goal,targetedGross,targetedRefunds,divergentCash,previousRefunds,margin]=await Promise.all([
         this.reports(tenant,branch,{from:asOf,to:asOf}),
         first("SELECT COUNT(*) AS n FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND status='OPEN'",tenant,branch),
         this.reportStockCoverage(tenant,branch,{asOf,days:30}),
@@ -991,11 +993,41 @@ export function createCommerceService(db,{now=nowISO}={}){
           AND m.user_id=t.seller_id AND m.active=1
           WHERE r.tenant_id=? AND r.branch_id=?
           AND r.created_at>=? AND r.created_at<=?`,
-          month,tenant,branch,month+'-01T00:00:00.000Z',asOf+'T23:59:59.999Z')
+          month,tenant,branch,month+'-01T00:00:00.000Z',asOf+'T23:59:59.999Z'),
+        first(`SELECT COUNT(*) AS count,COALESCE(SUM(divergence_cents),0) AS divergenceCents
+          FROM cash_sessions WHERE tenant_id=? AND branch_id=?
+          AND status='CLOSED' AND divergence_cents<>0 AND closed_at>=?
+          AND closed_at<=?`,tenant,branch,asOf+'T00:00:00.000Z',asOf+'T23:59:59.999Z'),
+        first(`SELECT COALESCE(SUM(amount_cents),0) AS amountCents FROM sale_returns
+          WHERE tenant_id=? AND branch_id=? AND created_at>=? AND created_at<=?`,
+          tenant,branch,previousDay+'T00:00:00.000Z',previousDay+'T23:59:59.999Z'),
+        this.marginReport(tenant,branch,{from:asOf,to:asOf})
       ]);
       const monthlyTargetCents=goal?.count?goal.totalCents:null;
       const targetedSellerNetCents=(targetedGross?.amountCents||0)-(targetedRefunds?.amountCents||0);
-      return {asOf,salesCount:report.sales.count,
+      // Match the original desktop management alert predicates. All inputs
+      // come from the branch-scoped canonical ledgers, never from cached UI.
+      const negativeMarginCount=margin.products.filter(p=>
+        p.marginCents!=null&&p.revenueCents>0&&p.marginCents<0).length;
+      const alerts=[];
+      if(coverage.zeroOrReservedOut>0)alerts.push({code:'ZERO_STOCK',title:'Produtos sem estoque',
+        count:coverage.zeroOrReservedOut,route:'inventory'});
+      if(coverage.belowMinimum>0)alerts.push({code:'BELOW_MINIMUM',title:'Estoque abaixo do mínimo',
+        count:coverage.belowMinimum,route:'reports'});
+      if(Number(divergentCash.count)>0)alerts.push({code:'CASH_DIVERGENCE',title:'Divergência de caixa',
+        count:Number(divergentCash.count),amountCents:Number(divergentCash.divergenceCents),route:'cash'});
+      if(negativeMarginCount>0)alerts.push({code:'NEGATIVE_MARGIN',title:'Margem negativa',
+        count:negativeMarginCount,route:'reports'});
+      if(report.sales.refundedCents>Number(previousRefunds.amountCents||0))
+        alerts.push({code:'REFUNDS_INCREASED',title:'Devoluções aumentaram',
+          amountCents:report.sales.refundedCents,
+          previousAmountCents:Number(previousRefunds.amountCents||0),route:'reports'});
+      return {asOf,alerts,
+        divergentCashCount:Number(divergentCash.count||0),
+        divergentCashCents:Number(divergentCash.divergenceCents||0),
+        negativeMarginCount,
+        previousDayRefundsCents:Number(previousRefunds.amountCents||0),
+        salesCount:report.sales.count,
         netSalesCents:report.sales.totalCents,
         refundedCents:report.sales.refundedCents,
         cashOpen:Boolean(open?.n),activeCashTerminals:Number(open?.n||0),
