@@ -284,9 +284,13 @@ function proveCapability(id){
       const matcher=selected.map(escaped).join('|');
       // Run only selected, real integration tests against their own fresh SQLite
       // instances; this is a separate explicit R1 regression gate.
+      // Node's parent test runner exports NODE_TEST_CONTEXT=child-v8.
+      // It must not leak into a distinct child test-runner instance: that
+      // environment would silently suppress its TAP output (false green).
+      const env={...process.env};delete env.NODE_TEST_CONTEXT;
       const result=execFileSync(process.execPath,[
         '--experimental-sqlite','--test','--test-name-pattern='+matcher,resolve(ROOT,file)
-      ],{cwd:ROOT,encoding:'utf8',timeout:180000,maxBuffer:16*1024*1024});
+      ],{cwd:ROOT,env,encoding:'utf8',timeout:180000,maxBuffer:16*1024*1024});
       assert.match(result,/# fail 0(?:\r?\n|$)/,'Fluxos de '+file+' falharam');
       stdoutByFile.set(file,result);
     }
