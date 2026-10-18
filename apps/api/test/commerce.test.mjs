@@ -1256,3 +1256,119 @@ test('P1 restored category management API enforces tenant scope and products.man
    assert.equal(all.body.categories[0].name,'Categoria renomeada');
  }finally{x.close();}
 });
+
+// Cross-platform certification is executable evidence, not an imported-file assertion.
+// Original modules below have immutable blob IDs from PDV-ARTISYS@7efea9c.
+const certifiedCheckoutFixture=JSON.parse(readFileSync(
+  new URL('../../../docs/parity/fixtures/checkout-core-desktop-v1.json',import.meta.url),'utf8'
+));
+const originalRequire=createRequire(import.meta.url);
+const desktopPricing=originalRequire('../../../packages/core/js/domains/sales/pricing.js');
+const desktopPayments=originalRequire('../../../packages/core/js/domains/payments/payment-rules.js');
+const desktopAuthorization=originalRequire('../../../packages/core/js/core/auth/authorization-service.js');
+const desktopProfiles=originalRequire('../../../packages/core/js/core/auth/default-profiles.js');
+function assertCheckoutDesktopSourcePinned(){
+  assert.equal(certifiedCheckoutFixture.desktop.commit,'7efea9c61f75be1536a1e516e917218f2b8bf2bf');
+  assert.equal(certifiedCheckoutFixture.desktop.repo,'nutricionistaalmeidavh-spec/PDV-ARTISYS');
+  for(const [file,expectedHash] of Object.entries(certifiedCheckoutFixture.desktop.sourceBlobs)){
+    const bytes=readFileSync(new URL('../../../packages/core/'+file,import.meta.url));
+    const sha=createHash('sha1').update('blob '+bytes.length+'\0').update(bytes).digest('hex');
+    assert.equal(sha,expectedHash,'Original desktop blob drifted: '+file);
+  }
+}
+function checkoutGolden(id){
+  const row=certifiedCheckoutFixture.cases.find(c=>c.id===id);
+  assert.ok(row,'missing golden vector '+id);
+  return row;
+}
+
+test('checkout-007/nominal checkout-discount-desktop-nominal-v1 compares desktop and authoritative SQL',async()=>{
+  assertCheckoutDesktopSourcePinned();
+  const vector=checkoutGolden('checkout-discount-desktop-nominal-v1');
+  const reference=desktopPricing.calculateSaleTotals(vector.input);
+  assert.deepEqual(reference,vector.expected);
+  const x=await setup();
+  try{
+    const productId=await x.id('Desktop discount','P0-DISCOUNT',2);
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(opened.status,201,opened.body.error);
+    const saleId=opened.body.sale.id;
+    const added=await x.write('a','sales/'+saleId+'/items',{branchId:'branch-a',productId,quantity:1});
+    assert.equal(added.status,200,added.body.error);
+    const applied=await x.write('a','sales/'+saleId+'/discount',{
+      branchId:'branch-a',discountCents:vector.input.discountCents
+    });
+    assert.equal(applied.status,200,applied.body.error);
+    const observed={subtotalCents:applied.body.sale.subtotalCents,
+      discountCents:applied.body.sale.discountCents,totalCents:applied.body.sale.totalCents};
+    assert.deepEqual(observed,reference,'API/SQLite totals match the pinned desktop golden vector');
+    const persisted=await x.db.prepare('SELECT discount_cents AS cents FROM sales WHERE id=? AND tenant_id=?')
+      .bind(saleId,'a').first();
+    assert.equal(persisted.cents,reference.discountCents);
+  }finally{x.close();}
+});
+
+test('checkout-007/authorization checkout-discount-desktop-authorization-v1 compares original role policy with API',async()=>{
+  assertCheckoutDesktopSourcePinned();
+  const vector=checkoutGolden('checkout-discount-desktop-authorization-v1');
+  const originalAuth=desktopAuthorization.createAuthorizationService({
+    resolvePermissions:p=>desktopProfiles.DEFAULT_PROFILE_PERMISSIONS[
+      p.id==='permitted'?vector.permittedProfile:vector.deniedProfile
+    ]
+  });
+  assert.equal(originalAuth.can({principal:{kind:'human',id:'permitted'},capability:vector.capability}),true);
+  assert.equal(originalAuth.can({principal:{kind:'human',id:'denied'},capability:vector.capability}),false);
+  const x=await setup();
+  try{
+    const productId=await x.id('Desktop RBAC','P0-AUTH',2);
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(opened.status,201,opened.body.error);
+    const saleId=opened.body.sale.id;
+    const added=await x.write('a','sales/'+saleId+'/items',{branchId:'branch-a',productId,quantity:1});
+    assert.equal(added.status,200,added.body.error);
+    const before=await x.db.prepare('SELECT discount_cents AS cents FROM sales WHERE id=?').bind(saleId).first();
+    const denied=await x.write('a','sales/'+saleId+'/discount',
+      {branchId:'branch-a',discountCents:150},{who:x.viewer});
+    assert.equal(denied.status,vector.expectedDeniedHttp);
+    const after=await x.db.prepare('SELECT discount_cents AS cents FROM sales WHERE id=?').bind(saleId).first();
+    assert.deepEqual(after,before,'denial cannot mutate financial records');
+    const accepted=await x.write('a','sales/'+saleId+'/discount',
+      {branchId:'branch-a',discountCents:150});
+    const observed={authorized:accepted.status===vector.expectedAllowedHttp,
+      denied:denied.status===vector.expectedDeniedHttp,unmodified:after.cents===before.cents};
+    const reference={authorized:true,denied:true,unmodified:true};
+    assert.deepEqual(observed,reference,'API permissions and invariance match byte-pinned desktop roles');
+  }finally{x.close();}
+});
+
+test('checkout-008/nominal checkout-payment-desktop-nominal-v1 compares mixed tender and cash ledger',async()=>{
+  assertCheckoutDesktopSourcePinned();
+  const vector=checkoutGolden('checkout-payment-desktop-nominal-v1');
+  const reference=desktopPayments.resolvePayment(vector.input);
+  assert.deepEqual(reference,vector.expected);
+  const x=await setup();
+  try{
+    const productId=await x.id('Desktop mixed payment','P0-MIXED',2);
+    const cash=await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+    assert.equal(cash.status,201,cash.body.error);
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(opened.status,201,opened.body.error);
+    const saleId=opened.body.sale.id;
+    const added=await x.write('a','sales/'+saleId+'/items',{branchId:'branch-a',productId,quantity:1});
+    assert.equal(added.status,200,added.body.error);
+    const completed=await x.write('a','sales/'+saleId+'/complete',{
+      branchId:'branch-a',payments:vector.input.payments
+    });
+    assert.equal(completed.status,200,JSON.stringify(completed.body));
+    const payments=await x.db.prepare('SELECT COUNT(*) AS n FROM sale_payments WHERE sale_id=?')
+      .bind(saleId).first();
+    const netCash=await x.db.prepare(
+      "SELECT COALESCE(SUM(amount_cents),0) AS cents FROM cash_movements WHERE tenant_id='a' AND method='CASH'"
+    ).bind().first();
+    const observed={totalCents:completed.body.sale.totalCents,
+      changeCents:completed.body.sale.changeCents,storedPayments:payments.n,netCashCents:netCash.cents};
+    const expected={totalCents:reference.totalCents,changeCents:reference.changeDueCents,
+      storedPayments:vector.expectedStoredPayments,netCashCents:vector.expectedCashMovementCents};
+    assert.deepEqual(observed,expected,'API payment and persisted ledger equal the pinned desktop golden vector');
+  }finally{x.close();}
+});
