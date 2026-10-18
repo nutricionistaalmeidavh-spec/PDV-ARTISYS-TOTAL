@@ -785,7 +785,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "thermal-print-queue-and-retry: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "reviewNote": "Bridge SQLite idempotente com recuperação FAILED/UNCERTAIN e reimpressão manual de ID separado; testes simulados. Ainda falta comparar integralmente fila e reimpressão com driver do desktop, formatos específicos e tentativas canônicas em D1. Nenhuma alegação de impressão física.",
       "implementationEvidence": {
         "file": "tools/local-hardware-bridge/bridge.mjs",
         "contains": "createSpoolQueue",
@@ -809,7 +809,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared-artisys-printing-renderer-and-drivers: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "reviewNote": "Comprovante HTML/PDF e texto ESC/POS/bridge recebem identidade congelada canônica por venda. Renderizações de cozinha/caixa, rasterização de logo na térmica e equivalência integral de drivers permanecem sob revisão; equipamento físico é opcional.",
       "implementationEvidence": {
         "file": "tools/local-hardware-bridge/main.mjs",
         "contains": "const printer=",
@@ -833,7 +833,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared-artisys-serialport-peripheral-runtime: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "reviewNote": "WebSerial requer gesto explícito, invalida porta desconectada/errada e exige reconexão manual; teste injeta EIO e recuperação. Ainda faltam todas as variantes de protocolo/timeout do desktop e o contrato checkout-016.",
       "implementationEvidence": {
         "file": "apps/web/peripherals-web.js",
         "contains": "function serialApi",
@@ -858,7 +858,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "hardware-protocol-simulation-ci-and-recovery-tests: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "reviewNote": "Simulações cobrem fila persistente, falha, retry, restart incerto, isolamento do bridge e porta WebSerial EIO/reconnect. Testes de estresse por perfil, framing e os demais protocolos da referência desktop ainda sem cobertura integral certificada.",
       "implementationEvidence": {
         "file": "tools/local-hardware-bridge/bridge.mjs",
         "contains": "createSpoolQueue",
@@ -882,7 +882,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "non-fiscal-sale-prebill-kitchen-and-cash-printing: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "reviewNote": "Venda concluída imprime comprovante com snapshot servidor; checkout web permite pré-conta não fiscal sem finalizar. KDS já tem outbox imutável R4 de impressão; prova integral de tickets por cozinha e caixa em todos os perfis ainda pendente.",
       "implementationEvidence": {
         "file": "apps/web/peripherals-web.js",
         "contains": "function receiptHtml",
@@ -906,7 +906,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "configurable-non-fiscal-receipt-branding-name-address-phone-logo: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Logo PNG e identificação local de comprovante, sanitizados, persistidos por filial neste navegador e renderizados no diálogo/PDF; texto no bridge/ESC-POS. Ainda não sincroniza configurações de loja entre terminais nem replica snapshots canônicos/reimpressões do desktop; portanto parcial.",
+      "reviewNote": "Identificação de cupom (nome, endereço, telefone e PNG limitado) sincronizada pela API e persistida no banco por tenant/filial. Trigger na conclusão da venda congela a marca em snapshot imutável e reimpressão usa o histórico; teste isola empresas, RBAC e invalidade do PNG. Ainda falta certificação integral dos drivers específicos do desktop para logo raster no ESC/POS/thermal.",
       "implementationEvidence": {
         "file": "apps/web/peripherals-web.js",
         "contains": "function receiptHtml",
@@ -1308,7 +1308,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "versioned-hardware-compatibility-evidence: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Matriz versionada com tipos PRINTER/SCALE/DRAWER/SCANNER, protocolo emulado, sistemas operacionais, limitações e evidências executáveis. Nenhuma homologação física declarada. Ainda depende de checkout-016 parcial e exige revisão de equivalência integral com a referência desktop.",
+      "reviewNote": "Matriz de protocolo versionada com tipos PRINTER/SCALE/DRAWER/SCANNER e evidência emulada. Reforçados testes de EIO/repareamento e comprovantes canônicos; checkout-016 segue parcial e a equivalência de todos os protocolos do desktop não está certificada. FIELD_VERIFIED não alegado.",
       "implementationEvidence": {
         "file": "docs/parity/hardware-compatibility.json",
         "contains": "r3-hardware-contracts-2026-10-18",

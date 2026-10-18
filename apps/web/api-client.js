@@ -84,6 +84,7 @@
         else if(original.startsWith('/api/v1/finance-advanced/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/reports/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/sales'))operation=original.slice(apiRoot.length);
+        else if(original.startsWith('/api/v1/printing/'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/returns')operation='returns';
         else if(/^\/api\/v1\/(customers|suppliers|sellers|restaurant|recipes|onboarding|wholesale|commissions|credit)(\/|$)/.test(original))operation=original.slice(apiRoot.length);
         else throw new Error('Este módulo ainda não está disponível na versão online.');
@@ -189,6 +190,7 @@
       if(operation==='returns')return method==='GET'?value.returns:value.return;
       if(/^sales\/[^/]+\/returns\/quote$/.test(operation))return value.quote;
       if(/^sales\/[^/]+\/returns$/.test(operation))return method==='GET'?value.returns:value.result;
+      if(/^sales\/[^/]+\/(receipt|prebill)$/.test(operation))return value;
       if(operation.startsWith('sales/'))return operation.endsWith('/complete')?{sale:value.sale}:value.sale;
       return value;
     }
