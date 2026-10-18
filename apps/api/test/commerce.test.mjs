@@ -460,7 +460,7 @@ const p5ReportCoreFixture=JSON.parse(readFileSync(
 function p5OriginalReport(){
  const {input:p,expected,desktop}=p5ReportCoreFixture;
  const source=readFileSync(new URL('../../../packages/core/js/domains/reports/reporting-service.js',import.meta.url));
- const sha=createHash('sha1').update('blob '+source.length+'\\0').update(source).digest('hex');
+ const sha=createHash('sha1').update('blob '+source.length+'\0').update(source).digest('hex');
  assert.equal(sha,desktop.blobSha,'P5 original desktop report algorithm was modified');
  const db={prepare(sql){
   if(sql==='PRAGMA table_info(sales)')return {all:()=>[]};
