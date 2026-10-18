@@ -92,7 +92,8 @@ export function verifyExecutableEvidence(row,readSource){
     'covered needs an executable assertion, not just matching source: '+row.id);
   const runner=proof.testFile==='scripts/web-browser-e2e.mjs'?'playwright':
     /^apps\/api\/test\/[^/]+\.test\.mjs$/.test(proof.testFile) ||
-    /^packages\/core\/test\/[^/]+\.test\.js$/.test(proof.testFile)?'node-test':null;
+    /^packages\/core\/test\/[^/]+\.test\.js$/.test(proof.testFile) ||
+    /^scripts\/selfhost-backup\.test\.mjs$/.test(proof.testFile)?'node-test':null;
   requireProof(runner && proof.testRunner===runner,'covered evidence must use executed Node/Chromium test suite '+row.id);
   const test=readSource(proof.testFile);
   requireProof(runner==='playwright'?test.includes('chromium.launch'):test.includes('test('),
