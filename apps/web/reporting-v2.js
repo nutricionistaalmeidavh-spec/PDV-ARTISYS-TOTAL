@@ -477,7 +477,7 @@
     };
     const coverageTable=()=>{
       if(!coverage)return '<p>Selecione um período.</p>';
-      const canManage=Boolean(root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'inventory.adjust'));
+      const canManage=Boolean(coverage.minimumPoliciesAvailable&&root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'inventory.adjust'));
       const minimumForm=canManage?`<form id="web-stock-minimum" class="ops-form report-v2-no-print">
         <h3>Estoque mínimo por filial</h3><p class="ops-muted">O mínimo é configurado por produto nesta filial. Não altera o saldo real nem cria pedido automático.</p>
         <div class="ops-grid two"><label>Produto<select name="productId" class="ops-input" required>
@@ -488,7 +488,7 @@
           <button class="ops-primary" type="submit" ${coverage.products.length?'':'disabled'}>Salvar mínimo</button>
           <button class="ops-secondary" type="button" id="web-stock-minimum-clear" ${coverage.products.length?'':'disabled'}>Remover mínimo</button>
         </div></form>`:'';
-      return `<p class="ops-muted">Consumo efetivo: ${escapeHtml(coverage.period.from)} a ${escapeHtml(coverage.period.to)}.
+      return `${!coverage.minimumPoliciesAvailable?'<p role="alert">Configuração de estoque mínimo indisponível até aplicar a migração 0016 neste ambiente. Os saldos e consumos continuam disponíveis.</p>':''}<p class="ops-muted">Consumo efetivo: ${escapeHtml(coverage.period.from)} a ${escapeHtml(coverage.period.to)}.
         Cobertura estimada por consumo líquido de vendas/devoluções e disponibilidade após reservas.
         Produtos sem mínimo configurado não recebem alertas fictícios.</p>`+
         `<div class="ops-metrics">
