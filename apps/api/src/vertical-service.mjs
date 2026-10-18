@@ -205,6 +205,19 @@ export function createVerticalService(db){
    },
 
    // R4 operational actions reuse the canonical table sessions and restaurant orders.
+   async linkedCheckout(t,b,{tableSessionId=null,orderId=null}={}){
+     await branchExists(t,b);
+     if(Boolean(tableSessionId)===Boolean(orderId))throw err(400,'Informe comanda ou pedido.');
+     if(tableSessionId)await checkSession(t,b,tableSessionId);
+     else if(!(await first('SELECT id FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,orderId)))
+       throw err(404,'Pedido não encontrado.');
+     return first(`SELECT s.id AS saleId,s.status,s.total_cents AS totalCents,s.sale_number AS saleNumber,
+         s.terminal_id AS terminalId
+       FROM restaurant_sale_links link JOIN sales s ON s.id=link.sale_id AND s.tenant_id=link.tenant_id AND s.branch_id=link.branch_id
+       WHERE link.tenant_id=? AND link.branch_id=?
+         AND ((? IS NOT NULL AND link.table_session_id=?) OR (? IS NOT NULL AND link.order_id=?))`,
+       t,b,tableSessionId,tableSessionId,orderId,orderId);
+   },
    async transferTable(t,b,id,targetTableId,key){
      await branchExists(t,b);
      if(!keyOK(key))throw err(400,'Identificador da operação obrigatório.');
