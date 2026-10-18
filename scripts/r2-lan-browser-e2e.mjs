@@ -110,7 +110,7 @@ try{
   await context.setOffline(false);
   let recovered=false;
   for(let attempt=0;attempt<10;attempt++){
-    try{recovered=(await page.evaluate(()=>fetch('/api/v1/health'))).ok;if(recovered)break;}catch{}
+    try{recovered=await page.evaluate(async()=> (await fetch('/api/v1/health')).ok);if(recovered)break;}catch{}
     await pause(100);
   }
   assert.equal(recovered,true,'cap-047 local network reconnection must restore API');
