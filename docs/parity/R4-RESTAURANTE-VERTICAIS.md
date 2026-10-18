@@ -6,25 +6,31 @@ Data: 2026-10-18. Baseline desktop: `7efea9c61f75be1536a1e516e917218f2b8bf2bf`.
 
 **Regra de fechamento R4:** validação exclusivamente por software: API, UI web/PWA, SQLite self-hosted, D1 local, testes de perfil/filial, concorrência, recuperação, protocolos simulados e comparação executável com a referência desktop. **Impressoras, balanças, leitores, tablets e terminais físicos não fazem parte do gate, do merge nem da classificação `covered`.** Uma inspeção de instalação em campo pode ocorrer posteriormente, em checklist opcional e separado.
 
-As capacidades abaixo permanecem com os **estados da matriz canônica**, e não estados inferidos da existência de implementação. Na matriz auditada de 18/10/2026: **0/13 certificadas `covered`; 13/13 `partial` com referência ao subconjunto implementado/testado**. `partial` não significa ausência de código: a comparação integral com todos os comportamentos da origem ainda precisa ser demonstrada por software, sem teste físico.
+As capacidades abaixo permanecem com os **estados da matriz canônica**, e não estados inferidos da existência de implementação. Na matriz revisada: **1/13 `covered` (cap-033); 12 `partial` com testes próprios por ID; 0 `gap` sem evidência funcional.** `gap` não significa necessariamente que o recurso esteja sem código.
 
-| ID | Fluxo | Código existente / aceite que falta comprovar em software |
-|---|---|---|
-| cap-009 | Fichas técnicas e insumos | Versão de receita e baixa via estoque canônico; comparação executável com a referência desktop |
-| cap-031 | Mesas, comandas, pedidos e transferência | API e interface, transferência e sessões; equivalência integral de transições e concorrência |
-| cap-032 | Divisão, taxa de serviço e transferência de itens | Divisão igual, taxa explícita e transferência; regras restantes do desktop e conciliação |
-| cap-033 | Checkout único restaurante | Venda, caixa e estoque canônicos, recuperação e idempotência; cenários de reversão e concorrência |
-| cap-034 | KDS por estação e impressão | Rotas, tickets congelados, fila e agente local; falhas/reconexão e contrato de driver emulados |
-| cap-035 | KDS compartilhado | Filas por estação/canal; comparação executável de mudanças de rotas e estados |
-| cap-036 | Pizzaria | Tamanhos, sabores, bordas, preços absolutos ou acréscimos e múltiplas configurações por SKU; comparação desktop |
-| cap-037 | Delivery, retirada e balcão | Fluxo de entrega, despacho/entregador, retirada e checkout; cobertura completa de estados |
-| cap-038 | Pedidos e senhas | Pedidos unificados, senhas opcionais e histórico novo; legado **somente se houver dados reais a importar**, sem migração fictícia |
-| cap-039 | Padaria e peso | Peso em gramas/kg e pedidos de balcão; precisão, identificação por etiqueta e protocolos simulados |
-| cap-041 | Primeiro acesso e módulos | Escolha de segmento e sugestões sem habilitação automática; teste de persistência/autorizações |
-| cap-048 | Chamados garçom/conta | Abertura, atendimento e fechamento por perfil; regressão por filial e estados |
-| cap-049 | Relatório operacional e CSV | Contagens e valores separados do faturamento; comparação entre dados base, filtros e CSV |
+| ID | Status comprovado | Fluxo | Próxima lacuna estritamente de software |
+|---|---|---|---|
+| cap-009 | Parcial | Receitas, versões e insumos | Consumo nas combinações avançadas comparado ao desktop |
+| cap-031 | Parcial | Mesas, pedidos, transferência de comanda | Estados e concorrência multicaixa |
+| cap-032 | Parcial | Rateio, taxa de serviço e transferência de itens | Split por itens/pagadores e pagamentos parciais independentes |
+| cap-033 | **Integral** | Checkout restaurante, venda única, caixa e estoque canônicos | Regredir continuamente; divisão avançada pertence à cap-032 |
+| cap-034 | Parcial | KDS, impressoras e fila persistente | Protocolo de impressão emulado e permissões |
+| cap-035 | Parcial | KDS compartilhado por estações/canais | Concorrência e transições de produção |
+| cap-036 | Parcial | Pizzas, tamanhos, sabores, bordas e preços | Adicionais/consumo de insumos por sabor conforme desktop |
+| cap-037 | Parcial | Delivery, despacho, balcão e retirada | Ciclo completo de entregador e recuperação |
+| cap-038 | Parcial | Pedidos unificados e senhas | Fuso/localidade e histórico de sessões — sem migração legada fictícia |
+| cap-039 | Parcial | Padaria, pesos, pedidos e checkout | Leitura de etiquetas/balanças **simuladas** |
+| cap-041 | Parcial | Primeiro acesso e recomendações | Edição de módulos e permissões por perfil |
+| cap-048 | Parcial | Chamados garçom e conta | Jornada UI e concorrência entre perfis |
+| cap-049 | Parcial | Resumos operacionais/CSV | Limites, filtros e comparação com desktop |
 
-**Situação objetiva:** o código desta rodada passou na CI de sua PR, mas isso **não** certifica 13/13 contra o desktop. Para concluir integralmente, faltam apenas evidências e/ou comportamentos de **software** apontados por capacidade; nenhum teste físico será solicitado como condição.
+**Situação objetiva:** 13/13 capacidades do R4 possuem pelo menos evidência direta e executável na API. Somente cap-033 passou para `covered`; **12 ainda precisam de trabalhos reais de software ou cenários adicionais antes de paridade integral**, sem testes físicos. Para concluir integralmente, faltam apenas evidências e/ou comportamentos de **software** apontados por capacidade; nenhum teste físico será solicitado como condição.
+
+## Evidência de revisão da matriz (18/10/2026)
+
+A classificação de cada capacidade do R4 agora aponta em `desktop-capability-inventory.json` para um trecho de implementação (`independentEvidence.file` / `contains`), teste Node de integração por ID (`testContains`) e asserção exata (`testAssertionContains`). O auditor `scripts/parity-rules.mjs` verifica a existência de cada trecho e não permite declarar `covered` se um contrato de dependência estiver parcial.
+
+O estado **parcial** pode representar uma prova direta de subfluxo do R4, mesmo quando a matriz auxiliar das sete telas ainda tem um contrato incompleto; isso elimina um falso `gap` sem dispensar prova de completude. A **cap-033** possui `checkout-008` e `products-021` cobertos e teste de pagamento, vínculo único, preço congelado e estoque no caixa canônico.
 
 ## Contratos introduzidos nesta rodada
 
@@ -62,7 +68,7 @@ Novas rotas de recuperação:
 - `GET /api/v1/tenants/:tenant/restaurant/sessions/:session/checkout?branchId=:branch`
 - `GET /api/v1/tenants/:tenant/restaurant/orders/:order/checkout?branchId=:branch`
 
-A `main` não recebe automaticamente um estado **coberto integralmente** por esta entrega. Revisão e testes continuam vinculados ao SHA da PR.
+A `main` não recebe estados `covered` por mera existência de arquivos: cada avanço contém referência direta ao teste e à asserção verificada. Revisão e testes continuam vinculados ao SHA da PR.
 
 ## PR #59 — matriz atualizada dos avanços
 
