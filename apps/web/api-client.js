@@ -325,6 +325,7 @@
     reportSalesDetailsCanonical(filters={}){return this.request('/api/v1/reports/details'+this.params(filters));}
     exportSalesDetailCsvCanonical(filters={}){return this.request('/api/v1/reports/details.csv'+this.params(filters));}
     reportStockCoverage(filters={}){return this.request('/api/v1/reports/stock-coverage'+this.params(filters));}
+    setStockMinimum(productId,minimumQuantity,mutationId){return this.request('/api/v1/reports/stock-minimum',{method:'PUT',body:{productId,minimumQuantity},mutationId});}
     homeIndicators(filters={}){return this.request('/api/v1/reports/home'+this.params(filters));}
     sale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}`); }
     saleDetails(id) { return this.webMode?this.sale(id):this.request(`/api/v1/sales/${encodeURIComponent(id)}/details`); }
