@@ -56,7 +56,9 @@ try{
   await page.locator('#web-new-product').click();
   await page.locator('#web-product-name').fill('Produto Web QA');
   const sku='BROWSER-'+Date.now();
+  const barcode='7891780213442';
   await page.locator('#web-product-sku').fill(sku);
+  await page.locator('#web-product-form [name=barcode]').fill(barcode);
   await page.locator('#web-product-price').fill('12,90');
   await page.locator('#web-product-form button[type=submit]').click();
   await page.locator('.web-product-row').filter({hasText:sku}).waitFor();
@@ -147,6 +149,17 @@ try{
   await page.locator('#app-sidebar [data-route=checkout]').click();
   const product=page.locator('[data-add-product]').filter({hasText:'Produto Web QA'});
   await product.waitFor({timeout:12000});
+  // USB HID scanners normally send the barcode followed by Enter. Exercise
+  // that full browser flow without claiming physical reader certification.
+  await page.locator('#product-search').fill('0000000000000');
+  await page.locator('#product-search').press('Enter');
+  assert.equal(await page.locator('.cart-line').count(),0,'unknown barcode must never charge a different product');
+  await page.locator('#product-search').fill(barcode);
+  await page.locator('#product-search').press('Enter');
+  await page.locator('.cart-line').filter({hasText:'Produto Web QA'}).waitFor({timeout:12000});
+  assert.equal(await page.locator('#product-search').inputValue(),'','accepted scanner input clears for the next scan');
+  await page.locator('.cart-line').filter({hasText:'Produto Web QA'}).locator('[data-remove]').click();
+  await page.locator('.cart-line').filter({hasText:'Produto Web QA'}).waitFor({state:'detached',timeout:12000});
   await page.locator('#product-search').fill('Web QA');
   await product.click();
   const cart=page.locator('.cart-line').filter({hasText:'Produto Web QA'});
@@ -174,13 +187,16 @@ try{
   const completionResponse=page.waitForResponse(response=>
     response.request().method()==='POST'&&new URL(response.url()).pathname.endsWith('/complete')&&
     new URL(response.url()).pathname.includes('/sales/'),{timeout:12000});
+  // Arm the assertion before clicking: success notifications are ephemeral
+  // (2s) and can disappear before the API response body is parsed.
+  const completionToastWait=page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
   await page.locator('#confirm-payment').click();
   const completedPayload=await (await completionResponse).json();
   const completedSaleNumber=completedPayload.sale?.saleNumber;
   const expectedTerminalId=await page.evaluate(()=>localStorage.getItem('artisys.pdv.webTerminalId.v1'));
   assert.equal(completedPayload.sale?.terminalId,expectedTerminalId,'browser must never silently complete a draft inherited from another terminal');
   assert.ok(completedSaleNumber,'completion response must identify the exact sale for parity follow-up');
-  await page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
+  await completionToastWait;
   await page.waitForFunction(()=>document.querySelectorAll('.cart-line').length===0,null,{timeout:12000});
   // Post-sale receipt dialog is part of the original renderer. Dismiss it
   // through the same accessible close action an operator uses, not force-clicking
