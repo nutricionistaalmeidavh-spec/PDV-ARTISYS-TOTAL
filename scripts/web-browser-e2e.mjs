@@ -395,6 +395,18 @@ try{
   await page.getByRole('heading',{name:'Relatórios comerciais'}).waitFor({timeout:12000});
   const report=await page.locator('#route-content').innerText();
   assert.match(report,/Faturamento registrado/i);
+  await page.locator('[data-report-web=overview]').click();
+  await page.getByRole('heading',{name:'Evolução diária de vendas líquidas'}).waitFor({timeout:12000});
+  await page.locator('[data-report-web=coverage]').click();
+  await page.locator('#web-stock-minimum').waitFor({timeout:12000});
+  const minimumForm=page.locator('#web-stock-minimum');
+  await minimumForm.locator('[name=minimum]').fill('2');
+  await minimumForm.locator('[type=submit]').click();
+  await page.waitForFunction(()=>document.querySelector('#report-v2-body')?.textContent.includes('Mínimo 2'),null,{timeout:12000});
+  assert.match(await page.locator('#report-v2-body').innerText(),/Abaixo do mínimo|No mínimo|Acima do mínimo/);
+  await page.screenshot({path:'qa-artifacts/pdv-minimum-stock-mobile.png',fullPage:true});
+  await page.locator('#web-stock-minimum-clear').click();
+  await page.waitForFunction(()=>document.querySelector('#report-v2-body')?.textContent.includes('Sem mínimo'),null,{timeout:12000});
   await page.locator('[data-report-web=finance]').click();
   await page.getByText('A pagar').first().waitFor();
   await page.screenshot({path:'qa-artifacts/pdv-reports-mobile.png',fullPage:true});
