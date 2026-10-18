@@ -1194,7 +1194,7 @@ export function createCommerceService(db,{now=nowISO}={}){
       const original=parent&&parent.configuration_json&&!children.length;
       const parents=await all('SELECT * FROM sale_items WHERE sale_id=?',id);
       const priced=await pricedSaleLines(all,tenant,branch,id,parents);
-      if(!matched&&priced.length+(original?0:1)>MAX_LINES)
+      if(!matched&&priced.length+1>MAX_LINES)
         throw error(400,'Máximo de 80 linhas de venda.');
       const parentId=parent?.id||randomId(),statements=[];
       if(!parent)statements.push(q(`INSERT INTO sale_items
@@ -1288,12 +1288,17 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(typeof note!=='string'||note.length>240||
          /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(note))
         throw error(400,'Observação inválida: use até 240 caracteres.');
-      const item=await first('SELECT id FROM sale_items WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
+      const cleaned=note.trim();
+      const child=await first(`SELECT id FROM sale_configured_lines
+        WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?`,
+        tenant,branch,id,itemId);
+      const item=child||await first('SELECT id FROM sale_items WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
         tenant,branch,id,itemId);
       if(!item)throw error(404,'Item não encontrado nesta venda.');
-      const cleaned=note.trim();
       await batch([
-        q('UPDATE sale_items SET note=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
+        child?q('UPDATE sale_configured_lines SET note=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
+          cleaned,tenant,branch,id,itemId)
+          :q('UPDATE sale_items SET note=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
           cleaned,tenant,branch,id,itemId),
         audit(tenant,scope,key,{saleId:id,itemId,note:cleaned,operatorId:user})
       ]);
@@ -1326,6 +1331,8 @@ export function createCommerceService(db,{now=nowISO}={}){
         FROM sale_items WHERE id=? AND sale_id=? AND tenant_id=? AND branch_id=?`,
         itemId,id,tenant,branch);
       if(!row)throw error(404,'Item não encontrado na venda.');
+      if(await first('SELECT id FROM sale_configured_lines WHERE sale_item_id=? LIMIT 1',row.id))
+        throw error(409,'Preço configurado depende das escolhas do catálogo. Edite a configuração antes de vender.');
       const price=requiredNumber(body?.unitPriceCents,'Preço unitário');
       const reason=text(body?.reason,240);
       if(reason.length<3)throw error(400,'Informe a justificativa da alteração de preço.');
@@ -1347,6 +1354,10 @@ export function createCommerceService(db,{now=nowISO}={}){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const milli=quantityMilli(quantity);
       if(!milli)throw error(400,'Quantidade inválida: até três casas decimais.');
+      const parent=await first('SELECT id FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=? AND product_id=?',
+        id,tenant,branch,productId);
+      if(parent&&await first('SELECT 1 AS found FROM sale_configured_lines WHERE sale_item_id=? LIMIT 1',parent.id))
+        throw error(409,'Altere a quantidade de cada configuração individualmente.');
       const result=await run('UPDATE sale_items SET quantity_milli=? WHERE sale_id=? AND tenant_id=? AND branch_id=? AND product_id=?',
         milli,id,tenant,branch,productId);
       if(!result.meta?.changes)throw error(404,'Item não encontrado.');
