@@ -8,6 +8,7 @@ import {createSaleReturnAdapter} from './sale-reversals.mjs';
 import {createCatalogDepthService} from './catalog-depth.mjs';
 import {createPurchasingService} from './purchasing.mjs';
 import {createCatalogImportService} from './catalog-import.mjs';
+import {catalogEditVersion,catalogGuard,catalogGuardArgs} from './catalog-cas.mjs';
 import {createHistoricalMarginService} from './historical-margin.mjs';
 import {createReportDepthService} from './report-depth.mjs';
 import {createCheckoutConfigurationService} from './checkout-configuration.mjs';
@@ -475,18 +476,18 @@ export function createCommerceService(db,{now=nowISO}={}){
         COALESCE((SELECT SUM(r.quantity_milli) FROM inventory_reservations r
           WHERE r.tenant_id=p.tenant_id AND r.branch_id=? AND r.product_id=p.id
           AND r.status='ACTIVE'),0) AS reservedMilli,p.brand,p.barcode,p.category_id,
-          p.parent_product_id,p.variant_label,p.last_cost_cents,
+          p.parent_product_id,p.variant_label,p.last_cost_cents,p.updated_at AS updatedAt,
           EXISTS(SELECT 1 FROM product_media pm WHERE pm.tenant_id=p.tenant_id AND pm.product_id=p.id) AS hasPhoto
         FROM products p LEFT JOIN stock_positions s ON s.tenant_id=p.tenant_id
         AND s.product_id=p.id AND s.branch_id=?
         WHERE p.tenant_id=? AND (?=1 OR p.active=1)
         ORDER BY p.name,p.id LIMIT ?`,branch,branch,tenant,includeInactive?1:0,cap);
-      return rows.map(x=>({...x,trackStock:Boolean(x.trackStock),active:Boolean(x.active),
+      return Promise.all(rows.map(async x=>({...x,editVersion:await catalogEditVersion(x),trackStock:Boolean(x.trackStock),active:Boolean(x.active),
         balance:x.balanceMilli/1000,reserved:x.reservedMilli/1000,
         available:(x.balanceMilli-x.reservedMilli)/1000,menuEnabled:true,
         brand:x.brand||'',barcode:x.barcode||x.sku,categoryId:x.category_id||null,
         parentProductId:x.parent_product_id||null,variantLabel:x.variant_label||null,
-        lastCostCents:x.last_cost_cents||0,photo:Boolean(x.hasPhoto)}));
+        lastCostCents:x.last_cost_cents||0,photo:Boolean(x.hasPhoto)})));
     },
     async createProduct(tenant,user,body,header){
       const key=requiredMutation(body,header),scope='product.create';
@@ -527,6 +528,12 @@ export function createCommerceService(db,{now=nowISO}={}){
         throw error(400,'Informe ao menos um campo de produto para editar.');
       const old=await first('SELECT * FROM products WHERE tenant_id=? AND id=?',tenant,id);
       if(!old)throw error(404,'Produto não encontrado.');
+      if(body?.expectedVersion!==undefined){
+        if(typeof body.expectedVersion!=='string'||!/^[a-f0-9]{64}$/.test(body.expectedVersion))
+          throw error(400,'Versão do cadastro inválida.');
+        if(body.expectedVersion!==await catalogEditVersion(old))
+          throw error(409,'Produto alterado por outro terminal. Atualize o cadastro antes de salvar.');
+      }
       const name=Object.hasOwn(body,'name')?text(body.name,120):old.name;
       const sku=Object.hasOwn(body,'sku')?text(body.sku,64).toUpperCase():old.sku;
       const unit=Object.hasOwn(body,'unit')?String(body.unit||'').trim().toUpperCase():old.unit;
@@ -565,9 +572,12 @@ export function createCommerceService(db,{now=nowISO}={}){
       const result={id,name,sku,unit,salePriceCents:price,brand,barcode,categoryId,parentProductId,variantLabel,
         trackStock:Boolean(old.track_stock),active,lastCostCents:old.last_cost_cents,updatedAt:stamp()};
       await batch([
-        q(`UPDATE products SET name=?,sku=?,sale_price_cents=?,unit=?,active=?,updated_at=?,
-          brand=?,barcode=?,category_id=?,parent_product_id=?,variant_label=? WHERE id=? AND tenant_id=?`,
-          name,sku,price,unit,active?1:0,result.updatedAt,
+        q(`UPDATE products SET name=?,sku=?,
+          sale_price_cents=CASE WHEN ${catalogGuard} THEN ? ELSE -1 END,
+          unit=?,active=?,updated_at=?,
+          brand=?,barcode=?,category_id=?,parent_product_id=?,variant_label=?
+          WHERE id=? AND tenant_id=?`,
+          name,sku,...catalogGuardArgs(old),price,unit,active?1:0,result.updatedAt,
           brand,barcode,categoryId,parentProductId,variantLabel,id,tenant),
         audit(tenant,scope,key,result)
       ]);
