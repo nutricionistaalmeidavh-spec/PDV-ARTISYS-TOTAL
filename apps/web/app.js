@@ -503,9 +503,29 @@
     return `<div class="cart-line ${state.selectedProductId === item.productId ? 'selected' : ''}" data-select-product="${item.productId}"><div><strong>${escapeHtml(item.productName)}</strong>${configurationSummary?`<small>${escapeHtml(configurationSummary)}</small>`:''}${noteLabel}${priceDetails}${priceButton}${noteButton}</div>${quantityControl}<div class="line-total">${ui.formatCents(item.totalCents)} ${remove}</div></div>`;
   }
 
+  let checkoutBarcodeBusy=false;
   function bindCheckoutEvents() {
     const search = document.getElementById('product-search');
     search?.addEventListener('input', (event) => { state.productQuery = event.target.value; renderCheckoutProductGrid(); });
+    // USB-HID readers behave like keyboards: scan the barcode then press Enter.
+    // Match the exact barcode/SKU, never guess from a fuzzy name search. A
+    // collision between a barcode and another product's SKU must not charge.
+    search?.addEventListener('keydown',event=>{
+      if(!api.webMode||event.key!=='Enter'||event.isComposing)return;
+      event.preventDefault();
+      if(checkoutBarcodeBusy){showToast('Conclua a leitura anterior antes de escanear novamente.','error');return;}
+      const code=String(search.value||'').trim().toLowerCase();
+      if(!code)return;
+      const matches=state.products.filter(p=>p.active!==false&&
+        [p.barcode,p.sku].some(value=>value&&String(value).trim().toLowerCase()===code));
+      if(matches.length!==1){
+        showToast(matches.length?'Código ambíguo: corrija os códigos duplicados no catálogo.':'Código não encontrado no catálogo.','error');
+        return;
+      }
+      checkoutBarcodeBusy=true;
+      state.productQuery='';search.value='';renderCheckoutProductGrid();
+      Promise.resolve(addProduct(matches[0].id)).finally(()=>{checkoutBarcodeBusy=false;});
+    });
     document.getElementById('scan-focus')?.addEventListener('click', () => document.getElementById('product-search')?.focus());
     document.getElementById('checkout-documents')?.addEventListener('click', openCheckoutDocuments);
     content.querySelectorAll('[data-category]').forEach((button) => button.addEventListener('click', () => { state.categoryId = button.dataset.category; renderCheckout(); }));
