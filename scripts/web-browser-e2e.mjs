@@ -82,6 +82,21 @@ try{
   await page.screenshot({path:'qa-artifacts/pdv-parity-stock-history.png',fullPage:true});
   await page.locator('.web-stock-history [data-close-modal]').click();
 
+  // P2 counted inventory: exercise the actual canonical stock screen in Chromium.
+  await page.locator('#app-sidebar [data-route=inventory]').click();
+  const countForm=page.locator('#web-stock-count');
+  await countForm.waitFor({timeout:12000});
+  const productChoice=(await countForm.locator('select[name=productId] option').allTextContents())
+    .find(label=>label.includes(sku));
+  assert.ok(productChoice,'counted inventory must expose the catalogued product from the canonical API');
+  await countForm.locator('select[name=productId]').selectOption({label:productChoice});
+  await countForm.locator('select[name=operation]').selectOption('count');
+  await countForm.locator('[name=quantity]').fill('2.25');
+  await countForm.locator('[name=reason]').fill('Conferência física no navegador QA');
+  await countForm.locator('button[type=submit]').click();
+  await page.locator('table tbody tr').filter({hasText:sku}).first().getByText('2,25',{exact:true}).waitFor({timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-parity-inventory-count.png',fullPage:true});
+
   await page.locator('#app-sidebar [data-route=checkout]').click();
   const product=page.locator('[data-add-product]').filter({hasText:'Produto Web QA'});
   await product.waitFor({timeout:12000});
