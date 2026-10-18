@@ -13,6 +13,14 @@ export function createStorageLocationsService({q,first,all,batch,applied,audit,s
      WHERE l.tenant_id=? AND l.branch_id=?
      GROUP BY l.id,l.code,l.name ORDER BY l.code,l.id LIMIT 200`,tenant,branch);
   },
+  async storageAssignments(tenant,branch){
+   await branchExists(tenant,branch);
+   return all(`SELECT a.product_id AS productId,a.location_id AS locationId,
+     l.code AS locationCode,l.name AS locationName
+     FROM inventory_product_location_assignments a
+     JOIN inventory_storage_locations l ON l.id=a.location_id AND l.tenant_id=a.tenant_id AND l.branch_id=a.branch_id
+     WHERE a.tenant_id=? AND a.branch_id=? ORDER BY l.code,a.product_id LIMIT 500`,tenant,branch);
+  },
   async createStorageLocation(tenant,branch,user,body,header){
    await branchExists(tenant,branch);
    const mutation=requiredMutation(body,header),scope='inventory.location.create:'+branch;
