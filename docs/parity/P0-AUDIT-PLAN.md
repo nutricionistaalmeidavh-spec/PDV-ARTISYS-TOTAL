@@ -14,7 +14,7 @@ Os 56 IDs **não são 56 entregas implementadas**, nem duplicam as 68 operaçõe
 
 | Escopo | Coberto | Parcial | Gap | Total |
 | --- | ---: | ---: | ---: | ---: |
-| Operações das sete telas | 23 | 24 | 21 | 68 |
+| Operações das sete telas | 23 | 45 | 0 | 68 |
 | Capacidades publicadas do desktop | 0 | 14 | 42 | 56 |
 
 "Parcial" no inventário estendido significa que existe ao menos um contrato da matriz com evidência testada relacionado à capacidade. **Não** significa que a capacidade inteira passe no navegador. "Gap" significa falta de comprovação de equivalência funcional integral, não prova de ausência de código.
@@ -28,6 +28,20 @@ Os 56 IDs **não são 56 entregas implementadas**, nem duplicam as 68 operaçõe
 3. O workflow `Verify SaaS canonical foundation` executa build, `test:parity`, testes do núcleo e da API, migrações D1 em Wrangler local, Workerd, navegador desktop/mobile e verificação de um único renderer.
 
 Uma asserção encontrada em um arquivo não basta isoladamente: a CI também precisa executar a suíte em que o cenário está registrado, com conclusão verde no commit testado. Status `covered` requer arquivo de implementação, teste executável, cenário e referência à asserção. Resultados sem captura real, hardware real ou sem homologação não devem promover contratos parcialmente cobertos.
+
+## Gate de certificação futura
+
+## P0+ — cenários executáveis e prova independente (implementado em PR #35)
+
+- `scripts/parity-scenarios.mjs` cria um catálogo determinístico para **todos os 124 contratos** (68 telas + 56 capacidades), com quatro dimensões obrigatórias: nominal com dados idênticos, autorização, isolamento entre empresas e falha/recuperação. Cenários de equipamentos e rede acrescentam homologação física.
+- `docs/parity/scenario-evidence.json` é o registro de evidências, **vazio no início propositalmente**. Implementação existente e testes limitados não substituem resultado comparativo independente do mesmo fluxo.
+- Para certificar individualmente um cenário automatizado, adicionar no registro: `scenarioId`, `desktopBaselineCommit`, `desktopFixtureId`, `fixtureFile` na pasta `docs/parity/fixtures/`, `testFile`, `testRunner`, `testContains` e `testAssertionContains`. A suíte referenciada deve ser realmente executada pela CI. O teste de cenário deve conter os IDs associados à comparação e checar resultado observável, não simplesmente presença de strings.
+- Para cenários físicos: registrar equipamento/modelo, plataforma, evidência de teste real e revisor independente, com URL verificável. A CI **não simula homologação física** nem muda automaticamente `pending` para `verified`.
+- `scripts/parity-desktop-pricing.test.mjs` compara vetores fixos de cálculo/desconto/arredondamento contra o código canônico, cujo blob é conferido byte a byte com o arquivo `js/domains/sales/pricing.js` da origem pinada. **Prova apenas a equivalência do mecanismo de preços coberto pelos casos**, não todo o checkout.
+- `npm run audit:parity` valida a matriz, a origem e os cenários, gerando `qa-artifacts/parity/audit-summary.json` e `scenario-catalog.json`. Os resultados são publicados como artefato CI `pdv-total-parity-evidence`, inclusive quando a etapa de teste posterior falha.
+- `npm run test:parity` acrescenta cenários e testes do mecanismo de preços às regressões anteriores. Uma mudança para `complete` exige **100% das evidências dos cenários pertinentes**, além das 68/68 e 56/56 linhas, revisão independente e CI aprovada.
+
+**Importante:** cenários planejados não representam testes efetivamente passados. Não promover uma linha de `partial` ou `gap` apenas porque há um cenário listado. Testes do desktop para demais módulos ainda dependem de extração independente de dados de referência, cenários E2E e homologação onde couber.
 
 ## Gate de certificação futura
 
