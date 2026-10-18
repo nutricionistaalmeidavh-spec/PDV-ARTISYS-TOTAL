@@ -27,7 +27,6 @@ must(existsSync(resolve(root,'apps/api/migrations/0013_cash_terminals.sql')),'P3
 must(existsSync(resolve(root,'apps/api/migrations/0014_checkout_configurations.sql')),'P3 configured checkout schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0015_seller_sales_targets.sql')),'P4 seller target schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0016_inventory_minimum_levels.sql')),'P5 stock minimum schema missing');
-must(existsSync(resolve(root,'apps/api/migrations/0016_inventory_minimum_levels.sql')),'P5 stock minimum schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0002_commerce.sql')),'commerce schema missing');
 must(existsSync(resolve(root,'packages/core/js/domains/sales/sale-service.js')),'canonical sales core missing');
 must(existsSync(resolve(root,'packages/core/js/domains/inventory/inventory-service.js')),'canonical inventory core missing');
