@@ -93,3 +93,25 @@ test('physical printer, scale, scanner or computer never gate R3/R4 software rea
   assert.match(r4,/Impressoras, balanças, leitores, tablets e terminais físicos não fazem parte do gate/);
   assert.doesNotMatch(r4,/Checklist ainda bloqueado por evidência externa/);
 });
+
+test('R2/R4 partial implementation can use its own executable proof without inventing a seven-screen contract',()=>{
+  const published=['central-lan-server'];
+  const matrix={modules:[]};
+  const evidence={file:'apps/api/src/https-lan-server.mjs',contains:'createLanServer',
+    testFile:'apps/api/test/https-lan-server.test.mjs',
+    testContains:"test('cap-002 LAN: two authenticated HTTPS terminals"};
+  const row={id:'cap-001',capability:published[0],owner:'operations',dependsOn:[],status:'partial',
+    testedContractRefs:[],implementationEvidence:evidence,
+    sourceEvidence:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,file:'release/capabilities.json',manifestIndex:0},
+    acceptance:'Local HTTPS server accepts isolated sessions and maintains safe tenant permissions'};
+  const inventory={schemaVersion:1,baseline:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
+    manifest:'release/capabilities.json',publishedCapabilities:published,sourceManifestCount:1},
+    web:{repo:WEB_REPO},contracts:[row],fullSystemClaim:'incomplete'};
+  const files={'apps/api/src/https-lan-server.mjs':'export function createLanServer() {}',
+    'apps/api/test/https-lan-server.test.mjs':"test('cap-002 LAN: two authenticated HTTPS terminals',()=>{assert.equal(1,1)});"};
+  const readSource=path=>files[path]||'';
+  assert.equal(verifyCapabilityInventory(matrix,inventory,published,{readSource}).partial,1);
+  assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[{...row,implementationEvidence:undefined}]},published,{readSource}),/partial capability needs covered subset or executable implementation proof/);
+  assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[{...row,implementationEvidence:{...evidence,testContains:"test('missing'"}}]},published,{readSource}),/partial implementation test not found/);
+  assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[{...row,status:'covered',independentEvidence:evidence}]},published,{readSource}),/canonical ID|covered needs an executable assertion/);
+});
