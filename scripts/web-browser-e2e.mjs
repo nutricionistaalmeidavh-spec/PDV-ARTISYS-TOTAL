@@ -391,7 +391,7 @@ try{
   await page.screenshot({path:'qa-artifacts/pdv-finance-mobile.png',fullPage:true});
 
   // P5: authorized home indicators are scoped and link back to the one report route.
-  await page.locator('#app-sidebar [data-route=home]').click();
+  await page.locator('#sidebar-nav [data-route=home]').click();
   await page.locator('#web-home-live [data-home-open-report]').waitFor({timeout:12000});
   assert.match(await page.locator('#web-home-live').innerText(),/Terminais com caixa aberto/);
   await page.locator('#web-home-live [data-home-open-report]').click();
