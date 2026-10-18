@@ -5,6 +5,7 @@
   if(!Client || !root.PdvWebHardware || !root.PdvUiLifecycle)return;
   const api=new Client();
   let currentSale=null;
+  let receiptSubmitted=false;
   const esc=value=>root.PdvWebHardwareUtils.escapeHtml(value);
   const money=n=>(Number(n||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   function panel(){
@@ -22,6 +23,7 @@
     const host=document.getElementById('post-sale-receipt-root');
     if(host){host.classList.add('hidden');host.replaceChildren();}
     currentSale=null;
+    receiptSubmitted=false;
   }
   function notice(message,isError=false){
     const el=document.getElementById('post-sale-receipt-status');
@@ -36,9 +38,13 @@
     button.disabled=true;
     notice('Carregando venda do servidor…');
     try{
-      const sale=await api.sale(currentSale.id);
-      if(sale?.status!=='COMPLETED')throw new Error('Venda não concluída ou indisponível.');
-      const result=await root.PdvWebHardware.printSale(sale,{popup,forceBrowser:pdf});
+      // Always fetch the transaction-time immutable receipt snapshot.
+      // A later store-logo edit must never rewrite an older sale receipt.
+      const receipt=await api.request('/api/v1/sales/'+encodeURIComponent(currentSale.id)+'/receipt');
+      if(receipt?.sale?.status!=='COMPLETED')throw new Error('Venda não concluída ou indisponível.');
+      const result=await root.PdvWebHardware.printSale(receipt.sale,{popup,forceBrowser:pdf,
+        branding:receipt.branding,reprint:receiptSubmitted&&!pdf});
+      if(!pdf)receiptSubmitted=true;
       notice(pdf?'No diálogo, escolha Salvar como PDF.':result?.queued?'Enviado ao spooler local. Confira a impressão no equipamento.':'Diálogo aberto ou comando enviado; confirme a impressão.');
     }catch(error){
       try{popup?.close();}catch{}
@@ -48,6 +54,7 @@
   function showPostSaleModal(sale){
     if(!sale?.id)return;
     currentSale={id:String(sale.id)};
+    receiptSubmitted=false;
     const host=panel();
     host.classList.remove('hidden');
     host.innerHTML='<section class="modal-card post-sale-card" role="dialog" aria-labelledby="post-sale-title" style="pointer-events:auto;width:100%;max-width:100%;box-sizing:border-box;padding:16px"><header class="modal-head"><div><h2 id="post-sale-title">Venda concluída</h2><p class="post-sale-subtitle">Venda '+esc(sale.saleNumber||sale.id)+' — comprovante disponível.</p></div><button class="modal-close" id="post-sale-close" type="button" aria-label="Fechar">×</button></header><div class="modal-body"><div class="post-sale-summary"><div><span>Total</span><strong>'+esc(money(sale.totalCents))+'</strong></div><div><span>Troco</span><strong>'+esc(money(sale.changeCents))+'</strong></div></div><p class="post-sale-help">A impressão usa os dispositivos deste navegador. O PDF é salvo pelo diálogo do sistema, sem impressora física.</p><div class="post-sale-primary-actions"><button type="button" class="primary-button" id="post-sale-print">Imprimir comprovante</button><button type="button" class="secondary-button post-sale-pdf-button" id="post-sale-save-pdf">Salvar como PDF</button></div><div id="post-sale-receipt-status" class="post-sale-status" aria-live="polite"></div><div class="modal-actions post-sale-footer-actions"><button type="button" class="secondary-button" id="post-sale-new-sale">Nova venda</button></div></div></section>';
