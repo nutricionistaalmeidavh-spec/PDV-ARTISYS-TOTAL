@@ -110,8 +110,63 @@ export function buildReport(matrix,inventory){
     groups,rows
   };
 }
+export function buildSaasDeliveryReport(historical,scope){
+  if(scope?.schemaVersion!==1||scope?.primaryDelivery!=='hosted-https-web-api'
+    ||!Array.isArray(scope.deferredCapabilityIds))throw Error('Invalid SaaS delivery scope manifest.');
+  if(historical.rows?.length!==56)throw Error('Expected exactly 56 historical desktop capabilities.');
+  const all=new Map(historical.rows.map(row=>[row.id,row]));
+  const deferred=new Set(),items=[];
+  for(const entry of scope.deferredCapabilityIds){
+    if(!/^cap-\d{3}$/.test(entry?.id||''))throw Error('Invalid deferred capability ID.');
+    if(deferred.has(entry.id))throw Error('Duplicate deferred capability: '+entry.id);
+    const cap=all.get(entry.id);
+    if(!cap)throw Error('Unknown deferred capability: '+entry.id);
+    if(cap.status==='covered')throw Error('Do not hide an already covered capability from the SaaS scope: '+entry.id);
+    if(typeof entry.reason!=='string'||entry.reason.length<25)throw Error('Missing deferred rationale: '+entry.id);
+    deferred.add(entry.id);
+    items.push({...cap,reason:entry.reason});
+  }
+  const active=historical.rows.filter(row=>!deferred.has(row.id));
+  const counts={covered:0,partial:0,gap:0};
+  for(const row of active)counts[row.status]++;
+  return {
+    product:scope.primaryProduct,primaryDelivery:scope.primaryDelivery,
+    primaryRuntime:scope.primaryRuntime,optionalRuntime:scope.optionalRuntime,
+    defaultClient:scope.defaultClient,releasePolicy:scope.releasePolicy,
+    active:{total:active.length,counts,pending:active.filter(row=>row.status!=='covered')},
+    deferred:{total:items.length,ids:items.map(row=>row.id).sort(),items},
+    historical:{total:historical.summary.total,counts:{
+      covered:historical.summary.covered,partial:historical.summary.partial,gap:historical.summary.gap
+    }},
+    note:'Itens historicos de LAN/Windows foram mantidos no inventario, mas nao bloqueiam o SaaS hospedado. O numero de capacidades desktop nao substitui gates de SaaS, autenticacao, pagamento e implantacao.'
+  };
+}
+function printSaasHuman(saas){
+  console.log('PDV TOTAL — ENTREGA PRINCIPAL: WEB / SAAS (navegador + HTTPS; sem instalador)');
+  console.log('Referencias de desktop no escopo web: '+saas.active.total+
+    ' | cobertas '+saas.active.counts.covered+' | parciais '+saas.active.counts.partial+
+    ' | gap '+saas.active.counts.gap);
+  console.log('Recursos opcionais de instalacao local/LAN fora do bloqueio SaaS: '+
+    saas.deferred.ids.join(', '));
+  console.log('\nPendencias reais do escopo web:');
+  for(const row of saas.active.pending)
+    console.log('- '+row.id+' '+row.name+' ['+row.status+']');
+  console.log('\nA auditoria historica completa continua com 56 IDs. Prontidao SaaS requer QA de seguranca, deploy e jornadas web, alem destas referencias.');
+}
+function printSaasMarkdown(saas){
+  console.log('# PDV TOTAL — pendencias WEB/SAAS (navegador)\n');
+  console.log('| Referencias desktop aplicaveis | Cobertas | Parciais | Sem prova | Opcionais fora do bloqueio |');
+  console.log('|---:|---:|---:|---:|---:|');
+  console.log('| '+saas.active.total+' | '+saas.active.counts.covered+' | '+saas.active.counts.partial+
+    ' | '+saas.active.counts.gap+' | '+saas.deferred.total+' |\n');
+  console.log('| ID | Pendencia funcional web | Estado |\n|---|---|---|');
+  for(const row of saas.active.pending)console.log('| '+row.id+' | '+row.name+' | '+row.status+' |');
+  console.log('\nOpcionais de LAN/desktop: '+saas.deferred.ids.join(', ')+
+    '. Sem obrigatoriedade de instalar servidor Windows/terminal ou usar rede local para o SaaS.');
+}
 function printHuman(report){
-  console.log('PDV TOTAL — painel unico: '+report.progress.total+' capacidades do desktop');
+  if(report.saasDelivery){printSaasHuman(report.saasDelivery);console.log('\n--- Inventario historico, NAO fila de entrega SaaS ---\n');}
+  console.log('PDV TOTAL — painel de auditoria historica: '+report.progress.total+' capacidades do desktop');
   for(const [key,label] of Object.entries(report.progress.labels))
     console.log(' - '+label+': '+report.progress.counts[key]);
   console.log('\nOs '+report.contractDiagnostics.total+' contratos sao criterios internos ('+
@@ -127,7 +182,8 @@ function printHuman(report){
   }
 }
 function printMarkdown(report){
-  console.log('# Paridade PDV Total — 56 capacidades\n');
+  if(report.saasDelivery){printSaasMarkdown(report.saasDelivery);console.log('\n---\n');}
+  console.log('# Paridade historica do desktop — 56 capacidades\n');
   console.log('| Estado | Quantidade |\n|---|---:|');
   for(const [key,label] of Object.entries(report.progress.labels))
     console.log('| '+label+' | '+report.progress.counts[key]+' |');
@@ -144,7 +200,10 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const matrix=JSON.parse(readFileSync(resolve(ROOT,'docs/parity/desktop-web-matrix.json'),'utf8'));
   const inventory=JSON.parse(readFileSync(resolve(ROOT,'docs/parity/desktop-capability-inventory.json'),'utf8'));
   const report=buildReport(matrix,inventory);
-  if(process.argv.includes('--json'))console.log(JSON.stringify(report,null,2));
-  else if(process.argv.includes('--markdown'))printMarkdown(report);
-  else printHuman(report);
+  const scope=JSON.parse(readFileSync(resolve(ROOT,'docs/parity/saas-delivery-scope.json'),'utf8'));
+  report.saasDelivery=buildSaasDeliveryReport(report,scope);
+  const saasOnly=process.argv.includes('--saas');
+  if(process.argv.includes('--json'))console.log(JSON.stringify(saasOnly?report.saasDelivery:report,null,2));
+  else if(process.argv.includes('--markdown'))saasOnly?printSaasMarkdown(report.saasDelivery):printMarkdown(report);
+  else saasOnly?printSaasHuman(report.saasDelivery):printHuman(report);
 }
