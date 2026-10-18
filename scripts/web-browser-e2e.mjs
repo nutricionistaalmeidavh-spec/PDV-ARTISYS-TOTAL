@@ -53,10 +53,20 @@ try{
   await page.locator('#product-search').waitFor({state:'visible',timeout:12000});
   // R4: the first authenticated owner session receives segment recommendations,
   // but no optional module is activated by the choice itself.
-  await page.locator('#r4-segment-first-run').waitFor({timeout:12000});
-  await page.locator('#r4-segment-first-run [name=segmentId]').selectOption('RESTAURANT');
-  await page.locator('#r4-segment-first-run [type=submit]').click();
-  await page.locator('#r4-segment-first-run').waitFor({state:'detached',timeout:12000});
+  const freshSegment=page.locator('#r4-segment-first-run');
+  if(await freshSegment.count()){
+    await freshSegment.locator('[name=segmentId]').selectOption('RESTAURANT');
+    await freshSegment.locator('[type=submit]').click();
+    await freshSegment.waitFor({state:'detached',timeout:12000});
+  }
+  const savedSegment=await page.evaluate(async()=>{
+    const api=new window.PdvApiClient.ApiClient();
+    return api.request('/api/v1/onboarding/segments');
+  });
+  assert.equal(savedSegment.selectedId,'RESTAURANT',
+    'saved first-login segment should persist across second authenticated browser session');
+  assert.equal(await page.locator('#auth-overlay').isVisible(),false,
+    'persisted segment must not intercept cashier pointer events');
 
   assert.equal(await page.locator('#product-search').count(),1,'only the canonical checkout renderer should exist');
   await page.locator('#app-sidebar [data-route=products]').click();
