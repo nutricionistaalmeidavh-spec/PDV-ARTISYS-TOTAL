@@ -13,6 +13,7 @@ let html=readFileSync(filename,'utf8');
 html=html.replace("connect-src 'none'","connect-src 'self' http://127.0.0.1:8765");
 html=html.replace('<title>ArtiSys PDV</title>','<title>PDV Total | ArtiSys</title>');
 html=html.replace("../../packages/core/shared/order-composer.js","./order-composer.js");
+html=html.replace("../../packages/core/js/core/mobile-access/qr-code.js","./local-access-qr.js");
 for(const desktopScript of ['first-access-ui.js','updater-ui.js','hardware-scale-ui.js','telemetry-ui.js','reload-transition-ui.js']){
   html=html.replace(new RegExp('\\s*<script defer src="\\./'+desktopScript.replaceAll('.','\\.')+'"></script>','g'),'');
 }
@@ -30,6 +31,7 @@ html=html.replace('<body class="theme-home">','<body class="theme-home"><div id=
 html=html.replace('</body>','  <script defer src="./pwa-register.js"></script>\n</body>');
 writeFileSync(filename,html,'utf8');
 copyFileSync(resolve(root,'packages/core/shared/order-composer.js'),resolve(output,'order-composer.js'));
+copyFileSync(resolve(root,'packages/core/js/core/mobile-access/qr-code.js'),resolve(output,'local-access-qr.js'));
 buildPwaIcons(output);
 // Cache only public, reproducible assets, never authenticated API responses.
 const publicAssets=[];
