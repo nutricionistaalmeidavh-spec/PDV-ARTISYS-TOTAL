@@ -453,6 +453,126 @@ test('P4 finance: manual payable/receivable ledger settles partially, prevents o
   }finally{x.close();}
 });
 
+// P5 basic reports are compared to the byte-pinned desktop algorithm, not a
+// hand-written claim of visual equality. Exact numeric fields only.
+const p5ReportCoreFixture=JSON.parse(readFileSync(
+ new URL('../../../docs/parity/fixtures/p5-report-core-desktop-pinned.json',import.meta.url),'utf8'));
+function p5OriginalReport(){
+ const {input:p,expected,desktop}=p5ReportCoreFixture;
+ const source=readFileSync(new URL('../../../packages/core/js/domains/reports/reporting-service.js',import.meta.url));
+ const sha=createHash('sha1').update('blob '+source.length+'\0').update(source).digest('hex');
+ assert.equal(sha,desktop.blobSha,'P5 original desktop report algorithm was modified');
+ const db={prepare(sql){
+  if(sql==='PRAGMA table_info(sales)')return {all:()=>[]};
+  if(sql.includes('FROM products p LEFT JOIN inventory_balances b'))
+   return {all:()=>[{productId:'p5-item',sku:p.sku,name:'P5 item',unit:'UN',
+     costCents:p.unitCostCents,salePriceCents:1000,minimumStock:0,quantity:p.stock}]};
+  if(sql.includes("FROM cash_sessions WHERE status='CLOSED'"))
+   return {all:()=>[{id:'p5-cash',terminalId:'DEFAULT',operatorId:'owner',
+    expectedCashCents:p.openingCashCents,countedCashCents:p.countedCashCents,
+    divergenceCents:p.countedCashCents-p.openingCashCents,openedAt:date,closedAt:date}]};
+  if(sql.includes('FROM cash_movements cm JOIN cash_sessions'))
+   return {all:()=>[]};
+  if(sql.includes('FROM financial_entries fe'))
+   return {all:()=>[{kind:'PAYABLE',amount_cents:p.payableCents,
+    settled_cents:p.settledCents,due_at:p.dueDate}]};
+  throw Error('Unknown original desktop SQL in P5 fixture: '+sql.slice(0,150));
+ }};
+ const original=createPinnedDesktopReportingService({db,now:()=>date});
+ const stock=original.buildInventorySummary();
+ const cash=original.buildCashSummary({from:'2026-10-17',to:'2026-10-17'});
+ const finance=original.buildFinanceSummary({asOf:date});
+ const observed={inventoryQuantity:stock.items[0].quantity,closedSessions:cash.closedSessions,
+   expectedCashCents:cash.expectedCashCents,countedCashCents:cash.countedCashCents,
+   divergenceCents:cash.divergenceCents,payableOpenCents:finance.payableOpenCents,
+   payableSettledCents:finance.payableSettledCents};
+ assert.deepEqual(observed,expected,'original pinned desktop P5 summary numeric fixture');
+ return observed;
+}
+async function p5SeedBasicReport(x){
+ const {input:p}=p5ReportCoreFixture;
+ await x.id('P5 basic stock',p.sku,p.stock);
+ const opened=await x.write('a','cash/open',{branchId:'branch-a',openingCents:p.openingCashCents});
+ assert.equal(opened.status,201,JSON.stringify(opened.body));
+ const closed=await x.write('a','cash/sessions/'+opened.body.session.id+'/close',
+  {branchId:'branch-a',countedCashCents:p.countedCashCents});
+ assert.equal(closed.status,200,JSON.stringify(closed.body));
+ const fin=await x.write('a','finance/entries',
+   {branchId:'branch-a',kind:'PAYABLE',description:'P5 fixture expense',
+    amountCents:p.payableCents,dueDate:p.dueDate});
+ assert.equal(fin.status,201,JSON.stringify(fin.body));
+ const settled=await x.write('a','finance/entries/'+fin.body.entry.id+'/settle',
+   {branchId:'branch-a',amountCents:p.settledCents,method:'PIX'});
+ assert.equal(settled.status,200,JSON.stringify(settled.body));
+ return {financeId:fin.body.entry.id,sessionId:opened.body.session.id};
+}
+const p5Summary=async x=>x.get('a','reports/summary?branchId=branch-a&from=2026-10-17&to=2026-10-17');
+
+test('reports-060/nominal p5-report-core-desktop-pinned-v1 stock, closed cash and manual finance match original desktop',async()=>{
+ const expected=p5OriginalReport();
+ const x=await setup();try{
+  await p5SeedBasicReport(x);
+  const res=await p5Summary(x);
+  assert.equal(res.status,200,JSON.stringify(res.body));
+  const report=res.body.report;
+  const row=report.inventory.find(v=>v.sku===p5ReportCoreFixture.input.sku);
+  assert.ok(row,'canonical stock is visible in the basic report');
+  const cash=report.cash.find(v=>v.status==='CLOSED');
+  assert.ok(cash,'closed original cash session is in the basic report');
+  const observed={inventoryQuantity:row.quantity,closedSessions:report.cash.filter(v=>v.status==='CLOSED').length,
+   expectedCashCents:cash.expectedCashCents,countedCashCents:cash.countedCashCents,
+   divergenceCents:cash.divergenceCents,payableOpenCents:report.finance.payableOpenCents,
+   payableSettledCents:report.finance.payableSettledCents};
+  assert.deepEqual(observed,expected,'P5 web API/SQLite matches original desktop basic operational summary');
+ }finally{x.close();}
+});
+
+test('reports-060/authorization p5-report-core-desktop-pinned-v1 read only profile cannot mutate stock/cash/finance',async()=>{
+ p5OriginalReport();
+ const x=await setup();try{
+  const ids=await p5SeedBasicReport(x);
+  assert.equal((await x.get('a','reports/summary?branchId=branch-a',x.viewer)).status,200);
+  assert.equal((await x.write('a','cash/open',{branchId:'branch-a',openingCents:1},{who:x.viewer})).status,403);
+  assert.equal((await x.write('a','finance/entries',
+   {branchId:'branch-a',kind:'PAYABLE',description:'Unauthorized bill',amountCents:1,dueDate:'2026-10-25'},{who:x.viewer})).status,403);
+  assert.equal((await x.write('a','inventory/receipts',
+   {branchId:'branch-a',productId:'p5-item',quantity:1,type:'opening'},{who:x.viewer})).status,403);
+  assert.equal((await x.get('a','finance/entries?branchId=branch-a')).body.entries.length,1);
+  assert.equal((await x.get('a','cash/sessions?branchId=branch-a')).body.sessions.length,1);
+  assert.ok(ids.financeId);
+ }finally{x.close();}
+});
+
+test('reports-060/tenant-isolation p5-report-core-desktop-pinned-v1 report core never leaks stock/cash/finance to other tenant',async()=>{
+ p5OriginalReport();
+ const x=await setup();try{
+  await p5SeedBasicReport(x);
+  const other=await x.get('b','reports/summary?branchId=branch-b&from=2026-10-17&to=2026-10-17',x.other);
+  assert.equal(other.status,200,JSON.stringify(other.body));
+  assert.deepEqual(other.body.report.inventory,[]);
+  assert.deepEqual(other.body.report.cash,[]);
+  assert.equal(other.body.report.finance.payableOpenCents,0);
+  assert.equal((await x.get('a','reports/summary?branchId=branch-b')).status,404);
+  assert.equal((await x.get('b','reports/summary?branchId=branch-a',x.other)).status,404);
+ }finally{x.close();}
+});
+
+test('reports-060/failure-recovery p5-report-core-desktop-pinned-v1 rejected duplicate settlement preserves report totals',async()=>{
+ const baseline=p5OriginalReport();
+ const x=await setup();try{
+  const {financeId}=await p5SeedBasicReport(x);
+  const before=await p5Summary(x);
+  assert.equal(before.status,200,JSON.stringify(before.body));
+  const wrong=await x.write('a','finance/entries/'+financeId+'/settle',
+    {branchId:'branch-a',amountCents:1100,method:'PIX'});
+  assert.equal(wrong.status,400,'overpayment is rejected atomically');
+  const after=await p5Summary(x);
+  assert.equal(after.body.report.finance.payableOpenCents,baseline.payableOpenCents);
+  assert.deepEqual(after.body.report.finance,before.body.report.finance,'failed write leaves report untouched');
+  assert.equal((await x.get('a','finance/entries?branchId=branch-a')).body.entries.length,1);
+ }finally{x.close();}
+});
+
 test('P4 reports: summed sales, noncash breakdown and bounded CSV are tenant scoped and read-only',async()=>{
   const x=await setup();try{
     const pid=await x.id('Copo descartável','COPO01',10);

@@ -43,16 +43,21 @@
         {
           "id": "home-002",
           "name": "Painel e atalhos conforme perfil/capacidade",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
-            "file": "apps/web/app.js",
-            "contains": "renderHome"
+            "file": "apps/web/home-role-model.js",
+            "contains": "function homeForUser(user,baseTiles=[])",
+            "testFile": "apps/api/test/p5-home-role-parity.test.mjs",
+            "testContains": "home-002/nominal p5-home-roles-desktop-pinned-v1",
+            "testAssertionContains": "assert.deepEqual(tiles(user(expected('operador'))),['checkout','cash','post-sale','catalog']);",
+            "testRunner": "node-test"
           },
           "owner": "web-shell",
           "dependsOn": [
             "home-001"
           ],
-          "acceptance": "Painel e atalhos conforme perfil/capacidade. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Painel e atalhos conforme perfil/capacidade. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "reviewNote": "Desktop fixado e web têm SHA Git idênticos no modelo de atalhos e política. Quatro cenários executáveis verificam vetores de perfil, autorização negativa, isolamento do contexto de permissões e recuperação. Isolamento de dados também é imposto pela API/RBAC, não pelos botões."
         },
         {
           "id": "home-003",
@@ -1097,16 +1102,21 @@
         {
           "id": "reports-060",
           "name": "Estoques, caixa e contas manuais básicos",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
-            "contains": "inventory,cash,finance"
+            "contains": "inventory,cash,finance",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "reports-060/nominal p5-report-core-desktop-pinned-v1",
+            "testAssertionContains": "assert.deepEqual(observed,expected,'P5 web API/SQLite matches original desktop basic operational summary');",
+            "testRunner": "node-test"
           },
           "owner": "reports",
           "dependsOn": [
             "reports-058"
           ],
-          "acceptance": "Estoques, caixa e contas manuais básicos. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Estoques, caixa e contas manuais básicos. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "reviewNote": "Regra original de estoque/caixa/financeiro (blob Git original fixado) executada e comparada em centavos e unidades à API SQLite. Testes adicionais executados de RBAC, isolamento por empresa/filial e falha de pagamento; só o contrato básico está coberto, sem afirmar paridade de relatórios especializados."
         },
         {
           "id": "reports-061",

@@ -365,6 +365,94 @@
       "testContains": "test('checkout-010/failure-recovery price-override-retry-v4 audited API SQLite comparison'",
       "testAssertionContains": "assert.equal(first.body.sale.totalCents,desktopPricing.calculateSaleTotals({items:[{unitPriceCents:850,quantity:1}]}).totalCents);",
       "fixtureFile": "docs/parity/fixtures/checkout-core-desktop-v1.json"
+    },
+    {
+      "scenarioId": "home-002/nominal",
+      "desktopFixtureId": "p5-home-roles-desktop-pinned-v1",
+      "testContains": "home-002/nominal p5-home-roles-desktop-pinned-v1",
+      "testAssertionContains": "assert.deepEqual(tiles(user(expected('operador'))),['checkout','cash','post-sale','catalog']);",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/p5-home-role-parity.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home-roles-desktop-pinned.json"
+    },
+    {
+      "scenarioId": "home-002/authorization",
+      "desktopFixtureId": "p5-home-roles-desktop-pinned-v1",
+      "testContains": "home-002/authorization p5-home-roles-desktop-pinned-v1",
+      "testAssertionContains": "assert.equal(policy.canAccessRoute(operator,'reports'),false);",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/p5-home-role-parity.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home-roles-desktop-pinned.json"
+    },
+    {
+      "scenarioId": "home-002/tenant-isolation",
+      "desktopFixtureId": "p5-home-roles-desktop-pinned-v1",
+      "testContains": "home-002/tenant-isolation p5-home-roles-desktop-pinned-v1",
+      "testAssertionContains": "assert.deepEqual(tiles(b),[],'role model is stateless across stores');",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/p5-home-role-parity.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home-roles-desktop-pinned.json"
+    },
+    {
+      "scenarioId": "home-002/failure-recovery",
+      "desktopFixtureId": "p5-home-roles-desktop-pinned-v1",
+      "testContains": "home-002/failure-recovery p5-home-roles-desktop-pinned-v1",
+      "testAssertionContains": "assert.deepEqual(tiles(operator),before,'role changes must not mutate other sessions');",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/p5-home-role-parity.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-home-roles-desktop-pinned.json"
+    },
+    {
+      "scenarioId": "reports-060/nominal",
+      "desktopFixtureId": "p5-report-core-desktop-pinned-v1",
+      "testContains": "reports-060/nominal p5-report-core-desktop-pinned-v1",
+      "testAssertionContains": "assert.deepEqual(observed,expected,'P5 web API/SQLite matches original desktop basic operational summary');",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-report-core-desktop-pinned.json"
+    },
+    {
+      "scenarioId": "reports-060/authorization",
+      "desktopFixtureId": "p5-report-core-desktop-pinned-v1",
+      "testContains": "reports-060/authorization p5-report-core-desktop-pinned-v1",
+      "testAssertionContains": "assert.equal((await x.get('a','reports/summary?branchId=branch-a',x.viewer)).status,200);",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-report-core-desktop-pinned.json"
+    },
+    {
+      "scenarioId": "reports-060/tenant-isolation",
+      "desktopFixtureId": "p5-report-core-desktop-pinned-v1",
+      "testContains": "reports-060/tenant-isolation p5-report-core-desktop-pinned-v1",
+      "testAssertionContains": "assert.deepEqual(other.body.report.inventory,[]);",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-report-core-desktop-pinned.json"
+    },
+    {
+      "scenarioId": "reports-060/failure-recovery",
+      "desktopFixtureId": "p5-report-core-desktop-pinned-v1",
+      "testContains": "reports-060/failure-recovery p5-report-core-desktop-pinned-v1",
+      "testAssertionContains": "assert.deepEqual(after.body.report.finance,before.body.report.finance,'failed write leaves report untouched');",
+      "method": "automated",
+      "desktopBaselineCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "testRunner": "node-test",
+      "testFile": "apps/api/test/commerce.test.mjs",
+      "fixtureFile": "docs/parity/fixtures/p5-report-core-desktop-pinned.json"
     }
   ]
 }

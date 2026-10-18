@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "p5-report-core-desktop-pinned-v1",
+  "desktop": {
+    "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
+    "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+    "source": "js/domains/reports/reporting-service.js",
+    "blobSha": "a5ffc3e9e467e5475bd250fa46f77d80ff0a017d",
+    "test": "test/e17-reporting.test.js"
+  },
+  "input": {
+    "sku": "P5-BASIC-STOCK",
+    "stock": 3,
+    "unitCostCents": 500,
+    "openingCashCents": 200,
+    "countedCashCents": 200,
+    "payableCents": 1500,
+    "settledCents": 500,
+    "dueDate": "2026-10-25"
+  },
+  "expected": {
+    "inventoryQuantity": 3,
+    "closedSessions": 1,
+    "expectedCashCents": 200,
+    "countedCashCents": 200,
+    "divergenceCents": 0,
+    "payableOpenCents": 1000,
+    "payableSettledCents": 500
+  },
+  "notes": "Same numeric basis as desktop buildInventorySummary, buildCashSummary and buildFinanceSummary. API adds branch scoping and keeps cash and finance in separate authoritative ledgers; only common contract fields compared."
+}
