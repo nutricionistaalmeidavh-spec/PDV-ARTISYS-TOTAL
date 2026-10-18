@@ -221,5 +221,38 @@
     node.innerHTML='<section class="page"><h2>Carregando opções…</h2></section>';
     try{await load();render();}catch(e){node.textContent='Não foi possível carregar: '+e.message;}
   }
-  root.PdvR4AdvancedUi=Object.freeze({show});
+
+  async function offerFirstRun(){
+    if(!api.webMode||!can('settings.manage'))return;
+    let preference;
+    try{preference=await api.request('/api/v1/onboarding/segments');}catch{return;}
+    if(preference?.selectedId||!preference?.segments?.length)return;
+    const overlay=document.getElementById('auth-overlay');
+    if(!overlay)return;
+    overlay.classList.remove('hidden');
+    overlay.innerHTML='<section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="r4-segment-title">'+
+      '<h1 id="r4-segment-title">Qual é o tipo do seu negócio?</h1>'+
+      '<p>Esta escolha sugere módulos. Nenhum recurso pago ou área opcional será ativado automaticamente.</p>'+
+      '<form id="r4-segment-first-run"><label class="field"><span>Segmento principal</span><select name="segmentId" required>'+
+      preference.segments.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.label)+'</option>').join('')+
+      '</select></label><div class="modal-actions"><button type="button" class="secondary-button" data-r4-onboard-later>Decidir depois</button>'+
+      '<button type="submit" class="primary-button">Salvar e continuar</button></div></form>'+
+      '<small>Depois, em Configurações, você poderá escolher quais áreas deseja habilitar.</small></section>';
+    const close=()=>{overlay.classList.add('hidden');overlay.innerHTML='';};
+    overlay.querySelector('[data-r4-onboard-later]')?.addEventListener('click',close);
+    const form=overlay.querySelector('#r4-segment-first-run');
+    form?.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const button=form.querySelector('[type="submit"]');button.disabled=true;
+      try{
+        const selected=form.elements.segmentId.value;
+        await api.request('/api/v1/onboarding/segments',{method:'PUT',body:{segmentId:selected}});
+        close();
+        toast('Segmento configurado. As áreas opcionais continuam sob seu controle.');
+      }catch(error){button.disabled=false;toast(error.message,true);}
+    });
+    form?.elements.segmentId.focus();
+  }
+
+  root.PdvR4AdvancedUi=Object.freeze({show,offerFirstRun});
 })();
