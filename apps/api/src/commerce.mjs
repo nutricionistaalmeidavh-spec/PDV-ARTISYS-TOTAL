@@ -1474,10 +1474,30 @@ export function createCommerceService(db,{now=nowISO}={}){
         productId:row.id,quantity,grams,weightSource:source
       },header);
     },
-    async removeWeightedItem(tenant,branch,id,itemId){
-      const found=await first('SELECT product_id AS productId FROM sale_items WHERE id=? AND sale_id=? AND tenant_id=? AND branch_id=?',itemId,id,tenant,branch);
+    async removeWeightedItem(tenant,branch,id,itemId,header){
+      const key=requiredMutation(null,header),scope='sale.remove-weighted:'+id+':'+itemId;
+      const previous=await applied(tenant,scope,key);
+      if(previous)return snapshot(tenant,branch,id);
+      const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
+      const found=await first(`SELECT p.unit FROM sale_items i
+        JOIN products p ON p.tenant_id=i.tenant_id AND p.id=i.product_id
+        WHERE i.id=? AND i.sale_id=? AND i.tenant_id=? AND i.branch_id=?`,
+        itemId,id,tenant,branch);
       if(!found)throw error(404,'Item pesado não encontrado.');
-      return this.removeItem(tenant,branch,id,found.productId);
+      if(!['KG','G'].includes(String(found.unit).toUpperCase()))
+        throw error(409,'Somente itens por peso podem ser removidos neste fluxo.');
+      // Atomic delete + receipt keyed to the exact historic line ID.
+      // Deleting an old weighing twice cannot erase a new line for this SKU.
+      await batch([
+        q(`DELETE FROM sale_items WHERE id=? AND sale_id=? AND tenant_id=? AND branch_id=?
+          AND EXISTS(SELECT 1 FROM sales s WHERE s.tenant_id=sale_items.tenant_id
+            AND s.branch_id=sale_items.branch_id AND s.id=sale_items.sale_id AND s.status='OPEN')`,
+          itemId,id,tenant,branch),
+        q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) SELECT ?,?,?,?,? WHERE changes()=1',
+          tenant,scope,key,JSON.stringify({itemId,removed:true}),stamp())
+      ]);
+      if(!await applied(tenant,scope,key))throw error(409,'A venda mudou de estado. Atualize antes de remover.');
+      return snapshotAfterCartChange(tenant,branch,id);
     },
     async overrideItemPrice(tenant,branch,id,itemId,user,body,header){
       const key=requiredMutation(body,header),scope='sale.price-override:'+branch+':'+id;
