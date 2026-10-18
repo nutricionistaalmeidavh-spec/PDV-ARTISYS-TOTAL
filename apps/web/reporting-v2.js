@@ -475,19 +475,34 @@
     };
     const coverageTable=()=>{
       if(!coverage)return '<p>Selecione um período.</p>';
+      const canManage=Boolean(root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'inventory.adjust'));
+      const minimumForm=canManage?`<form id="web-stock-minimum" class="ops-form report-v2-no-print">
+        <h3>Estoque mínimo por filial</h3><p class="ops-muted">O mínimo é configurado por produto nesta filial. Não altera o saldo real nem cria pedido automático.</p>
+        <div class="ops-grid two"><label>Produto<select name="productId" class="ops-input" required>
+          ${(coverage.products||[]).map(p=>`<option value="${escapeHtml(p.productId)}">${escapeHtml(p.name)} · ${escapeHtml(p.sku)} (${p.minimumQuantity==null?'Sem mínimo':'Mínimo '+qty(p.minimumQuantity)})</option>`).join('')}
+        </select></label>
+        <label>Quantidade mínima<input type="number" name="minimum" class="ops-input" min="0" max="100000" step="0.001" inputmode="decimal" placeholder="Ex.: 5" required></label></div>
+        <p role="status" class="web-form-feedback"></p><div class="ops-actions">
+          <button class="ops-primary" type="submit" ${coverage.products.length?'':'disabled'}>Salvar mínimo</button>
+          <button class="ops-secondary" type="button" id="web-stock-minimum-clear" ${coverage.products.length?'':'disabled'}>Remover mínimo</button>
+        </div></form>`:'';
       return `<p class="ops-muted">Consumo efetivo: ${escapeHtml(coverage.period.from)} a ${escapeHtml(coverage.period.to)}.
-        Cobertura estimada em dias com base nas vendas e devoluções, após reservas.
-        Estoque mínimo não configurado: sem alerta de mínimo inventado.</p>`+
+        Cobertura estimada por consumo líquido de vendas/devoluções e disponibilidade após reservas.
+        Produtos sem mínimo configurado não recebem alertas fictícios.</p>`+
         `<div class="ops-metrics">
           ${metric('Sem disponibilidade',String(coverage.zeroOrReservedOut))}
+          ${metric('Abaixo do mínimo',String(coverage.belowMinimum||0))}
+          ${metric('No mínimo',String(coverage.atMinimum||0))}
           ${metric('Sem consumo no período',String(coverage.coverageUnknown))}
           ${metric('Mínimo não definido',String(coverage.unknownMinimum))}</div>`+
-        table(['Produto','Disponível','Reservado','Consumo período','Cobertura (dias)','Entradas por transferência','Saídas por transferência'],
+        table(['Produto','Disponível','Reservado','Consumo período','Cobertura (dias)','Mínimo cadastrado','Situação','Entradas por transferência','Saídas por transferência'],
           (coverage.products||[]).map(p=>`<tr>
           <td>${escapeHtml(p.name)} · ${escapeHtml(p.sku)}</td>
           <td>${qty(p.available)}</td><td>${qty(p.reserved)}</td><td>${qty(p.consumed)}</td>
           <td>${p.daysCoverage==null?'Sem base':qty(p.daysCoverage)}</td>
-          <td>${qty(p.transfersIn)}</td><td>${qty(p.transfersOut)}</td></tr>`));
+          <td>${p.minimumQuantity==null?'Não definido':qty(p.minimumQuantity)}</td>
+          <td>${escapeHtml({BELOW_MINIMUM:'Abaixo do mínimo',AT_MINIMUM:'No mínimo',ABOVE_MINIMUM:'Acima do mínimo',NOT_CONFIGURED:'Não configurado'}[p.minimumStatus]||'Indefinido')}</td>
+          <td>${qty(p.transfersIn)}</td><td>${qty(p.transfersOut)}</td></tr>`))+minimumForm;
     };
     const sellerTargetsView=()=>{
       if(!ranking)return '<p>Selecione o mês.</p>';
@@ -640,6 +655,30 @@
       if(button.disabled)return;
       void renderWebReports({detailOffset:Math.max(0,detail.offset+Number(button.dataset.reportDetailsPage)*detail.limit)});
     }));
+    const minimumForm=content.querySelector('#web-stock-minimum');
+    if(minimumForm){
+      const saveMinimum=async(remove)=>{
+        const feedback=minimumForm.querySelector('[role=status]');
+        const id=minimumForm.elements.productId.value;
+        const raw=minimumForm.elements.minimum.value.trim().replace(',','.');
+        if(!remove&&!/^\\d+(?:\\.\\d{1,3})?$/.test(raw)){
+          feedback.textContent='Informe quantidade de 0 a 100000 com até três casas decimais.';return;
+        }
+        const minimumQuantity=remove?null:Number(raw);
+        if(!remove&&(minimumQuantity>100000||!Number.isFinite(minimumQuantity))){
+          feedback.textContent='Quantidade fora dos limites.';return;
+        }
+        const buttons=[...minimumForm.querySelectorAll('button')];
+        buttons.forEach(button=>button.disabled=true);
+        try{
+          await api.setStockMinimum(id,minimumQuantity,api.mutationId());
+          showToast(remove?'Mínimo removido.':'Mínimo atualizado.','success');
+          await renderWebReports();
+        }catch(error){feedback.textContent=error.message;buttons.forEach(button=>button.disabled=false);}
+      };
+      minimumForm.addEventListener('submit',event=>{event.preventDefault();void saveMinimum(false);});
+      minimumForm.querySelector('#web-stock-minimum-clear')?.addEventListener('click',()=>void saveMinimum(true));
+    }
     content.querySelector('#web-report-print')?.addEventListener('click',()=>root.print());
     content.querySelector('#web-report-xlsx')?.addEventListener('click',async()=>{
       const button=content.querySelector('#web-report-xlsx');button.disabled=true;
