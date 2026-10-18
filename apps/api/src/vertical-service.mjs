@@ -236,14 +236,14 @@ export function createVerticalService(db){
    },
    async serviceRequests(t,b){
      await branchExists(t,b);
-     return all(\`SELECT r.id,r.table_session_id AS tableSessionId,r.request_type AS type,
+     return all(`SELECT r.id,r.table_session_id AS tableSessionId,r.request_type AS type,
        r.status,r.note,r.created_by AS createdBy,r.handled_by AS handledBy,
        r.created_at AS createdAt,r.updated_at AS updatedAt,tb.label AS tableLabel
        FROM restaurant_service_requests r
        JOIN restaurant_table_sessions s ON s.id=r.table_session_id AND s.tenant_id=r.tenant_id AND s.branch_id=r.branch_id
        JOIN restaurant_tables tb ON tb.id=s.table_id AND tb.tenant_id=s.tenant_id AND tb.branch_id=s.branch_id
        WHERE r.tenant_id=? AND r.branch_id=?
-       ORDER BY CASE r.status WHEN 'OPEN' THEN 0 WHEN 'ACKNOWLEDGED' THEN 1 ELSE 2 END,r.created_at DESC LIMIT 250\`,t,b);
+       ORDER BY CASE r.status WHEN 'OPEN' THEN 0 WHEN 'ACKNOWLEDGED' THEN 1 ELSE 2 END,r.created_at DESC LIMIT 250`,t,b);
    },
    async createServiceRequest(t,b,user,id,body,key){
      await branchExists(t,b);
