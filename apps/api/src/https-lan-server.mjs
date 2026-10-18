@@ -1,20 +1,14 @@
 import {createServer} from 'node:https';
-import {readFileSync,readdirSync} from 'node:fs';
-import {readFile} from 'node:fs/promises';
-import {dirname,extname,join,resolve} from 'node:path';
+import {readFileSync,existsSync} from 'node:fs';
+import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {openLocalDatabase} from './local-db.mjs';
 import {applyLocalMigrations} from './local-migrations.mjs';
 import {createApi} from './worker.mjs';
+import {serveLocalPwa} from './local-static.mjs';
 
 // Independent HTTPS entrypoint. The existing loopback-only HTTP server stays dev-only.
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
-const EXTENSIONS=new Map([
-  ['.html','text/html; charset=utf-8'],['.js','text/javascript; charset=utf-8'],
-  ['.css','text/css; charset=utf-8'],['.json','application/json; charset=utf-8'],
-  ['.svg','image/svg+xml'],['.webmanifest','application/manifest+json'],
-  ['.png','image/png'],['.webp','image/webp'],['.ico','image/x-icon']
-]);
 const SECURE_HEADERS={
   'x-content-type-options':'nosniff','referrer-policy':'no-referrer',
   'x-frame-options':'DENY','content-security-policy':"frame-ancestors 'none'",
@@ -44,21 +38,9 @@ export function lanConfig(env=process.env){
     webRoot:resolve(root,'dist/web')};
 }
 
-function publicAssets(webRoot){
-  const entries=new Map();
-  function walk(folder,prefix=''){
-    for(const entry of readdirSync(folder,{withFileTypes:true})){
-      if(entry.name.startsWith('.'))continue;
-      const name=prefix+'/'+entry.name;
-      if(entry.isDirectory())walk(join(folder,entry.name),name);
-      else if(entry.isFile()&&EXTENSIONS.has(extname(entry.name)))
-        entries.set(name,join(folder,entry.name));
-    }
-  }
-  walk(webRoot);
-  if(!entries.has('/index.html')||!entries.has('/sw.js'))
+function requireWebBuild(webRoot){
+  if(!existsSync(join(webRoot,'index.html'))||!existsSync(join(webRoot,'sw.js')))
     throw Error('UI web não compilada: execute npm run build antes do servidor LAN.');
-  return entries;
 }
 
 function reject(res,status,message){
@@ -91,7 +73,7 @@ export function createLanServer({origin,tlsKey,tlsCert,db,webRoot}){
   if(expected.protocol!=='https:'||expected.pathname!=='/'||expected.search||expected.hash)
     throw Error('Servidor LAN exige origem HTTPS exata.');
   if(!db||!tlsKey||!tlsCert)throw Error('Banco e TLS obrigatórios.');
-  const assets=publicAssets(webRoot);
+  requireWebBuild(webRoot);
   const api=createApi({DB:db,COOKIE_SECURE:'true',AUTH_ENABLED:'true',LOCAL_MEDIA_ENABLED:'true'});
   return createServer({key:tlsKey,cert:tlsCert,minVersion:'TLSv1.2'},async(req,res)=>{
     try{
@@ -124,13 +106,10 @@ export function createLanServer({origin,tlsKey,tlsCert,db,webRoot}){
       if(!['GET','HEAD'].includes(method)){
         reject(res,405,'Arquivos da interface são somente leitura.');return;
       }
-      const path=url.pathname==='/'?'/index.html':url.pathname;
-      const filename=assets.get(path);
-      if(!filename){reject(res,404,'Arquivo não encontrado.');return;}
-      const file=await readFile(filename);
-      res.writeHead(200,{'content-type':EXTENSIONS.get(extname(filename)),...SECURE_HEADERS,
-        'content-length':String(file.length)});
-      res.end(method==='HEAD'?undefined:file);
+      // Reuse the same canonical static delivery as the loopback server.
+      const asset=await serveLocalPwa(url.pathname,{rootDir:webRoot,method});
+      res.writeHead(asset.status,{...Object.fromEntries(asset.headers.entries()),...SECURE_HEADERS});
+      res.end(Buffer.from(await asset.arrayBuffer()));
     }catch(error){
       console.error('[PDV LAN] request error',error?.name||'Error');
       if(!res.headersSent)reject(res,500,'Erro interno.');else res.end();
