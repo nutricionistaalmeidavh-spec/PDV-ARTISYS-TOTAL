@@ -2048,3 +2048,174 @@ test('cash-040/failure-recovery cash-single-drawer-v4 audited API SQLite compari
 
  }finally{x.close();}
 });
+
+test('history-033/nominal sale-history-status-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('sale-history-status-v4');
+ assert.equal(fixture.scenarioId,'history-033/nominal');
+ const x=await setup();try{
+
+ const a=await x.write('a','sales',{branchId:'branch-a'}),b=await x.write('a','sales',{branchId:'branch-a'});
+ assert.equal(a.status,201);
+ assert.equal(b.status,201);
+ const suspend=await x.write('a','sales/'+a.body.sale.id+'/suspend',{branchId:'branch-a'});
+ assert.equal(suspend.status,200,suspend.body.error);
+ const listed=await x.get('a','sales/history?branchId=branch-a');
+ assert.equal(listed.status,200,listed.body.error);
+ const statuses=new Set(listed.body.history.items.map(row=>row.status));
+ assert.deepEqual([...statuses].sort(),['OPEN','SUSPENDED'],
+   'desktop sale-service OPEN/SUSPENDED state persists into canonical history');
+ const original=await x.db.prepare('SELECT COUNT(*) AS n FROM sales WHERE tenant_id=?').bind('a').first();
+ assert.equal(original.n,2);
+
+ }finally{x.close();}
+});
+
+test('history-033/authorization sale-history-read-rbac-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('sale-history-read-rbac-v4');
+ assert.equal(fixture.scenarioId,'history-033/authorization');
+ const x=await setup();try{
+
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ assert.equal(opened.status,201);
+ const readOnly=await x.get('a','sales/history?branchId=branch-a',x.viewer);
+ assert.equal(readOnly.status,200,'desktop READ_ONLY profile grants sales.view');
+ p6Policy('sales.view','KITCHEN');
+ await x.db.prepare('UPDATE tenant_memberships SET profile_key=? WHERE tenant_id=? AND user_id=?').bind('KITCHEN','a','viewer').run();
+ const denied=await x.get('a','sales/history?branchId=branch-a',x.viewer);
+ assert.equal(denied.status,403);
+ const rows=await x.db.prepare('SELECT COUNT(*) AS n FROM sales WHERE tenant_id=?').bind('a').first();
+ assert.equal(rows.n,1,'read access policy cannot mutate the desktop sale history');
+
+ }finally{x.close();}
+});
+
+test('history-033/tenant-isolation sale-history-tenant-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('sale-history-tenant-v4');
+ assert.equal(fixture.scenarioId,'history-033/tenant-isolation');
+ const x=await setup();try{
+
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ assert.equal(opened.status,201);
+ const foreign=await x.get('b','sales/history?branchId=branch-b',x.other);
+ assert.equal(foreign.status,200);
+ assert.equal(foreign.body.history.total,0);
+ const wrongBranch=await x.get('a','sales/history?branchId=branch-b');
+ assert.equal(wrongBranch.status,404);
+ const correct=await x.get('a','sales/history?branchId=branch-a');
+ assert.equal(correct.body.history.total,1);
+ const persisted=await x.db.prepare('SELECT tenant_id AS tenant FROM sales WHERE id=?').bind(opened.body.sale.id).first();
+ assert.equal(persisted.tenant,'a','desktop sale journal remains on the original company');
+
+ }finally{x.close();}
+});
+
+test('history-033/failure-recovery sale-history-resume-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('sale-history-resume-v4');
+ assert.equal(fixture.scenarioId,'history-033/failure-recovery');
+ const x=await setup();try{
+
+ const mutation=next(),payload={branchId:'branch-a'};
+ const opened=await x.write('a','sales',payload,{key:mutation});
+ assert.equal(opened.status,201);
+ const replay=await x.write('a','sales',payload,{key:mutation});
+ assert.deepEqual(replay.body,opened.body);
+ const first=await x.get('a','sales/history?branchId=branch-a');
+ const second=await x.get('a','sales/history?branchId=branch-a');
+ assert.deepEqual(second.body,first.body,'history recovery after repeated read is stable and side-effect-free');
+ const count=await x.db.prepare('SELECT COUNT(*) AS n FROM sales WHERE tenant_id=?').bind('a').first();
+ assert.equal(count.n,1,'retried sale opening cannot duplicate persisted original-desktop history');
+
+ }finally{x.close();}
+});
+
+test('checkout-010/nominal price-override-recalculate-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('price-override-recalculate-v4');
+ assert.equal(fixture.scenarioId,'checkout-010/nominal');
+ const x=await setup();try{
+
+ p6Policy('sales.discount');
+ const pid=await x.id('Price override case','PRICE-NOM',5);
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ const sid=opened.body.sale.id;
+ const added=await x.write('a','sales/'+sid+'/items',{branchId:'branch-a',productId:pid,quantity:2});
+ assert.equal(added.status,200,added.body.error);
+ const itemId=added.body.sale.items[0].id;
+ const response=await x.write('a','sales/'+sid+'/items/'+itemId+'/price',
+   {branchId:'branch-a',unitPriceCents:850,reason:'Price approved for customer'},{method:'PUT'});
+ assert.equal(response.status,200,response.body.error);
+ const original=desktopPricing.calculateSaleTotals({items:[{unitPriceCents:850,quantity:2}]});
+ assert.equal(response.body.sale.totalCents,original.totalCents,'authorized price override recalculates with pinned desktop pricing.js');
+ const ledger=await x.db.prepare('SELECT old_price_cents AS before,new_price_cents AS after FROM sale_item_price_overrides WHERE sale_id=?').bind(sid).first();
+ assert.deepEqual({before:ledger.before,after:ledger.after},{before:1000,after:850});
+
+ }finally{x.close();}
+});
+
+test('checkout-010/authorization price-override-rbac-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('price-override-rbac-v4');
+ assert.equal(fixture.scenarioId,'checkout-010/authorization');
+ const x=await setup();try{
+
+ p6Policy('sales.discount','READ_ONLY');
+ const pid=await x.id('Override denied','PRICE-AUTH',3);
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ const sid=opened.body.sale.id;
+ const added=await x.write('a','sales/'+sid+'/items',{branchId:'branch-a',productId:pid,quantity:1});
+ const itemId=added.body.sale.items[0].id;
+ const payload={branchId:'branch-a',unitPriceCents:850,reason:'Authorized pricing change'};
+ const denied=await x.write('a','sales/'+sid+'/items/'+itemId+'/price',payload,{who:x.viewer,method:'PUT'});
+ assert.equal(denied.status,403);
+ const original=desktopPricing.calculateSaleTotals({items:[{unitPriceCents:1000,quantity:1}]});
+ const saved=await x.get('a','sales/'+sid+'?branchId=branch-a');
+ assert.equal(saved.body.sale.totalCents,original.totalCents,'unauthorized actor cannot change original desktop price');
+ const ledger=await x.db.prepare('SELECT COUNT(*) AS n FROM sale_item_price_overrides WHERE sale_id=?').bind(sid).first();
+ assert.equal(ledger.n,0);
+
+ }finally{x.close();}
+});
+
+test('checkout-010/tenant-isolation price-override-tenant-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('price-override-tenant-v4');
+ assert.equal(fixture.scenarioId,'checkout-010/tenant-isolation');
+ const x=await setup();try{
+
+ const pid=await x.id('Owner-only price','PRICE-TENANT',3);
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ const sid=opened.body.sale.id;
+ const added=await x.write('a','sales/'+sid+'/items',{branchId:'branch-a',productId:pid,quantity:1});
+ const itemId=added.body.sale.items[0].id;
+ const foreign=await x.write('b','sales/'+sid+'/items/'+itemId+'/price',
+   {branchId:'branch-b',unitPriceCents:850,reason:'Attempt foreign discount'},{who:x.other,method:'PUT'});
+ assert.equal(foreign.status,404);
+ const saved=await x.get('a','sales/'+sid+'?branchId=branch-a');
+ assert.equal(saved.body.sale.totalCents,desktopPricing.calculateSaleTotals({items:[{unitPriceCents:1000,quantity:1}]}).totalCents);
+ const audit=await x.db.prepare('SELECT COUNT(*) AS n FROM sale_item_price_overrides WHERE sale_id=?').bind(sid).first();
+ assert.equal(audit.n,0,'foreign tenant cannot change price or create audit entries in another company');
+
+ }finally{x.close();}
+});
+
+test('checkout-010/failure-recovery price-override-retry-v4 audited API SQLite comparison',async()=>{
+ const fixture=p6Fixture('price-override-retry-v4');
+ assert.equal(fixture.scenarioId,'checkout-010/failure-recovery');
+ const x=await setup();try{
+
+ const pid=await x.id('Audited retry pricing','PRICE-RETRY',3);
+ const opened=await x.write('a','sales',{branchId:'branch-a'});
+ const sid=opened.body.sale.id;
+ const added=await x.write('a','sales/'+sid+'/items',{branchId:'branch-a',productId:pid,quantity:1});
+ const itemId=added.body.sale.items[0].id;
+ const path='sales/'+sid+'/items/'+itemId+'/price';
+ const body={branchId:'branch-a',unitPriceCents:850,reason:'Repeatable audited manager change'},key=next();
+ const first=await x.write('a',path,body,{method:'PUT',key});
+ assert.equal(first.status,200,first.body.error);
+ const again=await x.write('a',path,body,{method:'PUT',key});
+ assert.deepEqual(again.body,first.body);
+ const bad=await x.write('a',path,{...body,reason:'a'},{method:'PUT',key:next()});
+ assert.equal(bad.status,400);
+ const ledger=await x.db.prepare('SELECT COUNT(*) AS n FROM sale_item_price_overrides WHERE sale_id=?').bind(sid).first();
+ assert.equal(ledger.n,1,'replay and invalid request cannot duplicate immutable price change audit');
+ assert.equal(first.body.sale.totalCents,desktopPricing.calculateSaleTotals({items:[{unitPriceCents:850,quantity:1}]}).totalCents);
+
+ }finally{x.close();}
+});
