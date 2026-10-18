@@ -376,6 +376,46 @@ export function createCommerceService(db,{now=nowISO}={}){
       ]);
       return result;
     },
+    // Counted stock is an adjustment to the existing immutable stock ledger,
+    // not a second mutable stock balance. The client must prove what it saw.
+    async countStock(tenant,branch,user,body,header){
+      await branchExists(tenant,branch);
+      const key=requiredMutation(body,header),scope='inventory.count:'+branch;
+      const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const p=await product(tenant,body?.productId);
+      if(!p.track_stock)throw error(409,'Produto não controla estoque físico.');
+      const parseCount=(value,label)=>{
+        if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>100000||
+           Math.abs(value-roundQuantity(value))>0.00000001)
+          throw error(400,label+' deve ser positiva ou zero, com até três casas decimais.');
+        return Math.round(roundQuantity(value)*1000);
+      };
+      const expectedMilli=parseCount(body?.expectedQuantity,'Saldo esperado');
+      const countedMilli=parseCount(body?.countedQuantity,'Quantidade contada');
+      const reason=text(body?.reason,240);
+      if(reason.length<3)throw error(400,'Inventário contado exige justificativa.');
+      const existing=await first('SELECT balance_milli AS milli FROM stock_positions WHERE tenant_id=? AND branch_id=? AND product_id=?',tenant,branch,p.id);
+      if((existing?.milli||0)!==expectedMilli)
+        throw error(409,'O saldo mudou desde a contagem. Atualize o inventário antes de confirmar.');
+      const delta=countedMilli-expectedMilli,at=stamp();
+      const result={movementId:delta?randomId():null,productId:p.id,branchId:branch,
+        quantityBefore:expectedMilli/1000,quantityDelta:delta/1000,
+        quantityAfter:countedMilli/1000,reason,type:'inventory-count',operatorId:user};
+      // A nonzero delta is checked a SECOND time inside the write statement.
+      // If another terminal changes stock between read and write, CHECK(delta<>0)
+      // aborts the whole batch (including the idempotency record).
+      const commands=[];
+      if(delta)commands.push(q(`INSERT INTO inventory_movements
+        (id,tenant_id,branch_id,product_id,delta_milli,type,sale_id,mutation_id,occurred_at,reason)
+        SELECT ?,?,?,?,
+          CASE WHEN COALESCE((SELECT balance_milli FROM stock_positions
+            WHERE tenant_id=? AND branch_id=? AND product_id=?),0)=?
+          THEN ? ELSE 0 END,'adjustment',NULL,?,?,?`,
+        result.movementId,tenant,branch,p.id,tenant,branch,p.id,expectedMilli,delta,key,at,reason));
+      commands.push(audit(tenant,scope,key,result));
+      await batch(commands);
+      return result;
+    },
     async transferStock(tenant,branch,user,body,header){
       await branchExists(tenant,branch);
       const target=String(body?.toBranchId||'').trim();
