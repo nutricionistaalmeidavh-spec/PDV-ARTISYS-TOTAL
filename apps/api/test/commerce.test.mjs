@@ -20,6 +20,8 @@ const notesMigration=readFileSync(new URL('../migrations/0012_sale_item_notes.sq
 const cashTerminalMigration=readFileSync(new URL('../migrations/0013_cash_terminals.sql',import.meta.url),'utf8');
 const checkoutConfigurationMigration=readFileSync(new URL('../migrations/0014_checkout_configurations.sql',import.meta.url),'utf8');
 const salesTargetsMigration=readFileSync(new URL('../migrations/0015_seller_sales_targets.sql',import.meta.url),'utf8');
+// A fixed business date must reach the commerce adapter, not only session authentication.
+// Otherwise UTC midnight makes period-filtered reports silently disappear in CI.
 const NOW=Date.parse('2026-10-17T14:00:00Z');
 const date='2026-10-17T14:00:00.000Z';
 const password='SafeTestPasswordForPdv2026!';
@@ -459,7 +461,7 @@ test('Desktop parity: paginated sale history scopes status, date, operator, sear
     assert.equal(searched.body.history.items[0].id,sid);
     const someone=await x.get('a','sales/history?branchId=branch-a&operatorId=other');
     assert.equal(someone.body.history.total,0);
-    const today=new Date().toISOString().slice(0,10);
+    const today=date.slice(0,10);
     const time=await x.get('a',`sales/history?branchId=branch-a&from=${today}&to=${today}`);
     assert.equal(time.body.history.total,2);
     assert.equal((await x.get('a','sales/history?branchId=branch-a&limit=101')).status,400);
@@ -737,7 +739,7 @@ test('P3 line note is atomic and idempotent, preserved in completed sale and can
 
 test('P3 home indicators are canonical live data, tenant-isolated and authorization-gated',async()=>{
  const x=await setup();try{
-  const asOf=new Date().toISOString().slice(0,10);
+  const asOf=date.slice(0,10);
   const path='reports/home?branchId=branch-a&asOf='+asOf;
   const before=await x.get('a',path);
   assert.equal(before.status,200,JSON.stringify(before.body));

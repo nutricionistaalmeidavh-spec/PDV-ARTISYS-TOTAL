@@ -176,7 +176,9 @@ export function createApi(env,{now=()=>Date.now()}={}){
         if(media)return media;
         const advanced=await advancedFinanceRoute(request,db,session,membership,tenantId,commerceMatch[2]);
         if(advanced)return advanced;
-        const commerce=await commerceRoute(request,db,session,membership,tenantId,commerceMatch[2]);
+        const commerce=await commerceRoute(request,db,session,membership,tenantId,commerceMatch[2],{
+          now:()=>new Date(now()).toISOString()
+        });
         if(commerce)return commerce;
         const vertical=await verticalRoute(request,db,session,membership,tenantId,commerceMatch[2]);
         if(vertical)return vertical;
