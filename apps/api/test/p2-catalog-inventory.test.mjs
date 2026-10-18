@@ -10,7 +10,7 @@ async function setup(){
   const db=openLocalDatabase();
   for(const x of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql',
     '0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql',
-    '0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql'])db.exec(sql(x));
+    '0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0017_inventory_minimum_levels.sql'])db.exec(sql(x));
   await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
     .bind('u','u@test.example','Operador','unused',now).run();
   for(const [t,b] of [['a','x'],['b','y']]){
@@ -108,36 +108,5 @@ test('P2 stock reservations block checkout stock debit, allow explicit release a
    await x.service.complete('a','x',opened.id,'u',{payments:[{method:'PIX',amountCents:2000}]},key());
    assert.equal(await x.scalar("SELECT balance_milli AS n FROM stock_positions WHERE product_id=?",p.id),1000);
    await assert.rejects(x.service.releaseReservation('a','x',first.id,'u',key()),e=>e.status===409);
- }finally{x.close();}
-});
-
-test('P1 category rename keeps the canonical ID and every product historical category reference',async()=>{
- const x=await setup();try{
-  const category=await x.service.createCategory('a','x','u',{name:'Laticínios'},key());
-  const p=await x.create('MANTEIGA',1500,false,{categoryId:category.id});
-  const transaction=key();
-  const changed=await x.service.renameCategory('a','x','u',category.id,{name:'Frios e laticínios'},transaction);
-  assert.equal(changed.id,category.id);
-  assert.equal(changed.name,'Frios e laticínios');
-  assert.deepEqual(await x.service.renameCategory('a','x','u',category.id,{name:'Frios e laticínios'},transaction),changed);
-  assert.equal((await x.service.categories('a','x')).find(c=>c.id===category.id).name,'Frios e laticínios');
-  assert.equal((await x.service.products('a','x')).find(item=>item.id===p.id).categoryId,category.id);
-  assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM products WHERE category_id=?',category.id),1);
-  assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM product_categories WHERE tenant_id=?','a'),1);
- }finally{x.close();}
-});
-
-test('P1 category rename rejects duplicate names, foreign tenant and missing categories without changing products',async()=>{
- const x=await setup();try{
-  const a=await x.service.createCategory('a','x','u',{name:'Armazém'},key());
-  const b=await x.service.createCategory('a','x','u',{name:'Frutas'},key());
-  const product=await x.create('FRUTA-1',120,true,{categoryId:b.id});
-  await assert.rejects(x.service.renameCategory('a','x','u',b.id,{name:'armazém'},key()),e=>e.status===409);
-  await assert.rejects(x.service.renameCategory('b','y','u',b.id,{name:'Categoria roubada'},key()),e=>e.status===404);
-  await assert.rejects(x.service.renameCategory('a','x','u','missing-category',{name:'Categoria ausente'},key()),e=>e.status===404);
-  await assert.rejects(x.service.renameCategory('a','x','u',b.id,{name:'Z'},key()),e=>e.status===400);
-  assert.equal((await x.service.categories('a','x')).find(c=>c.id===b.id).name,'Frutas');
-  assert.equal((await x.service.products('a','x')).find(p=>p.id===product.id).categoryId,b.id);
-  assert.equal((await x.service.categories('b','y')).length,0);
  }finally{x.close();}
 });

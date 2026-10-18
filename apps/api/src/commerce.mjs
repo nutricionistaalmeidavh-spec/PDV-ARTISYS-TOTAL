@@ -275,7 +275,6 @@ export function createCommerceService(db,{now=nowISO}={}){
     purchaseCostSummary:(t,b,filters)=>purchasing.purchaseCostSummary(t,b,filters),
     categories:(t,b)=>catalogDepth.categories(t,b),
     createCategory:(t,b,u,body,key)=>catalogDepth.createCategory(t,b,u,body,key),
-    renameCategory:(t,b,u,id,body,key)=>catalogDepth.renameCategory(t,b,u,id,body,key),
     productBundle:(t,b,id)=>catalogDepth.bundle(t,b,id),
     setBundle:(t,b,id,u,body,key)=>catalogDepth.setBundle(t,b,id,u,body,key),
     reserveStock:(t,b,u,body,key)=>catalogDepth.reserveStock(t,b,u,body,key),
@@ -879,6 +878,38 @@ export function createCommerceService(db,{now=nowISO}={}){
       }
       return result;
     },
+    async saveInventoryMinimum(tenant,branch,user,body,header){
+      await branchExists(tenant,branch);
+      if(!await first("SELECT 1 AS ready FROM sqlite_master WHERE type='table' AND name='inventory_minimum_levels'"))
+        throw error(503,'A atualização de estoque mínimo ainda não foi aplicada no banco desta instalação.');
+      const productId=body?.productId;
+      if(typeof productId!=='string'||!productId||productId.length>128)
+        throw error(400,'Informe o produto.');
+      const record=await product(tenant,productId);
+      if(!record.track_stock)throw error(409,'Produto sem controle de estoque.');
+      const minimum=body?.minimumQuantity;
+      if(minimum!==null && (typeof minimum!=='number'||!Number.isFinite(minimum)||
+         minimum<0||minimum>100000||Math.abs(minimum*1000-Math.round(minimum*1000))>1e-7))
+        throw error(400,'Mínimo deve ser nulo ou quantidade entre 0 e 100000 com três casas decimais.');
+      const scope='inventory.minimum:'+branch+':'+productId;
+      const key=requiredMutation(body,header);
+      const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const result={productId,branchId:branch,minimumQuantity:minimum,
+        status:minimum===null?'NOT_CONFIGURED':'CONFIGURED'};
+      const statements=minimum===null
+        ?[q('DELETE FROM inventory_minimum_levels WHERE tenant_id=? AND branch_id=? AND product_id=?',
+            tenant,branch,productId)]
+        :[q(`INSERT INTO inventory_minimum_levels
+            (tenant_id,branch_id,product_id,minimum_milli,updated_by,updated_at)
+            VALUES(?,?,?,?,?,?)
+            ON CONFLICT(tenant_id,branch_id,product_id) DO UPDATE SET
+              minimum_milli=excluded.minimum_milli,updated_by=excluded.updated_by,
+              updated_at=excluded.updated_at`,
+            tenant,branch,productId,Math.round(minimum*1000),user,stamp())];
+      statements.push(audit(tenant,scope,key,result));
+      await batch(statements);
+      return result;
+    },
     async homeIndicators(tenant,branch,{asOf=stamp().slice(0,10)}={}){
       period({from:asOf,to:asOf});
       const [report,open,coverage]=await Promise.all([
@@ -891,6 +922,9 @@ export function createCommerceService(db,{now=nowISO}={}){
         refundedCents:report.sales.refundedCents,
         cashOpen:Boolean(open?.n),activeCashTerminals:Number(open?.n||0),
         outOfStockCount:coverage.zeroOrReservedOut,
+        belowMinimumCount:coverage.belowMinimum,
+        atMinimumCount:coverage.atMinimum,
+        minimumUnconfiguredCount:coverage.unknownMinimum,
         trackedProducts:coverage.products.length,
         stockCoverageUnknown:coverage.coverageUnknown,
         source:'CANONICAL_SALES_CASH_STOCK'};
@@ -952,6 +986,38 @@ export function createCommerceService(db,{now=nowISO}={}){
       return {period:{from:from||null,to:to||null},sales,methodTotals:payments,
         products:[...products.values()].sort((x,y)=>y.grossCents-x.grossCents).slice(0,50),
         inventory,cash,finance};
+    },
+    async dailySalesTrend(tenant,branch,{from,to}={}){
+      await branchExists(tenant,branch);
+      if(!from||!to)throw error(400,'Informe período para tendência.');
+      const {a,b}=period({from,to});
+      const start=Date.parse(from+'T00:00:00.000Z'),end=Date.parse(to+'T00:00:00.000Z');
+      const days=Math.round((end-start)/86400000)+1;
+      if(!Number.isSafeInteger(days)||days<1||days>90)
+        throw error(400,'A tendência permite de 1 a 90 dias por consulta.');
+      const [sales,returns]=await Promise.all([
+        all(`SELECT substr(completed_at,1,10) AS day,
+          COUNT(*) AS count,COALESCE(SUM(total_cents),0) AS grossCents
+          FROM sales WHERE tenant_id=? AND branch_id=? AND
+          status IN('COMPLETED','CANCELLED') AND completed_at BETWEEN ? AND ?
+          GROUP BY substr(completed_at,1,10)`,tenant,branch,a,b),
+        all(`SELECT substr(created_at,1,10) AS day,
+          COALESCE(SUM(amount_cents),0) AS refundedCents
+          FROM sale_returns WHERE tenant_id=? AND branch_id=? AND created_at BETWEEN ? AND ?
+          GROUP BY substr(created_at,1,10)`,tenant,branch,a,b)
+      ]);
+      const byDay=new Map();
+      for(const row of sales)byDay.set(row.day,{count:Number(row.count),grossCents:Number(row.grossCents),refundedCents:0});
+      for(const row of returns){
+        const record=byDay.get(row.day)||{count:0,grossCents:0,refundedCents:0};
+        record.refundedCents=Number(row.refundedCents);byDay.set(row.day,record);
+      }
+      const points=Array.from({length:days},(_,index)=>{
+        const date=new Date(start+index*86400000).toISOString().slice(0,10);
+        const value=byDay.get(date)||{count:0,grossCents:0,refundedCents:0};
+        return {date,...value,netCents:value.grossCents-value.refundedCents};
+      });
+      return {period:{from,to},source:'CANONICAL_COMPLETIONS_AND_RETURNS',points};
     },
     async compareReports(tenant,branch,{from,to,compareFrom,compareTo}={}){
       if(!from||!to||!compareFrom||!compareTo)

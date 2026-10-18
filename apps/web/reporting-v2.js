@@ -382,14 +382,16 @@
     const available=['overview','comparison','products','payments','inventory','cash','finance','margins','details','coverage','targets'];
     if(!available.includes(state.view))state.view='overview';
     saveWebReportView();
-    let report,comparison=null,margin=null,detail=null,coverage=null,ranking=null,sellersForGoals=[];
+    let report,comparison=null,trend=null,margin=null,detail=null,coverage=null,ranking=null,sellersForGoals=[];
     try{
       const previous=root.PdvBusinessDate.equivalentPreviousPeriod(fromDate,toDate);
-      [report,comparison,margin,detail,coverage,ranking,sellersForGoals]=await Promise.all([
+      const spanDays=Math.round((Date.parse(toDate+'T00:00:00Z')-Date.parse(fromDate+'T00:00:00Z'))/86400000)+1;
+      [report,comparison,trend,margin,detail,coverage,ranking,sellersForGoals]=await Promise.all([
         api.request('/api/v1/reports/summary?'+query.toString()),
         ['overview','comparison'].includes(state.view)?api.compareSalesPeriods({
           from:fromDate,to:toDate,compareFrom:previous.previousFrom,compareTo:previous.previousTo
         }).catch(error=>{if(state.view==='comparison')throw error;return null;}):Promise.resolve(null),
+        state.view==='overview'&&spanDays>=1&&spanDays<=90?api.dailySalesTrend({from:fromDate,to:toDate}):Promise.resolve(null),
         state.view==='margins'?api.historicalMarginReport({from:fromDate,to:toDate}):Promise.resolve(null),
         state.view==='details'?api.reportSalesDetailsCanonical({from:fromDate,to:toDate,
           sellerId:state.sellerId||'',customerId:state.customerId||'',
@@ -478,19 +480,34 @@
     };
     const coverageTable=()=>{
       if(!coverage)return '<p>Selecione um período.</p>';
-      return `<p class="ops-muted">Consumo efetivo: ${escapeHtml(coverage.period.from)} a ${escapeHtml(coverage.period.to)}.
-        Cobertura estimada em dias com base nas vendas e devoluções, após reservas.
-        Estoque mínimo não configurado: sem alerta de mínimo inventado.</p>`+
+      const canManage=Boolean(coverage.minimumPoliciesAvailable&&root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'inventory.adjust'));
+      const minimumForm=canManage?`<form id="web-stock-minimum" class="ops-form report-v2-no-print">
+        <h3>Estoque mínimo por filial</h3><p class="ops-muted">O mínimo é configurado por produto nesta filial. Não altera o saldo real nem cria pedido automático.</p>
+        <div class="ops-grid two"><label>Produto<select name="productId" class="ops-input" required>
+          ${(coverage.products||[]).map(p=>`<option value="${escapeHtml(p.productId)}">${escapeHtml(p.name)} · ${escapeHtml(p.sku)} (${p.minimumQuantity==null?'Sem mínimo':'Mínimo '+qty(p.minimumQuantity)})</option>`).join('')}
+        </select></label>
+        <label>Quantidade mínima<input type="number" name="minimum" class="ops-input" min="0" max="100000" step="0.001" inputmode="decimal" placeholder="Ex.: 5" required></label></div>
+        <p role="status" class="web-form-feedback"></p><div class="ops-actions">
+          <button class="ops-primary" type="submit" ${coverage.products.length?'':'disabled'}>Salvar mínimo</button>
+          <button class="ops-secondary" type="button" id="web-stock-minimum-clear" ${coverage.products.length?'':'disabled'}>Remover mínimo</button>
+        </div></form>`:'';
+      return `${!coverage.minimumPoliciesAvailable?'<p role="alert">Configuração de estoque mínimo indisponível até aplicar a migração 0016 neste ambiente. Os saldos e consumos continuam disponíveis.</p>':''}<p class="ops-muted">Consumo efetivo: ${escapeHtml(coverage.period.from)} a ${escapeHtml(coverage.period.to)}.
+        Cobertura estimada por consumo líquido de vendas/devoluções e disponibilidade após reservas.
+        Produtos sem mínimo configurado não recebem alertas fictícios.</p>`+
         `<div class="ops-metrics">
           ${metric('Sem disponibilidade',String(coverage.zeroOrReservedOut))}
+          ${metric('Abaixo do mínimo',String(coverage.belowMinimum||0))}
+          ${metric('No mínimo',String(coverage.atMinimum||0))}
           ${metric('Sem consumo no período',String(coverage.coverageUnknown))}
           ${metric('Mínimo não definido',String(coverage.unknownMinimum))}</div>`+
-        table(['Produto','Disponível','Reservado','Consumo período','Cobertura (dias)','Entradas por transferência','Saídas por transferência'],
+        table(['Produto','Disponível','Reservado','Consumo período','Cobertura (dias)','Mínimo cadastrado','Situação','Entradas por transferência','Saídas por transferência'],
           (coverage.products||[]).map(p=>`<tr>
           <td>${escapeHtml(p.name)} · ${escapeHtml(p.sku)}</td>
           <td>${qty(p.available)}</td><td>${qty(p.reserved)}</td><td>${qty(p.consumed)}</td>
           <td>${p.daysCoverage==null?'Sem base':qty(p.daysCoverage)}</td>
-          <td>${qty(p.transfersIn)}</td><td>${qty(p.transfersOut)}</td></tr>`));
+          <td>${p.minimumQuantity==null?'Não definido':qty(p.minimumQuantity)}</td>
+          <td>${escapeHtml({BELOW_MINIMUM:'Abaixo do mínimo',AT_MINIMUM:'No mínimo',ABOVE_MINIMUM:'Acima do mínimo',NOT_CONFIGURED:'Não configurado'}[p.minimumStatus]||'Indefinido')}</td>
+          <td>${qty(p.transfersIn)}</td><td>${qty(p.transfersOut)}</td></tr>`))+minimumForm;
     };
     const sellerTargetsView=()=>{
       if(!ranking)return '<p>Selecione o mês.</p>';
@@ -539,6 +556,14 @@
           `<tr><td>Variação de receita (%)</td><td colspan="3">${d.percentage==null?'Sem base comparativa anterior':escapeHtml(d.percentage.toLocaleString('pt-BR')+'%')}</td></tr>`
         ]);
     };
+    const trendTable=()=>{
+      if(!trend)return '<p class="ops-muted">Para consultar a evolução diária, selecione até 90 dias no período.</p>';
+      const points=trend.points||[];
+      return table(['Data','Vendas','Receita original','Devoluções','Líquido'],
+        points.map(p=>`<tr><td>${escapeHtml(p.date)}</td><td>${p.count}</td>
+          <td>${value(p.grossCents)}</td><td>${value(p.refundedCents)}</td>
+          <td>${value(p.netCents)}</td></tr>`));
+    };
     const overview=`<div class="ops-metrics">
       ${metric('Faturamento registrado (líquido)',value(total),comparison?comparisonHint:'')}
       ${metric('Vendas concluídas',String(count))}
@@ -547,7 +572,10 @@
       ${metric('Descontos',value(sale.discountsCents))}
       </div><div class="ops-grid two">
       <section class="ops-card"><h2>Meios de pagamento</h2>${paymentsTable()}</section>
-      <section class="ops-card"><h2>Mais vendidos</h2>${productsTable()}</section></div>`;
+      <section class="ops-card"><h2>Mais vendidos</h2>${productsTable()}</section></div>
+      <section class="ops-card"><h2>Evolução diária de vendas líquidas</h2>
+      <p class="ops-muted">Movimentos por data efetiva: vendas concluídas e devoluções são apresentados separadamente, sem reescrever o faturamento de períodos passados.</p>
+      ${trendTable()}</section>`;
     const views={overview,comparison:comparativeView(),products:productsTable(),payments:paymentsTable(),inventory:inventoryTable(),
       cash:cashTable(),finance:financeTable(),margins:marginsTable(),details:detailedTable(),coverage:coverageTable(),targets:sellerTargetsView()};
 
@@ -635,17 +663,18 @@
       void renderWebReports({fromDate:form.elements.from.value,toDate:form.elements.to.value});
     });
     content.querySelectorAll('[data-report-web]').forEach(button=>{
-      button.addEventListener('click',()=>void renderWebReports({view:button.dataset.reportWeb}));
+      button.addEventListener('click',()=>{const target=button.dataset.reportWeb;
+        void renderWebReports({view:target}).then(()=>{
+          content.querySelector('[data-report-web="'+target+'"]')?.focus({preventScroll:true});
+        });});
       button.addEventListener('keydown',event=>{
-        if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
-        event.preventDefault();
-        const index=available.indexOf(button.dataset.reportWeb);
-        const nextIndex=event.key==='Home'?0:event.key==='End'?available.length-1:
-          (index+(event.key==='ArrowRight'?1:-1)+available.length)%available.length;
-        const nextView=available[nextIndex];
-        void renderWebReports({view:nextView}).then(()=>{
-          content.querySelector('[data-report-web="'+nextView+'"]')?.focus({preventScroll:true});
-        });
+        const tabs=[...content.querySelectorAll('[data-report-web]')];
+        const index=tabs.indexOf(button);
+        const nextIndex=event.key==='ArrowRight'?(index+1)%tabs.length:
+          event.key==='ArrowLeft'?(index-1+tabs.length)%tabs.length:
+          event.key==='Home'?0:event.key==='End'?tabs.length-1:-1;
+        if(nextIndex<0)return;
+        event.preventDefault();tabs[nextIndex].click();
       });
     });
     content.querySelector('#web-target-month')?.addEventListener('submit',event=>{
@@ -673,6 +702,30 @@
       if(button.disabled)return;
       void renderWebReports({detailOffset:Math.max(0,detail.offset+Number(button.dataset.reportDetailsPage)*detail.limit)});
     }));
+    const minimumForm=content.querySelector('#web-stock-minimum');
+    if(minimumForm){
+      const saveMinimum=async(remove)=>{
+        const feedback=minimumForm.querySelector('[role=status]');
+        const id=minimumForm.elements.productId.value;
+        const raw=minimumForm.elements.minimum.value.trim().replace(',','.');
+        if(!remove&&!/^\d+(?:\.\d{1,3})?$/.test(raw)){
+          feedback.textContent='Informe quantidade de 0 a 100000 com até três casas decimais.';return;
+        }
+        const minimumQuantity=remove?null:Number(raw);
+        if(!remove&&(minimumQuantity>100000||!Number.isFinite(minimumQuantity))){
+          feedback.textContent='Quantidade fora dos limites.';return;
+        }
+        const buttons=[...minimumForm.querySelectorAll('button')];
+        buttons.forEach(button=>button.disabled=true);
+        try{
+          await api.setStockMinimum(id,minimumQuantity,api.mutationId());
+          showToast(remove?'Mínimo removido.':'Mínimo atualizado.','success');
+          await renderWebReports();
+        }catch(error){feedback.textContent=error.message;buttons.forEach(button=>button.disabled=false);}
+      };
+      minimumForm.addEventListener('submit',event=>{event.preventDefault();void saveMinimum(false);});
+      minimumForm.querySelector('#web-stock-minimum-clear')?.addEventListener('click',()=>void saveMinimum(true));
+    }
     content.querySelector('#web-report-print')?.addEventListener('click',()=>root.print());
     content.querySelector('#web-report-xlsx')?.addEventListener('click',async()=>{
       const button=content.querySelector('#web-report-xlsx');button.disabled=true;

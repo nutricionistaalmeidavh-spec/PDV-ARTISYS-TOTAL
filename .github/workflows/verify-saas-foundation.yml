@@ -114,6 +114,8 @@ jobs:
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0015_seller_sales_targets.sql
       - name: Test additive immutable lot receipt provenance migration in local D1
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0016_inventory_lot_receipts.sql
+      - name: Test P5 per-branch stock minimum policy in local D1
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0017_inventory_minimum_levels.sql
       - name: Install one Chromium for all browser regression gates
         run: |
           npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0

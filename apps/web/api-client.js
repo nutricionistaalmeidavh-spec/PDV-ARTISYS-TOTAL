@@ -157,6 +157,7 @@
       if(operation==='reports/commission-ranking')return value.ranking;
       if(operation==='reports/commission-targets')return value.target;
       if(operation==='reports/compare')return value.comparison;
+      if(operation==='reports/daily-trend')return value.trend;
       if(operation==='reports/margins')return value.margin;
       if(operation==='reports/details')return value.details;
       if(operation==='reports/stock-coverage')return value.coverage;
@@ -211,7 +212,6 @@
 
     categories(includeInactive = false) { return this.request(this.webMode?'/api/v1/products/categories':`/api/v1/categories${includeInactive ? '?includeInactive=true' : ''}`); }
     saveCategory(body) { return this.request(this.webMode?'/api/v1/products/categories':'/api/v1/categories', { method: 'POST', body }); }
-    renameCategory(id,name,mutationId){return this.request(`/api/v1/products/categories/${encodeURIComponent(id)}`,{method:'PATCH',body:{name},mutationId});}
     previewCatalogCsv(csv,mode='create'){return this.request('/api/v1/products/import/preview',{method:'POST',body:{csv,mode}});}
     commitCatalogCsv(csv,mutationId,mode='create',previewToken=null){
       return this.request('/api/v1/products/import/commit',{method:'POST',body:{csv,mode,...(previewToken?{previewToken}:{})},mutationId});
@@ -328,12 +328,14 @@
     sales(status = '', limit = 50) { return this.request(`/api/v1/sales${this.params({status,limit})}`); }
     salesHistory(filters = {}) { return this.request(`/api/v1/sales/history${this.params(filters)}`); }
     compareSalesPeriods(filters = {}) { return this.request(`/api/v1/reports/compare${this.params(filters)}`); }
+    dailySalesTrend(filters={}){return this.request('/api/v1/reports/daily-trend'+this.params(filters));}
     sellerSalesRanking(filters={}){return this.request('/api/v1/reports/commission-ranking'+this.params(filters));}
     saveSellerSalesTarget(body,mutationId){return this.request('/api/v1/reports/commission-targets',{method:'PUT',body,mutationId});}
     historicalMarginReport(filters = {}) { return this.request(`/api/v1/reports/margins${this.params(filters)}`); }
     reportSalesDetailsCanonical(filters={}){return this.request('/api/v1/reports/details'+this.params(filters));}
     exportSalesDetailCsvCanonical(filters={}){return this.request('/api/v1/reports/details.csv'+this.params(filters));}
     reportStockCoverage(filters={}){return this.request('/api/v1/reports/stock-coverage'+this.params(filters));}
+    setStockMinimum(productId,minimumQuantity,mutationId){return this.request('/api/v1/reports/stock-minimum',{method:'PUT',body:{productId,minimumQuantity},mutationId});}
     homeIndicators(filters={}){return this.request('/api/v1/reports/home'+this.params(filters));}
     sale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}`); }
     saleDetails(id) { return this.webMode?this.sale(id):this.request(`/api/v1/sales/${encodeURIComponent(id)}/details`); }

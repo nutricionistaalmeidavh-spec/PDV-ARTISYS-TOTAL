@@ -71,10 +71,6 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
         if(method==='GET'){requireAccess(member,'products.view',user);return json({categories:await service.categories(tenant,branch)});}
         if(method==='POST'){requireAccess(member,'products.manage',user);return json({category:await service.createCategory(tenant,branch,user,body,key)},201);}
       }
-      if(parts[1]==='categories'&&parts.length===3&&method==='PATCH'){
-        requireAccess(member,'products.manage',user);
-        return json({category:await service.renameCategory(tenant,branch,user,parts[2],body,key)});
-      }
       if(parts.length===3&&parts[2]==='configuration'){
         if(method==='GET'){
           requireAccess(member,'products.view',user);
@@ -258,6 +254,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
       }
     }
     if(feature==='reports'){
+      if(parts.length===2&&parts[1]==='stock-minimum'&&method==='PUT'){
+        requireAccess(member,'inventory.adjust',user);
+        return json({minimum:await service.saveInventoryMinimum(tenant,branch,user,body,key)});
+      }
       if(parts.length===2&&parts[1]==='commission-targets'&&method==='PUT'){
         requireAccess(member,'sellers.manage',user);
         return json({target:await service.saveSellerSalesTarget(tenant,branch,user,body,key)});
@@ -300,6 +300,12 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
         return json({margin:await service.marginReport(tenant,branch,{
           from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||'',
           productId:url.searchParams.get('productId')||''
+        })});
+      }
+      if(parts.length===2&&parts[1]==='daily-trend'&&method==='GET'){
+        requireAccess(member,'reports.view',user);
+        return json({trend:await service.dailySalesTrend(tenant,branch,{
+          from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||''
         })});
       }
       if(parts.length===2&&parts[1]==='compare'&&method==='GET'){

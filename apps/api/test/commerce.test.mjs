@@ -21,6 +21,7 @@ const cashTerminalMigration=readFileSync(new URL('../migrations/0013_cash_termin
 const checkoutConfigurationMigration=readFileSync(new URL('../migrations/0014_checkout_configurations.sql',import.meta.url),'utf8');
 const salesTargetsMigration=readFileSync(new URL('../migrations/0015_seller_sales_targets.sql',import.meta.url),'utf8');
 const lotReceiptMigration=readFileSync(new URL('../migrations/0016_inventory_lot_receipts.sql',import.meta.url),'utf8');
+const minimumMigration=readFileSync(new URL('../migrations/0017_inventory_minimum_levels.sql',import.meta.url),'utf8');
 // A fixed business date must reach the commerce adapter, not only session authentication.
 // Otherwise UTC midnight makes period-filtered reports silently disappear in CI.
 const NOW=Date.parse('2026-10-17T14:00:00Z');
@@ -29,7 +30,7 @@ const password='SafeTestPasswordForPdv2026!';
 let num=0;
 const next=()=>('mutation-'+(++num)+'-long');
 async function setup(){
-  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);db.exec(checkoutConfigurationMigration);db.exec(salesTargetsMigration);db.exec(lotReceiptMigration);
+  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);db.exec(checkoutConfigurationMigration);db.exec(salesTargetsMigration);db.exec(lotReceiptMigration);db.exec(minimumMigration);
   const pass=await hashPassword(password);
   for(const [id,email] of [['owner','owner@test.com'],['other','other@test.com'],['viewer','viewer@test.com']])
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
@@ -813,6 +814,80 @@ test('P4 stock coverage derives reserved availability and demand from immutable 
  }finally{x.close();}
 });
 
+test('P5 staged D1 rollout keeps old reports usable and blocks writes until 0016 is deployed',async()=>{
+ const x=await setup();try{
+  const id=await x.id('Sem tabela opcional','P5-SAFE',3);
+  x.db.exec('DROP TABLE inventory_minimum_levels');
+  const old=await x.get('a','reports/stock-coverage?branchId=branch-a&asOf=2026-10-17');
+  assert.equal(old.status,200,JSON.stringify(old.body));
+  assert.equal(old.body.coverage.minimumPoliciesAvailable,false);
+  assert.equal(old.body.coverage.products.find(p=>p.productId===id).minimumStatus,'NOT_CONFIGURED');
+  const home=await x.get('a','reports/home?branchId=branch-a&asOf=2026-10-17');
+  assert.equal(home.status,200,JSON.stringify(home.body));
+  const attempt=await x.write('a','reports/stock-minimum',{branchId:'branch-a',productId:id,minimumQuantity:2},{method:'PUT'});
+  assert.equal(attempt.status,503);
+  assert.match(attempt.body.error,/atualização.*não foi aplicada|migração|banco/i);
+ }finally{x.close();}
+});
+
+test('P5 daily trend is zero-filled, uses canonical completed sales, validates period and isolates tenants',async()=>{
+ const x=await setup();try{
+  const p=await x.id('Tendência comprovada','P5-TREND',2);
+  await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+  const s=(await x.write('a','sales',{branchId:'branch-a'})).body.sale;
+  await x.write('a','sales/'+s.id+'/items',{branchId:'branch-a',productId:p,quantity:1});
+  const paid=await x.write('a','sales/'+s.id+'/complete',
+    {branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]});
+  assert.equal(paid.status,200,paid.body.error);
+  const url='reports/daily-trend?branchId=branch-a&from=2026-10-16&to=2026-10-18';
+  const response=await x.get('a',url);
+  assert.equal(response.status,200,JSON.stringify(response.body));
+  assert.deepEqual(response.body.trend.points.map(p=>p.date),['2026-10-16','2026-10-17','2026-10-18']);
+  assert.deepEqual(response.body.trend.points.map(p=>p.netCents),[0,1000,0]);
+  assert.equal(response.body.trend.points[1].count,1);
+  const other=await x.get('b','reports/daily-trend?branchId=branch-b&from=2026-10-16&to=2026-10-18',x.other);
+  assert.equal(other.status,200);
+  assert.equal(other.body.trend.points.reduce((n,p)=>n+p.netCents,0),0);
+  assert.equal((await x.get('a','reports/daily-trend?branchId=branch-b&from=2026-10-16&to=2026-10-18')).status,404);
+  assert.equal((await x.get('a','reports/daily-trend?branchId=branch-a&from=2026-01-01&to=2026-10-18')).status,400);
+  assert.equal((await x.get('a','reports/daily-trend?branchId=branch-a&from=2026-10-18&to=2026-10-17')).status,400);
+  assert.equal((await x.get('a','reports/daily-trend?branchId=branch-a&from=2026-02-30&to=2026-03-01')).status,400);
+ }finally{x.close();}
+});
+
+test('P5 minimum stock settings are validated, atomic, idempotent and tenant/branch/RBAC isolated',async()=>{
+ const x=await setup();try{
+  const p=await x.id('Item com mínimo','P5-MIN',5);
+  const route='reports/stock-minimum';
+  const report=()=>x.get('a','reports/stock-coverage?branchId=branch-a&asOf=2026-10-17&days=30');
+  const find=async()=>((await report()).body.coverage.products.find(item=>item.productId===p));
+  assert.equal((await find()).minimumQuantity,null);
+  const key=next();
+  const configured=await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:6},{method:'PUT',key});
+  assert.equal(configured.status,200,JSON.stringify(configured.body));
+  assert.equal(configured.body.minimum.minimumQuantity,6);
+  const replay=await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:6},{method:'PUT',key});
+  assert.deepEqual(replay.body,configured.body);
+  const under=await report(),row=under.body.coverage.products.find(item=>item.productId===p);
+  assert.equal(row.minimumStatus,'BELOW_MINIMUM');
+  assert.equal(under.body.coverage.belowMinimum,1);
+  assert.equal(under.body.coverage.unknownMinimum,0);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:0},{method:'PUT',who:x.viewer})).status,403);
+  assert.equal((await x.write('b',route,{branchId:'branch-b',productId:p,minimumQuantity:4},{method:'PUT',who:x.other})).status,404);
+  assert.equal((await x.write('a',route,{branchId:'branch-b',productId:p,minimumQuantity:4},{method:'PUT'})).status,404);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:-1},{method:'PUT'})).status,400);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:0.0001},{method:'PUT'})).status,400);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:'5'},{method:'PUT'})).status,400);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:5},{method:'PUT'})).status,200);
+  assert.equal((await find()).minimumStatus,'AT_MINIMUM');
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:2},{method:'PUT'})).status,200);
+  assert.equal((await find()).minimumStatus,'ABOVE_MINIMUM');
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:null},{method:'PUT'})).status,200);
+  assert.equal((await find()).minimumStatus,'NOT_CONFIGURED');
+  assert.equal((await x.get('b','reports/stock-coverage?branchId=branch-b&asOf=2026-10-17',x.other)).body.coverage.products.length,0);
+ }finally{x.close();}
+});
+
 test('P3 line note is atomic and idempotent, preserved in completed sale and cannot be edited afterwards',async()=>{
  const x=await setup();try{
   const product=await x.id('Suco natural','ITEM-NOTE',5);
@@ -859,6 +934,8 @@ test('P3 home indicators are canonical live data, tenant-isolated and authorizat
   assert.equal(after.body.home.netSalesCents,1000);
   assert.equal(after.body.home.cashOpen,true);
   assert.equal(after.body.home.outOfStockCount,1);
+  assert.equal(after.body.home.minimumUnconfiguredCount,1);
+  assert.equal(after.body.home.belowMinimumCount,0);
   const other=await x.get('b','reports/home?branchId=branch-b&asOf='+asOf,x.other);
   assert.equal(other.status,200,JSON.stringify(other.body));
   assert.equal(other.body.home.salesCount,0);

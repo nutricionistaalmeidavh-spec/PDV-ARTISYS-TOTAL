@@ -362,12 +362,15 @@
             ${metric('Terminais com caixa aberto',String(data.activeCashTerminals))}
             ${metric('Sem estoque disponível',String(data.outOfStockCount))}
             ${metric('Produtos com estoque monitorado',String(data.trackedProducts))}
+            ${metric('Abaixo do mínimo cadastrado',String(data.belowMinimumCount||0))}
           </div>
           <p class="ops-muted">Dados do caixa, vendas e estoque canônicos. ${
             data.stockCoverageUnknown?'Sem base de consumo para estimar cobertura de '+data.stockCoverageUnknown+' produto(s).':
             'Cobertura estimada a partir de movimentações reais.'}</p>
           ${data.outOfStockCount>0?`<p role="alert">${data.outOfStockCount}
             produto(s) sem disponibilidade após reservas. Consulte Estoque.</p>`:''}
+          ${data.belowMinimumCount>0?`<p role="alert">${data.belowMinimumCount}
+            produto(s) abaixo do mínimo cadastrado nesta filial. Consulte Cobertura do estoque.</p>`:''}
           ${!data.cashOpen?'<p class="ops-muted">Não existe caixa aberto nesta filial.</p>':''}
           <div class="ops-actions">
             ${canAccessRoute('reports')?'<button type="button" class="ops-secondary" data-home-open-report>Ver relatórios</button>':''}
@@ -1046,13 +1049,11 @@
 
   let inactiveWebProducts=[];
   let showInactiveWebProducts=false;
-  let webCategoryFilter='';
   function renderWebProducts(){
     const canManage=window.PdvAccessPolicy?.hasCapability(state.user,'products.manage');
     const canStock=window.PdvAccessPolicy?.hasCapability(state.user,'inventory.adjust');
     const catalogItems=showInactiveWebProducts?[...state.products,...inactiveWebProducts]:state.products;
-    const listed=catalogItems.filter(p=>(!webCategoryFilter||(webCategoryFilter==='uncategorized'?!p.categoryId:p.categoryId===webCategoryFilter))&&
-      (!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku+' '+(p.barcode||'')+' '+(p.brand||'')+' '+(p.variantLabel||'')).includes(ui.normalizeSearch(state.productQuery))));
+    const listed=catalogItems.filter(p=>!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku+' '+(p.barcode||'')+' '+(p.brand||'')+' '+(p.variantLabel||'')).includes(ui.normalizeSearch(state.productQuery)));
     content.innerHTML=`<section class="page web-products-page"><header class="page-head">
       <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
       <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
@@ -1060,14 +1061,7 @@
       ${canStock?'<button id="web-purchase-orders" class="secondary-button" type="button">Pedidos de compra</button>':''}
       ${canManage?`<button id="web-toggle-inactive" class="secondary-button" type="button">${showInactiveWebProducts?'Ocultar inativos':'Mostrar inativos'}</button>`:''}</header>
       <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
-        placeholder="Buscar produto, SKU ou código de barras" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label>
-      <label for="web-products-category-filter">Categoria
-        <select id="web-products-category-filter" class="secondary-button" aria-label="Filtrar produtos por categoria">
-          <option value="">Todas as categorias</option>
-          <option value="uncategorized" ${webCategoryFilter==='uncategorized'?'selected':''}>Sem categoria</option>
-          ${state.categories.map(c=>`<option value="${escapeHtml(c.id)}" ${webCategoryFilter===c.id?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}
-        </select>
-      </label></div>
+        placeholder="Buscar produto, SKU ou código de barras" aria-label="Buscar produtos" value="${escapeHtml(state.productQuery)}"></label></div>
       <div class="data-card web-product-table" id="web-products-list">
         ${listed.length?listed.map(p=>`<div class="data-row web-product-row">
           <div class="web-product-identity">${p.photo?`<img src="${escapeHtml(api.webProductPhotoUrl(p.id))}" alt="Foto de ${escapeHtml(p.name)}" loading="lazy" style="width:42px;height:42px;border-radius:9px;object-fit:cover">`:`<span class="web-product-monogram">${escapeHtml(initials(p.name))}</span>`}
@@ -1086,10 +1080,7 @@
         </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
       </div></section>`;
     content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
-    content.querySelector('#web-new-category')?.addEventListener('click',()=>openWebCategoryForm());
-    content.querySelector('#web-products-category-filter')?.addEventListener('change',event=>{
-      webCategoryFilter=event.currentTarget.value;renderWebProducts();
-    });
+    content.querySelector('#web-new-category')?.addEventListener('click',openWebCategoryForm);
     content.querySelector('#web-import-csv')?.addEventListener('click',()=>void openWebCsvImport());
     content.querySelector('#web-purchase-orders')?.addEventListener('click',()=>void openWebPurchaseOrders());
     content.querySelector('#web-toggle-inactive')?.addEventListener('click',async event=>{
@@ -1465,35 +1456,21 @@
     }catch(e){showToast(e.message,'error');}
   }
 
-  function openWebCategoryForm(category=null){
-    const list=category?'':`<div class="web-stock-history"><h3>Categorias cadastradas</h3>
-      <div class="data-card">${state.categories.map(c=>`<div class="data-row">
-        <strong>${escapeHtml(c.name)}</strong>
-        <button type="button" class="secondary-button" data-edit-web-category="${escapeHtml(c.id)}">Editar nome</button>
-      </div>`).join('')||'<div class="empty-state">Ainda não há categorias.</div>'}</div></div>`;
-    openModal(category?'Renomear categoria':'Gerenciar categorias',`${list}<form id="web-category-form"><div class="field">
-      <label>${category?'Novo nome da categoria':'Nova categoria'}<input name="name" minlength="2" maxlength="100" required
-        placeholder="Ex.: Bebidas" value="${escapeHtml(category?.name||'')}"></label></div>
+  function openWebCategoryForm(){
+    openModal('Nova categoria',`<form id="web-category-form"><div class="field">
+      <label>Nome<input name="name" minlength="2" maxlength="100" required placeholder="Ex.: Bebidas"></label></div>
       <p role="status" class="web-form-feedback"></p>
-      <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal">Cancelar</button>
-      <button type="submit" class="primary-button">${category?'Salvar novo nome':'Criar categoria'}</button></div></form>`,{wide:true,onMount(root){
-      root.querySelectorAll('[data-edit-web-category]').forEach(button=>button.addEventListener('click',()=>{
-        const selected=state.categories.find(c=>c.id===button.dataset.editWebCategory);
-        if(selected)openWebCategoryForm(selected);
-      }));
+      <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Cancelar</button>
+      <button type="submit" class="primary-button">Salvar categoria</button></div></form>`,{onMount(root){
       const form=root.querySelector('form');
       form.addEventListener('submit',async event=>{
         event.preventDefault();if(form.dataset.pending)return;
         form.dataset.pending='1';form.querySelector('[type=submit]').disabled=true;
         try{
-          const name=form.elements.name.value.trim();
-          if(category)await api.renameCategory(category.id,name,api.mutationId());
-          else await api.saveCategory({name});
-          state.categories=await api.categories();
-          closeModal();renderWebProducts();
-          showToast(category?'Categoria renomeada.':'Categoria criada.','success');
-        }catch(e){form.querySelector('[role=status]').textContent=e.message;
-          form.querySelector('[type=submit]').disabled=false;}
+          await api.saveCategory({name:form.elements.name.value.trim()});
+          state.categories=await api.categories();closeModal();renderWebProducts();
+          showToast('Categoria salva.','success');
+        }catch(e){form.querySelector('[role=status]').textContent=e.message;}
         finally{form.dataset.pending='';}
       });
     }});
