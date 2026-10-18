@@ -79,7 +79,7 @@ test('P1 SQL CAS rejects a concurrent edit between server read and database batc
 test('P1 CSV upsert is all-or-nothing if another terminal changes an existing SKU mid-commit',async()=>{
  const x=await fixture();try{
    const item=await x.service.createProduct('store-one','operator',{name:'Before',sku:'BATCH-OLD',salePriceCents:450},key());
-   const csv='sku;name;salePriceCents\\nBATCH-OLD;Imported name;500\\nBATCH-NEW;New product;600\\n';
+   const csv='sku;name;salePriceCents\nBATCH-OLD;Imported name;500\nBATCH-NEW;New product;600\n';
    const prev=await x.service.previewCatalogImport('store-one','front',{csv,mode:'upsert'});
    assert.equal(prev.invalidRows,0);
    let raced=false;
