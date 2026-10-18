@@ -161,6 +161,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
           limit:url.searchParams.get('limit')||100,offset:url.searchParams.get('offset')||0
         })});
       }
+      if(parts[1]==='counts'&&parts.length===2&&method==='POST'){
+        requireAccess(member,'inventory.adjust',user);
+        return json({count:await service.countStock(tenant,branch,user,body,key)},201);
+      }
       if(parts[1]==='adjustments'&&parts.length===2&&method==='POST'){
         requireAccess(member,'inventory.adjust',user);
         return json({movement:await service.adjustStock(tenant,branch,body,key)},201);
