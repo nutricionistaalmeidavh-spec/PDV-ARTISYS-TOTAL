@@ -105,6 +105,17 @@ try{
     .find(label=>label.includes(sku));
   assert.ok(productChoice,'counted inventory must expose the catalogued product from the canonical API');
   await countForm.locator('select[name=productId]').selectOption({label:productChoice});
+  await countForm.locator('select[name=operation]').selectOption('purchase');
+  await countForm.locator('[name=quantity]').fill('1');
+  await countForm.locator('[name=reason]').fill('Entrada de lote para teste');
+  await countForm.locator('[name=lotCode]').fill('QA-LOTE-01');
+  await countForm.locator('[name=manufacturedAt]').fill('2026-10-01');
+  await countForm.locator('[name=expiresAt]').fill('2026-11-01');
+  await countForm.locator('button[type=submit]').click();
+  await page.getByText('QA-LOTE-01',{exact:true}).waitFor({timeout:12000});
+  // Historical lot intake must not display a fabricated per-lot balance.
+  assert.match(await page.getByText(/ainda não existe baixa por lote/).innerText(),/saldo individual/);
+  await countForm.locator('select[name=productId]').selectOption({label:productChoice});
   await countForm.locator('select[name=operation]').selectOption('count');
   await countForm.locator('[name=quantity]').fill('2.25');
   await countForm.locator('[name=reason]').fill('Conferência física no navegador QA');
