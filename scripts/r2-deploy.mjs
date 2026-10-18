@@ -2,7 +2,7 @@
 // Configuration stores only file paths and the HTTPS origin, never passwords or device credentials.
 import {spawn} from 'node:child_process';
 import {access,mkdir,readFile,stat,writeFile,rm} from 'node:fs/promises';
-import {resolve,dirname,join,relative,sep} from 'node:path';
+import {resolve,dirname,join,relative,sep,isAbsolute} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -24,7 +24,7 @@ function safePath(value,name){
 }
 function outsidePublicWeb(file){
   const rel=relative(privateRoot,file);
-  if(rel===''||(!rel.startsWith('..'+sep)&&rel!=='..'&&!rel.startsWith('..'+sep)&&!rel.startsWith('..'))){
+  if(rel===''||(!isAbsolute(rel)&&rel!=='..'&&!rel.startsWith('..'+sep))){
     throw Error('Arquivos privados do servidor não podem ficar na pasta web.');
   }
 }
