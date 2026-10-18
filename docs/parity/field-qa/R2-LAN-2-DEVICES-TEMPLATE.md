@@ -1,6 +1,6 @@
-# R2 — homologação de rede local e dois dispositivos físicos
+# R2 — inspeção presencial opcional, posterior à conclusão do código
 
-**Status:** NÃO EXECUTADO. Modelo para preencher em campo; não é evidência.
+**Status:** OPCIONAL / NÃO EXECUTADO. Esta ficha não faz parte da certificação de código, não bloqueia `covered`, merge ou fechamento da R2.
 É proibido marcar como FIELD_VERIFIED antes de ter resultados reais,
 assinatura do revisor independente e arquivos reproduzíveis.
 
@@ -49,7 +49,7 @@ assinatura do revisor independente e arquivos reproduzíveis.
 - Falhas encontradas e issues/PRs corretivos:
 - Verificações reproduzidas por terceiro:
 
-## Aceite independente
+## Avaliação opcional de implantação
 
 - [ ] Os casos aplicáveis foram executados em hardware físico real.
 - [ ] Todos os casos obrigatórios passaram, com falhas remediadas e retestadas.
@@ -62,4 +62,4 @@ assinatura do revisor independente e arquivos reproduzíveis.
 
 **Data:** __________________
 
-Sem isso, o status do inventário de capacidades permanece parcial ou gap.
+A ausência deste formulário não altera o estado das capacidades. O código pode estar `covered` sem testes presenciais; apenas não se afirma validação do equipamento específico.
