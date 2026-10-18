@@ -957,15 +957,28 @@ export function createCommerceService(db,{now=nowISO}={}){
     },
     async homeIndicators(tenant,branch,{asOf=stamp().slice(0,10)}={}){
       period({from:asOf,to:asOf});
-      const [report,open,coverage]=await Promise.all([
+      const month=asOf.slice(0,7);
+      const [report,open,coverage,monthlyReport,goal]=await Promise.all([
         this.reports(tenant,branch,{from:asOf,to:asOf}),
         first("SELECT COUNT(*) AS n FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND status='OPEN'",tenant,branch),
-        this.reportStockCoverage(tenant,branch,{asOf,days:30})
+        this.reportStockCoverage(tenant,branch,{asOf,days:30}),
+        this.reports(tenant,branch,{from:month+'-01',to:asOf}),
+        first(`SELECT COUNT(*) AS count,COALESCE(SUM(t.target_cents),0) AS totalCents
+          FROM seller_sales_targets t JOIN tenant_memberships m
+          ON m.tenant_id=t.tenant_id AND m.user_id=t.seller_id AND m.active=1
+          WHERE t.tenant_id=? AND t.branch_id=? AND t.month_key=?`,tenant,branch,month)
       ]);
+      const monthlyTargetCents=goal?.count?goal.totalCents:null;
       return {asOf,salesCount:report.sales.count,
         netSalesCents:report.sales.totalCents,
         refundedCents:report.sales.refundedCents,
         cashOpen:Boolean(open?.n),activeCashTerminals:Number(open?.n||0),
+        month,
+        monthToDateNetSalesCents:monthlyReport.sales.totalCents,
+        monthlyTargetCents,
+        targetProgressPercent:monthlyTargetCents>0?
+          Math.round(10000*monthlyReport.sales.totalCents/monthlyTargetCents)/100:null,
+        targetedSellers:goal?.count||0,
         outOfStockCount:coverage.zeroOrReservedOut,
         belowMinimumCount:coverage.belowMinimum,
         atMinimumCount:coverage.atMinimum,
