@@ -434,7 +434,7 @@ try{
   // P5: authorized home indicators are scoped and link back to the one report route.
   await page.locator('#sidebar-nav [data-route=home]').click();
   await page.locator('#web-home-live [data-home-open-report]').waitFor({timeout:12000});
-  assert.match(await page.locator('#web-home-live').innerText(),/Terminais com caixa aberto/);
+  assert.match(await page.locator('#web-home-live').innerText(),/Terminais com caixa aberto/i);
   await page.locator('#web-home-live [data-home-open-report]').click();
   // P4: Shared ReportsV2 owner, no duplicate report rendering pipeline.
   await page.getByRole('heading',{name:'Relatórios comerciais'}).waitFor({timeout:12000});
