@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
+import {runInNewContext} from 'node:vm';
 const requireDesktop=createRequire(import.meta.url);
 const {createReportingService:createPinnedDesktopReportingService}=
   requireDesktop('../../../packages/core/js/domains/reports/reporting-service.js');
@@ -1226,6 +1227,95 @@ test('P3 line note is atomic and idempotent, preserved in completed sale and can
   assert.equal((await x.write('a',url,{branchId:'branch-a',note:'Alterar após venda'},{method:'PUT'})).status,409);
   const history=await x.get('a','sales/history?branchId=branch-a');
   assert.equal(history.body.history.items[0].items[0].note,'Sem gelo; com limão');
+ }finally{x.close();}
+});
+
+
+const p5Home003Fixture=JSON.parse(readFileSync(new URL(
+ '../../../docs/parity/fixtures/p5-home003-desktop-alerts.json',import.meta.url),'utf8'));
+function p5DesktopAlerts(){
+ const body=readFileSync(new URL(
+  '../../../docs/parity/baseline/desktop-reporting-v2.js',import.meta.url));
+ const sha=createHash('sha1').update('blob '+body.length+'\0').update(body).digest('hex');
+ assert.equal(sha,p5Home003Fixture.desktop.gitBlob,'Original desktop alert logic changed');
+ const source=body.toString('utf8'),start=source.indexOf('  function managerAlerts(');
+ const end=source.indexOf('\n  function presetPeriod(',start);
+ assert.ok(start>0&&end>start,'Published desktop managerAlerts not found');
+ return runInNewContext('('+source.slice(start,end).trim()+')',{
+   money:cents=>'R$ '+(Number(cents||0)/100).toFixed(2),
+   comparisonText:(current,previous)=>String(current-previous)
+ },{timeout:500});
+}
+async function p5Home003Setup(x){
+ const productId=await x.id('Alertas P5','HOME-003-SKU',1);
+ const saved=await x.write('a','reports/stock-minimum',{
+   branchId:'branch-a',productId,minimumQuantity:2},{method:'PUT'});
+ assert.equal(saved.status,200,JSON.stringify(saved.body));
+ const opened=await x.write('a','cash/open',{branchId:'branch-a',openingCents:500});
+ assert.equal(opened.status,201,JSON.stringify(opened.body));
+ const closed=await x.write('a','cash/sessions/'+opened.body.session.id+'/close',{
+   branchId:'branch-a',countedCashCents:490});
+ assert.equal(closed.status,200,JSON.stringify(closed.body));
+ return {productId,sessionId:opened.body.session.id};
+}
+const p5Home003Path='reports/home?branchId=branch-a&asOf=2026-10-17';
+
+test('home-003/nominal p5-home003-desktop-alerts-v1 original desktop alert predicates match web canonical dashboard',async()=>{
+ const desktop=p5DesktopAlerts();
+ const original=desktop(p5Home003Fixture.input.sales,p5Home003Fixture.input.previousSales,
+   p5Home003Fixture.input.inventory,p5Home003Fixture.input.cash);
+ assert.deepEqual(Array.from(original,a=>a.title),p5Home003Fixture.expectedTitles);
+ const x=await setup();try{
+  await p5Home003Setup(x);
+  const response=await x.get('a',p5Home003Path);
+  assert.equal(response.status,200,JSON.stringify(response.body));
+  const home=response.body.home;
+  assert.deepEqual(home.alerts.map(a=>a.title),p5Home003Fixture.expectedTitles);
+  assert.equal(home.divergentCashCount,1);
+  assert.equal(home.divergentCashCents,-10);
+  assert.equal(home.belowMinimumCount,1);
+  assert.equal(home.outOfStockCount,0,'physical inventory remains nonzero');
+  assert.equal(home.negativeMarginCount,0,'unknown costs do not invent a negative margin');
+ }finally{x.close();}
+});
+
+test('home-003/authorization p5-home003-desktop-alerts-v1 authorized read-only viewer cannot change alert source ledgers',async()=>{
+ p5DesktopAlerts();
+ const x=await setup();try{
+  const {productId}=await p5Home003Setup(x);
+  assert.equal((await x.get('a',p5Home003Path,x.viewer)).status,200);
+  assert.equal((await x.write('a','reports/stock-minimum',{
+    branchId:'branch-a',productId,minimumQuantity:0},{method:'PUT',who:x.viewer})).status,403);
+  assert.equal((await x.write('a','cash/open',{
+    branchId:'branch-a',openingCents:1},{who:x.viewer})).status,403);
+  assert.deepEqual((await x.get('a',p5Home003Path)).body.home.alerts.map(a=>a.code),
+    ['BELOW_MINIMUM','CASH_DIVERGENCE']);
+ }finally{x.close();}
+});
+
+test('home-003/tenant-isolation p5-home003-desktop-alerts-v1 branch scoped alerts never disclose another store',async()=>{
+ p5DesktopAlerts();
+ const x=await setup();try{
+  await p5Home003Setup(x);
+  const other=await x.get('b','reports/home?branchId=branch-b&asOf=2026-10-17',x.other);
+  assert.equal(other.status,200);
+  assert.deepEqual(other.body.home.alerts,[]);
+  assert.equal(other.body.home.divergentCashCount,0);
+  assert.equal((await x.get('a','reports/home?branchId=branch-b')).status,404);
+  assert.equal((await x.get('b',p5Home003Path,x.other)).status,404);
+ }finally{x.close();}
+});
+
+test('home-003/failure-recovery p5-home003-desktop-alerts-v1 bad period and rejected mutations leave home evidence intact',async()=>{
+ p5DesktopAlerts();
+ const x=await setup();try{
+  const {productId}=await p5Home003Setup(x);
+  const before=(await x.get('a',p5Home003Path)).body.home.alerts;
+  assert.equal((await x.get('a','reports/home?branchId=branch-a&asOf=2026-02-30')).status,400);
+  assert.equal((await x.write('a','reports/stock-minimum',{
+    branchId:'branch-a',productId,minimumQuantity:1000000},{method:'PUT'})).status,400);
+  const after=(await x.get('a',p5Home003Path)).body.home.alerts;
+  assert.deepEqual(after,before,'failed edits cannot clear operational warnings');
  }finally{x.close();}
 });
 
