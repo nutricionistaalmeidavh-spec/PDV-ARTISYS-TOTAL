@@ -1446,7 +1446,11 @@ export function createCommerceService(db,{now=nowISO}={}){
     async transition(tenant,branch,id,to,header){
       const key=requiredMutation(null,header),scope='sale.transition:'+id;
       // Replays must never reapply an obsolete transition after a later state change.
-      if(await applied(tenant,scope,key))return snapshot(tenant,branch,id);
+      const previous=await applied(tenant,scope,key);
+      if(previous){
+        if(previous.to!==to)throw error(409,'Identificador já utilizado em outra transição de venda.');
+        return snapshot(tenant,branch,id);
+      }
       const sale=await tenantSale(tenant,branch,id);
       const allowed=(sale.status==='OPEN'&&['SUSPENDED','CANCELLED'].includes(to))||(sale.status==='SUSPENDED'&&to==='OPEN');
       if(!allowed)throw error(409,'A venda mudou de estado; atualize antes de continuar.');
