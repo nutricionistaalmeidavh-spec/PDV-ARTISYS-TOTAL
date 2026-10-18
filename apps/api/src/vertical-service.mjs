@@ -184,9 +184,10 @@ export function createVerticalService(db){
      if(body.customerId)await customer(t,body.customerId);
      const lines=await orderItems(t,b,body.items);
      const totals=calculateSaleTotals({items:lines});
-     const routed=[];
+     const routed=[];let directCount=0;
      for(const line of lines){
        const route=await first('SELECT mode,station_id AS stationId FROM r4_product_kitchen_routes WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,line.productId);
+       if(route?.mode==='DIRECT')directCount++;
        if(route?.mode==='PRODUCTION'){
          const station=await first('SELECT id FROM r4_kitchen_stations WHERE tenant_id=? AND branch_id=? AND id=? AND active=1',t,b,route.stationId);
          if(!station)throw err(409,'Estação de produção inativa; reconfigure o destino do produto.');
@@ -194,17 +195,18 @@ export function createVerticalService(db){
        }
      }
      const stations=[...new Set(routed)];
+     const allDirect=directCount===lines.length;
      return mutate(t,'restaurant.order:'+b,key,async()=>{
        const id=uuid(),stamp=now(),day=useTicket?stamp.slice(0,10):null;
        const previous=useTicket?await first('SELECT COALESCE(MAX(ticket_number),0) AS last FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND ticket_day=?',t,b,day):null;
        const ticketNumber=useTicket?previous.last+1:null;
        if(ticketNumber>99999)throw err(409,'Limite diário de senhas atingido.');
-       const result={id,status:'OPEN',fulfillment,serviceChannel,tableSessionId:sid,totalCents:totals.totalCents,
+       const result={id,status:allDirect?'READY':'OPEN',fulfillment,serviceChannel,tableSessionId:sid,totalCents:totals.totalCents,
          ticketDay:day,ticketNumber,items:lines};
        const statements=[q(`INSERT INTO restaurant_orders(id,tenant_id,branch_id,table_session_id,customer_id,fulfillment,status,address,contact,note,total_cents,created_by,created_at,updated_at,service_channel,ticket_day,ticket_number) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-         id,t,b,sid,body.customerId||null,fulfillment,'OPEN',clean(body.address,300)||null,clean(body.contact,120)||null,clean(body.note,500)||null,totals.totalCents,user,stamp,stamp,serviceChannel,day,ticketNumber)];
+         id,t,b,sid,body.customerId||null,fulfillment,allDirect?'READY':'OPEN',clean(body.address,300)||null,clean(body.contact,120)||null,clean(body.note,500)||null,totals.totalCents,user,stamp,stamp,serviceChannel,day,ticketNumber)];
        for(const l of lines)statements.push(q('INSERT INTO restaurant_order_items(id,tenant_id,branch_id,order_id,product_id,product_name,quantity_milli,unit_price_cents,configuration_json) VALUES(?,?,?,?,?,?,?,?,?)',uuid(),t,b,id,l.productId,l.name,l.milli,l.unitPriceCents,l.configuration?JSON.stringify(l.configuration):null));
-       statements.push(q('INSERT INTO restaurant_kitchen_tickets(id,tenant_id,branch_id,order_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',uuid(),t,b,id,'NEW',stamp,stamp));
+       statements.push(q('INSERT INTO restaurant_kitchen_tickets(id,tenant_id,branch_id,order_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',uuid(),t,b,id,allDirect?'READY':'NEW',stamp,stamp));
        for(const stationId of stations)statements.push(q(
          'INSERT INTO r4_station_tickets(id,tenant_id,branch_id,order_id,station_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
          uuid(),t,b,id,stationId,'NEW',stamp,stamp));
