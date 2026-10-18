@@ -603,7 +603,7 @@
       tabindex="${state.view===key?'0':'-1'}"
       aria-controls="report-v2-body">${viewLabels[key]}</button>`).join('');
     content.innerHTML=`<section class="ops-page report-v2-page web-report-page">
-      <header class="ops-head"><div><span class="web-section-kicker">DADOS CANÔNICOS · D1</span>
+      <header class="ops-head"><div><span class="web-section-kicker">DADOS CANÔNICOS · API LOCAL OU CLOUD</span>
         <h1>Relatórios comerciais</h1><p>Dados registrados pelo PDV Total, separados por filial.</p></div>
         <div class="ops-head-actions"><button id="web-report-export" class="ops-secondary" type="button">
           Exportar vendas CSV</button><button id="web-report-xlsx" class="ops-secondary" type="button">
