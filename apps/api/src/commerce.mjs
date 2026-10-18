@@ -1158,7 +1158,7 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(restaurantSessionId&&(typeof restaurantSessionId!=='string'||restaurantSessionId.length>128)||
          restaurantOrderId&&(typeof restaurantOrderId!=='string'||restaurantOrderId.length>128))
         throw error(400,'Identificador de comanda ou pedido inválido.');
-      let restaurantCheckout=null;
+      let restaurantCheckout=null,restaurantChoices=[],choiceGroups=new Map();
       let order=null,quoted=[];
       if(wholesaleId){
         order=await first('SELECT id,customer_id,status,sale_id FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND id=?',tenant,branch,wholesaleId);
@@ -1185,19 +1185,19 @@ export function createCommerceService(db,{now=nowISO}={}){
         if(sourceOrders.some(o=>!['DELIVERED','CANCELLED'].includes(o.status)))
           throw error(409,'Todos os pedidos precisam estar entregues ou cancelados antes da cobrança.');
         const restaurantLines=restaurantSessionId
-          ?await all(`SELECT oi.product_id AS productId,oi.quantity_milli-COALESCE((SELECT SUM(tr.quantity_milli) FROM r4_item_transfers tr WHERE tr.tenant_id=oi.tenant_id AND tr.branch_id=oi.branch_id AND tr.order_item_id=oi.id),0) AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
+          ?await all(`SELECT oi.product_id AS productId,oi.quantity_milli-COALESCE((SELECT SUM(tr.quantity_milli) FROM r4_item_transfers tr WHERE tr.tenant_id=oi.tenant_id AND tr.branch_id=oi.branch_id AND tr.order_item_id=oi.id),0) AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku,oi.configuration_json AS configurationJson
               FROM restaurant_order_items oi JOIN restaurant_orders o ON o.id=oi.order_id AND o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id
               JOIN products p ON p.id=oi.product_id AND p.tenant_id=oi.tenant_id
               WHERE oi.tenant_id=? AND oi.branch_id=? AND o.table_session_id=? AND o.status='DELIVERED'
                UNION ALL
-               SELECT oi.product_id AS productId,tr.quantity_milli AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
+               SELECT oi.product_id AS productId,tr.quantity_milli AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku,oi.configuration_json AS configurationJson
                FROM r4_item_transfers tr
                JOIN restaurant_order_items oi ON oi.id=tr.order_item_id AND oi.tenant_id=tr.tenant_id AND oi.branch_id=tr.branch_id
                JOIN restaurant_orders o ON o.id=oi.order_id AND o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id
                JOIN products p ON p.tenant_id=oi.tenant_id AND p.id=oi.product_id
                WHERE tr.tenant_id=? AND tr.branch_id=? AND tr.target_session_id=? AND o.status='DELIVERED'
               `,tenant,branch,restaurantSessionId,tenant,branch,restaurantSessionId)
-          :await all(`SELECT oi.product_id AS productId,oi.quantity_milli AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku
+          :await all(`SELECT oi.product_id AS productId,oi.quantity_milli AS milli,oi.unit_price_cents AS unitPriceCents,oi.product_name AS name,p.sku,oi.configuration_json AS configurationJson
               FROM restaurant_order_items oi JOIN products p ON p.id=oi.product_id AND p.tenant_id=oi.tenant_id
               WHERE oi.tenant_id=? AND oi.branch_id=? AND oi.order_id=? ORDER BY oi.rowid`,tenant,branch,restaurantOrderId);
         const grouped=new Map();
@@ -1205,8 +1205,9 @@ export function createCommerceService(db,{now=nowISO}={}){
           if(line.milli<0)throw error(409,'Transferência excede o item original.');
           if(line.milli===0)continue;
           const existing=grouped.get(line.productId);
-          if(existing&&existing.unitPriceCents!==line.unitPriceCents)
-            throw error(409,'O mesmo produto possui preços diferentes na comanda. Revise antes de consolidar.');
+          if(!choiceGroups.has(line.productId))choiceGroups.set(line.productId,[]);
+          choiceGroups.get(line.productId).push(line);
+          restaurantChoices.push(line);
           if(existing)existing.milli+=line.milli;
           else grouped.set(line.productId,{...line});
         }
@@ -1222,11 +1223,14 @@ export function createCommerceService(db,{now=nowISO}={}){
             if(amount>0)quoted.push({productId:fee.id,name:fee.name,sku:fee.sku,milli:1000,unitPriceCents:amount});
           }
         }
+        // Explicit service fee is also a priced child if its catalog line differs.
+        if(quoted.length>restaurantChoices.length)restaurantChoices.push(...quoted.slice(restaurantChoices.length));
         restaurantCheckout={tableSessionId:restaurantSessionId,orderId:restaurantOrderId,customerId:source.customerId||null};
       }
-      const quotedTotals=calculateSaleTotals({items:quoted.map(x=>({unitPriceCents:x.unitPriceCents,quantity:x.milli/1000}))});
+      const previewLines=restaurantCheckout?restaurantChoices:quoted;
+      const quotedTotals=calculateSaleTotals({items:previewLines.map(x=>({unitPriceCents:x.unitPriceCents,quantity:x.milli/1000}))});
       const result={id,tenantId:tenant,branchId:branch,terminalId,saleNumber,operatorId:user,sellerId,customerId:order?.customer_id||restaurantCheckout?.customerId||null,status:'OPEN',
-        items:quoted.map(x=>({productId:x.productId,productName:x.name,sku:x.sku,quantity:x.milli/1000,unitPriceCents:x.unitPriceCents,totalCents:Math.round(x.unitPriceCents*x.milli/1000)})),
+        items:previewLines.map(x=>({productId:x.productId,productName:x.name,sku:x.sku,quantity:x.milli/1000,unitPriceCents:x.unitPriceCents,totalCents:Math.round(x.unitPriceCents*x.milli/1000),...(x.configurationJson?{configuration:JSON.parse(x.configurationJson)}:{})})),
         payments:[],subtotalCents:quotedTotals.subtotalCents,discountCents:0,totalCents:quotedTotals.totalCents,changeCents:0,completedAt:null};
       // One sale authority: a quote is a price snapshot, not a second sale.
       // INSERT..SELECT prevents concurrent checkouts from claiming the same quote twice.
