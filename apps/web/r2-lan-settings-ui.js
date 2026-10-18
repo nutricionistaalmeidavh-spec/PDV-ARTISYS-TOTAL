@@ -60,6 +60,7 @@
       (previousId&&previousCredential?'<button class="ops-secondary" id="r2-check-device" type="button">Verificar vínculo deste aparelho</button>':'')+
       '<p class="ops-muted">A credencial técnica é específica deste navegador, estabelecimento e usuário; não concede acesso sem sessão válida. Em computadores compartilhados, apague dados do site ao desativar o terminal.</p></section>'+
       (isAdmin?'<section class="ops-card"><h2>Dispositivos registrados</h2><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Nome</th><th>Uso</th><th>Filial</th><th>Status</th><th>Ação</th></tr></thead><tbody>'+deviceRows+'</tbody></table></div></section>':'')+
+      (isAdmin?'<section class="ops-card"><h2>Diagnóstico sem dados sensíveis</h2><p>Pacote ZIP com saúde, nomes das migrações e eventos administrativos sem senhas, credenciais ou banco de dados.</p><button id="r2-download-diagnostics" type="button" class="ops-secondary">Gerar ZIP de diagnóstico</button></section>':'')+
       '<section class="ops-card"><h2>Checklist de homologação e piloto</h2><p class="ops-muted">O registro de evidências não substitui a verificação em máquinas reais, por revisor independente.</p><div class="ops-grid two" id="r2-checks">'+checks+'</div></section></section>';
     const status=content.querySelector('#r2-device-status');
     const notify=(message,error=false)=>{if(status){status.textContent=message;status.className=error?'ops-error':'ops-muted';}};
@@ -68,6 +69,18 @@
       catch{notify('Selecione e copie o endereço exibido.',true);}
     });
     if(isAdmin){
+      content.querySelector('#r2-download-diagnostics')?.addEventListener('click',async()=>{
+        try{
+          const response=await window.fetch(base+'/diagnostics.zip',{credentials:'same-origin',headers:{accept:'application/zip'}});
+          if(!response.ok)throw Error('Não foi possível gerar o pacote de diagnóstico.');
+          const blob=await response.blob(),url=URL.createObjectURL(blob);
+          try{
+            const a=document.createElement('a');a.href=url;a.download='pdv-total-lan-diagnostics.zip';
+            document.body.appendChild(a);a.click();a.remove();
+          }finally{window.setTimeout(()=>URL.revokeObjectURL(url),1000);}
+          notify('Pacote de diagnóstico gerado.');
+        }catch(error){notify(error.message,true);}
+      });
       try{
         const result=await api.request('/api/v1/tenants/'+encodeURIComponent(tenantId)+'/branches');
         const select=content.querySelector('#r2-new-pairing [name="branchId"]');
