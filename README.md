@@ -8,7 +8,7 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 - `packages/core/server/`: contratos/rotas do servidor original usados **apenas como base de transição**, não publicados pela Cloudflare; rotas comerciais P3 usam a borda única `apps/api/src/commerce-router.mjs`, com idempotência e transações D1.
 - `packages/core/shared/` e `packages/core/vendor/`: componentes de domínio e bibliotecas de apoio reutilizados; nenhuma segunda cópia dos arquivos originais.
 - `apps/web/`: a **única interface de operação** transferida do renderer existente para transformação no navegador. Servida como assets do Worker na fase P3, com login web, produtos, estoque, caixa, vendas e histórico básico. Recursos restantes do Electron/IPC não são expostos no modo web.
-- `apps/api/`: borda Cloudflare Workers + D1, com opção local Node + SQLite. Já tem identidade, empresas, sessões e filiais, além do recorte P3 de produtos, estoque, caixa e vendas com D1 (`0002_commerce.sql`).
+- `apps/api/`: API autoritativa em Cloudflare Workers/D1 **ou** no Node + SQLite self-hosted; no modo local, entrega a **mesma PWA** do build sem Cloudflare. Já tem identidade, empresas, sessões e filiais, além do recorte P3 de produtos, estoque, caixa e vendas com D1 (`0002_commerce.sql`).
 - `docs/`: migração, UX, limites de segurança e implantação.
 
 **Não existe uma segunda árvore `legacy/` no código ativo**. O commit original importado e os 900 arquivos continuam auditáveis no histórico Git; instaladores, Electron, auto-update Windows/macOS, CI do desktop, licença desktop e artefatos específicos não são carregados aqui.
@@ -33,6 +33,10 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 4. **Cloudflare isolada:** D1 e R2 novos, sem usar Worker, banco, dados ou licenças do PDV original.
 5. **R$ 0 obrigatório para o núcleo inicial**, com Cloudflare Free e alternativa self-hosted; cobrança com Asaas é opção explícita posterior.
 6. **Reestruturação incremental comprovada:** scripts `npm run test:core`, `npm run test:api` e dry-run Wrangler passam antes de cada merge.
+
+## Execução self-hosted gratuita
+
+O núcleo pode rodar em localhost com Node 22+ e SQLite, sem Cloudflare: execute `npm run build`, depois `cd apps/api && npm run dev`, e abra http://127.0.0.1:4175/. O acesso comercial permanece desabilitado por padrão até provisionamento e QA. Consulte [instalação self-hosted](docs/SELF-HOSTED.md). Não exponha HTTP local à LAN sem TLS.
 
 ## Documentação
 

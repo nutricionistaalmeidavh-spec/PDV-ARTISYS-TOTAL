@@ -12,6 +12,29 @@
   let config = null;
   let storeTimeZone = 'America/Sao_Paulo';
   let state = { view:'overview',fromDate:'',toDate:'',sellerId:'',customerId:'',productId:'',paymentMethod:'',locationId:'' };
+  let webReportContextKey = '';
+  const webReportViews = new Set(['overview','products','payments','inventory','cash','finance','margins','details','coverage','targets']);
+  // Keep only presentation preferences per tenant/branch in this browser tab.
+  // Never persist monetary aggregates, customer IDs, or authorization data.
+  function restoreWebReportContext() {
+    const context = String(api.tenantId||'')+'/'+String(api.branchId||'');
+    if(webReportContextKey===context)return;
+    webReportContextKey=context;
+    state={view:'overview',fromDate:'',toDate:'',sellerId:'',customerId:'',
+      productId:'',paymentMethod:'',locationId:'',detailOffset:0};
+    try {
+      const saved=JSON.parse(root.sessionStorage?.getItem('pdv-total.report-view.v1:'+context)||'null');
+      if(saved&&webReportViews.has(saved.view))state.view=saved.view;
+      if(saved&&/^\d{4}-\d{2}-\d{2}$/.test(saved.fromDate)&&
+        /^\d{4}-\d{2}-\d{2}$/.test(saved.toDate)&&saved.fromDate<=saved.toDate){
+        state.fromDate=saved.fromDate;state.toDate=saved.toDate;
+      }
+    } catch {}
+  }
+  function saveWebReportView() {
+    try {root.sessionStorage?.setItem('pdv-total.report-view.v1:'+webReportContextKey,
+      JSON.stringify({view:state.view,fromDate:state.fromDate,toDate:state.toDate}));} catch {}
+  }
 
   const PAYMENT_LABELS = Object.freeze({
     CASH:'Dinheiro',PIX:'PIX',DEBIT_CARD:'Cartão de débito',CREDIT_CARD:'Cartão de crédito',STORE_CREDIT:'Crediário / crédito da loja',OTHER:'Outros'
@@ -343,6 +366,7 @@
   // Backend D1 aggregates are authoritative; no replica or browser-side ledger.
   async function renderWebReports(next={}){
     await ready();
+    restoreWebReportContext();
     state={...state,...next};
     markActive();
     const date=new Date().toISOString().slice(0,10);
@@ -352,6 +376,7 @@
     const query=new URLSearchParams({from:fromDate,to:toDate});
     const available=['overview','products','payments','inventory','cash','finance','margins','details','coverage','targets'];
     if(!available.includes(state.view))state.view='overview';
+    saveWebReportView();
     let report,comparison=null,margin=null,detail=null,coverage=null,ranking=null,sellersForGoals=[];
     try{
       const previous=root.PdvBusinessDate.equivalentPreviousPeriod(fromDate,toDate);
@@ -506,6 +531,46 @@
       <section class="ops-card"><h2>Mais vendidos</h2>${productsTable()}</section></div>`;
     const views={overview,products:productsTable(),payments:paymentsTable(),inventory:inventoryTable(),
       cash:cashTable(),finance:financeTable(),margins:marginsTable(),details:detailedTable(),coverage:coverageTable(),targets:sellerTargetsView()};
+
+    const xlsxData=()=>{
+      const brl=cents=>Number(cents||0)/100;
+      switch(state.view){
+        case 'products':return {headers:['Produto','Unidades','Vendas','Valor bruto (R$)'],
+          rows:products.map(p=>[p.name,p.quantity,p.salesCount,brl(p.grossCents)])};
+        case 'payments':return {headers:['Forma','Recebido (R$)'],
+          rows:payments.map(p=>[paymentLabel(p.method),brl(p.amountCents)])};
+        case 'inventory':return {headers:['Produto','SKU','Saldo'],
+          rows:inventory.map(p=>[p.name,p.sku,p.quantity])};
+        case 'cash':return {headers:['Abertura','Fechamento','Esperado (R$)','Contado (R$)','Divergência (R$)'],
+          rows:cash.map(s=>[s.openedAt||'',s.closedAt||'',brl(s.expectedCashCents),
+            s.countedCashCents==null?'Não informado':brl(s.countedCashCents),
+            s.divergenceCents==null?'Não informado':brl(s.divergenceCents)])};
+        case 'finance':return {headers:['Indicador','Valor (R$)'],
+          rows:[['A pagar',brl(finance.payableOpenCents)],['A receber',brl(finance.receivableOpenCents)],
+            ['Pago',brl(finance.payableSettledCents)],['Recebido',brl(finance.receivableSettledCents)]]};
+        case 'margins':return {headers:['Produto','Quantidade líquida','Receita líquida (R$)',
+          'Custo identificado (R$)','Margem histórica (R$)','Base de custo'],
+          rows:(margin?.products||[]).map(p=>[p.name,p.quantity,brl(p.revenueCents),brl(p.costCents),
+            p.marginCents==null?'Não apurada':brl(p.marginCents),
+            p.missingCostLines?'Histórico incompleto':'Snapshot da venda'])};
+        case 'coverage':return {headers:['Produto','SKU','Disponível','Reservado','Consumo',
+          'Cobertura em dias','Entradas por transferência','Saídas por transferência','Estoque mínimo'],
+          rows:(coverage?.products||[]).map(p=>[p.name,p.sku,p.available,p.reserved,p.consumed,
+            p.daysCoverage==null?'Sem base':p.daysCoverage,p.transfersIn,p.transfersOut,
+            p.minimumQuantity==null?'Não configurado':p.minimumQuantity])};
+        case 'targets':return {headers:['Vendedor','Vendas líquidas (R$)','Devoluções (R$)',
+          'Meta (R$)','Atingimento (%)','Comissão gerada (R$)','Comissão estornada (R$)',
+          'Comissão paga (R$)','Saldo comissão (R$)'],
+          rows:(ranking?.sellers||[]).map(p=>[p.sellerName||p.sellerId,brl(p.netSalesCents),
+            brl(p.refundedCents),p.targetCents==null?'Não definida':brl(p.targetCents),
+            p.progressPercent==null?'Sem meta':p.progressPercent,brl(p.commissionEarnedCents),
+            brl(p.commissionReversedCents),brl(p.commissionPaidCents),brl(p.commissionBalanceCents)])};
+        default:return {headers:['Indicador','Valor'],
+          rows:[['Vendas líquidas (R$)',brl(total)],['Vendas concluídas',count],
+            ['Ticket médio (R$)',count?brl(Math.round(total/count)):0],
+            ['Devoluções (R$)',brl(sale.refundedCents)],['Descontos (R$)',brl(sale.discountsCents)]]};
+      }
+    };
     const tabs=available.map(key=>`<button type="button" data-report-web="${key}"
       class="report-v2-tab ${state.view===key?'active':''}"
       role="tab" aria-selected="${state.view===key?'true':'false'}"
@@ -514,7 +579,8 @@
       <header class="ops-head"><div><span class="web-section-kicker">DADOS CANÔNICOS · D1</span>
         <h1>Relatórios comerciais</h1><p>Dados registrados pelo PDV Total, separados por filial.</p></div>
         <div class="ops-head-actions"><button id="web-report-export" class="ops-secondary" type="button">
-          Exportar vendas CSV</button><button id="web-report-print" class="ops-primary" type="button">
+          Exportar vendas CSV</button><button id="web-report-xlsx" class="ops-secondary" type="button">
+          Exportar aba XLSX</button><button id="web-report-print" class="ops-primary" type="button">
           Imprimir / PDF</button></div></header>
       <form id="web-report-filter" class="web-report-filter">
         <label>De<input name="from" type="date" class="ops-input" value="${escapeHtml(fromDate)}" required></label>
@@ -523,6 +589,7 @@
       </form><nav class="report-v2-tabs" role="tablist" aria-label="Categorias de relatório">${tabs}</nav>
       <div id="report-v2-body" role="tabpanel"><section class="ops-card">
         ${views[state.view]||overview}</section></div>
+      <p class="ops-muted">O XLSX contém os dados desta aba; em Vendas detalhadas exporta todos os registros filtrados dentro do limite da API (não apenas a página). O PDF usa a impressão do navegador.</p>
       <p class="ops-muted">Relatório não fiscal. Margens são calculadas sobre custos registrados no fechamento da venda; não representam lucro contábil auditado quando o custo histórico é incompleto. PIX e cartão são pagamentos registrados manualmente.</p>
     </section>`;
     content.querySelector('#web-report-filter')?.addEventListener('submit',event=>{
@@ -558,6 +625,23 @@
       void renderWebReports({detailOffset:Math.max(0,detail.offset+Number(button.dataset.reportDetailsPage)*detail.limit)});
     }));
     content.querySelector('#web-report-print')?.addEventListener('click',()=>root.print());
+    content.querySelector('#web-report-xlsx')?.addEventListener('click',async()=>{
+      const button=content.querySelector('#web-report-xlsx');button.disabled=true;
+      try{
+        if(!root.PdvReportXlsx)throw Error('Exportador XLSX não carregado.');
+        const data=state.view==='details'
+          ?root.PdvReportXlsx.parseCsv((await api.exportSalesDetailCsvCanonical({
+            from:state.fromDate,to:state.toDate,sellerId:state.sellerId||'',
+            customerId:state.customerId||'',productId:state.productId||'',
+            paymentMethod:state.paymentMethod||''
+          })).csv||'')
+          :xlsxData();
+        root.PdvReportXlsx.download('relatorio-'+state.view+'-'+state.fromDate+'-'+state.toDate+'.xlsx',
+          data.headers,data.rows,{sheetName:viewLabels[state.view]});
+        showToast('Planilha XLSX gerada localmente.','success');
+      }catch(error){showToast(error.message||'Falha ao gerar XLSX.','error');}
+      finally{button.disabled=false;}
+    });
     content.querySelector('#web-report-export')?.addEventListener('click',async()=>{
       const button=content.querySelector('#web-report-export');
       button.disabled=true;
