@@ -958,7 +958,7 @@ export function createCommerceService(db,{now=nowISO}={}){
     async homeIndicators(tenant,branch,{asOf=stamp().slice(0,10)}={}){
       period({from:asOf,to:asOf});
       const month=asOf.slice(0,7);
-      const [report,open,coverage,monthlyReport,goal]=await Promise.all([
+      const [report,open,coverage,monthlyReport,goal,targetedGross,targetedRefunds]=await Promise.all([
         this.reports(tenant,branch,{from:asOf,to:asOf}),
         first("SELECT COUNT(*) AS n FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND status='OPEN'",tenant,branch),
         this.reportStockCoverage(tenant,branch,{asOf,days:30}),
@@ -966,9 +966,30 @@ export function createCommerceService(db,{now=nowISO}={}){
         first(`SELECT COUNT(*) AS count,COALESCE(SUM(t.target_cents),0) AS totalCents
           FROM seller_sales_targets t JOIN tenant_memberships m
           ON m.tenant_id=t.tenant_id AND m.user_id=t.seller_id AND m.active=1
-          WHERE t.tenant_id=? AND t.branch_id=? AND t.month_key=?`,tenant,branch,month)
+          WHERE t.tenant_id=? AND t.branch_id=? AND t.month_key=?`,tenant,branch,month),
+        first(`SELECT COALESCE(SUM(s.total_cents),0) AS amountCents
+          FROM sales s JOIN seller_sales_targets t ON t.tenant_id=s.tenant_id
+          AND t.branch_id=s.branch_id AND t.seller_id=COALESCE(s.seller_id,s.operator_id)
+          AND t.month_key=?
+          JOIN tenant_memberships m ON m.tenant_id=t.tenant_id
+          AND m.user_id=t.seller_id AND m.active=1
+          WHERE s.tenant_id=? AND s.branch_id=?
+          AND s.status IN('COMPLETED','CANCELLED') AND s.completed_at>=?
+          AND s.completed_at<=?`,month,tenant,branch,month+'-01T00:00:00.000Z',asOf+'T23:59:59.999Z'),
+        first(`SELECT COALESCE(SUM(r.amount_cents),0) AS amountCents
+          FROM sale_returns r JOIN sales s ON s.id=r.sale_id
+          AND s.tenant_id=r.tenant_id AND s.branch_id=r.branch_id
+          JOIN seller_sales_targets t ON t.tenant_id=s.tenant_id
+          AND t.branch_id=s.branch_id AND t.seller_id=COALESCE(s.seller_id,s.operator_id)
+          AND t.month_key=?
+          JOIN tenant_memberships m ON m.tenant_id=t.tenant_id
+          AND m.user_id=t.seller_id AND m.active=1
+          WHERE r.tenant_id=? AND r.branch_id=?
+          AND r.created_at>=? AND r.created_at<=?`,
+          month,tenant,branch,month+'-01T00:00:00.000Z',asOf+'T23:59:59.999Z')
       ]);
       const monthlyTargetCents=goal?.count?goal.totalCents:null;
+      const targetedSellerNetCents=(targetedGross?.amountCents||0)-(targetedRefunds?.amountCents||0);
       return {asOf,salesCount:report.sales.count,
         netSalesCents:report.sales.totalCents,
         refundedCents:report.sales.refundedCents,
@@ -976,8 +997,9 @@ export function createCommerceService(db,{now=nowISO}={}){
         month,
         monthToDateNetSalesCents:monthlyReport.sales.totalCents,
         monthlyTargetCents,
+        targetedSellerNetCents:monthlyTargetCents===null?null:targetedSellerNetCents,
         targetProgressPercent:monthlyTargetCents>0?
-          Math.round(10000*monthlyReport.sales.totalCents/monthlyTargetCents)/100:null,
+          Math.round(10000*targetedSellerNetCents/monthlyTargetCents)/100:null,
         targetedSellers:goal?.count||0,
         outOfStockCount:coverage.zeroOrReservedOut,
         belowMinimumCount:coverage.belowMinimum,
