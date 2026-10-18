@@ -23,7 +23,11 @@ test('cap-002 LAN: two authenticated HTTPS terminals, strict host/CSRF, RBAC and
   try{execFileSync('openssl',['version'],{stdio:'ignore'});}
   catch{t.skip('OpenSSL CLI not available to create short-lived test certificate');return;}
   const folder=await mkdtemp(join(tmpdir(),'pdv-lan-'));
-  t.after(()=>rm(folder,{recursive:true,force:true}));
+  const cleanup=[];
+  t.after(async()=>{
+    for(const close of cleanup.reverse())await close();
+    await rm(folder,{recursive:true,force:true});
+  });
   const keyPath=join(folder,'server.key'),certPath=join(folder,'server.crt');
   execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-sha256','-nodes',
     '-keyout',keyPath,'-out',certPath,'-days','1','-subj','/CN=localhost',
@@ -35,7 +39,7 @@ test('cap-002 LAN: two authenticated HTTPS terminals, strict host/CSRF, RBAC and
   await writeFile(join(webRoot,'app.js'),'window.appReady=true;');
   await writeFile(join(folder,'secret.env'),'CANNOT-BE-SERVED');
   const db=openLocalDatabase(join(folder,'pdv.sqlite'));
-  t.after(()=>db.close());
+  cleanup.push(()=>db.close());
   await applyLocalMigrations(db);
   const stamp=new Date().toISOString();
   const hash=await hashPassword('A-long-offline-test-password!');
@@ -53,7 +57,8 @@ test('cap-002 LAN: two authenticated HTTPS terminals, strict host/CSRF, RBAC and
   const server=createLanServer({origin:'https://localhost:8443',tlsKey:await readFile(keyPath),
     tlsCert:await readFile(certPath),db,webRoot});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  cleanup.push(()=>new Promise(resolve=>server.close(resolve)));
+
   const port=server.address().port;
   const send=(path,method='GET',body,headers={})=>new Promise((resolve,reject)=>{
     const data=body===undefined?undefined:JSON.stringify(body);
