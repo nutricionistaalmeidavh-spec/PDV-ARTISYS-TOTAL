@@ -132,6 +132,98 @@ export function createR4ExtendedService(db){
        return {result:out,statements};
      });
    },
+
+   async transferItems(t,b,user,sourceSessionId,body,key){
+     await branch(t,b);
+     const target=label(body.targetSessionId,128);
+     const [sourceRow,targetRow]=await Promise.all([
+       first("SELECT status FROM restaurant_table_sessions WHERE tenant_id=? AND branch_id=? AND id=?",t,b,sourceSessionId),
+       first("SELECT status FROM restaurant_table_sessions WHERE tenant_id=? AND branch_id=? AND id=?",t,b,target)
+     ]);
+     if(!sourceRow||!targetRow)throw fail(404,'Comanda de origem ou destino inexistente.');
+     if(target===sourceSessionId||sourceRow.status!=='OPEN'||targetRow.status!=='OPEN')throw fail(409,'Transfira somente entre duas comandas abertas.');
+     const existingPlan=await first('SELECT table_session_id FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id IN(?,?) LIMIT 1',t,b,sourceSessionId,target);
+     if(existingPlan)throw fail(409,'Cancele o plano de divisão de contas antes de transferir itens.');
+     if(!Array.isArray(body.items)||!body.items.length||body.items.length>40)throw fail(400,'Itens inválidos.');
+     const entries=[],seen=new Set();
+     for(const input of body.items){
+       const itemId=label(input.orderItemId,128);
+       if(!itemId||seen.has(itemId))throw fail(400,'Item repetido.');
+       seen.add(itemId);
+       const milli=integer(Math.round(Number(input.quantity)*1000),1,100000000,'Quantidade');
+       if(!Number.isFinite(Number(input.quantity))||Math.abs(Number(input.quantity)*1000-milli)>0.000001)
+         throw fail(400,'Quantidade precisa usar até três casas decimais.');
+       const item=await first(`SELECT oi.quantity_milli AS quantityMilli,o.status
+          FROM restaurant_order_items oi JOIN restaurant_orders o ON o.id=oi.order_id
+            AND o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id
+          WHERE oi.tenant_id=? AND oi.branch_id=? AND oi.id=? AND o.table_session_id=?`,t,b,itemId,sourceSessionId);
+       if(!item||item.status!=='DELIVERED')throw fail(409,'Só transfira itens entregues desta comanda.');
+       const used=await first('SELECT COALESCE(SUM(quantity_milli),0) AS used FROM r4_item_transfers WHERE tenant_id=? AND branch_id=? AND order_item_id=?',t,b,itemId);
+       if(used.used+milli>item.quantityMilli)throw fail(409,'Quantidade disponível insuficiente para transferência.');
+       entries.push({orderItemId:itemId,quantity:milli/1000,milli});
+     }
+     return mutation(t,'r4.items.transfer:'+b+':'+sourceSessionId,key,async()=>{
+       const at=stamp();
+       return {result:{sourceSessionId,targetSessionId:target,items:entries.map(({milli,...x})=>x)},
+         statements:entries.map(x=>q(`INSERT INTO r4_item_transfers
+           (id,tenant_id,branch_id,order_item_id,source_session_id,target_session_id,quantity_milli,created_by,created_at)
+           VALUES(?,?,?,?,?,?,?,?,?)`,id(),t,b,x.orderItemId,sourceSessionId,target,x.milli,user,at))};
+     });
+   },
+   async sessionPosition(t,b,sessionId){
+     await branch(t,b);
+     const s=await first('SELECT id,status FROM restaurant_table_sessions WHERE tenant_id=? AND branch_id=? AND id=?',t,b,sessionId);
+     if(!s)throw fail(404,'Comanda não encontrada.');
+     const active=await first("SELECT COUNT(*) AS n FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND table_session_id=? AND status IN('OPEN','READY')",t,b,sessionId);
+     if(active.n)throw fail(409,'Todos os pedidos precisam ser entregues antes da divisão.');
+     const base=await all(`SELECT oi.id,oi.unit_price_cents AS unitPriceCents,
+       oi.quantity_milli-COALESCE((SELECT SUM(tr.quantity_milli) FROM r4_item_transfers tr WHERE tr.tenant_id=oi.tenant_id
+         AND tr.branch_id=oi.branch_id AND tr.order_item_id=oi.id),0) AS milli
+       FROM restaurant_order_items oi JOIN restaurant_orders o ON o.id=oi.order_id AND o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id
+       WHERE oi.tenant_id=? AND oi.branch_id=? AND o.table_session_id=? AND o.status='DELIVERED'
+       UNION ALL
+       SELECT oi.id,oi.unit_price_cents AS unitPriceCents,tr.quantity_milli AS milli
+       FROM r4_item_transfers tr JOIN restaurant_order_items oi ON oi.id=tr.order_item_id
+       JOIN restaurant_orders o ON o.id=oi.order_id AND o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id
+       WHERE tr.tenant_id=? AND tr.branch_id=? AND tr.target_session_id=? AND o.status='DELIVERED'`,
+       t,b,sessionId,t,b,sessionId);
+     const items=base.filter(x=>x.milli>0);
+     const baseCents=items.reduce((sum,x)=>sum+Math.round(x.unitPriceCents*x.milli/1000),0);
+     return {sessionId,status:s.status,itemsCount:items.length,baseCents};
+   },
+   async split(t,b,sessionId){
+     const position=await this.sessionPosition(t,b,sessionId);
+     const plan=await first('SELECT parts,service_charge_bps AS serviceChargeBps,service_charge_product_id AS serviceChargeProductId FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId);
+     if(!plan)return null;
+     const serviceChargeCents=Math.round(position.baseCents*plan.serviceChargeBps/10000);
+     const totalCents=position.baseCents+serviceChargeCents;
+     const per=Math.floor(totalCents/plan.parts),extra=totalCents%plan.parts;
+     return {sessionId,parts:plan.parts,baseCents:position.baseCents,serviceChargeBps:plan.serviceChargeBps,
+       serviceChargeProductId:plan.serviceChargeProductId,serviceChargeCents,totalCents,
+       shares:Array.from({length:plan.parts},(_,index)=>per+(index<extra?1:0))};
+   },
+   async saveSplit(t,b,sessionId,body,key){
+     const position=await this.sessionPosition(t,b,sessionId);
+     if(position.status!=='OPEN'||position.baseCents<1)throw fail(409,'Somente comanda aberta com itens entregues pode ser dividida.');
+     const parts=integer(body.parts,2,50,'Número de partes');
+     const bps=integer(body.serviceChargeBps??0,0,3000,'Percentual de serviço');
+     const feeId=bps?label(body.serviceChargeProductId,128):null;
+     if(bps){
+       const fee=await product(t,feeId);
+       if(fee.track_stock||fee.sku!=='SERVICE_CHARGE')throw fail(400,'Cadastre explicitamente produto não estocável com SKU SERVICE_CHARGE.');
+     }
+     return mutation(t,'r4.split:'+b+':'+sessionId,key,async()=>{
+       const serviceChargeCents=Math.round(position.baseCents*bps/10000);
+       const totalCents=position.baseCents+serviceChargeCents,per=Math.floor(totalCents/parts),extra=totalCents%parts;
+       return {result:{sessionId,parts,baseCents:position.baseCents,serviceChargeBps:bps,serviceChargeProductId:feeId,
+         serviceChargeCents,totalCents,shares:Array.from({length:parts},(_,i)=>per+(i<extra?1:0))},
+         statements:[q(`INSERT INTO r4_split_plans(tenant_id,branch_id,table_session_id,parts,service_charge_bps,service_charge_product_id,updated_at)
+           VALUES(?,?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,table_session_id) DO UPDATE SET
+           parts=excluded.parts,service_charge_bps=excluded.service_charge_bps,
+           service_charge_product_id=excluded.service_charge_product_id,updated_at=excluded.updated_at`,
+           t,b,sessionId,parts,bps,feeId,stamp())]};
+     });
+   },
    async pizzaProfiles(t,b){
      await branch(t,b);
      return all('SELECT product_id AS productId,pricing_policy AS policy,max_flavors AS maxFlavors FROM r4_pizza_profiles WHERE tenant_id=? AND branch_id=? ORDER BY product_id',t,b);
