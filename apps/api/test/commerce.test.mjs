@@ -1473,3 +1473,233 @@ test('P1 HTTP shelf addresses honor inventory RBAC, tenant and branch and never 
    assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM inventory_movements').bind().first()).n,0);
  }finally{x.close();}
 });
+
+
+
+// P6 10 independent scenario executions. These compare immutable desktop
+// policy/price/payment source blobs (verified by assertCheckoutDesktopSourcePinned)
+// against authenticated API calls and actual SQLite rows, not mock outputs.
+function desktopV2(id,scenarioId){
+  assertCheckoutDesktopSourcePinned();
+  const row=checkoutGolden(id);
+  assert.equal(row.scenarioId,scenarioId);
+  return row;
+}
+function referenceAuth(capability,permittedProfile='ADMINISTRATOR',deniedProfile='READ_ONLY'){
+  const service=desktopAuthorization.createAuthorizationService({
+    resolvePermissions:principal=>desktopProfiles.DEFAULT_PROFILE_PERMISSIONS[
+      principal.id==='permitted'?permittedProfile:deniedProfile]||[]
+  });
+  assert.equal(service.can({principal:{kind:'human',id:'permitted'},capability}),true);
+  assert.equal(service.can({principal:{kind:'human',id:'denied'},capability}),false);
+}
+async function certifiedSale(x,sku,quantity=1){
+  const productId=await x.id('Certificacao '+sku,sku,6);
+  const opened=await x.write('a','sales',{branchId:'branch-a'});
+  assert.equal(opened.status,201,opened.body.error);
+  const saleId=opened.body.sale.id;
+  const added=await x.write('a','sales/'+saleId+'/items',{branchId:'branch-a',productId,quantity});
+  assert.equal(added.status,200,added.body.error);
+  return {productId,saleId,opened,added};
+}
+function saleTotals(sale){
+  return {subtotalCents:sale.subtotalCents,discountCents:sale.discountCents,totalCents:sale.totalCents};
+}
+
+test('checkout-007/tenant-isolation discount-tenant-desktop-v2 excludes another company from price changes',async()=>{
+  const vector=desktopV2('discount-tenant-desktop-v2','checkout-007/tenant-isolation');
+  const reference=desktopPricing.calculateSaleTotals(vector.input);
+  assert.deepEqual(reference,vector.expected);
+  const x=await setup();try{
+    const {saleId}=await certifiedSale(x,'CERT-DISC-TENANT');
+    const foreign=await x.write('b','sales/'+saleId+'/discount',
+      {branchId:'branch-b',discountCents:vector.input.discountCents},{who:x.other});
+    assert.equal(foreign.status,vector.foreignTenantStatus);
+    const unchanged=await x.db.prepare('SELECT discount_cents AS cents FROM sales WHERE id=?').bind(saleId).first();
+    assert.equal(unchanged.cents,0,'foreign tenant cannot mutate seller price or discount');
+    const own=await x.write('a','sales/'+saleId+'/discount',
+      {branchId:'branch-a',discountCents:vector.input.discountCents});
+    assert.equal(own.status,200,own.body.error);
+    assert.deepEqual(saleTotals(own.body.sale),reference,'isolated tenant follows original desktop pricing');
+  }finally{x.close();}
+});
+
+test('checkout-007/failure-recovery discount-recovery-desktop-v2 replays idempotently and rejects invalid amounts',async()=>{
+  const vector=desktopV2('discount-recovery-desktop-v2','checkout-007/failure-recovery');
+  const reference=desktopPricing.calculateSaleTotals(vector.input);
+  assert.deepEqual(reference,vector.expected);
+  assert.throws(()=>desktopPricing.calculateSaleTotals({...vector.input,discountCents:vector.invalidDiscountCents}));
+  const x=await setup();try{
+    const {saleId}=await certifiedSale(x,'CERT-DISC-RETRY');
+    const payload={branchId:'branch-a',discountCents:vector.input.discountCents};
+    const key=next();
+    const first=await x.write('a','sales/'+saleId+'/discount',payload,{key});
+    assert.equal(first.status,200,first.body.error);
+    const replay=await x.write('a','sales/'+saleId+'/discount',payload,{key});
+    assert.deepEqual(replay.body,first.body,'retry returns original mutation response');
+    const invalid=await x.write('a','sales/'+saleId+'/discount',
+      {...payload,discountCents:vector.invalidDiscountCents});
+    assert.equal(invalid.status,400);
+    const persisted=await x.db.prepare('SELECT discount_cents AS cents FROM sales WHERE id=?').bind(saleId).first();
+    assert.equal(persisted.cents,reference.discountCents);
+    assert.deepEqual(saleTotals(first.body.sale),reference,'failed mutation leaves desktop-equivalent amount');
+  }finally{x.close();}
+});
+
+test('checkout-008/authorization payment-authorization-desktop-v2 refuses readonly completion without ledger effects',async()=>{
+  const vector=desktopV2('payment-authorization-desktop-v2','checkout-008/authorization');
+  referenceAuth(vector.capability,vector.permittedProfile,vector.deniedProfile);
+  const x=await setup();try{
+    const {saleId}=await certifiedSale(x,'CERT-PAY-AUTH');
+    const cash=await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+    assert.equal(cash.status,201,cash.body.error);
+    const payload={branchId:'branch-a',payments:[{method:'PIX',amountCents:1000}]};
+    const denied=await x.write('a','sales/'+saleId+'/complete',payload,{who:x.viewer});
+    assert.equal(denied.status,vector.expectedDeniedHttp);
+    const state=await x.db.prepare('SELECT status FROM sales WHERE id=?').bind(saleId).first();
+    const count=await x.db.prepare('SELECT COUNT(*) AS n FROM sale_payments WHERE sale_id=?').bind(saleId).first();
+    assert.deepEqual({status:state.status,payments:count.n},{status:'OPEN',payments:0},
+      'unauthorized payment cannot finalize sale or create a financial posting');
+    const accepted=await x.write('a','sales/'+saleId+'/complete',payload);
+    assert.equal(accepted.status,200,accepted.body.error);
+  }finally{x.close();}
+});
+
+test('checkout-008/tenant-isolation payment-tenant-desktop-v2 forbids foreign settlements',async()=>{
+  const vector=desktopV2('payment-tenant-desktop-v2','checkout-008/tenant-isolation');
+  const reference=desktopPayments.resolvePayment(vector.input);
+  assert.deepEqual(reference,vector.expected);
+  const x=await setup();try{
+    const {saleId}=await certifiedSale(x,'CERT-PAY-TENANT');
+    assert.equal((await x.write('a','cash/open',{branchId:'branch-a',openingCents:0})).status,201);
+    const foreign=await x.write('b','sales/'+saleId+'/complete',
+      {branchId:'branch-b',payments:vector.input.payments},{who:x.other});
+    assert.equal(foreign.status,vector.foreignTenantStatus);
+    const count=await x.db.prepare('SELECT COUNT(*) AS n FROM sale_payments WHERE sale_id=?').bind(saleId).first();
+    assert.equal(count.n,0,'foreign settlement must not enter the original tenant ledger');
+    const own=await x.write('a','sales/'+saleId+'/complete',
+      {branchId:'branch-a',payments:vector.input.payments});
+    assert.equal(own.status,200,own.body.error);
+    assert.equal(own.body.sale.totalCents,reference.totalCents);
+    assert.equal(own.body.sale.changeCents,reference.changeDueCents);
+  }finally{x.close();}
+});
+
+test('checkout-008/failure-recovery payment-recovery-desktop-v2 pays exactly once on retry',async()=>{
+  const vector=desktopV2('payment-recovery-desktop-v2','checkout-008/failure-recovery');
+  const reference=desktopPayments.resolvePayment(vector.input);
+  assert.deepEqual(reference,vector.expected);
+  const x=await setup();try{
+    const {saleId}=await certifiedSale(x,'CERT-PAY-RETRY');
+    assert.equal((await x.write('a','cash/open',{branchId:'branch-a',openingCents:0})).status,201);
+    const payload={branchId:'branch-a',payments:vector.input.payments},key=next();
+    const initial=await x.write('a','sales/'+saleId+'/complete',payload,{key});
+    assert.equal(initial.status,200,initial.body.error);
+    const retry=await x.write('a','sales/'+saleId+'/complete',payload,{key});
+    assert.deepEqual(retry.body,initial.body,'idempotent payment returns the identical original confirmation');
+    const second=await x.write('a','sales/'+saleId+'/complete',payload,{key:next()});
+    assert.equal(second.status,409,'second independently keyed settlement cannot double charge');
+    const count=await x.db.prepare('SELECT COUNT(*) AS n FROM sale_payments WHERE sale_id=?').bind(saleId).first();
+    const events=await x.db.prepare("SELECT COUNT(*) AS n FROM domain_events WHERE aggregate_id=? AND type='sale.completed'").bind(saleId).first();
+    const cash=await x.db.prepare("SELECT COALESCE(SUM(amount_cents),0) AS cents FROM cash_movements WHERE method='CASH'").bind().first();
+    assert.deepEqual({payments:count.n,events:events.n,cashCents:cash.cents,change:initial.body.sale.changeCents},
+      {payments:1,events:1,cashCents:reference.totalCents,change:reference.changeDueCents},
+      'the retry creates exactly one desktop-equivalent posting');
+  }finally{x.close();}
+});
+
+test('checkout-005/nominal sale-open-desktop-v2 creates one open sale with original zero totals',async()=>{
+  const vector=desktopV2('sale-open-desktop-v2','checkout-005/nominal');
+  const reference=desktopPricing.calculateSaleTotals(vector.input);
+  assert.deepEqual(reference,vector.expected);
+  const x=await setup();try{
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(opened.status,201,opened.body.error);
+    const saleId=opened.body.sale.id;
+    const record=await x.db.prepare('SELECT status,subtotal_cents AS subtotalCents,discount_cents AS discountCents,total_cents AS totalCents FROM sales WHERE id=?').bind(saleId).first();
+    assert.equal(record.status,vector.expectedStatus);
+    assert.deepEqual({subtotalCents:record.subtotalCents,discountCents:record.discountCents,totalCents:record.totalCents},
+      reference,'new sale state persists original desktop empty cart totals');
+  }finally{x.close();}
+});
+
+test('checkout-005/authorization sale-open-authorization-desktop-v2 honors desktop sales.create profile',async()=>{
+  const vector=desktopV2('sale-open-authorization-desktop-v2','checkout-005/authorization');
+  referenceAuth(vector.capability,vector.permittedProfile,vector.deniedProfile);
+  const x=await setup();try{
+    const denied=await x.write('a','sales',{branchId:'branch-a'},{who:x.viewer});
+    assert.equal(denied.status,vector.expectedDeniedHttp);
+    const before=await x.db.prepare('SELECT COUNT(*) AS n FROM sales WHERE tenant_id=?').bind('a').first();
+    assert.equal(before.n,0,'readonly user cannot open or persist a sale');
+    const accepted=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(accepted.status,vector.expectedAllowedHttp);
+    const after=await x.db.prepare('SELECT COUNT(*) AS n FROM sales WHERE tenant_id=?').bind('a').first();
+    assert.deepEqual({before:before.n,after:after.n},{before:0,after:1},
+      'original desktop permission separates allowed and denied actors in the API');
+  }finally{x.close();}
+});
+
+test('checkout-005/tenant-isolation sale-open-tenant-desktop-v2 never reveals another tenant sale',async()=>{
+  const vector=desktopV2('sale-open-tenant-desktop-v2','checkout-005/tenant-isolation');
+  const readable=desktopAuthorization.createAuthorizationService({
+    resolvePermissions:principal=>desktopProfiles.DEFAULT_PROFILE_PERMISSIONS[
+      principal.id==='owner'?vector.permittedProfile:vector.deniedProfile]||[]
+  });
+  assert.equal(readable.can({principal:{kind:'human',id:'owner'},capability:vector.capability}),true);
+  assert.equal(readable.can({principal:{kind:'human',id:'viewer'},capability:vector.capability}),true,
+    'desktop READ_ONLY permits sales.view; tenant scoping is an independent API constraint');
+  const x=await setup();try{
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(opened.status,201,opened.body.error);
+    const saleId=opened.body.sale.id;
+    const foreign=await x.get('b','sales/'+saleId+'?branchId=branch-b',x.other);
+    assert.equal(foreign.status,vector.foreignTenantStatus);
+    const wrongBranch=await x.get('a','sales/'+saleId+'?branchId=branch-b');
+    assert.equal(wrongBranch.status,404);
+    const owner=await x.get('a','sales/'+saleId+'?branchId=branch-a');
+    assert.equal(owner.status,200,owner.body.error);
+    const persisted=await x.db.prepare('SELECT tenant_id AS tenantId FROM sales WHERE id=?').bind(saleId).first();
+    assert.deepEqual({tenantId:persisted.tenantId,visible:owner.body.sale.id,foreignStatus:foreign.status},
+      {tenantId:'a',visible:saleId,foreignStatus:404},'sale and customer metadata stay in the owning company');
+  }finally{x.close();}
+});
+
+test('checkout-005/failure-recovery sale-open-recovery-desktop-v2 does not duplicate a timed out open',async()=>{
+  const vector=desktopV2('sale-open-recovery-desktop-v2','checkout-005/failure-recovery');
+  const reference=desktopPricing.calculateSaleTotals(vector.input);
+  assert.deepEqual(reference,vector.expected);
+  const x=await setup();try{
+    const key=next(),body={branchId:'branch-a'};
+    const opened=await x.write('a','sales',body,{key});
+    assert.equal(opened.status,201,opened.body.error);
+    const retry=await x.write('a','sales',body,{key});
+    assert.deepEqual(retry.body,opened.body,'same request key reuses previously opened sale');
+    const count=await x.db.prepare('SELECT COUNT(*) AS n FROM sales WHERE tenant_id=?').bind('a').first();
+    assert.equal(count.n,vector.expectedPersistedRows,'network retry cannot duplicate a new sale');
+    assert.deepEqual(saleTotals(opened.body.sale),reference,'reopened response keeps the original desktop empty total');
+  }finally{x.close();}
+});
+
+test('checkout-006/nominal sale-items-desktop-v2 adds updates and removes with original pricing',async()=>{
+  const vector=desktopV2('sale-items-desktop-v2','checkout-006/nominal');
+  const original={
+    initial:desktopPricing.calculateSaleTotals(vector.initial),
+    updated:desktopPricing.calculateSaleTotals(vector.updated),
+    empty:desktopPricing.calculateSaleTotals(vector.empty)
+  };
+  assert.deepEqual(original,vector.expected);
+  const x=await setup();try{
+    const {productId,saleId,added}=await certifiedSale(x,'CERT-ITEMS',2);
+    assert.deepEqual(saleTotals(added.body.sale),original.initial);
+    const updated=await x.write('a','sales/'+saleId+'/items/'+productId,
+      {branchId:'branch-a',quantity:3},{method:'PUT'});
+    assert.equal(updated.status,200,updated.body.error);
+    assert.deepEqual(saleTotals(updated.body.sale),original.updated);
+    const removed=await x.write('a','sales/'+saleId+'/items/'+productId,
+      {branchId:'branch-a'},{method:'DELETE'});
+    assert.equal(removed.status,200,removed.body.error);
+    const record=await x.db.prepare('SELECT COUNT(*) AS n FROM sale_items WHERE sale_id=?').bind(saleId).first();
+    assert.equal(record.n,0,'deleted item must disappear from authoritative SQLite');
+    assert.deepEqual(saleTotals(removed.body.sale),original.empty,'all item mutations match the desktop golden totals');
+  }finally{x.close();}
+});
