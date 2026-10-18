@@ -800,6 +800,36 @@ export function createCommerceService(db,{now=nowISO}={}){
       }
       return result;
     },
+    async saveInventoryMinimum(tenant,branch,user,body,header){
+      await branchExists(tenant,branch);
+      const productId=body?.productId;
+      if(typeof productId!=='string'||!productId||productId.length>128)
+        throw error(400,'Informe o produto.');
+      const record=await product(tenant,productId);
+      if(!record.track_stock)throw error(409,'Produto sem controle de estoque.');
+      const minimum=body?.minimumQuantity;
+      if(minimum!==null && (typeof minimum!=='number'||!Number.isFinite(minimum)||
+         minimum<0||minimum>100000||Math.abs(minimum*1000-Math.round(minimum*1000))>1e-7))
+        throw error(400,'Mínimo deve ser nulo ou quantidade entre 0 e 100000 com três casas decimais.');
+      const scope='inventory.minimum:'+branch+':'+productId;
+      const key=requiredMutation(body,header);
+      const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const result={productId,branchId:branch,minimumQuantity:minimum,
+        status:minimum===null?'NOT_CONFIGURED':'CONFIGURED'};
+      const statements=minimum===null
+        ?[q('DELETE FROM inventory_minimum_levels WHERE tenant_id=? AND branch_id=? AND product_id=?',
+            tenant,branch,productId)]
+        :[q(`INSERT INTO inventory_minimum_levels
+            (tenant_id,branch_id,product_id,minimum_milli,updated_by,updated_at)
+            VALUES(?,?,?,?,?,?)
+            ON CONFLICT(tenant_id,branch_id,product_id) DO UPDATE SET
+              minimum_milli=excluded.minimum_milli,updated_by=excluded.updated_by,
+              updated_at=excluded.updated_at`,
+            tenant,branch,productId,Math.round(minimum*1000),user,stamp())];
+      statements.push(audit(tenant,scope,key,result));
+      await batch(statements);
+      return result;
+    },
     async homeIndicators(tenant,branch,{asOf=stamp().slice(0,10)}={}){
       period({from:asOf,to:asOf});
       const [report,open,coverage]=await Promise.all([
