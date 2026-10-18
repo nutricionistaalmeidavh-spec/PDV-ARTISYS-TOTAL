@@ -842,6 +842,9 @@ export function createCommerceService(db,{now=nowISO}={}){
         refundedCents:report.sales.refundedCents,
         cashOpen:Boolean(open?.n),activeCashTerminals:Number(open?.n||0),
         outOfStockCount:coverage.zeroOrReservedOut,
+        belowMinimumCount:coverage.belowMinimum,
+        atMinimumCount:coverage.atMinimum,
+        minimumUnconfiguredCount:coverage.unknownMinimum,
         trackedProducts:coverage.products.length,
         stockCoverageUnknown:coverage.coverageUnknown,
         source:'CANONICAL_SALES_CASH_STOCK'};
