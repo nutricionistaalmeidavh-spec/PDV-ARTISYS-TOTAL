@@ -1,3 +1,5 @@
+> **Histórico de arquitetura e implantação.** O roadmap operacional de paridade foi substituído por [Roadmap v2 — 56 capacidades](ROADMAP-PARIDADE-56.md). Os 68 contratos são critérios internos, não outra lista de funcionalidades. Este documento NÃO é o quadro de progresso vigente.
+
 # Roadmap — ArtiSys PDV Total (SaaS web Cloudflare)
 
 **Status:** planejamento técnico e importação da base; não é aplicação SaaS pronta.
