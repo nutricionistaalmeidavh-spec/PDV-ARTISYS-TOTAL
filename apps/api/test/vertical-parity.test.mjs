@@ -224,7 +224,7 @@ test('R4 cap-048: chamado garçom/conta é isolado, idempotente e tem transiçõ
    assert.equal((await x.request('a',`restaurant/requests/${rid}`,'PATCH',{branchId:'filial-a',status:'ACKNOWLEDGED'})).status,200);
    assert.equal((await x.request('a',`restaurant/requests/${rid}`,'PATCH',{branchId:'filial-a',status:'CLOSED'})).status,200);
    assert.equal((await x.request('a',`restaurant/requests/${rid}`,'PATCH',{branchId:'filial-a',status:'ACKNOWLEDGED'})).status,409);
-   await x.db.prepare("UPDATE tenant_memberships SET profile_key='KITCHEN' WHERE tenant_id='a' AND user_id='a-user'").run();
+   await x.db.prepare("UPDATE tenant_memberships SET profile_key='KITCHEN' WHERE tenant_id='a' AND user_id='a-user'").bind().run();
    assert.equal((await x.request('a','restaurant/requests?branchId=filial-a')).status,403);
  }finally{x.close();}
 });
