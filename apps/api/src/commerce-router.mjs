@@ -243,6 +243,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
       }
     }
     if(feature==='reports'){
+      if(parts.length===2&&parts[1]==='stock-minimum'&&method==='PUT'){
+        requireAccess(member,'inventory.adjust',user);
+        return json({minimum:await service.saveInventoryMinimum(tenant,branch,user,body,key)});
+      }
       if(parts.length===2&&parts[1]==='commission-targets'&&method==='PUT'){
         requireAccess(member,'sellers.manage',user);
         return json({target:await service.saveSellerSalesTarget(tenant,branch,user,body,key)});
