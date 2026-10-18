@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS r4_segment_preferences (
  FOREIGN KEY(tenant_id,branch_id) REFERENCES branches(tenant_id,id)
 );
 -- Store optional daily counter on existing order, do not create an order duplicate.
+ALTER TABLE restaurant_orders ADD COLUMN service_channel TEXT CHECK(service_channel IN('TABLE','DELIVERY','PICKUP','COUNTER'));
 ALTER TABLE restaurant_orders ADD COLUMN ticket_day TEXT;
 ALTER TABLE restaurant_orders ADD COLUMN ticket_number INTEGER;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_r4_daily_food_ticket ON restaurant_orders(tenant_id,branch_id,ticket_day,ticket_number)
@@ -94,3 +95,11 @@ CREATE TRIGGER IF NOT EXISTS r4_sale_recipe_versions_no_update BEFORE UPDATE ON 
 BEGIN SELECT RAISE(ABORT,'RECIPE_SALE_SNAPSHOT_IMMUTABLE'); END;
 CREATE TRIGGER IF NOT EXISTS r4_sale_recipe_versions_no_delete BEFORE DELETE ON r4_sale_recipe_versions
 BEGIN SELECT RAISE(ABORT,'RECIPE_SALE_SNAPSHOT_IMMUTABLE'); END;
+
+-- Dispatch attaches to the same food order; it never creates another order or sale.
+CREATE TABLE IF NOT EXISTS r4_delivery_dispatches (
+ tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,order_id TEXT NOT NULL,
+ courier_name TEXT NOT NULL,dispatched_at TEXT NOT NULL,
+ PRIMARY KEY(tenant_id,branch_id,order_id),
+ FOREIGN KEY(tenant_id,branch_id,order_id) REFERENCES restaurant_orders(tenant_id,branch_id,id)
+);
