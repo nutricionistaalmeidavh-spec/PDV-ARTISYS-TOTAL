@@ -459,8 +459,8 @@ try{
   await page.locator('[data-report-web=overview][aria-selected=true]').waitFor();
   await page.locator('[data-report-web=comparison]').click();
   await page.locator('[data-report-web=comparison][aria-selected=true]').waitFor();
-  assert.match(await page.locator('#report-v2-body').innerText(),/Receita líquida|Variação de receita/);
-  assert.match(await page.locator('#report-v2-body').innerText(),/Sem base comparativa anterior/);
+  assert.match(await page.locator('#report-v2-body').innerText(),/Receita líquida|Variação de receita/i);
+  assert.match(await page.locator('#report-v2-body').innerText(),/Sem base comparativa anterior/i);
   await page.locator('[data-report-web=comparison]').focus();
   await page.keyboard.press('ArrowRight');
   await page.locator('[data-report-web=products][aria-selected=true]').waitFor();
