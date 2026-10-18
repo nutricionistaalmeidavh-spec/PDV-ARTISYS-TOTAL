@@ -21,7 +21,7 @@
       try{devices=await req('/devices');isAdmin=true;health=await req('/health');}
       catch(error){if(error.status!==403)throw error;devices={devices:[]};}
     }catch(error){
-      content.innerHTML='<section class="ops-page"><h1>Rede local</h1><p class="ops-error">'+safe(error.message)+'</p></section>';
+      content.innerHTML='<section class="ops-page"><h1>Rede local</h1><p class="ops-error">'+(error.status===404?'Esta instalação não executa o servidor HTTPS da rede local. A gestão de dispositivos é exclusiva do modo gratuito self-hosted.':safe(error.message))+'</p></section>';
       return;
     }
     if(document.body.dataset.activeRoute!=='settings')return;
