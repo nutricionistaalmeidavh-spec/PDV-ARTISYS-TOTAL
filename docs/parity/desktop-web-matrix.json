@@ -507,13 +507,16 @@
           "status": "partial",
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
-            "contains": "async adjustStock("
+            "contains": "async countStock(",
+            "testFile": "apps/api/test/commerce.test.mjs",
+            "testContains": "P2 inventory count is tenant-scoped, idempotent, zero-aware and rejects stale stock"
           },
           "owner": "inventory",
           "dependsOn": [
             "products-027"
           ],
-          "acceptance": "Inventário contado, ajustes positivos e negativos. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual)."
+          "acceptance": "Inventário contado, ajustes positivos e negativos. Verificar resultado no banco autoritativo, isolamento entre empresas e comportamento de autorização em testes executados (não apenas elemento visual).",
+          "reviewNote": "Inventário contado web implementado com saldo esperado, CAS transacional e ajuste pelo ledger imutável, RBAC, isolamento por tenant e idempotência. Mantido parcial até QA físico de contagens simultâneas em terminais, equivalência integral com desktop e revisão independente."
         },
         {
           "id": "products-029",
