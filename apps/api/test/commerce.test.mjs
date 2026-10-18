@@ -1305,7 +1305,7 @@ test('P5 home-003 commercial targets use only sellers with goals, with RBAC and 
  }finally{x.close();}
 });
 
-test('cash-046 P3 independent terminal drawers link every sale to its originating open cash session',async()=>{
+test('P3 independent terminal drawers link every sale to its originating open cash session',async()=>{
  const x=await setup();try{
   const product=await x.id('Item independente','TERMINAL-CASH',8);
   const openedA=await x.write('a','cash/open',{branchId:'branch-a',terminalId:'T-A',openingCents:1000});
