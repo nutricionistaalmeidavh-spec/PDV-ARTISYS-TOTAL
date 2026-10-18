@@ -1,6 +1,8 @@
+import moduleCatalog from '../../../packages/core/js/core/modules/module-registry.js';
 import {zipJsonEntries} from './r2-diagnostics-zip.mjs';
 import {sha256,newSessionToken} from './password.mjs';
 
+const {MODULES,getModuleDefinition}=moduleCatalog;
 const KINDS=new Set(['TERMINAL','WAITER','KITCHEN']);
 const ADMINS=new Set(['OWNER','ADMINISTRATOR']);
 const DEVICE_ROLES={
@@ -81,6 +83,18 @@ export async function authorizeLanBusinessRequest(request,db,member,tenantId){
   }
   if(!branchId||branchId!==row.branch_id)
     return err(403,'Este aparelho só pode operar na filial autorizada.');
+  return null;
+}
+
+/** Module policy is shared by web LAN: disable access but never erase history. */
+export async function authorizeLanModule(db,tenantId,path){
+  const moduleId=path.startsWith('restaurant/')?'FOOD':path.startsWith('wholesale/')?'WHOLESALE':null;
+  if(!moduleId)return null;
+  const row=await db.prepare('SELECT enabled FROM r2_tenant_modules WHERE tenant_id=? AND module_id=?')
+    .bind(tenantId,moduleId).first();
+  const def=getModuleDefinition(moduleId);
+  if(!(row?Boolean(row.enabled):def.defaultEnabled))
+    return err(403,'Módulo opcional desativado para este estabelecimento.');
   return null;
 }
 
@@ -172,6 +186,27 @@ export async function r2LanRoute(request,db,session,member,tenantId,path,{now=()
         await audit(db,tenantId,userId,'device.revoked','device',id,instant);
       }
       return json({revoked:true,id});
+    }
+    if(path==='lan/modules'&&method==='GET'){
+      const {results}=await db.prepare('SELECT module_id,enabled FROM r2_tenant_modules WHERE tenant_id=?')
+        .bind(tenantId).all();
+      const stored=new Map(results.map(item=>[item.module_id,Boolean(item.enabled)]));
+      return json({modules:MODULES.map(def=>({id:def.id,name:def.name,description:def.description,
+        enabled:stored.has(def.id)?stored.get(def.id):def.defaultEnabled}))});
+    }
+    if(parts.length===3&&parts[1]==='modules'&&method==='PATCH'){
+      if(!owner)return err(403,'Somente o administrador gerencia módulos.');
+      const def=getModuleDefinition(parts[2]);
+      if(!def)return err(404,'Módulo desconhecido.');
+      const body=await parse(request);
+      if(typeof body?.enabled!=='boolean')return err(400,'Informe enabled verdadeiro ou falso.');
+      const before=await db.prepare('SELECT enabled FROM r2_tenant_modules WHERE tenant_id=? AND module_id=?')
+        .bind(tenantId,def.id).first();
+      await db.prepare('INSERT INTO r2_tenant_modules(tenant_id,module_id,enabled,updated_by,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,module_id) DO UPDATE SET enabled=excluded.enabled,updated_by=excluded.updated_by,updated_at=excluded.updated_at')
+        .bind(tenantId,def.id,body.enabled?1:0,userId,instant).run();
+      await audit(db,tenantId,userId,'module.updated','module',def.id,instant);
+      return json({module:{id:def.id,name:def.name,enabled:body.enabled,
+        previousEnabled:before?Boolean(before.enabled):def.defaultEnabled}});
     }
     if(path==='lan/readiness'&&method==='GET'){
       const {results}=await db.prepare('SELECT * FROM r2_readiness WHERE tenant_id=?').bind(tenantId).all();
