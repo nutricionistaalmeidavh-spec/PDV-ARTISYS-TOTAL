@@ -50,7 +50,8 @@ O núcleo pode rodar em localhost com Node 22+ e SQLite, sem Cloudflare: execute
 A **fila única de implementação** é composta por **56 capacidades do desktop**; os 68 contratos das sete telas são verificações internas associadas a elas, não um segundo backlog. Use `npm run report:parity` para visualizar os quatro estados: copiado integralmente, copiado parcialmente, não copiado/não demonstrado e implementado aguardando auditoria de código. **Atenção:** ausência de prova (`gap`) não significa necessariamente ausência de código.
 
 - [Roadmap operacional vigente — 56 capacidades, prioridades R0–R5 e política de migrations](docs/ROADMAP-PARIDADE-56.md)
-- [Auditoria R0 e execução R1 — diagnóstico dos 21 itens e testes de suspensão/retomada](docs/parity/R0-R1-EXECUTION-20261018.md · [R1: 21 aceites de software](docs/parity/R1-SOFTWARE-ACCEPTANCE-20261018.md))
+- [Auditoria R0 e execução R1 — diagnóstico dos 21 itens e testes de suspensão/retomada](docs/parity/R0-R1-EXECUTION-20261018.md)
+- [R1 concluído no escopo de software — 21/21 capacidades com aceites executáveis](docs/parity/R1-SOFTWARE-ACCEPTANCE-20261018.md)
 - Auditoria atualizada: `npm run audit:r0-r1` (56 capacidades e detalhamento dos 21 do R1, sem promoção automática de paridade).
 - [Roadmap original de arquitetura/Cloudflare (histórico)](docs/ROADMAP-SAAS-CLOUDFLARE.md)
 
