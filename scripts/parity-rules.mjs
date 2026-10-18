@@ -63,7 +63,18 @@ export function verifyCapabilityInventory(matrix,inventory,publishedCapabilities
     requireProof(Array.isArray(tested) && new Set(tested).size===tested.length &&
       tested.every(id=>row.dependsOn.includes(id) && statuses.get(id)==='covered'),
       'capability refers to an unverified seven-screen proof '+row.id);
-    if(row.status==='partial')requireProof(tested.length>0,'partial capability needs covered subset '+row.id);
+    if(row.status==='partial'){
+      // P6 capabilities are broader than the earlier seven-screen contracts.
+      // A named API/Chromium test is valid partial evidence even if a parent
+      // seven-screen contract remains partial; it cannot certify full parity.
+      const direct=row.independentEvidence;
+      requireProof(tested.length>0||direct,'partial capability needs covered subset or executable proof '+row.id);
+      if(direct){
+        requireProof(typeof readSource==='function','partial direct evidence requires checked source '+row.id);
+        requireProof(direct.testContains?.includes(row.id),'partial evidence needs an ID-specific scenario '+row.id);
+        verifyExecutableEvidence({id:row.id,status:'covered',webEvidence:direct},readSource);
+      }
+    }
     if(row.status==='gap')requireProof(tested.length===0,'gap incorrectly claims verified subflow '+row.id);
     if(row.status==='covered'){
       requireProof(row.dependsOn.every(id=>statuses.get(id)==='covered'),
