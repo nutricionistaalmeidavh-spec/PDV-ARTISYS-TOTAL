@@ -675,3 +675,20 @@ test('R4 cap-034: cancelling unstarted production cancels pending print jobs ato
   assert.equal((await x.request('a',`restaurant/kitchen/print-jobs/${jobs[0].id}/claim`,'POST',{branchId:'filial-a'})).status,409);
  }finally{x.close();}
 });
+
+test('R4 cap-036 desktop delta policy adds catalog price plus size, flavor and crust exactly once',async()=>{
+ const x=await setup();try{
+  const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'PIZZA-DELTA',name:'Pizza base',salePriceCents:2000,trackStock:false})).body.product;
+  const profile=await x.request('a','restaurant/pizzeria/profiles','POST',{branchId:'filial-a',productId:p.id,
+    policy:'HIGHEST_FLAVOR',pricingMode:'DESKTOP_DELTAS',sizes:[{code:'M',name:'Média',priceCents:500}],
+    flavors:[{code:'CAL',name:'Calabresa',priceCents:300},{code:'QUE',name:'Queijo',priceCents:600}],
+    crusts:[{code:'CAT',name:'Catupiry',priceCents:200}]});
+  assert.equal(profile.status,201,JSON.stringify(profile.body));
+  const quote=await x.request('a','restaurant/pizzeria/quote','POST',{branchId:'filial-a',
+    productId:p.id,sizeCode:'M',flavorCodes:['CAL','QUE'],crustCode:'CAT'});
+  assert.equal(quote.status,200,JSON.stringify(quote.body));
+  assert.equal(quote.body.quote.unitPriceCents,3300);
+  assert.equal(quote.body.quote.configuration.pricingMode,'DESKTOP_DELTAS');
+  assert.equal((await x.request('a','restaurant/pizzeria/products/'+p.id+'?branchId=filial-a')).body.profile.pricingMode,'DESKTOP_DELTAS');
+ }finally{x.close();}
+});
