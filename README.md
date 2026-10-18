@@ -46,3 +46,11 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 A matriz operacional em `docs/parity/desktop-web-matrix.json` verifica 68 contratos de sete telas e o inventário em `docs/parity/desktop-capability-inventory.json` cobre **todas as 56 capacidades publicadas** no manifesto `release/capabilities.json` do desktop original, fixado em `7efea9c`. A cópia verificável por SHA Git fica em `docs/parity/desktop-capabilities-baseline.json`. O escopo estendido não é prova de que todos os subfluxos já estejam catalogados ou equivalentes.
 
 A paridade permanece **incompleta**. `npm run test:parity` executa testes de regressão do gate e valida links para as asserções dos testes Node/Chromium, a integridade de IDs, responsáveis, pré-requisitos e reivindicações; a CI executa os testes de domínio e E2E correspondentes. **Não** equiparar a existência de um arquivo a funcionalidade comprovada; teste físico de periféricos e prova independente de homologação são etapas separadas. Os estados `complete` só são aceitos com cobertura 100% do escopo e atestado rastreável de revisão/CI. Ver `docs/parity/P0-AUDIT-PLAN.md`.
+
+## P6 — 56 capacidades estendidas e self-hosted
+
+- [Plano e critérios verificáveis](docs/parity/P6-56-CAPACIDADES.md): quatro frentes de execução, exigência de testes reais e homologação física.
+- `npm run report:parity`: relatório auditável com os bloqueios de cada uma das 56 capacidades.
+- `npm run test:selfhost`: regressão offline de backup SQLite, SHA-256 e restauração não destrutiva.
+- A CLI `scripts/selfhost-backup.mjs` **não substitui** automaticamente o banco de produção; consulte o plano antes de executar a restauração.
+- **Não declarar paridade total** até 68/68 operações e 56/56 capacidades certificados; o núcleo permanece gratuito e self-hosted.
