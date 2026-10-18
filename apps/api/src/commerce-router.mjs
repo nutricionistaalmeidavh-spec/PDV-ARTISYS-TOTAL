@@ -32,7 +32,7 @@ const requireAccess=(membership,capability,userId)=>{
   if(!can(membership.profileKey,capability,userId))
     throw Object.assign(new Error('Permissão insuficiente.'),{status:403});
 };
-export async function commerceRoute(request,db,session,member,tenantId,path){
+export async function commerceRoute(request,db,session,member,tenantId,path,{now}={}){
   const url=new URL(request.url),method=request.method;
   const parts=path.split('/').filter(Boolean);
   const feature=parts[0];
@@ -42,7 +42,7 @@ export async function commerceRoute(request,db,session,member,tenantId,path){
     const body=writeMethods.has(method) ? (method==='DELETE'&&!request.headers.has('content-type')?{}:await payload(request)) : {};
     if(!['GET','HEAD','POST','PUT','PATCH','DELETE'].includes(method))return null;
     const branch=body.branchId||url.searchParams.get('branchId');
-    const service=createCommerceService(db);
+    const service=createCommerceService(db,{now});
     if(!branch)throw Object.assign(new Error('Selecione a filial antes de continuar.'),{status:400});
     const tenant=tenantId,user=session.userId;
     if(feature==='returns'){
