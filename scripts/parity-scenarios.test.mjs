@@ -7,7 +7,7 @@ const row=(id,name,owner='sales')=>({
   id,name,owner,acceptance:'Assert equivalent persistence, authorization and rollback in the original desktop and canonical web implementation.',
   status:'partial',dependsOn:[],webEvidence:{file:'apps/api/src/commerce.mjs',contains:'async openSale('}
 });
-const sampleMatrix={modules:[{id:'checkout',desktopEvidence:['js/domains/sales/sale-service.js'],contracts:[
+const sampleMatrix={desktop:{commit:DESKTOP_SHA},modules:[{id:'checkout',desktopEvidence:['js/domains/sales/sale-service.js'],contracts:[
   row('checkout-005','Abertura de venda'),row('checkout-007','Desconto de venda com permissão')]}]};
 const sampleInventory={baseline:{repo:'nutricionistaalmeidavh-spec/PDV-ARTISYS',commit:DESKTOP_SHA,
   manifest:'release/capabilities.json'},contracts:[{...row('cap-001','physical checkout peripherals','peripherals'),
@@ -30,9 +30,9 @@ test('P0 refuses non-existent, duplicate or unexecuted proof for scenario certif
   const input={schemaVersion:1,desktopBaselineCommit:DESKTOP_SHA,results:[]};
   const empty=validateScenarioEvidence(cases,input,()=>{throw Error('no file expected')});
   assert.equal(empty.verified,0);assert.equal(empty.complete,false);
-  const fake={scenarioId:cases[0].id,method:'automated',testFile:'apps/api/test/commerce.test.mjs',
+  const fake={scenarioId:cases[0].id,method:'automated',desktopBaselineCommit:DESKTOP_SHA,testFile:'apps/api/test/commerce.test.mjs',
     testContains:"test('sale')",testAssertionContains:'assert.equal(result,true)',testRunner:'node-test',
-    desktopFixtureId:'desktop-fixture-v1'};
+    desktopFixtureId:'desktop-fixture-v1',fixtureFile:'docs/parity/fixtures/pricing-desktop-v2.json'};
   assert.throws(()=>validateScenarioEvidence(cases,{...input,results:[fake]},()=>"test('sale',()=>{})"),/assertion|evidence/);
   assert.throws(()=>validateScenarioEvidence(cases,{...input,results:[fake,fake]},()=>''),/duplicate/);
   assert.throws(()=>validateScenarioEvidence(cases,{...input,results:[{...fake,scenarioId:'invented-001'}]},()=>''),/unknown scenario/);
