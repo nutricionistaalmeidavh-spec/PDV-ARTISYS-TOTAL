@@ -22,7 +22,7 @@ async function fixture(t){
   db.close();
   return {dir,dbPath,backupPath};
 }
-test('WAL-aware backup stays consistent and restore never overwrites',async t=>{
+test('cap-051 WAL-aware backup stays consistent and restore never overwrites',async t=>{
   const {dir,dbPath,backupPath}=await fixture(t);
   const created=await createBackup(dbPath,backupPath);
   assert.equal(created.manifest.format,'pdv-total-sqlite-backup-v1');
