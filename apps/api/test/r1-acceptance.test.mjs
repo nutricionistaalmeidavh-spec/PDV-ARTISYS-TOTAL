@@ -401,11 +401,3 @@ test('cap-052 R1 — aceite automatizado dos fluxos de negócio',()=>{
   const checks=proveCapability('cap-052');
   assert.ok(checks>=1,'Nenhuma prova operacional executada para cap-052');
 });
-
-// Separate browser CI exercises the ORIGINAL PWA with mocked keyboard HID,
-// receipt reprint, safe XLSX workbook sheet resolution and whole preview/commit.
-// Keep these facts as additional validation, NEVER pretend hardware connected.
-test('R1 navegador obrigatório — os fluxos XLSX, leitor HID, recibo e atacado são exercitados',()=>{
-  const script=resolve(ROOT,'scripts/web-browser-e2e.mjs');
-  assert.ok(script.endsWith('scripts/web-browser-e2e.mjs'));
-});
