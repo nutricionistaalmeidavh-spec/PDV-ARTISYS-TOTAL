@@ -708,7 +708,7 @@
         const feedback=minimumForm.querySelector('[role=status]');
         const id=minimumForm.elements.productId.value;
         const raw=minimumForm.elements.minimum.value.trim().replace(',','.');
-        if(!remove&&!/^\\d+(?:\\.\\d{1,3})?$/.test(raw)){
+        if(!remove&&!/^\d+(?:\.\d{1,3})?$/.test(raw)){
           feedback.textContent='Informe quantidade de 0 a 100000 com até três casas decimais.';return;
         }
         const minimumQuantity=remove?null:Number(raw);
