@@ -115,7 +115,16 @@
       }));
       content.querySelectorAll('[data-r2-revoke]').forEach(button=>button.addEventListener('click',async()=>{
         if(!window.confirm('Revogar o acesso deste dispositivo? Será necessário parear novamente.'))return;
-        try{await req('/devices/'+encodeURIComponent(button.dataset.r2Revoke),{method:'DELETE'});await render(content,api);}
+        try{
+          await req('/devices/'+encodeURIComponent(button.dataset.r2Revoke),{method:'DELETE'});
+          if(button.dataset.r2Revoke===previousId){
+            window.localStorage?.removeItem(currentKey+'-id');
+            window.localStorage?.removeItem(currentKey+'-credential');
+            window.location.reload();
+            return;
+          }
+          await render(content,api);
+        }
         catch(error){notify(error.message,true);}
       }));
       content.querySelectorAll('[data-r2-check]').forEach(form=>form.addEventListener('submit',async event=>{
@@ -133,7 +142,10 @@
         // Credential is useful only together with the authenticated operator session.
         window.localStorage?.setItem(currentKey+'-id',result.device.id);
         window.localStorage?.setItem(currentKey+'-credential',result.credential);
-        notify('Dispositivo pareado. A credencial não substitui o login.');
+        notify('Dispositivo pareado. Carregando o PDV autorizado…');
+        // First login intentionally skipped business reads before pairing.
+        // Re-enter the canonical web boot now that the terminal is authorized.
+        window.location.reload();
       }catch(error){notify(error.message,true);}
     });
     content.querySelector('#r2-check-device')?.addEventListener('click',async()=>{
