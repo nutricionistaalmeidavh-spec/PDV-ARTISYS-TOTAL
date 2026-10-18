@@ -34,7 +34,7 @@ test('roadmap and README reflect canonical 56 capabilities without reopening cov
   assert.match(roadmap,new RegExp(screen.covered+' cobertos e '+screen.partial+' parciais'));
   assert.match(roadmap,/R1: manutenção e regressão, não nova implementação/);
   assert.equal(roadmap.includes('**Fechar R1:'),false);
-  assert.ok(readme.includes('R2 — self-hosted / LAN:** '+byWave[1].covered+'/14'));
+  assert.ok(readme.includes('R2 — alternativa self-hosted / LAN (não bloqueia o SaaS):** '+byWave[1].covered+'/14'));
   assert.ok(readme.includes('R3 — periféricos:** '+byWave[2].partial+'/8'));
   assert.ok(readme.includes('R4 — alimentação e verticais:** '+byWave[3].covered+'/13'));
   assert.match(readme,/a loja pode operar sem Internet/);
