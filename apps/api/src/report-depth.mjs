@@ -52,6 +52,7 @@ export function createReportDepthService(h){
    const start=new Date(Date.parse(end+'T00:00:00.000Z')-(span-1)*86400000)
      .toISOString().slice(0,10);
    const rows=await all(`SELECT p.id AS productId,p.sku,p.name,p.unit,
+      ml.minimum_milli AS minimumMilli,
       COALESCE(s.balance_milli,0) AS quantityMilli,
       COALESCE((SELECT SUM(r.quantity_milli) FROM inventory_reservations r
         WHERE r.tenant_id=p.tenant_id AND r.branch_id=? AND r.product_id=p.id
@@ -69,12 +70,14 @@ export function createReportDepthService(h){
           AND t.created_at BETWEEN ? AND ?),0) AS outgoingMilli
     FROM products p LEFT JOIN stock_positions s ON s.tenant_id=p.tenant_id
       AND s.branch_id=? AND s.product_id=p.id
+    LEFT JOIN inventory_minimum_levels ml ON ml.tenant_id=p.tenant_id
+      AND ml.branch_id=? AND ml.product_id=p.id
     WHERE p.tenant_id=? AND p.track_stock=1 AND p.active=1
     ORDER BY p.name,p.id LIMIT 1001`,
     branch,branch,start+'T00:00:00.000Z',end+'T23:59:59.999Z',
     branch,start+'T00:00:00.000Z',end+'T23:59:59.999Z',
     branch,start+'T00:00:00.000Z',end+'T23:59:59.999Z',
-    branch,tenant);
+    branch,branch,tenant);
    if(rows.length>1000)
      throw error(413,'Mais de 1000 produtos. Filtre ou exporte o cadastro por lotes.');
    const products=rows.map(row=>{
@@ -82,18 +85,24 @@ export function createReportDepthService(h){
     const available=Math.max(0,quantity-reserved);
     const consumed=Math.max(0,row.consumedMilli/1000);
     const daily=consumed/span;
+    const minimum=row.minimumMilli==null?null:row.minimumMilli/1000;
+    const minimumStatus=minimum===null?'NOT_CONFIGURED':
+      available<minimum?'BELOW_MINIMUM':available===minimum?'AT_MINIMUM':'ABOVE_MINIMUM';
     return {productId:row.productId,sku:row.sku,name:row.name,unit:row.unit,
       quantity,reserved,available,consumed,
       averageDailyConsumption:Number(daily.toFixed(4)),
       daysCoverage:daily>0?Number((available/daily).toFixed(1)):null,
-      minimumQuantity:null,minimumStatus:'NOT_CONFIGURED',
+      minimumQuantity:minimum,minimumStatus,
       transfersIn:row.incomingMilli/1000,transfersOut:row.outgoingMilli/1000,
       depleted:available<=0
     };
    });
    return {period:{from:start,to:end,days:span},products,
     zeroOrReservedOut:products.filter(x=>x.depleted).length,
-    unknownMinimum:products.length,coverageUnknown:products.filter(x=>x.daysCoverage==null).length};
+    unknownMinimum:products.filter(x=>x.minimumQuantity===null).length,
+    belowMinimum:products.filter(x=>x.minimumStatus==='BELOW_MINIMUM').length,
+    atMinimum:products.filter(x=>x.minimumStatus==='AT_MINIMUM').length,
+    coverageUnknown:products.filter(x=>x.daysCoverage==null).length};
   }
  };
 }
