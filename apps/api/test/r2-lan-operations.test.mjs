@@ -143,3 +143,35 @@ test('R2: support diagnostics ZIP contains no password, cookie, email or credent
     assert.ok(!raw.includes(secret),secret+' cannot be in ZIP');
   assert.ok(bytes.length>300);
 });
+
+
+test('R2 optional modules: FOOD and WHOLESALE stay tenant-scoped, reversible and audited',async t=>{
+  const db=openLocalDatabase(':memory:');
+  t.after(()=>db.close());
+  await applyLocalMigrations(db);
+  const now=new Date().toISOString();
+  for(const id of ['a','b'])
+    await db.prepare('INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)')
+      .bind(id,'mod-'+id,'Store '+id,now).run();
+  for(const [id,email] of [['owner','modules@example.test'],['cash','cash@example.test']])
+    await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
+      .bind(id,email,id,'fixture-not-valid-for-login',now).run();
+  const {r2LanRoute,authorizeLanModule}=await import('../src/r2-lan-router.mjs');
+  const base='https://localhost:8443/api/v1/tenants/a/';
+  const owner={userId:'owner'},admin={profileKey:'OWNER'};
+  const send=(path,method='GET',body=null,who=owner,role=admin)=>
+    r2LanRoute(new Request(base+path,{method,headers:{origin:'https://localhost:8443'},
+      ...(body===null?{}:{body:JSON.stringify(body)})}),db,who,role,'a',path);
+  const defaults=await (await send('lan/modules')).json();
+  assert.equal(defaults.modules.find(m=>m.id==='FOOD').enabled,true);
+  assert.equal(defaults.modules.find(m=>m.id==='WHOLESALE').enabled,false);
+  assert.equal((await send('lan/modules/FOOD','PATCH',{enabled:false},{userId:'cash'},{profileKey:'CASHIER'})).status,403);
+  assert.equal((await send('lan/modules/FOOD','PATCH',{enabled:false})).status,200);
+  assert.equal((await authorizeLanModule(db,'a','restaurant/tables'))?.status,403);
+  assert.equal(await authorizeLanModule(db,'b','restaurant/tables'),null,'second tenant retains defaults');
+  assert.equal((await send('lan/modules/FOOD','PATCH',{enabled:true})).status,200);
+  assert.equal(await authorizeLanModule(db,'a','restaurant/tables'),null);
+  assert.equal((await send('lan/modules/INVALID','PATCH',{enabled:true})).status,404);
+  const audit=await (await send('lan/audit')).json();
+  assert.ok(audit.events.some(e=>e.action==='module.updated'));
+});
