@@ -49,16 +49,31 @@ BEGIN
  UPDATE inventory_lot_balances SET balance_milli=balance_milli+NEW.delta_milli
  WHERE tenant_id=NEW.tenant_id AND branch_id=NEW.branch_id
  AND product_id=NEW.product_id AND lot_receipt_id=NEW.lot_receipt_id;
- SELECT CASE WHEN
-  (SELECT COALESCE(SUM(balance_milli),0) FROM inventory_lot_balances
-   WHERE tenant_id=NEW.tenant_id AND branch_id=NEW.branch_id
-   AND product_id=NEW.product_id)>
-  (SELECT balance_milli FROM stock_positions
-   WHERE tenant_id=NEW.tenant_id AND branch_id=NEW.branch_id
-   AND product_id=NEW.product_id)
- THEN RAISE(ABORT,'LOT_BALANCE_EXCEEDS_STOCK') END;
+
 END;
 CREATE TRIGGER inventory_lot_entry_no_update BEFORE UPDATE ON inventory_lot_entries
 BEGIN SELECT RAISE(ABORT,'LOT_LEDGER_IMMUTABLE'); END;
 CREATE TRIGGER inventory_lot_entry_no_delete BEFORE DELETE ON inventory_lot_entries
 BEGIN SELECT RAISE(ABORT,'LOT_LEDGER_IMMUTABLE'); END;
+
+-- A single product stock movement may consume multiple lots. Verify AFTER
+-- the last subledger entry in the same atomic D1/SQLite batch, never midway.
+CREATE TABLE inventory_lot_integrity_checks(
+ id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,
+ product_id TEXT NOT NULL,movement_id TEXT NOT NULL REFERENCES inventory_movements(id),
+ created_at TEXT NOT NULL,
+ FOREIGN KEY(tenant_id,branch_id) REFERENCES branches(tenant_id,id),
+ FOREIGN KEY(tenant_id,product_id) REFERENCES products(tenant_id,id)
+);
+CREATE TRIGGER inventory_lot_verify_final BEFORE INSERT ON inventory_lot_integrity_checks
+WHEN NOT EXISTS(SELECT 1 FROM inventory_movements m WHERE m.id=NEW.movement_id
+ AND m.tenant_id=NEW.tenant_id AND m.branch_id=NEW.branch_id AND m.product_id=NEW.product_id)
+ OR (SELECT COALESCE(SUM(balance_milli),0) FROM inventory_lot_balances
+  WHERE tenant_id=NEW.tenant_id AND branch_id=NEW.branch_id AND product_id=NEW.product_id)
+ > COALESCE((SELECT balance_milli FROM stock_positions
+  WHERE tenant_id=NEW.tenant_id AND branch_id=NEW.branch_id AND product_id=NEW.product_id),0)
+BEGIN SELECT RAISE(ABORT,'LOT_BALANCE_EXCEEDS_STOCK'); END;
+CREATE TRIGGER inventory_lot_integrity_immutable_update BEFORE UPDATE ON inventory_lot_integrity_checks
+BEGIN SELECT RAISE(ABORT,'LOT_CHECK_IMMUTABLE'); END;
+CREATE TRIGGER inventory_lot_integrity_immutable_delete BEFORE DELETE ON inventory_lot_integrity_checks
+BEGIN SELECT RAISE(ABORT,'LOT_CHECK_IMMUTABLE'); END;
