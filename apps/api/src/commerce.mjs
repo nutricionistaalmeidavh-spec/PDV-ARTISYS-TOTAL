@@ -1212,6 +1212,16 @@ export function createCommerceService(db,{now=nowISO}={}){
         }
         quoted=[...grouped.values()];
         if(!quoted.length)throw error(409,'Não há itens para cobrança.');
+        if(restaurantSessionId){
+          const plan=await first('SELECT service_charge_bps AS bps,service_charge_product_id AS productId FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,restaurantSessionId);
+          if(plan?.bps){
+            const base=calculateSaleTotals({items:quoted.map(x=>({unitPriceCents:x.unitPriceCents,quantity:x.milli/1000}))}).totalCents;
+            const amount=Math.round(base*plan.bps/10000);
+            const fee=await first("SELECT id,name,sku,track_stock AS tracked FROM products WHERE tenant_id=? AND id=? AND sku='SERVICE_CHARGE' AND active=1",tenant,plan.productId);
+            if(!fee||fee.tracked||quoted.some(x=>x.productId===fee.id))throw error(409,'Produto de taxa de serviço inválido.');
+            if(amount>0)quoted.push({productId:fee.id,name:fee.name,sku:fee.sku,milli:1000,unitPriceCents:amount});
+          }
+        }
         restaurantCheckout={tableSessionId:restaurantSessionId,orderId:restaurantOrderId,customerId:source.customerId||null};
       }
       const quotedTotals=calculateSaleTotals({items:quoted.map(x=>({unitPriceCents:x.unitPriceCents,quantity:x.milli/1000}))});
