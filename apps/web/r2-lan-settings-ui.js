@@ -15,9 +15,9 @@
     const base='/api/v1/tenants/'+encodeURIComponent(tenantId)+'/lan';
     const req=(suffix,options)=>api.request(base+suffix,options);
     content.innerHTML='<section class="ops-page"><header class="ops-head"><h1>Rede local e segurança</h1><p>Consultando a configuração do servidor…</p></header></section>';
-    let access,readiness,health,devices,isAdmin=false;
+    let access,readiness,health,devices,modules,isAdmin=false;
     try{
-      [access,readiness]=await Promise.all([req('/access'),req('/readiness')]);
+      [access,readiness,modules]=await Promise.all([req('/access'),req('/readiness'),req('/modules')]);
       try{devices=await req('/devices');isAdmin=true;health=await req('/health');}
       catch(error){if(error.status!==403)throw error;devices={devices:[]};}
     }catch(error){
@@ -32,6 +32,8 @@
       '<tr><td>'+safe(device.name)+'</td><td>'+safe(kinds[device.kind]||device.kind)+'</td><td>'+
       safe(device.branchId)+'</td><td>'+(device.active?'Ativo':'Revogado')+'</td><td>'+
       (device.active?'<button type="button" class="ops-secondary" data-r2-revoke="'+safe(device.id)+'">Revogar</button>':'—')+'</td></tr>').join('');
+    const moduleCards=(modules.modules||[]).map(item=>'<article class="ops-card"><h3>'+safe(item.name)+'</h3><p>'+safe(item.description)+'</p><strong>'+(item.enabled?'Ativado':'Desativado')+'</strong> '+
+      (isAdmin?'<button type="button" class="ops-secondary" data-r2-module="'+safe(item.id)+'" data-enabled="'+String(!item.enabled)+'">'+(item.enabled?'Desativar':'Ativar')+'</button>':'')+'</article>').join('');
     const checks=readiness.checks.map(item=>
       '<form class="ops-card" data-r2-check="'+safe(item.key)+'"><h3>'+safe(item.title)+'</h3><p class="ops-muted">'+safe(item.category)+(item.optional?' · opcional':' · obrigatório')+'</p>'+
       '<label>Estado<select name="status" class="ops-input" '+(isAdmin?'':'disabled')+'>'+
@@ -60,6 +62,7 @@
       '<button type="submit" class="ops-primary">Parear aparelho</button></form><p id="r2-device-status" role="status"></p>'+
       (previousId&&previousCredential?'<button class="ops-secondary" id="r2-check-device" type="button">Verificar vínculo deste aparelho</button>':'')+
       '<p class="ops-muted">A credencial técnica é específica deste navegador, estabelecimento e aparelho autorizado (uso depende do perfil do operador); não concede acesso sem sessão válida. Em computadores compartilhados, apague dados do site ao desativar o terminal.</p></section>'+
+      '<section class="ops-card"><h2>Módulos opcionais</h2><p>Ativar ou desativar uma área não exclui vendas, estoque, pedidos ou históricos já registrados.</p><div class="ops-grid two">'+moduleCards+'</div></section>'+
       (isAdmin?'<section class="ops-card"><h2>Dispositivos registrados</h2><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Nome</th><th>Uso</th><th>Filial</th><th>Status</th><th>Ação</th></tr></thead><tbody>'+deviceRows+'</tbody></table></div></section>':'')+
       (isAdmin?'<section class="ops-card"><h2>Diagnóstico sem dados sensíveis</h2><p>Pacote ZIP com saúde, nomes das migrações e eventos administrativos sem senhas, credenciais ou banco de dados.</p><button id="r2-download-diagnostics" type="button" class="ops-secondary">Gerar ZIP de diagnóstico</button></section>':'')+
       '<section class="ops-card"><h2>Checklist de homologação e piloto</h2><p class="ops-muted">O registro de evidências não substitui a verificação em máquinas reais, por revisor independente.</p><div class="ops-grid two" id="r2-checks">'+checks+'</div></section></section>';
@@ -105,6 +108,11 @@
           output.append(text,copy);
         }catch(error){notify(error.message,true);}
       });
+      content.querySelectorAll('[data-r2-module]').forEach(button=>button.addEventListener('click',async()=>{
+        if(!window.confirm('Alterar disponibilidade deste módulo para todos os operadores da loja?'))return;
+        try{await req('/modules/'+encodeURIComponent(button.dataset.r2Module),{method:'PATCH',body:{enabled:button.dataset.enabled==='true'}});await render(content,api);}
+        catch(error){notify(error.message,true);}
+      }));
       content.querySelectorAll('[data-r2-revoke]').forEach(button=>button.addEventListener('click',async()=>{
         if(!window.confirm('Revogar o acesso deste dispositivo? Será necessário parear novamente.'))return;
         try{await req('/devices/'+encodeURIComponent(button.dataset.r2Revoke),{method:'DELETE'});await render(content,api);}
