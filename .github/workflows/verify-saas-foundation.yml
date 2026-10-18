@@ -13,6 +13,10 @@ on:
       - 'packages/core/**'
       - 'apps/web/**'
       - 'docs/parity/**'
+      - 'scripts/selfhost-backup.mjs'
+      - 'scripts/selfhost-backup.test.mjs'
+      - 'scripts/p6-capability-report.mjs'
+      - 'scripts/p6-capability-report.test.mjs'
       - 'scripts/check-desktop-parity.mjs'
       - 'scripts/parity-rules.mjs'
       - 'scripts/parity-rules.test.mjs'
@@ -46,6 +50,12 @@ jobs:
         run: npm run build
       - name: Audit seven-screen contracts and the pinned desktop capability manifest
         run: npm run test:parity
+      - name: Generate P6 canonical 56-capability blockers artifact
+        run: |
+          mkdir -p qa-artifacts
+          node scripts/p6-capability-report.mjs --json > qa-artifacts/p6-capabilities.json
+      - name: Test free offline SQLite backup and restore
+        run: npm run test:selfhost
       - name: Test canonical sales, inventory, cash and authorization contracts
         run: npm run test:core
       - name: Validate original renderer web syntax (no second app)

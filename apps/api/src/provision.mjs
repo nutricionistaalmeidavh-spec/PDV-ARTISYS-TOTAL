@@ -1,9 +1,10 @@
-import {writeFileSync,mkdirSync,readFileSync} from 'node:fs';
+import {writeFileSync,mkdirSync} from 'node:fs';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
 import {hashPassword} from './password.mjs';
 import {openLocalDatabase} from './local-db.mjs';
+import {applyLocalMigrations} from './local-migrations.mjs';
 
 const here=dirname(fileURLToPath(import.meta.url));
 const email=String(process.env.PDV_OWNER_EMAIL||'').trim().toLowerCase();
@@ -28,7 +29,7 @@ if(process.argv.includes('--local')){
   const localFile=process.env.LOCAL_DB_PATH||resolve(here,'../.local/pdv-total.sqlite');
   const db=openLocalDatabase(localFile);
   try{
-    db.exec(readFileSync(resolve(here,'../migrations/0001_identity.sql'),'utf8'));
+    await applyLocalMigrations(db);
     db.exec('BEGIN IMMEDIATE;');
     try{db.exec(sql);db.exec('COMMIT;');}
     catch(e){db.exec('ROLLBACK;');throw e;}

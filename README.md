@@ -54,3 +54,14 @@ A paridade permanece **incompleta**. `npm run test:parity` executa testes de reg
 ## Auditoria de paridade do desktop
 
 A paridade não é declarada automaticamente com build verde. A matriz de 68 contratos das telas e o inventário de 56 capacidades são independentes. O P0 gera cenários de comparação e artefatos auditáveis, preservando o código desktop fixado somente como referência. Use `npm run test:parity` para executar as verificações ou `npm run audit:parity` para gerar os relatórios em `qa-artifacts/parity/`. Cenários sem evidência permanecem pendentes, inclusive os que possuem testes parciais de API. Consulte `docs/parity/P0-AUDIT-PLAN.md`.
+
+### HTTPS na rede local (P6, implantação self-hosted gratuita)
+
+A interface web pode usar a mesma API autoritativa em **Node.js + SQLite local** sem Cloudflare e sem mensalidade. A implantação LAN exige TLS com certificado confiável nos terminais, autenticação habilitada explicitamente, firewall de rede interna e banco novo com migrações rastreadas. Início: `npm run serve:lan` após configurar as variáveis da documentação.
+
+- [Manual de instalação HTTPS LAN, provisionamento e recuperação](docs/SELFHOST-LAN-HTTPS.md)
+- `apps/api/src/local-migrations.mjs`: migrações transacionais com checksum; banco antigo sem histórico exige migração assistida (sem replay perigoso).
+- `apps/api/src/https-lan-server.mjs`: PWA e API na mesma origem HTTPS, cookies Secure, validação de Host e CSRF na API.
+- `apps/api/test/https-lan-server.test.mjs`: teste real com TLS temporário e 3 contas em 2 empresas; **não é homologação física**.
+- A aplicação precisa da API local acessível para confirmar transações: PWA offline mantém apenas a casca pública, não vendas.
+

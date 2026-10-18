@@ -28,7 +28,7 @@ O teste sobe Node+SQLite em porta aleatória na máquina, consulta a API e a int
 ## Segurança e escopo
 
 - Servidor HTTP escuta **apenas 127.0.0.1/localhost**. Não configurar PDV_HOST=0.0.0.0 com cookies inseguros.
-- Acesso por celular/tablet na LAN **ainda depende de provisionamento explícito de TLS e proxy seguro** (não incluído nesta entrega). Não anunciar operação LAN pronta sem homologação.
+- Acesso LAN em celular/tablet agora possui servidor HTTPS dedicado opcional. Exige TLS confiável nos dispositivos, origem exata e firewall interno; não é homologação física. Consulte [HTTPS LAN](SELFHOST-LAN-HTTPS.md).
 - Asset server expõe apenas arquivos do build, bloqueia traversal e não serve o SQLite, código do projeto, .env ou arquivos privados.
 - Mesma sessão e autorização da API canônica; isolamento entre empresas, RBAC e dados comerciais nunca são resolvidos pelo serviço estático.
 - O service worker mantém somente assets públicos. Operações comerciais e consultas precisam de conexão ativa; nenhuma mutação é enfileirada offline.

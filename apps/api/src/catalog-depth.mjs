@@ -22,6 +22,23 @@ export function createCatalogDepthService(helpers){
      ]);
      return result;
    },
+   async renameCategory(tenant,branch,user,id,body,header){
+     await branchExists(tenant,branch);
+     const key=requiredMutation(body,header),scope='catalog.category.rename:'+id;
+     const prior=await applied(tenant,scope,key);if(prior)return prior;
+     const old=await first('SELECT id,name FROM product_categories WHERE tenant_id=? AND id=?',tenant,id);
+     if(!old)throw error(404,'Categoria não encontrada nesta empresa.');
+     const name=text(body?.name,100);
+     if(name.length<2)throw error(400,'Informe nome de categoria com pelo menos dois caracteres.');
+     const other=await first('SELECT id FROM product_categories WHERE tenant_id=? AND name=? COLLATE NOCASE AND id<>?',tenant,name,id);
+     if(other)throw error(409,'Esta empresa já possui uma categoria com esse nome.');
+     const result={id:old.id,name};
+     await batch([
+       q('UPDATE product_categories SET name=? WHERE tenant_id=? AND id=?',name,tenant,id),
+       audit(tenant,scope,key,result)
+     ]);
+     return result;
+   },
    async bundle(tenant,branch,id){
      await branchExists(tenant,branch);
      const row=await first('SELECT id FROM products WHERE tenant_id=? AND id=?',tenant,id);
