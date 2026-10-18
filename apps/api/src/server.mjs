@@ -23,6 +23,7 @@ db.exec(readFileSync(resolve(here,'../migrations/0012_sale_item_notes.sql'),'utf
 db.exec(readFileSync(resolve(here,'../migrations/0013_cash_terminals.sql'),'utf8'));
 db.exec(readFileSync(resolve(here,'../migrations/0014_checkout_configurations.sql'),'utf8'));
 db.exec(readFileSync(resolve(here,'../migrations/0015_seller_sales_targets.sql'),'utf8'));
+db.exec(readFileSync(resolve(here,'../migrations/0016_inventory_minimum_levels.sql'),'utf8'));
 const host=process.env.PDV_HOST||'127.0.0.1',port=Number(process.env.PORT||4175);
 // Plain HTTP + insecure dev cookie must never be exposed on the local network.
 if(!['127.0.0.1','localhost'].includes(host))throw new Error('Servidor sem TLS somente em localhost.');
