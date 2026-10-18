@@ -1256,7 +1256,9 @@
   async function openWebCsvImport(){
     openModal('Importar produtos por CSV ou XLSX',`<section class="web-stock-history">
       <p>O arquivo será validado antes da gravação. Todos os preços devem estar em centavos inteiros,
-        sem símbolo de moeda ou vírgula decimal. A importação cria produtos; não modifica os existentes.</p>
+        sem símbolo de moeda ou vírgula decimal. O modo padrão apenas cria produtos; o modo assistido atualiza os SKUs existentes sem alterar estoque nem histórico.</p>
+      <div class="field"><label>Operação
+        <select id="web-import-mode"><option value="create">Criar apenas novos produtos</option><option value="upsert">Criar e atualizar produtos existentes (por SKU)</option></select></label></div>
       <div class="field"><label>Arquivo CSV (13,5 KB) ou XLSX (512 KB, até 100 produtos)
         <input type="file" id="web-import-file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label></div>
       <p>Colunas obrigatórias: <code>sku;name;salePriceCents</code>.
@@ -1267,11 +1269,12 @@
       <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Fechar</button>
         <button type="button" class="primary-button" id="web-import-confirm" disabled>Importar produtos validados</button></div>
     </section>`,{wide:true,onMount(root){
-      const input=root.querySelector('#web-import-file'),host=root.querySelector('#web-import-preview'),
+      const input=root.querySelector('#web-import-file'),mode=root.querySelector('#web-import-mode'),
+        host=root.querySelector('#web-import-preview'),
         confirm=root.querySelector('#web-import-confirm'),feedback=root.querySelector('[role=status]');
-      let loadedCsv='',mutationId='';
-      input.addEventListener('change',async()=>{
-        confirm.disabled=true;loadedCsv='';mutationId='';feedback.textContent='';
+      let loadedCsv='',mutationId='',previewToken='';
+      const refreshPreview=async()=>{
+        confirm.disabled=true;loadedCsv='';mutationId='';previewToken='';feedback.textContent='';
         const file=input.files?.[0];if(!file)return;
         const isXlsx=/\.xlsx$/i.test(file.name),isCsv=/\.csv$/i.test(file.name);
         if(!isXlsx&&!isCsv){feedback.textContent='Selecione um arquivo .csv ou .xlsx válido.';return;}
@@ -1282,29 +1285,34 @@
           const csv=isXlsx
             ?await window.PdvCatalogXlsx.toCsv(await file.arrayBuffer())
             :await file.text();
-          const result=await api.previewCatalogCsv(csv);
+          const result=await api.previewCatalogCsv(csv,mode.value);
           host.innerHTML=`<p><strong>${result.validRows}</strong> válidos de
-            ${result.totalRows} itens; <strong>${result.invalidRows}</strong> com erros.</p>
+            ${result.totalRows} itens; <strong>${result.invalidRows}</strong> com erros.
+            ${mode.value==='upsert'?`<strong>${result.createCount}</strong> novos · <strong>${result.updateCount}</strong> atualizações.`:''}</p>
             <div class="ops-table-wrap"><table class="ops-table"><thead>
-              <tr><th>Linha</th><th>SKU</th><th>Produto</th><th>Preço</th><th>Situação</th></tr></thead>
+              <tr><th>Linha</th><th>SKU</th><th>Produto</th><th>Preço</th><th>Ação</th><th>Situação</th></tr></thead>
               <tbody>${result.rows.map(row=>`<tr>
                 <td>${row.line}</td><td>${escapeHtml(row.sku)}</td><td>${escapeHtml(row.name)}</td>
                 <td>${Number.isFinite(row.salePriceCents)?ui.formatCents(row.salePriceCents):'—'}</td>
+                <td>${row.action==='update'?'Atualizar':'Criar'}</td>
                 <td>${row.valid?'Válido':escapeHtml(row.errors.join(' · '))}</td>
               </tr>`).join('')}</tbody></table></div>`;
           if(result.invalidRows){feedback.textContent='Corrija o CSV e selecione o arquivo novamente para prosseguir.';return;}
-          loadedCsv=csv;confirm.disabled=false;
+          loadedCsv=csv;previewToken=result.previewToken||'';confirm.disabled=false;
+          confirm.textContent=mode.value==='upsert'?'Aplicar criação e atualização':'Importar novos produtos';
         }catch(e){host.textContent='Não foi possível validar o CSV.';feedback.textContent=e.message;}
-      });
+      };
+      input.addEventListener('change',refreshPreview);
+      mode.addEventListener('change',()=>void refreshPreview());
       confirm.addEventListener('click',async()=>{
         if(!loadedCsv||confirm.disabled)return;
         confirm.disabled=true;feedback.textContent='';
         try{
           if(!mutationId)mutationId=api.mutationId();
-          const result=await api.commitCatalogCsv(loadedCsv,mutationId);
+          const result=await api.commitCatalogCsv(loadedCsv,mutationId,mode.value,previewToken);
           state.products=await api.products();
           closeModal();renderWebProducts();
-          showToast(result.createdCount+' produtos importados com sucesso.','success');
+          showToast(result.createdCount+' criados e '+(result.updatedCount||0)+' atualizados com sucesso.','success');
         }catch(e){feedback.textContent=e.message;confirm.disabled=false;}
       });
     }});
