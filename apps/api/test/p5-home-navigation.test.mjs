@@ -41,6 +41,7 @@ function harness(){
  const mounted=(route,scope)=>{
    document.body.dataset.activeRoute=route;
    events.get('route:mounted')({route,scope});
+   events.get('route:focus-ready')?.({route,scope});
  };
  const transition=(next,previous,scope)=>{
    events.get('route:before')({route:next,previousRoute:previous,scope});
