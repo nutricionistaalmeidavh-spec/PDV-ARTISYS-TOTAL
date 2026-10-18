@@ -96,6 +96,11 @@
       const writer=port.writable.getWriter();
       try{await writer.write(Uint8Array.from(bytes));}finally{writer.releaseLock();}
       return true;
+    }catch(error){
+      // USB/serial disconnect invalidates a formerly approved handle. Never reuse
+      // an uncertain port or silently ask for another device in a background task.
+      ports[kind]=null;
+      throw error;
     }finally{
       try{await port?.close();}catch{}
       busy=false;
@@ -133,6 +138,10 @@
       const raw=new TextDecoder().decode(Uint8Array.from(chunks)).trim();
       if(urano)return {weight:parseUranoWeight(chunks),unit:'kg'};
       return parseWeight(raw);
+    }catch(error){
+      // A timeout or transport error requires another explicit connect gesture.
+      ports.scale=null;
+      throw error;
     }finally{
       clearTimeout(timer);
       try{await reader?.cancel();}catch{}
