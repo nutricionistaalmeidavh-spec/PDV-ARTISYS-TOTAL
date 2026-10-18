@@ -423,17 +423,19 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
         return json({sale:await service.discount(tenant,branch,id,body.discountCents)});
       }
       if(parts.length===3&&parts[2]==='suspend'&&method==='POST')
-        return json({sale:await service.transition(tenant,branch,id,'SUSPENDED')});
+        return json({sale:await service.transition(tenant,branch,id,'SUSPENDED',key)});
       if(parts.length===3&&parts[2]==='resume'&&method==='POST')
-        return json({sale:await service.transition(tenant,branch,id,'OPEN')});
+        return json({sale:await service.transition(tenant,branch,id,'OPEN',key)});
       if(parts.length===3&&parts[2]==='cancel'&&method==='POST'){
         requireAccess(member,'sales.cancel',user);
         const sale=await service.sale(tenant,branch,id);
-        if(sale.status==='COMPLETED'||sale.status==='CANCELLED'){
+        // A cancelled OPEN sale has no completed_at, so its replay belongs to the
+        // keyed status-transition ledger, not to refunds for completed sales.
+        if(sale.status==='COMPLETED'||(sale.status==='CANCELLED'&&sale.completedAt)){
           const result=await service.cancelCompletedSale(tenant,branch,id,user,body,key);
           return json({sale:{...sale,status:'CANCELLED'},result});
         }
-        return json({sale:await service.transition(tenant,branch,id,'CANCELLED')});
+        return json({sale:await service.transition(tenant,branch,id,'CANCELLED',key)});
       }
       if(parts.length===3&&parts[2]==='complete'&&method==='POST')
         return json({sale:await service.complete(tenant,branch,id,user,body,key)});
