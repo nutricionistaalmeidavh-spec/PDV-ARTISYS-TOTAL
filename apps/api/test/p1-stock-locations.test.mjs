@@ -36,7 +36,7 @@ test('P1 internal storage location is only an address; canonical stock ledger an
   assert.equal(products.find(item=>item.id===p.id).sku,'BIN-01');
   assert.deepEqual((await x.service.storageAssignments('a','front')).map(v=>v.locationCode),['A-01']);
   assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM inventory_movements').bind().first()).n,1);
-  assert.equal((await x.db.prepare('SELECT balance_milli AS n FROM stock_positions WHERE product_id=?',p.id).first()).n,8000);
+  assert.equal((await x.db.prepare('SELECT balance_milli AS n FROM stock_positions WHERE product_id=?').bind(p.id).first()).n,8000);
   assert.equal((await x.service.stock('a','front')).find(item=>item.productId===p.id).quantity,8);
  }finally{x.close();}
 });
