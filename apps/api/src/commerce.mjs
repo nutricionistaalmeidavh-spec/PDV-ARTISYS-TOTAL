@@ -1616,8 +1616,23 @@ export function createCommerceService(db,{now=nowISO}={}){
           p.last_cost_cents AS unitCostCents FROM product_bundle_components b
           JOIN products p ON p.id=b.component_id AND p.tenant_id=b.tenant_id
           WHERE b.tenant_id=? AND b.kit_id=? ORDER BY b.component_id`,tenant,line.product_id);
-        if(p.track_stock&&kit.length)throw error(409,'Produto com estoque próprio não pode ser kit.');
-        const allocations=kit.length?kit.map(c=>{
+        const latestRecipe=await first('SELECT MAX(version) AS version FROM r4_recipe_versions WHERE tenant_id=? AND branch_id=? AND product_id=?',
+          tenant,branch,line.product_id);
+        const recipeVersion=latestRecipe?.version||0;
+        const recipe=recipeVersion?await all(`SELECT ri.ingredient_id AS productId,ri.quantity_milli AS quantityMilli,
+           p.last_cost_cents AS unitCostCents FROM r4_recipe_ingredients ri
+           JOIN products p ON p.tenant_id=ri.tenant_id AND p.id=ri.ingredient_id
+           WHERE ri.tenant_id=? AND ri.branch_id=? AND ri.product_id=? AND ri.version=? ORDER BY ri.ingredient_id`,
+           tenant,branch,line.product_id,recipeVersion):[];
+        if(p.track_stock&&(kit.length||recipe.length))
+          throw error(409,'Produto com estoque próprio não pode conter kit ou ficha técnica de consumo.');
+        if(kit.length&&recipe.length)
+          throw error(409,'Produto com kit e ficha técnica simultâneos precisa escolher um único consumo.');
+        if(recipe.length)statements.push(q(`INSERT INTO r4_sale_recipe_versions
+          (tenant_id,branch_id,sale_id,sale_item_id,product_id,version,created_at) VALUES(?,?,?,?,?,?,?)`,
+          tenant,branch,id,line.id,line.product_id,recipeVersion,completedAt));
+        const composition=recipe.length?recipe:kit;
+        const allocations=composition.length?composition.map(c=>{
           const numerator=line.quantity_milli*c.quantityMilli;
           if(!Number.isSafeInteger(numerator)||numerator%1000!==0)
             throw error(409,'Composição do kit não suporta esta quantidade fracionada.');
