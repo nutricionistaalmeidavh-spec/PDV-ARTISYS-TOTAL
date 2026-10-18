@@ -12,7 +12,7 @@
  const path='/api/v1/restaurant';
  const today=new Date().toISOString().slice(0,10);
  const monthAgo=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
- let state={tables:[],orders:[],tickets:[],stationTickets:[],requests:[],products:[],split:null,report:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
+ let state={tables:[],orders:[],tickets:[],stationTickets:[],printJobs:[],requests:[],products:[],split:null,report:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
  const notice=(value,error=false)=>root.PdvToast?.show?.(value,error?'error':'success');
  const action=(endpoint,method='GET',body)=>api.request(path+endpoint,{method,body});
  const safe=async(fn,fallback=[])=>{try{return await fn();}catch{return fallback;}};
@@ -60,12 +60,12 @@
  }
  function title(value){return ({TABLE:'Mesa',PICKUP:'Retirada',DELIVERY:'Entrega',OPEN:'Aberto',READY:'Pronto',DELIVERED:'Entregue',CANCELLED:'Cancelado',NEW:'Novo',PREPARING:'Preparando',ACKNOWLEDGED:'Em atendimento',CLOSED:'Finalizado',WAITER:'Garçom',BILL:'Conta'})[value]||value;}
  async function load(){
-   const [tables,orders,tickets,stationTickets,requests,products,report]=await Promise.all([
+   const [tables,orders,tickets,stationTickets,printJobs,requests,products,report]=await Promise.all([
      safe(()=>action('/tables').then(v=>v.tables)),safe(()=>action('/orders').then(v=>v.orders)),
-     safe(()=>action('/kitchen').then(v=>v.tickets)),safe(()=>action('/kitchen/station-tickets').then(v=>v.tickets)),safe(()=>action('/requests').then(v=>v.requests)),
+     safe(()=>action('/kitchen').then(v=>v.tickets)),safe(()=>action('/kitchen/station-tickets').then(v=>v.tickets)),safe(()=>action('/kitchen/print-jobs').then(v=>v.jobs)),safe(()=>action('/requests').then(v=>v.requests)),
      safe(()=>api.products(false)),safe(()=>action('/reports/summary?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to)).then(v=>v.report),null)
    ]);
-   Object.assign(state,{tables,orders,tickets,stationTickets,requests,products,report});
+   Object.assign(state,{tables,orders,tickets,stationTickets,printJobs,requests,products,report});
  }
  function tableSection(){
    if(!can('restaurant.orders.view'))return '<p class="vertical-empty">Seu perfil não possui acesso às mesas.</p>';
@@ -123,7 +123,13 @@
      '</small></div>'+(can('kitchen.update_status')?'<div class="restaurant-actions">'+
      (t.status==='NEW'?btn('Iniciar preparo',t.stationScoped?'preparing-station':'preparing',t.id):'')+
      (t.status==='PREPARING'?btn('Marcar pronto',t.stationScoped?'ready-station':'ready',t.id):'')+'</div>':'')+'</div>').join('')+
-     '</div></section>';
+     '</div><details><summary>Fila de impressão e falhas ('+state.printJobs.filter(x=>x.status==='FAILED').length+' pendentes)</summary>'+
+       '<div class="restaurant-list">'+state.printJobs.map(j=>
+         '<div class="restaurant-row"><strong>'+esc(j.printerName)+' · '+esc(j.id.slice(0,8))+'</strong>'+
+         '<small>'+esc(({PENDING:'Aguardando agente',LEASED:'Em envio',FAILED:'Aguardando nova tentativa',
+           PRINTED:'Enviado à fila local',CANCELLED:'Cancelado'})[j.status]||j.status)+
+         ' · tentativa '+esc(j.attempts)+'/8</small></div>').join('')+'</div>'+
+       '<p>O agente local precisa estar conectado à impressora. Enviado à fila não garante papel impresso.</p></details></section>';
  }
  function serviceSection(){
    if(!can('restaurant.service.manage'))return '<p class="vertical-empty">Seu perfil não tem acesso aos chamados.</p>';
