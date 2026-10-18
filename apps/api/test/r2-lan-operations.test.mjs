@@ -27,9 +27,10 @@ test('R2: hashed one-use pairing, branch+operator scope, revocation, read-only a
   }
   const origin='https://localhost:8443';
   const api=createApi({DB:db,AUTH_ENABLED:'true',COOKIE_SECURE:'true',LAN_MODE:'true'});
-  async function call(path,method='GET',body=null,cookie='',sameOrigin=true){
+  async function call(path,method='GET',body=null,cookie='',sameOrigin=true,extraHeaders={}){
     const headers=new Headers();
     if(cookie)headers.set('cookie',cookie);
+    for(const [key,value] of Object.entries(extraHeaders))headers.set(key,value);
     if(method!=='GET'&&sameOrigin)headers.set('origin',origin);
     if(body!==null)headers.set('content-type','application/json');
     const res=await api.fetch(new Request(origin+path,{method,headers,...(body===null?{}:{body:JSON.stringify(body)})}));
@@ -71,9 +72,15 @@ test('R2: hashed one-use pairing, branch+operator scope, revocation, read-only a
   assert.equal((await call(base+'/devices/check','POST',{id,credential:paired.data.credential},owner)).status,200);
   assert.equal((await call(base+'/devices/check','POST',{id,credential:paired.data.credential},cashier)).status,403);
   assert.equal((await call(base+'/devices/check','POST',{id,credential:paired.data.credential},other)).status,404);
+  const protectedPath='/api/v1/tenants/a/products?branchId=branch-a';
+  const deviceHeaders={'x-pdv-device-id':id,'x-pdv-device-credential':paired.data.credential};
+  assert.equal((await call(protectedPath,'GET',null,owner)).status,403,'LAN business route must require a paired device');
+  assert.equal((await call(protectedPath,'GET',null,owner,true,{'x-pdv-device-id':id,'x-pdv-device-credential':'a'.repeat(64)})).status,401);
+  assert.equal((await call(protectedPath,'GET',null,owner,true,deviceHeaders)).status,200);
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},cashier)).status,403);
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},owner)).status,200);
   assert.equal((await call(base+'/devices/check','POST',{id,credential:paired.data.credential},waiter)).status,401);
+  assert.equal((await call(protectedPath,'GET',null,owner,true,deviceHeaders)).status,401,'revocation must block commercial requests');
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},owner)).status,200);
 });
 
