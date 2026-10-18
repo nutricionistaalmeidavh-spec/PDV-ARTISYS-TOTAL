@@ -78,6 +78,8 @@ export function validateScenarioEvidence(scenarios,registry,readSource){
   requireProof(Array.isArray(registry.results),'P0 evidence results must be an array');
   const scenarioById=new Map(scenarios.map(s=>[s.id,s]));
   requireProof(scenarioById.size===scenarios.length,'P0 catalog duplicates scenario IDs');
+  const evidenceIds=registry.results.map(result=>result.scenarioId);
+  requireProof(new Set(evidenceIds).size===evidenceIds.length,'duplicate P0 scenario evidence');
   const seen=new Set();
   for(const result of registry.results){
     requireProof(!seen.has(result.scenarioId),'duplicate P0 scenario evidence '+result.scenarioId);
