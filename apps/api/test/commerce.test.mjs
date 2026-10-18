@@ -713,6 +713,22 @@ test('P4 stock coverage derives reserved availability and demand from immutable 
  }finally{x.close();}
 });
 
+test('P5 staged D1 rollout keeps old reports usable and blocks writes until 0016 is deployed',async()=>{
+ const x=await setup();try{
+  const id=await x.id('Sem tabela opcional','P5-SAFE',3);
+  x.db.exec('DROP TABLE inventory_minimum_levels');
+  const old=await x.get('a','reports/stock-coverage?branchId=branch-a&asOf=2026-10-17');
+  assert.equal(old.status,200,JSON.stringify(old.body));
+  assert.equal(old.body.coverage.minimumPoliciesAvailable,false);
+  assert.equal(old.body.coverage.products.find(p=>p.productId===id).minimumStatus,'NOT_CONFIGURED');
+  const home=await x.get('a','reports/home?branchId=branch-a&asOf=2026-10-17');
+  assert.equal(home.status,200,JSON.stringify(home.body));
+  const attempt=await x.write('a','reports/stock-minimum',{branchId:'branch-a',productId:id,minimumQuantity:2},{method:'PUT'});
+  assert.equal(attempt.status,503);
+  assert.match(attempt.body.error,/atualização.*não foi aplicada|migração|banco/i);
+ }finally{x.close();}
+});
+
 test('P5 daily trend is zero-filled, uses canonical completed sales, validates period and isolates tenants',async()=>{
  const x=await setup();try{
   const p=await x.id('Tendência comprovada','P5-TREND',2);
