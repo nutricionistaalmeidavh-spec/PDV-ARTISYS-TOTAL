@@ -491,21 +491,29 @@
           <button class="ops-primary" type="submit" ${coverage.products.length?'':'disabled'}>Salvar mínimo</button>
           <button class="ops-secondary" type="button" id="web-stock-minimum-clear" ${coverage.products.length?'':'disabled'}>Remover mínimo</button>
         </div></form>`:'';
-      return `${!coverage.minimumPoliciesAvailable?'<p role="alert">Configuração de estoque mínimo indisponível até aplicar a migração 0016 neste ambiente. Os saldos e consumos continuam disponíveis.</p>':''}<p class="ops-muted">Consumo efetivo: ${escapeHtml(coverage.period.from)} a ${escapeHtml(coverage.period.to)}.
+      return `${!coverage.minimumPoliciesAvailable?'<p role="alert">Configuração de estoque mínimo indisponível até aplicar a migração 0017 neste ambiente. Os saldos e consumos continuam disponíveis.</p>':''}<p class="ops-muted">Consumo efetivo: ${escapeHtml(coverage.period.from)} a ${escapeHtml(coverage.period.to)}.
         Cobertura estimada por consumo líquido de vendas/devoluções e disponibilidade após reservas.
         Produtos sem mínimo configurado não recebem alertas fictícios.</p>`+
         `<div class="ops-metrics">
           ${metric('Sem disponibilidade',String(coverage.zeroOrReservedOut))}
           ${metric('Abaixo do mínimo',String(coverage.belowMinimum||0))}
           ${metric('No mínimo',String(coverage.atMinimum||0))}
+          ${metric('Itens no mínimo ou abaixo',String(coverage.lowStockCount||0))}
+          ${metric('Falta sem custo conhecido',String(coverage.unpricedShortages||0))}
+          ${metric('Reposição estimada',coverage.suggestedPurchaseCostCents==null?'Não apurada':
+            value(coverage.suggestedPurchaseCostCents),
+            'Estimativa pelo último custo registrado, não é cotação de fornecedor')}
           ${metric('Sem consumo no período',String(coverage.coverageUnknown))}
           ${metric('Mínimo não definido',String(coverage.unknownMinimum))}</div>`+
-        table(['Produto','Disponível','Reservado','Consumo período','Cobertura (dias)','Mínimo cadastrado','Situação','Entradas por transferência','Saídas por transferência'],
+        table(['Produto','Disponível','Reservado','Consumo período','Cobertura (dias)','Mínimo cadastrado','Falta para mínimo','Custo de reposição estimado','Situação','Entradas por transferência','Saídas por transferência'],
           (coverage.products||[]).map(p=>`<tr>
           <td>${escapeHtml(p.name)} · ${escapeHtml(p.sku)}</td>
           <td>${qty(p.available)}</td><td>${qty(p.reserved)}</td><td>${qty(p.consumed)}</td>
           <td>${p.daysCoverage==null?'Sem base':qty(p.daysCoverage)}</td>
           <td>${p.minimumQuantity==null?'Não definido':qty(p.minimumQuantity)}</td>
+          <td>${p.shortageToMinimum==null?'Sem mínimo':qty(p.shortageToMinimum)}</td>
+          <td>${p.shortageToMinimum==null?'Sem mínimo':p.suggestedPurchaseCostCents==null?
+            'Sem custo registrado':value(p.suggestedPurchaseCostCents)}</td>
           <td>${escapeHtml({BELOW_MINIMUM:'Abaixo do mínimo',AT_MINIMUM:'No mínimo',ABOVE_MINIMUM:'Acima do mínimo',NOT_CONFIGURED:'Não configurado'}[p.minimumStatus]||'Indefinido')}</td>
           <td>${qty(p.transfersIn)}</td><td>${qty(p.transfersOut)}</td></tr>`))+minimumForm;
     };
@@ -608,10 +616,12 @@
             p.marginCents==null?'Não apurada':brl(p.marginCents),
             p.missingCostLines?'Histórico incompleto':'Snapshot da venda'])};
         case 'coverage':return {headers:['Produto','SKU','Disponível','Reservado','Consumo',
-          'Cobertura em dias','Entradas por transferência','Saídas por transferência','Estoque mínimo'],
+          'Cobertura em dias','Entradas por transferência','Saídas por transferência','Estoque mínimo','Falta para mínimo','Reposição estimada (R$)'],
           rows:(coverage?.products||[]).map(p=>[p.name,p.sku,p.available,p.reserved,p.consumed,
             p.daysCoverage==null?'Sem base':p.daysCoverage,p.transfersIn,p.transfersOut,
-            p.minimumQuantity==null?'Não configurado':p.minimumQuantity])};
+            p.minimumQuantity==null?'Não configurado':p.minimumQuantity,
+            p.shortageToMinimum==null?'Não configurado':p.shortageToMinimum,
+            p.suggestedPurchaseCostCents==null?'Sem custo confiável':brl(p.suggestedPurchaseCostCents)])};
         case 'targets':return {headers:['Vendedor','Vendas líquidas (R$)','Devoluções (R$)',
           'Meta (R$)','Atingimento (%)','Comissão gerada (R$)','Comissão estornada (R$)',
           'Comissão paga (R$)','Saldo comissão (R$)'],
