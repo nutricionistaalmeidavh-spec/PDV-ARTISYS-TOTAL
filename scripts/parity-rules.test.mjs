@@ -115,3 +115,24 @@ test('partial R4 coverage may be demonstrated by direct runnable evidence even w
  assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[{...row,independentEvidence:null}]},
    ['example'],{readSource:p=>sources[p]}),/partial capability needs/);
 });
+
+test('outside seven-screen matrix, a tested hardware subflow may be partial but never automatically covered',()=>{
+  const published=['thermal-print-queue-and-retry'];
+  const matrix={modules:[]};
+  const evidence={file:'tools/local-hardware-bridge/bridge.mjs',contains:'createSpoolQueue',
+    testFile:'apps/api/test/local-bridge.test.mjs',testContains:"test('failed spool job is retryable"};
+  const row={id:'cap-001',capability:published[0],owner:'hardware',dependsOn:[],status:'partial',
+    testedContractRefs:[],implementationEvidence:evidence,
+    sourceEvidence:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,file:'release/capabilities.json',manifestIndex:0},
+    acceptance:'Durable print spool queue with explicit retry and crash recovery.'};
+  const inventory={schemaVersion:1,baseline:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
+    manifest:'release/capabilities.json',publishedCapabilities:published,sourceManifestCount:1},
+    web:{repo:WEB_REPO},contracts:[row],fullSystemClaim:'incomplete'};
+  const files={'tools/local-hardware-bridge/bridge.mjs':'export function createSpoolQueue() {}',
+    'apps/api/test/local-bridge.test.mjs':"test('failed spool job is retryable',()=>{assert.equal(1,1)});"};
+  const readSource=path=>files[path]||'';
+  assert.equal(verifyCapabilityInventory(matrix,inventory,published,{readSource}).partial,1);
+  assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[{...row,implementationEvidence:undefined}]},published,{readSource}),/partial capability needs covered subset or executable proof/);
+  assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[{...row,implementationEvidence:{...evidence,testContains:"test('missing'"}}]},published,{readSource}),/partial implementation test not found/);
+  assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[{...row,status:'covered'}]},published,{readSource}),/covered capability requires a canonical ID-specific test/);
+});
