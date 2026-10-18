@@ -582,7 +582,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -591,7 +591,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "thermal-print-queue-and-retry: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo de impressão/protocolo/serial periférico implementado e exercitado em apps/api/test/vertical-parity.test.mjs. Ainda faltam funcionalidades/comparações do desktop para paridade integral; não exigir equipamento físico como gate de código.",
+      "implementationEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "createR4ExtendedService",
+        "testFile": "apps/api/test/vertical-parity.test.mjs",
+        "testContains": "test('R4 cap-034: kitchen print outbox claims"
+      }
     },
     {
       "id": "cap-026",
@@ -600,7 +606,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -609,7 +615,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared-artisys-printing-renderer-and-drivers: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo de impressão/protocolo/serial periférico implementado e exercitado em apps/api/test/r4-print-agent.test.mjs. Ainda faltam funcionalidades/comparações do desktop para paridade integral; não exigir equipamento físico como gate de código.",
+      "implementationEvidence": {
+        "file": "scripts/r4-print-agent.mjs",
+        "contains": "spoolLocalPrinter",
+        "testFile": "apps/api/test/r4-print-agent.test.mjs",
+        "testContains": "test('KDS agent calls CUPS"
+      }
     },
     {
       "id": "cap-027",
@@ -618,7 +630,7 @@
       "dependsOn": [
         "checkout-016"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -627,7 +639,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared-artisys-serialport-peripheral-runtime: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo de impressão/protocolo/serial periférico implementado e exercitado em apps/api/test/peripherals-web.test.mjs. Ainda faltam funcionalidades/comparações do desktop para paridade integral; não exigir equipamento físico como gate de código.",
+      "implementationEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "readWeight",
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('sem permissão explícita não tenta ler porta física"
+      }
     },
     {
       "id": "cap-028",
@@ -637,7 +655,7 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -646,7 +664,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "hardware-protocol-simulation-ci-and-recovery-tests: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo de impressão/protocolo/serial periférico implementado e exercitado em apps/api/test/peripherals-web.test.mjs. Ainda faltam funcionalidades/comparações do desktop para paridade integral; não exigir equipamento físico como gate de código.",
+      "implementationEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "parseUranoWeight",
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('Urano POP-S rejeita frames incompletos"
+      }
     },
     {
       "id": "cap-029",
@@ -655,7 +679,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -664,7 +688,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "non-fiscal-sale-prebill-kitchen-and-cash-printing: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo de impressão/protocolo/serial periférico implementado e exercitado em apps/api/test/peripherals-web.test.mjs. Ainda faltam funcionalidades/comparações do desktop para paridade integral; não exigir equipamento físico como gate de código.",
+      "implementationEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "receiptHtml",
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('comprovante web só aceita venda concluída"
+      }
     },
     {
       "id": "cap-030",
@@ -1123,7 +1153,7 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1132,7 +1162,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "barcode-scale-drawer-adapters: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Subfluxo de impressão/protocolo/serial periférico implementado e exercitado em apps/api/test/peripherals-web.test.mjs. Ainda faltam funcionalidades/comparações do desktop para paridade integral; não exigir equipamento físico como gate de código.",
+      "implementationEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "escpos",
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('ESC/POS conserva quebras"
+      }
     },
     {
       "id": "cap-051",
@@ -1269,8 +1305,8 @@
   "deliveryAudit": {
     "reviewedAt": "2026-10-18",
     "baseMainCommit": "f082bfdd73126778f06d1d0c252704a69de6a578",
-    "scope": "R2/R4 executable partial implementation evidence",
+    "scope": "R2/R3/R4 executable partial implementation evidence",
     "verifiedBy": "CI test:parity and API tests on resulting PR",
-    "note": "Partial means implemented/tested subset, not 100% original desktop parity. Capabilities without seven-screen counterparts are supported by domain tests; physical hardware is optional."
+    "note": "Partial means at least one implemented/tested subset, not 100% desktop parity. The remaining R3 gaps are personalized receipt branding and versioned hardware compatibility evidence. Physical hardware is optional."
   }
 }
