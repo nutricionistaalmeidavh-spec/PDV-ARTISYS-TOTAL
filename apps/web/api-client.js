@@ -71,6 +71,7 @@
         else if(original==='/api/v1/inventory/adjustments')operation='inventory/adjustments';
         else if(original==='/api/v1/inventory/counts')operation='inventory/counts';
         else if(original==='/api/v1/inventory/lots')operation='inventory/lots';
+        else if(original.startsWith('/api/v1/inventory/locations'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/inventory/transfers')operation='inventory/transfers';
         else if(original.startsWith('/api/v1/inventory/reservations'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/inventory/purchase-costs')operation='inventory/purchase-costs';
