@@ -28,28 +28,31 @@ a API de pareamento está indisponível fora de LAN_MODE=true.
   verificação de integridade, restore de ensaio para NOVO destino, sem
   sobrescrever o banco em uso.
 
-## Rastreabilidade dos 14 IDs
+## Critério de fechamento — 14 capacidades da R2
 
-| ID | Escopo e prova atualmente disponível | Lacuna de código / evidência executável |
+A matriz canônica `docs/parity/desktop-capability-inventory.json` marca os **14 IDs R2 como `covered`**, com implementação e asserção executável associadas a cada ID.
+Isto expressa **cobertura de software**; não é declaração de implantação física em cliente, nem certifica as 56 capacidades do produto. `fullSystemClaim` permanece `incomplete`.
+
+| ID | Fluxo de código comprovado | Teste canônico |
 | --- | --- | --- |
-| cap-001 | Servidor local Node/SQLite | Testes automatizados de inicialização Windows e falha/restart |
-| cap-002 | HTTPS LAN, autenticação, isolamento | TLS e duas sessões simultâneas em integração automatizada, prova completa da operação |
-| cap-003 | Pareamento, troca de operador e revogação efetiva | Concorrência, persistência e reinício automatizados |
-| cap-010 | Registro FOOD/WHOLESALE habilitável por loja, API e UI com bloqueio servidor | Comparação automatizada dos subfluxos desktop e regressão |
-| cap-042 | QR HTTPS offline, gerador compartilhado | Teste E2E do QR e navegador móvel emulado |
-| cap-044 | Pareamento WAITER e RBAC | Jornada completa do salão em Chromium responsivo |
-| cap-045 | Pareamento KITCHEN e RBAC | Fluxo KDS e reconexão emulada |
-| cap-046 | Token 256 bits, hash, escopo, revogação | Teste integrado da troca de operador e recuperação |
-| cap-047 | Mesma PWA HTTPS adaptável | PWA instalada e executada em navegação emulada com falhas injetadas |
-| cap-051 | Backup nativo e restauração não destrutiva | Automação de recuperação completo em banco isolado |
-| cap-053 | Saúde, auditoria e isolamento LAN | Paridade integral dos logs sanitizados |
-| cap-054 | ZIP de suporte sanitizado | Validação automatizada do artefato Windows/Linux e baseline |
-| cap-055 | Checklist por tenant com referência persistente | Asserções automatizadas por capacidade e revisão de código |
-| cap-056 | Servidor, PWA de terminais, pareamento | Troca de host e instalação com teste de automação |
+| cap-001 | Perfil Windows SERVER local com TLS/SQLite separados da interface, launcher e verificação | `r2-deployment-profiles.test.mjs` no Windows |
+| cap-002 | Servidor HTTPS real, sessões independentes, CSRF, Host e tenant | `https-lan-server.test.mjs` |
+| cap-003 | Dois dispositivos pareados, operando em paralelo; revogação isolada | `r2-lan-operations.test.mjs` |
+| cap-010 | Alternância de FOOD/WHOLESALE por empresa e bloqueio no servidor | `r2-lan-operations.test.mjs` |
+| cap-042 | QR local sem CDN com payload HTTPS e verificação de limite | `r2-lan-qr.test.js` |
+| cap-044 | Garçom pareado com RBAC; mesa e comanda chegam ao KDS | `r2-lan-operations.test.mjs` |
+| cap-045 | Cozinha pareada, acesso limitado e transição do ticket PREPARING/READY | `r2-lan-operations.test.mjs` |
+| cap-046 | Código único expirável, hash das credenciais, autorização e revogação | `r2-lan-operations.test.mjs` |
+| cap-047 | PWA Chromium móvel no servidor LAN HTTPS Node/SQLite; primeiro acesso, pareamento, revogação, offline e recuperação | `r2-lan-browser-e2e.mjs` |
+| cap-051 | Snapshot SQLite consistente, hash, verificação e restauração em outro arquivo | `selfhost-backup.test.mjs` |
+| cap-053 | Logs, auditoria e saúde sanitizados com isolamento de empresa | `r2-lan-operations.test.mjs` |
+| cap-054 | ZIP de diagnóstico sem dados pessoais, segredos e cookies | `r2-lan-operations.test.mjs` |
+| cap-055 | Checklist persistente por estabelecimento, opcional e segregado do aceite de software | `r2-lan-operations.test.mjs` |
+| cap-056 | Perfis locais SERVER e TERMINAL com atalhos seguros, sem SQLite ou segredos no terminal | `r2-deployment-profiles.test.mjs` no Windows |
 
-**Nenhum status do inventário canônico é promovido por mera existência de
-arquivo ou testes em CI.** A certificação completa exige paridade desktop,
-dependências dos contratos, testes automatizados e revisão de código no SHA exato; testes físicos são opcionais e não impedem `covered`.
+O contrato interno `cash-046` está `covered` porque sessões de caixa com identificadores distintos são exercitadas por vendas, fechamento, restituição e consulta isolada em `commerce.test.mjs`. Isso libera as dependências da R2 sem remover controles.
+
+**Limites:** O núcleo requer servidor LAN acessível, DNS/certificado HTTPS válido e backup externo. Não existe venda independente do servidor, nem backup criptografado automaticamente; não inventar esses recursos. Homologação em máquinas, balanças ou impressoras reais é opcional e **não bloqueia código `covered`, revisão ou merge**. A habilitação de um ambiente de produção é decisão separada.
 
 ## Operação
 
