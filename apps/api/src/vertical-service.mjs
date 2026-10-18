@@ -196,6 +196,111 @@ export function createVerticalService(db){
        return {statements:[q("UPDATE restaurant_orders SET status='DELIVERED',updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='READY'",now(),t,b,id)],result};
      });
    },
+
+   // R4 operational actions reuse the canonical table sessions and restaurant orders.
+   async transferTable(t,b,id,targetTableId,key){
+     await branchExists(t,b);
+     if(!keyOK(key))throw err(400,'Identificador da operação obrigatório.');
+     const scope='restaurant.transfer:'+id;
+     const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(prior)return JSON.parse(prior.result_json);
+     const source=await checkSession(t,b,id);
+     if(source.status!=='OPEN')throw err(409,'Somente uma comanda aberta pode mudar de mesa.');
+     if(!targetTableId||targetTableId===source.table_id)throw err(400,'Escolha outra mesa de destino.');
+     const target=await first('SELECT id FROM restaurant_tables WHERE tenant_id=? AND branch_id=? AND id=? AND active=1',t,b,targetTableId);
+     if(!target)throw err(404,'Mesa de destino não encontrada.');
+     const busy=await first("SELECT id FROM restaurant_table_sessions WHERE tenant_id=? AND branch_id=? AND table_id=? AND status IN('OPEN','CHECKOUT')",t,b,targetTableId);
+     if(busy)throw err(409,'Mesa de destino já está ocupada.');
+     return mutate(t,scope,key,async()=>{
+       const result={id,tableId:targetTableId,status:'OPEN'};
+       return {result,statements:[q("UPDATE restaurant_table_sessions SET table_id=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN' AND table_id=?",targetTableId,t,b,id,source.table_id)]};
+     });
+   },
+   async cancelFoodOrder(t,b,id,key){
+     await branchExists(t,b);
+     if(!keyOK(key))throw err(400,'Identificador da operação obrigatório.');
+     const scope='restaurant.cancel:'+id;
+     const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(prior)return JSON.parse(prior.result_json);
+     const order=await first('SELECT id,status FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
+     if(!order)throw err(404,'Pedido não encontrado.');
+     const ticket=await first('SELECT status FROM restaurant_kitchen_tickets WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,id);
+     if(order.status!=='OPEN'||ticket?.status!=='NEW')throw err(409,'Pedido em produção ou finalizado não pode ser cancelado nesta etapa.');
+     return mutate(t,scope,key,async()=>{
+       const stamp=now();
+       return {result:{id,status:'CANCELLED'},statements:[
+         q("UPDATE restaurant_orders SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN'",stamp,t,b,id),
+         q("UPDATE restaurant_kitchen_tickets SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND order_id=? AND status='NEW'",stamp,t,b,id)
+       ]};
+     });
+   },
+   async serviceRequests(t,b){
+     await branchExists(t,b);
+     return all(\`SELECT r.id,r.table_session_id AS tableSessionId,r.request_type AS type,
+       r.status,r.note,r.created_by AS createdBy,r.handled_by AS handledBy,
+       r.created_at AS createdAt,r.updated_at AS updatedAt,tb.label AS tableLabel
+       FROM restaurant_service_requests r
+       JOIN restaurant_table_sessions s ON s.id=r.table_session_id AND s.tenant_id=r.tenant_id AND s.branch_id=r.branch_id
+       JOIN restaurant_tables tb ON tb.id=s.table_id AND tb.tenant_id=s.tenant_id AND tb.branch_id=s.branch_id
+       WHERE r.tenant_id=? AND r.branch_id=?
+       ORDER BY CASE r.status WHEN 'OPEN' THEN 0 WHEN 'ACKNOWLEDGED' THEN 1 ELSE 2 END,r.created_at DESC LIMIT 250\`,t,b);
+   },
+   async createServiceRequest(t,b,user,id,body,key){
+     await branchExists(t,b);
+     const s=await checkSession(t,b,id);
+     if(s.status!=='OPEN')throw err(409,'Comanda não está aberta.');
+     const type=body.type;
+     isSafeStatus(type,['WAITER','BILL']);
+     return mutate(t,'restaurant.service:'+id,key,async()=>{
+       const stamp=now(),rid=uuid(),note=clean(body.note,240);
+       return {result:{id:rid,tableSessionId:id,type,note,status:'OPEN',createdBy:user,createdAt:stamp},
+         statements:[q('INSERT INTO restaurant_service_requests(id,tenant_id,branch_id,table_session_id,request_type,status,note,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
+           rid,t,b,id,type,'OPEN',note,user,stamp,stamp)]};
+     });
+   },
+   async updateServiceRequest(t,b,user,id,body,key){
+     await branchExists(t,b);
+     if(!keyOK(key))throw err(400,'Identificador da operação obrigatório.');
+     const scope='restaurant.service.update:'+id;
+     const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(prior)return JSON.parse(prior.result_json);
+     const row=await first('SELECT id,status FROM restaurant_service_requests WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
+     if(!row)throw err(404,'Chamado não encontrado.');
+     const status=body.status;isSafeStatus(status,['ACKNOWLEDGED','CLOSED']);
+     if((row.status==='OPEN'&&status!=='ACKNOWLEDGED')||(row.status==='ACKNOWLEDGED'&&status!=='CLOSED')||row.status==='CLOSED')
+       throw err(409,'Transição de chamado inválida.');
+     return mutate(t,scope,key,async()=>{
+       const result={id,status,handledBy:user};
+       return {result,statements:[q('UPDATE restaurant_service_requests SET status=?,handled_by=?,updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status=?',status,user,now(),t,b,id,row.status)]};
+     });
+   },
+   async restaurantReport(t,b,from,to,{csv=false}={}){
+     await branchExists(t,b);
+     const dateValue=value=>{
+       if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))throw err(400,'Datas de início e fim obrigatórias (AAAA-MM-DD).');
+       const time=Date.parse(value+'T00:00:00.000Z');
+       if(!Number.isFinite(time)||new Date(time).toISOString().slice(0,10)!==value)throw err(400,'Data inválida.');
+       return time;
+     };
+     const a=dateValue(from),z=dateValue(to);
+     if(z<a||z-a>366*86400000)throw err(400,'Período inválido ou maior que 366 dias.');
+     const start=new Date(a).toISOString(),end=new Date(z+86400000).toISOString();
+     const rows=await all('SELECT id,fulfillment,status,total_cents AS totalCents,created_at AS createdAt FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND created_at>=? AND created_at<? ORDER BY created_at,id LIMIT 3001',t,b,start,end);
+     if(rows.length>3000)throw err(413,'Mais de 3000 pedidos. Reduza o período para exportar sem truncamento.');
+     if(csv){
+       const cell=value=>'"'+String(value??'').replace(/"/g,'""').replace(/^[=+@-]/,"'")+'"';
+       return '\uFEFFPedido;Criado em UTC;Canal;Estado;Valor operacional (R$)\r\n'+rows.map(x=>
+         [x.id,x.createdAt,x.fulfillment,x.status,(x.totalCents/100).toFixed(2).replace('.',',')].map(cell).join(';')).join('\r\n');
+     }
+     const active=rows.filter(r=>r.status!=='CANCELLED');
+     const totals={ordersCount:rows.length,cancelledCount:rows.length-active.length,
+       orderedCents:active.reduce((sum,r)=>sum+r.totalCents,0),
+       deliveredCount:active.filter(r=>r.status==='DELIVERED').length,
+       deliveredCents:active.filter(r=>r.status==='DELIVERED').reduce((sum,r)=>sum+r.totalCents,0)};
+     return {branchId:b,from,to,timezone:'UTC',...totals,
+       channels:Object.fromEntries(['TABLE','DELIVERY','PICKUP'].map(channel=>[channel,active.filter(r=>r.fulfillment===channel).length])),
+       note:'Indicadores operacionais: pedido entregue não equivale a venda recebida. Faturamento, caixa e estoque pertencem ao checkout canônico.'};
+   },
    async wholesaleTiers(t,b){await branchExists(t,b);return all('SELECT id,product_id AS productId,min_quantity_milli / 1000.0 AS minQuantity,unit_price_cents AS unitPriceCents,active FROM wholesale_tiers WHERE tenant_id=? AND branch_id=? ORDER BY product_id,min_quantity_milli',t,b);},
    async saveWholesaleTier(t,b,body,key){
      await branchExists(t,b);await product(t,body.productId);const milli=qty(body.minQuantity),price=cents(body.unitPriceCents,'Preço');
