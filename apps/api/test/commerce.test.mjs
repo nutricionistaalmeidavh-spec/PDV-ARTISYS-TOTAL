@@ -817,6 +817,8 @@ test('P3 home indicators are canonical live data, tenant-isolated and authorizat
   assert.equal(after.body.home.netSalesCents,1000);
   assert.equal(after.body.home.cashOpen,true);
   assert.equal(after.body.home.outOfStockCount,1);
+  assert.equal(after.body.home.minimumUnconfiguredCount,1);
+  assert.equal(after.body.home.belowMinimumCount,0);
   const other=await x.get('b','reports/home?branchId=branch-b&asOf='+asOf,x.other);
   assert.equal(other.status,200,JSON.stringify(other.body));
   assert.equal(other.body.home.salesCount,0);
