@@ -1616,8 +1616,13 @@ export function createCommerceService(db,{now=nowISO}={}){
           p.last_cost_cents AS unitCostCents FROM product_bundle_components b
           JOIN products p ON p.id=b.component_id AND p.tenant_id=b.tenant_id
           WHERE b.tenant_id=? AND b.kit_id=? ORDER BY b.component_id`,tenant,line.product_id);
-        const latestRecipe=await first('SELECT MAX(version) AS version FROM r4_recipe_versions WHERE tenant_id=? AND branch_id=? AND product_id=?',
-          tenant,branch,line.product_id);
+        // Older test/upgrade snapshots can run without the optional R4 schema.
+        // Absence of this table means only the pre-R4 catalog composition applies.
+        let latestRecipe=null;
+        try{
+          latestRecipe=await first('SELECT MAX(version) AS version FROM r4_recipe_versions WHERE tenant_id=? AND branch_id=? AND product_id=?',
+            tenant,branch,line.product_id);
+        }catch(e){if(!/no such table: r4_recipe_versions/i.test(String(e?.message)))throw e;}
         const recipeVersion=latestRecipe?.version||0;
         const recipe=recipeVersion?await all(`SELECT ri.ingredient_id AS productId,ri.quantity_milli AS quantityMilli,
            p.last_cost_cents AS unitCostCents FROM r4_recipe_ingredients ri
