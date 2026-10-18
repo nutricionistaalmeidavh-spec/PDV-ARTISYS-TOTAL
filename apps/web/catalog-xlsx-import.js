@@ -94,6 +94,35 @@
     if(kind==='e')fail('célula com erro no XLSX.');
     return value;
   }
+  async function firstWorkbookSheet(entries){
+    // Excel's first visible/logical sheet may live at sheet2.xml, sheet7.xml, etc.
+    // Resolving a hard-coded filename can import the wrong goods and prices.
+    const workbook=parseXml(await unpack(entries.get('xl/workbook.xml')));
+    const first=tags(workbook,'sheet')[0];
+    const relationId=first?.getAttributeNS(
+      'http://schemas.openxmlformats.org/officeDocument/2006/relationships','id'
+    )||first?.getAttribute('r:id');
+    if(!relationId)fail('primeira aba sem relacionamento no workbook.');
+    const relations=parseXml(await unpack(entries.get('xl/_rels/workbook.xml.rels')));
+    const matched=tags(relations,'Relationship').filter(node=>node.getAttribute('Id')===relationId);
+    if(matched.length!==1)fail('relacionamento da primeira aba ausente ou duplicado.');
+    const relation=matched[0];
+    if(relation.getAttribute('Type')!==
+       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet')
+      fail('a primeira aba não é uma planilha de células válida.');
+    if(relation.getAttribute('TargetMode')==='External')
+      fail('referências externas de planilhas não são permitidas.');
+    const target=relation.getAttribute('Target')||'';
+    // Only OOXML worksheet paths inside this ZIP are allowed: never URLs,
+    // network shares, encoded traversal, directories or alternate protocols.
+    let path;
+    if(/^worksheets\/[A-Za-z0-9._-]+\.xml$/.test(target))path='xl/'+target;
+    else if(/^\/?xl\/worksheets\/[A-Za-z0-9._-]+\.xml$/.test(target))
+      path=target.replace(/^\//,'');
+    else fail('caminho da primeira aba inválido.');
+    if(!entries.has(path))fail('arquivo da primeira aba não encontrado.');
+    return entries.get(path);
+  }
   function safeCsv(value){
     const raw=String(value??'');
     if(/^[\t\r\n ]*[=+@]/.test(raw))fail('célula com possível fórmula CSV; converta para texto literal.');
@@ -102,8 +131,7 @@
   async function toCsv(input){
     const bytes=input instanceof Uint8Array?input:new Uint8Array(input);
     const entries=archiveEntries(bytes);
-    const sheet=entries.get('xl/worksheets/sheet1.xml');
-    if(!sheet)fail('a primeira aba (sheet1.xml) é obrigatória.');
+    const sheet=await firstWorkbookSheet(entries);
     const shared=entries.get('xl/sharedStrings.xml');
     const strings=shared?tags(parseXml(await unpack(shared)),'si').map(textValue):[];
     const parsed=parseXml(await unpack(sheet));
