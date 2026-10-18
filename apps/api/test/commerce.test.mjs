@@ -714,6 +714,39 @@ test('P4 stock coverage derives reserved availability and demand from immutable 
  }finally{x.close();}
 });
 
+test('P5 minimum stock settings are validated, atomic, idempotent and tenant/branch/RBAC isolated',async()=>{
+ const x=await setup();try{
+  const p=await x.id('Item com mínimo','P5-MIN',5);
+  const route='reports/stock-minimum';
+  const report=()=>x.get('a','reports/stock-coverage?branchId=branch-a&asOf=2026-10-17&days=30');
+  const find=async()=>((await report()).body.coverage.products.find(item=>item.productId===p));
+  assert.equal((await find()).minimumQuantity,null);
+  const key=next();
+  const configured=await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:6},{method:'PUT',key});
+  assert.equal(configured.status,200,JSON.stringify(configured.body));
+  assert.equal(configured.body.minimum.minimumQuantity,6);
+  const replay=await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:6},{method:'PUT',key});
+  assert.deepEqual(replay.body,configured.body);
+  const under=await report(),row=under.body.coverage.products.find(item=>item.productId===p);
+  assert.equal(row.minimumStatus,'BELOW_MINIMUM');
+  assert.equal(under.body.coverage.belowMinimum,1);
+  assert.equal(under.body.coverage.unknownMinimum,0);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:0},{method:'PUT',who:x.viewer})).status,403);
+  assert.equal((await x.write('b',route,{branchId:'branch-b',productId:p,minimumQuantity:4},{method:'PUT',who:x.other})).status,404);
+  assert.equal((await x.write('a',route,{branchId:'branch-b',productId:p,minimumQuantity:4},{method:'PUT'})).status,404);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:-1},{method:'PUT'})).status,400);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:0.0001},{method:'PUT'})).status,400);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:'5'},{method:'PUT'})).status,400);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:5},{method:'PUT'})).status,200);
+  assert.equal((await find()).minimumStatus,'AT_MINIMUM');
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:2},{method:'PUT'})).status,200);
+  assert.equal((await find()).minimumStatus,'ABOVE_MINIMUM');
+  assert.equal((await x.write('a',route,{branchId:'branch-a',productId:p,minimumQuantity:null},{method:'PUT'})).status,200);
+  assert.equal((await find()).minimumStatus,'NOT_CONFIGURED');
+  assert.equal((await x.get('b','reports/stock-coverage?branchId=branch-b&asOf=2026-10-17',x.other)).body.coverage.products.length,0);
+ }finally{x.close();}
+});
+
 test('P3 line note is atomic and idempotent, preserved in completed sale and cannot be edited afterwards',async()=>{
  const x=await setup();try{
   const product=await x.id('Suco natural','ITEM-NOTE',5);
