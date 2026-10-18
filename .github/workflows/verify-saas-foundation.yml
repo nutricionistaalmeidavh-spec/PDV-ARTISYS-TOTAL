@@ -116,6 +116,8 @@ jobs:
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0016_inventory_lot_receipts.sql
       - name: Test P5 per-branch stock minimum policy in local D1
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0017_inventory_minimum_levels.sql
+      - name: Test P2 immutable lot balance and FEFO allocation schema in local D1
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0018_inventory_lot_balances.sql
       - name: Install one Chromium for all browser regression gates
         run: |
           npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0
