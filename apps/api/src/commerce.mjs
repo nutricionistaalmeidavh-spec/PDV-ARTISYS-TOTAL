@@ -6,6 +6,7 @@ import inventoryRules from '../../../packages/core/js/domains/inventory/inventor
 import cashRules from '../../../packages/core/js/domains/cash/cash-rules.js';
 import {createSaleReturnAdapter} from './sale-reversals.mjs';
 import {createLotLedger} from './inventory-lot-ledger.mjs';
+import {pricedSaleLines} from './sale-configured-lines.mjs';
 import {createCatalogDepthService} from './catalog-depth.mjs';
 import {createPurchasingService} from './purchasing.mjs';
 import {createCatalogImportService} from './catalog-import.mjs';
@@ -66,7 +67,7 @@ function formatSale(sale,items=[],payments=[]){
     discountCents:sale.discount_cents,totalCents:sale.total_cents,
     changeCents:sale.change_cents,completedAt:sale.completed_at,
     items:items.map(row=>({
-      id:row.id,productId:row.product_id,productName:row.product_name,
+      id:row.id,parentItemId:row.parent_item_id||null,productId:row.product_id,productName:row.product_name,
       sku:row.sku,quantity:row.quantity_milli/1000,
       unitPriceCents:row.unit_price_cents,
       catalogUnitPriceCents:row.catalog_unit_price_cents??row.unit_price_cents,
@@ -107,11 +108,12 @@ export function createCommerceService(db,{now=nowISO}={}){
       (SELECT o.reason FROM sale_item_price_overrides o
        WHERE o.sale_item_id=i.id ORDER BY o.created_at DESC,o.id DESC LIMIT 1) AS price_override_reason
       FROM sale_items i WHERE i.sale_id=? ORDER BY i.created_at,i.id`,sale.id);
+    const priced=await pricedSaleLines(all,sale.tenant_id,sale.branch_id,sale.id,items);
     const payments=await all('SELECT * FROM sale_payments WHERE sale_id=? ORDER BY created_at,id',sale.id);
     // A store-credit tender belongs to the credit ledger, not to cash or card payments.
     const credit=await all("SELECT id,'STORE_CREDIT' AS method,amount_cents AS amount_cents FROM customer_credit_ledger WHERE tenant_id=? AND branch_id=? AND sale_id=? AND type='CHARGE'",sale.tenant_id,sale.branch_id,sale.id);
     const returns=await first('SELECT COALESCE(SUM(amount_cents),0) AS refundedCents FROM sale_returns WHERE tenant_id=? AND branch_id=? AND sale_id=?',sale.tenant_id,sale.branch_id,sale.id);
-    const original=formatSale(sale,items,[...payments,...credit]);
+    const original=formatSale(sale,priced,[...payments,...credit]);
     return {...original,refundedCents:returns.refundedCents,netTotalCents:original.totalCents-returns.refundedCents};
   };
   const requireOpen=sale=>{if(sale.status!=='OPEN')throw error(409,'Esta venda não está aberta. Atualize e continue.');};
@@ -207,10 +209,13 @@ export function createCommerceService(db,{now=nowISO}={}){
     // The original desktop recalculate() caps persisted discounts whenever a
     // line is added, removed, re-priced, or its quantity changes. Keep the
     // original single-sale ledger and avoid a latent over-discount on re-add.
-    await run(`UPDATE sales SET discount_cents=MIN(discount_cents,COALESCE((
-        SELECT SUM(ROUND(unit_price_cents*quantity_milli/1000.0)) FROM sale_items
-        WHERE sale_id=sales.id AND tenant_id=sales.tenant_id AND branch_id=sales.branch_id
-      ),0)) WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'`,id,tenant,branch);
+    const parents=await all('SELECT * FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=?',id,tenant,branch);
+    const lines=await pricedSaleLines(all,tenant,branch,id,parents);
+    const cap=calculateSaleTotals({items:lines.map(i=>({
+      unitPriceCents:i.unit_price_cents,quantity:i.quantity_milli/1000
+    })),discountCents:0}).subtotalCents;
+    await run('UPDATE sales SET discount_cents=MIN(discount_cents,?) WHERE id=? AND tenant_id=? AND branch_id=? AND status=\'OPEN\'',
+      cap,id,tenant,branch);
     return snapshot(tenant,branch,id);
   };
   const listing=async(tenant,branch,limit=25,status=null)=>{
@@ -1308,12 +1313,13 @@ export function createCommerceService(db,{now=nowISO}={}){
       // Persist the applied value, not the larger request: a later cart change
       // must not resurrect a discount that was never authorized against its total.
       // The subquery rounds each positive item in cents just like pricing.js.
-      const result=await run(`UPDATE sales SET discount_cents=MIN(?,COALESCE((
-          SELECT SUM(ROUND(unit_price_cents*quantity_milli/1000.0)) FROM sale_items
-          WHERE sale_id=sales.id AND tenant_id=sales.tenant_id AND branch_id=sales.branch_id
-        ),0))
-        WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'`,
-        value,id,tenant,branch);
+      const parents=await all('SELECT * FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=?',id,tenant,branch);
+      const priced=await pricedSaleLines(all,tenant,branch,id,parents);
+      const cap=calculateSaleTotals({items:priced.map(i=>({
+        unitPriceCents:i.unit_price_cents,quantity:i.quantity_milli/1000
+      })),discountCents:0}).subtotalCents;
+      const result=await run("UPDATE sales SET discount_cents=MIN(?,?) WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'",
+        value,cap,id,tenant,branch);
       if(result.meta?.changes!==1)throw error(409,'A venda mudou de estado. Atualize antes de aplicar o desconto.');
       return snapshot(tenant,branch,id);
     },
@@ -1340,7 +1346,8 @@ export function createCommerceService(db,{now=nowISO}={}){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const rows=await all('SELECT * FROM sale_items WHERE sale_id=? ORDER BY created_at,id',id);
       if(!rows.length)throw error(400,'Adicione ao menos um produto.');
-      const mapped=rows.map(row=>({unitPriceCents:row.unit_price_cents,quantity:row.quantity_milli/1000}));
+      const pricedRows=await pricedSaleLines(all,tenant,branch,id,rows);
+      const mapped=pricedRows.map(row=>({unitPriceCents:row.unit_price_cents,quantity:row.quantity_milli/1000}));
       const totals=calculateSaleTotals({items:mapped,discountCents:sale.discount_cents});
       const payments=body?.payments;
       if(!Array.isArray(payments)||!payments.length||payments.length>6)throw error(400,'Informe a forma de pagamento.');
@@ -1375,7 +1382,9 @@ export function createCommerceService(db,{now=nowISO}={}){
         subtotalCents:totals.subtotalCents,discountCents:totals.discountCents,
         totalCents:totals.totalCents,changeCents:payment.changeDueCents,
         branchId:branch,terminalId:sale.terminal_id||'DEFAULT',completedAt,
-        items:rows.map(x=>({productId:x.product_id,quantity:x.quantity_milli/1000,unitPriceCents:x.unit_price_cents})),
+        items:pricedRows.map(x=>({saleItemId:x.id,parentItemId:x.parent_item_id||x.id,
+          productId:x.product_id,quantity:x.quantity_milli/1000,unitPriceCents:x.unit_price_cents,
+          configuration:x.configuration_json?JSON.parse(x.configuration_json):null})),
         payments:groupedPayments
       };
       const statements=[
@@ -1442,14 +1451,15 @@ export function createCommerceService(db,{now=nowISO}={}){
       // Commission rules are read from the single tenant registry and snapshotted
       // in an immutable financial ledger in the same transaction as sale completion.
       const sellerId=sale.seller_id||sale.operator_id;
-      const discounted=allocateSaleDiscount(rows.map(r=>({id:r.id,productId:r.product_id,unitPriceCents:r.unit_price_cents,quantity:r.quantity_milli/1000})),totals.discountCents);
+      const discounted=allocateSaleDiscount(pricedRows.map(r=>({id:r.id,parentItemId:r.parent_item_id||r.id,
+        productId:r.product_id,unitPriceCents:r.unit_price_cents,quantity:r.quantity_milli/1000})),totals.discountCents);
       for(const line of discounted){
         const rule=await first(`SELECT commission_bps AS bps FROM seller_commission_rules
           WHERE tenant_id=? AND seller_id=? AND active=1 AND (product_id=? OR product_id IS NULL)
           ORDER BY CASE WHEN product_id=? THEN 0 ELSE 1 END LIMIT 1`,tenant,sellerId,line.productId,line.productId);
         const commissionCents=Math.round(line.netTotalCents*(rule?.bps||0)/10000);
         if(commissionCents>0)statements.push(q(`INSERT INTO seller_commission_ledger(id,tenant_id,branch_id,seller_id,sale_id,sale_item_id,kind,amount_cents,reference_key,occurred_at)
-          VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,sellerId,id,line.id,'EARNED',commissionCents,'sale:'+id+':item:'+line.id,completedAt));
+          VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,sellerId,id,line.parentItemId,'EARNED',commissionCents,'sale:'+id+':item:'+line.id,completedAt));
       }
       const wholesaleOrder=await first('SELECT id FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND sale_id=? AND status=?',tenant,branch,id,'CONFIRMED');
       if(wholesaleOrder)statements.push(q("UPDATE wholesale_orders SET status='FULFILLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND status='CONFIRMED'",completedAt,tenant,branch,id));
