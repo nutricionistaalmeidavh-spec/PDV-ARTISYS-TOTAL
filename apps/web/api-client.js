@@ -153,6 +153,7 @@
       if(operation==='reports/commission-ranking')return value.ranking;
       if(operation==='reports/commission-targets')return value.target;
       if(operation==='reports/compare')return value.comparison;
+      if(operation==='reports/daily-trend')return value.trend;
       if(operation==='reports/margins')return value.margin;
       if(operation==='reports/details')return value.details;
       if(operation==='reports/stock-coverage')return value.coverage;
