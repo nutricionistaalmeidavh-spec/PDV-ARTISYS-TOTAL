@@ -2391,3 +2391,33 @@ test('R1 checkout transitions require mutation ID, respect roles and cross-tenan
     assert.equal((await x.write('a','sales/'+saleId+'/resume',{branchId:'branch-a'})).status,409);
   }finally{x.close();}
 });
+
+test('R1 cart mutations use operation receipts: delayed item, discount and removal retries never undo newer changes',async()=>{
+  const x=await setup();try{
+    const productId=await x.id('Item de teste R1','R1-ITEM',20);
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(opened.status,201);
+    const id=opened.body.sale.id;
+    assert.equal((await x.write('a','sales/'+id+'/items',{branchId:'branch-a',productId,quantity:1})).status,200);
+    const changeKey=next();
+    assert.equal((await x.write('a','sales/'+id+'/items/'+productId,{branchId:'branch-a',quantity:2},{key:changeKey,method:'PUT'})).status,200);
+    assert.equal((await x.write('a','sales/'+id+'/items/'+productId,{branchId:'branch-a',quantity:3},{method:'PUT'})).status,200);
+    const staleQuantity=await x.write('a','sales/'+id+'/items/'+productId,{branchId:'branch-a',quantity:2},{key:changeKey,method:'PUT'});
+    assert.equal(staleQuantity.status,200);
+    assert.equal(staleQuantity.body.sale.items[0].quantity,3,'late quantity retry must not overwrite newer quantity');
+    const discountKey=next();
+    assert.equal((await x.write('a','sales/'+id+'/discount',{branchId:'branch-a',discountCents:100},{key:discountKey})).status,200);
+    assert.equal((await x.write('a','sales/'+id+'/discount',{branchId:'branch-a',discountCents:300})).status,200);
+    const staleDiscount=await x.write('a','sales/'+id+'/discount',{branchId:'branch-a',discountCents:100},{key:discountKey});
+    assert.equal(staleDiscount.status,200);
+    assert.equal(staleDiscount.body.sale.discountCents,300,'late discount retry must not revert discount');
+    const removeKey=next();
+    assert.equal((await x.write('a','sales/'+id+'/items/'+productId,{branchId:'branch-a'},{key:removeKey,method:'DELETE'})).status,200);
+    assert.equal((await x.write('a','sales/'+id+'/items',{branchId:'branch-a',productId,quantity:1})).status,200);
+    const staleRemove=await x.write('a','sales/'+id+'/items/'+productId,{branchId:'branch-a'},{key:removeKey,method:'DELETE'});
+    assert.equal(staleRemove.status,200);
+    assert.equal(staleRemove.body.sale.items.length,1,'late remove retry cannot delete an item re-added later');
+    const ledger=await x.db.prepare("SELECT scope,COUNT(*) AS n FROM commerce_mutations WHERE tenant_id=? AND scope LIKE 'sale.%:'+?+'%' GROUP BY scope").bind('a',id).all();
+    assert.equal(ledger.results.length>=3,true);
+  }finally{x.close();}
+});
