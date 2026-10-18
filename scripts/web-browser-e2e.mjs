@@ -141,6 +141,22 @@ try{
     'XLSX must reject external sheet targets without importing unrelated data');
 
 
+  // R1 actual import: this repaired sheet selection must reach the canonical
+  // server-side preview and atomic SQLite/D1 commit, not merely parse in JS.
+  await page.locator('#web-import-csv').click();
+  await page.locator('#web-import-file').setInputFiles({
+    name:'reordered-catalog.xlsx',
+    mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer:reorderedWorkbook
+  });
+  await page.locator('#web-import-preview').getByText('XLSX-SHEET2-QA').waitFor({timeout:12000});
+  assert.equal(await page.locator('#web-import-confirm').isEnabled(),true,
+    'valid reordered Excel worksheet must pass server-side preview');
+  await page.locator('#web-import-confirm').click();
+  await page.locator('.web-product-row').filter({hasText:'XLSX-SHEET2-QA'}).waitFor({timeout:12000});
+  assert.equal(await page.locator('.web-product-row').filter({hasText:'Decoy'}).count(),0,
+    'unrelated physical sheet1.xml must not create a product');
+
   // P2 counted inventory: exercise the actual canonical stock screen in Chromium.
   await page.locator('#app-sidebar [data-route=inventory]').click();
   const countForm=page.locator('#web-stock-count');
