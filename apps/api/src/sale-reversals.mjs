@@ -167,6 +167,7 @@ export function createSaleReturnAdapter(helpers){
         const chosen=[...lotRestores.values()].filter(row=>row.productId===productId)
           .map(row=>({lotId:row.lotId,quantityMilli:row.quantityMilli}));
         statements.push(...lotLedger.statements(tenant,branch,productId,movementId,chosen,1,createdAt));
+        statements.push(lotLedger.check(tenant,branch,productId,movementId,createdAt));
       }
       for(const p of grouped){
         const refundId=randomId();
