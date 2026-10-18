@@ -28,11 +28,16 @@
   const jobs=()=>request('/v1/jobs');
   const retry=id=>request('/v1/jobs/'+encodeURIComponent(id)+'/retry',{});
   const drawer=()=>request('/v1/drawer/open',{});
-  async function print(sale,text){
+  async function print(sale,text,{reprint=false}={}){
     if(sale?.status!=='COMPLETED')throw new Error('Somente venda concluída pode gerar comprovante.');
     const id=String(sale.id||'');
     if(!/^[A-Za-z0-9_-]{4,100}$/.test(id))throw new Error('Identificador da venda inválido.');
-    const result=await request('/v1/print',{id:'receipt-'+id,saleId:id,text});
+    // The first copy is idempotent; an operator-initiated reprint gets its own
+    // identity and cannot be mistaken for a retry of an uncertain spool job.
+    if(reprint && typeof root.crypto?.randomUUID!=='function')
+      throw new Error('Reimpressão requer identificador seguro no navegador.');
+    const jobId=reprint?'reprint-'+root.crypto.randomUUID():'receipt-'+id;
+    const result=await request('/v1/print',{id:jobId,saleId:id,text});
     if(result.job?.status==='FAILED')throw new Error(result.job.error||'Falha na impressora local.');
     if(result.job?.status==='UNCERTAIN')throw new Error('Resultado incerto. Confira o equipamento antes de reimprimir.');
     return result.job;
