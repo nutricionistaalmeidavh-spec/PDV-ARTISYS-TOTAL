@@ -7,7 +7,7 @@
   },
   "web": {
     "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL",
-    "mainAtAudit": "ad036a2095c863aebbdd3b3282957133466a8bd4"
+    "mainAtAudit": "458d8e66ee3af173e907941c57a228bd50457cd4"
   },
   "parityClaim": "incomplete",
   "definitions": {
@@ -1298,7 +1298,12 @@
       ]
     }
   ],
-  "reviewedAt": "2026-10-17",
+  "reviewedAt": "2026-10-18",
   "scope": "seven-screen-operations",
-  "certification": null
+  "certification": null,
+  "deliveryAudit": {
+    "reviewedAt": "2026-10-18",
+    "mainBaselineCommit": "458d8e66ee3af173e907941c57a228bd50457cd4",
+    "note": "R1 21 certified software; R4 1 covered, 12 partial; R2 14 partial and R3 6 partial, 2 no demonstrated partial. Screen contracts subordinate diagnostics, 42 covered, 26 partial; physical devices do not gate software code."
+  }
 }
