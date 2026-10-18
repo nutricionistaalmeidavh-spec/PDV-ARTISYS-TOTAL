@@ -44,6 +44,7 @@
       '<p>O PC principal mantém os dados em SQLite; os demais aparelhos acessam a mesma interface por HTTPS. Nuvem e serviços pagos não são necessários.</p></header>'+
       '<div class="ops-grid two"><section class="ops-card"><h2>Acesso por HTTPS</h2><p>Use este endereço nos dispositivos da mesma rede. Instale o certificado confiável no próprio dispositivo.</p>'+
       '<p><code id="r2-lan-origin">'+safe(access.url)+'</code></p><button class="ops-secondary" id="r2-copy-address">Copiar endereço</button>'+
+      '<div id="r2-lan-qr" role="img" aria-label="Código QR para endereço HTTPS da rede local" style="max-width:180px"></div>'+
       '<p class="ops-muted">Ao perder conexão com o servidor, nenhuma venda nova deve ser considerada confirmada.</p></section>'+
       '<section class="ops-card"><h2>Estado da rede</h2><p>'+(isAdmin?('Dispositivos ativos: '+Number(health.devices.active)+' de '+Number(health.devices.total)+' · Códigos pendentes: '+Number(health.pendingPairings)):'Identifique-se como administrador para consultar todos os dispositivos.')+'</p>'+
       '<p>Checklist: '+Number(readiness.readyCount)+' / '+Number(readiness.total)+' verificados.</p>'+
@@ -62,6 +63,9 @@
       (isAdmin?'<section class="ops-card"><h2>Dispositivos registrados</h2><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Nome</th><th>Uso</th><th>Filial</th><th>Status</th><th>Ação</th></tr></thead><tbody>'+deviceRows+'</tbody></table></div></section>':'')+
       (isAdmin?'<section class="ops-card"><h2>Diagnóstico sem dados sensíveis</h2><p>Pacote ZIP com saúde, nomes das migrações e eventos administrativos sem senhas, credenciais ou banco de dados.</p><button id="r2-download-diagnostics" type="button" class="ops-secondary">Gerar ZIP de diagnóstico</button></section>':'')+
       '<section class="ops-card"><h2>Checklist de homologação e piloto</h2><p class="ops-muted">O registro de evidências não substitui a verificação em máquinas reais, por revisor independente.</p><div class="ops-grid two" id="r2-checks">'+checks+'</div></section></section>';
+    const qrHost=content.querySelector('#r2-lan-qr');
+    try{const svg=window.PdvLocalQr?.qrSvg(access.url,{scale:4});if(qrHost&&svg)qrHost.innerHTML=svg;}
+    catch{if(qrHost)qrHost.textContent='Endereço longo demais para o QR local. Copie a URL acima.';}
     const status=content.querySelector('#r2-device-status');
     const notify=(message,error=false)=>{if(status){status.textContent=message;status.className=error?'ops-error':'ops-muted';}};
     content.querySelector('#r2-copy-address')?.addEventListener('click',async()=>{
