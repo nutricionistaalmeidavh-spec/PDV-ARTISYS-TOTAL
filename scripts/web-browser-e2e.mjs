@@ -193,7 +193,17 @@ try{
   const expectedTerminalId=await page.evaluate(()=>localStorage.getItem('artisys.pdv.webTerminalId.v1'));
   assert.equal(completedPayload.sale?.terminalId,expectedTerminalId,'browser must never silently complete a draft inherited from another terminal');
   assert.ok(completedSaleNumber,'completion response must identify the exact sale for parity follow-up');
-  await page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
+  try{
+    await page.getByText(/venda .* finalizada/i).waitFor({timeout:12000});
+  }catch(error){
+    console.error('POST_PAYMENT_DIAGNOSTIC',JSON.stringify({
+      browserErrors:errors,unexpectedHttp,
+      messages:await page.locator('#toast-container,#modal-root,[role=alert],.toast').allTextContents(),
+      saleLines:await page.locator('.cart-line').count(),
+      route:await page.locator('body').getAttribute('data-active-route')
+    }));
+    throw error;
+  }
   await page.waitForFunction(()=>document.querySelectorAll('.cart-line').length===0,null,{timeout:12000});
   // Post-sale receipt dialog is part of the original renderer. Dismiss it
   // through the same accessible close action an operator uses, not force-clicking
