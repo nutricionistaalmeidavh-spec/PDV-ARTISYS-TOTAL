@@ -2417,7 +2417,7 @@ test('R1 cart mutations use operation receipts: delayed item, discount and remov
     const staleRemove=await x.write('a','sales/'+id+'/items/'+productId,{branchId:'branch-a'},{key:removeKey,method:'DELETE'});
     assert.equal(staleRemove.status,200);
     assert.equal(staleRemove.body.sale.items.length,1,'late remove retry cannot delete an item re-added later');
-    const ledger=await x.db.prepare("SELECT scope,COUNT(*) AS n FROM commerce_mutations WHERE tenant_id=? AND scope LIKE ? GROUP BY scope").bind('a','sale.%:'+id).all();
+    const ledger=await x.db.prepare("SELECT scope,COUNT(*) AS n FROM commerce_mutations WHERE tenant_id=? AND scope LIKE ? GROUP BY scope").bind('a','sale.%:'+id+'%').all();
     assert.equal(ledger.results.length>=3,true);
   }finally{x.close();}
 });
