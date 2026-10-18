@@ -8,7 +8,10 @@
       "js/core/auth/authorization-service.js": "2583c489ff600425dcc43505e6524cb9b868b24c",
       "js/core/auth/default-profiles.js": "12d3ae6e6797b671e2a60daa24787ca1459f8278",
       "js/domains/payments/payment-rules.js": "032be99080da9b311367858ec4510cf7d2afc260",
-      "js/domains/sales/sale-service.js": "7526948853df185d3e6f7277e2a165c7cbd527e6"
+      "js/domains/sales/sale-service.js": "7526948853df185d3e6f7277e2a165c7cbd527e6",
+      "js/domains/catalog/catalog-service.js": "b6c2747d60a063ba0f976a24f39d549b94df7ffa",
+      "js/domains/inventory/inventory-rules.js": "0ffdd67cdd26a7fbb5ce9f39d02549c8a3457dd8",
+      "js/domains/cash/cash-rules.js": "1141be41b2898890b42ccc77f4554ac483357c3c"
     }
   },
   "description": "Golden inputs and expected outcomes computed from byte-pinned original desktop modules, compared with canonical web API + persisted SQLite state. Only named scenarios have proof; other P0 scenarios stay pending.",
@@ -259,6 +262,386 @@
           "totalCents": 0
         }
       }
+    },
+    {
+      "id": "product-create-price-sku-v4",
+      "scenarioId": "products-020/nominal",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "product-create-rbac-v4",
+      "scenarioId": "products-020/authorization",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "product-cross-tenant-v4",
+      "scenarioId": "products-020/tenant-isolation",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "product-idempotent-sku-v4",
+      "scenarioId": "products-020/failure-recovery",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "stock-ledger-quantity-v4",
+      "scenarioId": "products-021/nominal",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "stock-view-adjust-rbac-v4",
+      "scenarioId": "products-021/authorization",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "stock-tenant-branch-v4",
+      "scenarioId": "products-021/tenant-isolation",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "stock-idempotent-negative-v4",
+      "scenarioId": "products-021/failure-recovery",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "cash-initial-balance-v4",
+      "scenarioId": "cash-040/nominal",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "cash-open-rbac-v4",
+      "scenarioId": "cash-040/authorization",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "cash-cross-tenant-v4",
+      "scenarioId": "cash-040/tenant-isolation",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "cash-single-drawer-v4",
+      "scenarioId": "cash-040/failure-recovery",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "sale-history-status-v4",
+      "scenarioId": "history-033/nominal",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "sale-history-read-rbac-v4",
+      "scenarioId": "history-033/authorization",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "sale-history-tenant-v4",
+      "scenarioId": "history-033/tenant-isolation",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "sale-history-resume-v4",
+      "scenarioId": "history-033/failure-recovery",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "price-override-recalculate-v4",
+      "scenarioId": "checkout-010/nominal",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "price-override-rbac-v4",
+      "scenarioId": "checkout-010/authorization",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "price-override-tenant-v4",
+      "scenarioId": "checkout-010/tenant-isolation",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
+    },
+    {
+      "id": "price-override-retry-v4",
+      "scenarioId": "checkout-010/failure-recovery",
+      "type": "api-desktop-comparison",
+      "desktopCommit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
+      "expected": {
+        "authDenied": 403,
+        "foreignTenantDenied": 404,
+        "pricingBaselineCents": 1000,
+        "unit": "UN",
+        "stockStart": 2.125,
+        "cashOpeningCents": 2000,
+        "historyStatuses": [
+          "OPEN",
+          "SUSPENDED"
+        ]
+      },
+      "recovery": "No duplicate ledgers, no unauthorized financial mutations"
     }
   ]
 }
