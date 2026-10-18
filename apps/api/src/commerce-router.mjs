@@ -137,6 +137,20 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
       return null;
     }
     if(feature==='inventory'){
+      if(parts[1]==='locations'&&parts.length===2){
+        if(method==='GET'){
+          requireAccess(member,'inventory.view',user);
+          return json({locations:await service.storageLocations(tenant,branch)});
+        }
+        if(method==='POST'){
+          requireAccess(member,'inventory.adjust',user);
+          return json({location:await service.createStorageLocation(tenant,branch,user,body,key)},201);
+        }
+      }
+      if(parts[1]==='locations'&&parts[2]==='assign'&&parts.length===3&&method==='POST'){
+        requireAccess(member,'inventory.adjust',user);
+        return json({assignment:await service.assignStorageLocation(tenant,branch,user,body,key)});
+      }
       if(parts[1]==='lots'&&parts.length===2&&method==='GET'){
         requireAccess(member,'inventory.view',user);
         return json({lots:await service.lotReceipts(tenant,branch,{
