@@ -26,7 +26,7 @@ test('R2: hashed one-use pairing, branch+operator scope, revocation, read-only a
       .bind(tenant,user,role,stamp).run();
   }
   const origin='https://localhost:8443';
-  const api=createApi({DB:db,AUTH_ENABLED:'true',COOKIE_SECURE:'true'});
+  const api=createApi({DB:db,AUTH_ENABLED:'true',COOKIE_SECURE:'true',LAN_MODE:'true'});
   async function call(path,method='GET',body=null,cookie='',sameOrigin=true){
     const headers=new Headers();
     if(cookie)headers.set('cookie',cookie);
