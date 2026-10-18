@@ -90,7 +90,7 @@ export function verifyExecutableEvidence(row,readSource){
   if(row.status!=='covered')return;
   requireProof(proof.testFile && proof.testContains && proof.testAssertionContains,
     'covered needs an executable assertion, not just matching source: '+row.id);
-  const runner=proof.testFile==='scripts/web-browser-e2e.mjs'?'playwright':
+  const runner=['scripts/web-browser-e2e.mjs','scripts/r2-lan-browser-e2e.mjs'].includes(proof.testFile)?'playwright':
     /^apps\/api\/test\/[^/]+\.test\.mjs$/.test(proof.testFile) ||
     /^packages\/core\/test\/[^/]+\.test\.js$/.test(proof.testFile) ||
     /^scripts\/selfhost-backup\.test\.mjs$/.test(proof.testFile)?'node-test':null;
