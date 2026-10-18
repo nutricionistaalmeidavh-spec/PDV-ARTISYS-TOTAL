@@ -85,7 +85,7 @@ test('P1 assisted CSV upsert changes existing catalogue identity without recreat
  const x=await setup();try{
   const old=await x.service.createProduct('a','user',{sku:'KEEP-01',name:'Sabonete antigo',salePriceCents:500,unit:'UN',barcode:'7890001112223',brand:'Marca legada',trackStock:true},key());
   await x.service.receipt('a','x','user',{productId:old.id,quantity:8,type:'opening',unitCostCents:200},key());
-  const csv='sku;name;salePriceCents;barcode;brand\\nKEEP-01;Sabonete novo;650;7890001112223;Marca nova\\nNEW-02;Creme vegetal;430;7890001112224;Marca nova\\n';
+  const csv='sku;name;salePriceCents;barcode;brand\nKEEP-01;Sabonete novo;650;7890001112223;Marca nova\nNEW-02;Creme vegetal;430;7890001112224;Marca nova\n';
   const preview=await x.service.previewCatalogImport('a','x',{csv,mode:'upsert'});
   assert.equal(preview.invalidRows,0);
   assert.equal(preview.updateCount,1);
@@ -115,7 +115,7 @@ test('P1 assisted upsert never erases unspecified stock/unit/category/barcode an
  const x=await setup();try{
   const category=await x.service.createCategory('a','x','user',{name:'Categoria atual'},key());
   const existing=await x.service.createProduct('a','user',{sku:'SAFE-01',name:'Produto velho',salePriceCents:400,unit:'KG',brand:'Marca',barcode:'7890007771000',categoryId:category.id,trackStock:false},key());
-  const csv='sku;name;salePriceCents\\nSAFE-01;Produto novo;555\\n';
+  const csv='sku;name;salePriceCents\nSAFE-01;Produto novo;555\n';
   const preview=await x.service.previewCatalogImport('a','x',{csv,mode:'upsert'});
   assert.equal(preview.validRows,1);
   await x.service.commitCatalogImport('a','x','user',{csv,mode:'upsert',previewToken:preview.previewToken},key());
@@ -126,7 +126,7 @@ test('P1 assisted upsert never erases unspecified stock/unit/category/barcode an
   assert.equal(updated.barcode,'7890007771000');
   assert.equal(updated.categoryId,category.id);
   assert.equal(updated.trackStock,false);
-  const wrong='sku;name;salePriceCents;unit\\nSAFE-01;Produto novo;555;UN\\n';
+  const wrong='sku;name;salePriceCents;unit\nSAFE-01;Produto novo;555;UN\n';
   const invalid=await x.service.previewCatalogImport('a','x',{csv:wrong,mode:'upsert'});
   assert.equal(invalid.invalidRows,1);
   assert.match(invalid.rows[0].errors.join(' '),/unidade/i);
@@ -137,7 +137,7 @@ test('P1 assisted upsert never erases unspecified stock/unit/category/barcode an
 test('P1 upsert previews are optimistic: stale catalog modification cancels every row atomically',async()=>{
  const x=await setup();try{
   const product=await x.service.createProduct('a','user',{sku:'LOCK-01',name:'Produto inicial',salePriceCents:100},key());
-  const csv='sku;name;salePriceCents\\nLOCK-01;Mudança proposta;200\\nNEW-LOCK;Novo item;300\\n';
+  const csv='sku;name;salePriceCents\nLOCK-01;Mudança proposta;200\nNEW-LOCK;Novo item;300\n';
   const preview=await x.service.previewCatalogImport('a','x',{csv,mode:'upsert'});
   await x.service.updateProduct('a','x',product.id,{salePriceCents:125},key());
   await assert.rejects(x.service.commitCatalogImport('a','x','user',{csv,mode:'upsert',previewToken:preview.previewToken},key()),e=>e.status===409);
@@ -153,13 +153,13 @@ test('P1 assisted upsert rejects barcode collisions in whole batch and isolates 
  const x=await setup();try{
   await x.service.createProduct('a','user',{sku:'OWNER-01',name:'Owner one',salePriceCents:100,barcode:'7890000000999'},key());
   const existing=await x.service.createProduct('a','user',{sku:'OWNER-02',name:'Owner two',salePriceCents:200,barcode:'7890000000888'},key());
-  const conflict='sku;name;salePriceCents;barcode\\nOWNER-02;Wrong owner;999;7890000000999\\nEXTRA-03;Extra;300;7890000000777\\n';
+  const conflict='sku;name;salePriceCents;barcode\nOWNER-02;Wrong owner;999;7890000000999\nEXTRA-03;Extra;300;7890000000777\n';
   const invalid=await x.service.previewCatalogImport('a','x',{csv:conflict,mode:'upsert'});
   assert.equal(invalid.invalidRows,1);
   await assert.rejects(x.service.commitCatalogImport('a','x','user',{csv:conflict,mode:'upsert',previewToken:invalid.previewToken},key()),e=>e.status===409);
   assert.equal(await x.scalar('SELECT sale_price_cents AS n FROM products WHERE id=?',existing.id),200);
   assert.equal(await x.scalar('SELECT COUNT(*) AS n FROM products WHERE tenant_id=?','a'),2);
-  const isolated=await x.service.previewCatalogImport('b','y',{csv:'sku;name;salePriceCents\\nOWNER-02;Empresa B;700\\n',mode:'upsert'});
+  const isolated=await x.service.previewCatalogImport('b','y',{csv:'sku;name;salePriceCents\nOWNER-02;Empresa B;700\n',mode:'upsert'});
   assert.equal(isolated.createCount,1);
   assert.equal(isolated.updateCount,0);
   assert.equal(isolated.rows[0].action,'create');
