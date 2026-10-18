@@ -77,8 +77,8 @@ async function bodyFor(req){
   for await(const chunk of req){
     size+=chunk.length;
     if(size>MAX_REQUEST_BYTES){
-      // Drain the remaining request without forwarding any partial mutation.
-      for await(const _ of req){}
+      // Stop parsing, discard incoming bytes; never forward a partial mutation.
+      req.resume();
       return null;
     }
     chunks.push(chunk);
