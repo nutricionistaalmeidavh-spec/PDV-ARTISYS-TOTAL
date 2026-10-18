@@ -13,6 +13,7 @@ let html=readFileSync(filename,'utf8');
 html=html.replace("connect-src 'none'","connect-src 'self' http://127.0.0.1:8765");
 html=html.replace('<title>ArtiSys PDV</title>','<title>PDV Total | ArtiSys</title>');
 html=html.replace("../../packages/core/shared/order-composer.js","./order-composer.js");
+html=html.replace("../../packages/core/js/core/mobile-access/qr-code.js","./local-access-qr.js");
 for(const desktopScript of ['first-access-ui.js','updater-ui.js','hardware-scale-ui.js','telemetry-ui.js','reload-transition-ui.js']){
   html=html.replace(new RegExp('\\s*<script defer src="\\./'+desktopScript.replaceAll('.','\\.')+'"></script>','g'),'');
 }
@@ -26,10 +27,11 @@ html=html.replace('</head>',`  <meta name="theme-color" content="#081a35" />
   <link rel="apple-touch-icon" href="/icons/pdv-total-192.png" />
   <link rel="stylesheet" href="./web-cloud.css" />
 </head>`);
-html=html.replace('<body class="theme-home">','<body class="theme-home"><div id="web-offline-alert" role="status" aria-live="polite">Sem conexão com o servidor. Consultas e vendas exigem internet; nenhuma operação será enviada automaticamente.</div>');
+html=html.replace('<body class="theme-home">','<body class="theme-home"><div id="web-offline-alert" role="status" aria-live="polite">Sem conexão com o servidor. Consultas e vendas precisam do servidor disponível na rede; nenhuma operação será enviada automaticamente.</div>');
 html=html.replace('</body>','  <script defer src="./pwa-register.js"></script>\n</body>');
 writeFileSync(filename,html,'utf8');
 copyFileSync(resolve(root,'packages/core/shared/order-composer.js'),resolve(output,'order-composer.js'));
+copyFileSync(resolve(root,'packages/core/js/core/mobile-access/qr-code.js'),resolve(output,'local-access-qr.js'));
 buildPwaIcons(output);
 // Cache only public, reproducible assets, never authenticated API responses.
 const publicAssets=[];

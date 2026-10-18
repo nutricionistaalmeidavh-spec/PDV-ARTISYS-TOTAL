@@ -74,7 +74,7 @@ export function createLanServer({origin,tlsKey,tlsCert,db,webRoot}){
     throw Error('Servidor LAN exige origem HTTPS exata.');
   if(!db||!tlsKey||!tlsCert)throw Error('Banco e TLS obrigatórios.');
   requireWebBuild(webRoot);
-  const api=createApi({DB:db,COOKIE_SECURE:'true',AUTH_ENABLED:'true',LOCAL_MEDIA_ENABLED:'true'});
+  const api=createApi({DB:db,COOKIE_SECURE:'true',AUTH_ENABLED:'true',LOCAL_MEDIA_ENABLED:'true',LAN_MODE:'true'});
   return createServer({key:tlsKey,cert:tlsCert,minVersion:'TLSv1.2'},async(req,res)=>{
     try{
       if(req.headers.host!==expected.host){

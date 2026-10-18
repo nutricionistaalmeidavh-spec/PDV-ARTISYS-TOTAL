@@ -39,7 +39,7 @@
   function page(title,subtitle,body,actions=''){return `<section class="ops-page"><header class="ops-head"><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p></div><div class="ops-head-actions">${actions}</div></header>${body}</section>`;}
   async function ready(){if(!config)config=await api.initialize();return config;}
   function routeActive(route){return document.body.dataset.activeRoute===route;}
-  function canAccess(route){return root.PdvAccessPolicy?.canAccessRoute(root.PdvCurrentAccess,route)===true;}
+  function canAccess(route){if(route==='settings'&&api.webMode)return true;return root.PdvAccessPolicy?.canAccessRoute(root.PdvCurrentAccess,route)===true;}
   function markActive(route){document.body.dataset.activeRoute=route;document.body.classList.remove('theme-home');document.querySelectorAll('[data-route]').forEach(node=>node.classList.toggle('active',node.dataset.route===route));}
 
   // Same canonical inventory route: web mode reads and writes only via the
@@ -864,6 +864,7 @@
 
   async function renderSettings(){
     await ready();
+    if(api.webMode)return root.PdvR2LanSettings.render(content,api);
     const [hardware,jobs]=await Promise.all([
       root.artisysDesktop.hardware.status().catch(()=>({})),
       api.printJobs().catch(()=>[])
@@ -902,7 +903,7 @@
       // The web renderer already owns the one canonical finance surface.
       if(!api.webMode)await root.PdvOperationalRouteExtensions?.mountRoute?.(route,pageRoot);
       if(route==='inventory')root.PdvEnterpriseDepthUi?.mountInventory?.(pageRoot);
-      if(route==='settings'){
+      if(route==='settings'&&!api.webMode){
         await root.PdvOperationalDetailExtensions?.mountSettings?.(pageRoot);
         root.PdvVerticalModules?.mountSettingsModules?.(pageRoot);
         root.PdvSettingsHub?.mount?.(pageRoot);

@@ -94,6 +94,16 @@
       for(const [k,v] of url.searchParams)target.searchParams.set(k,v);
       const headers={'accept':'application/json'};
       if(!['GET','HEAD'].includes(method))headers['content-type']='application/json';
+      // A revoked LAN terminal cannot use business APIs; device scope is verified by the server.
+      if(this.tenantId&&target.pathname.startsWith('/api/v1/tenants/')){
+        const deviceKey='pdv-total-r2-device-'+this.tenantId;
+        const deviceId=root.localStorage?.getItem(deviceKey+'-id');
+        const credential=root.localStorage?.getItem(deviceKey+'-credential');
+        if(deviceId&&credential){
+          headers['x-pdv-device-id']=deviceId;
+          headers['x-pdv-device-credential']=credential;
+        }
+      }
       const payload=body==null?{}:{...body};
       if(!['GET','HEAD'].includes(method)){
         if(operation)payload.branchId=this.branchId;
@@ -424,6 +434,13 @@
     systemHealth() { return this.request('/api/v1/system/health'); }
     systemLogs(filters={}) { return this.request(`/api/v1/system/logs${this.params(filters)}`); }
     createDiagnostics() { return this.request('/api/v1/system/diagnostics', { method:'POST', body:{} }); }
+
+    async modules(){
+      if(!this.webMode)return this.request('/api/v1/modules');
+      if(!this.tenantId)return [];
+      const result=await this.request('/api/v1/tenants/'+encodeURIComponent(this.tenantId)+'/lan/modules');
+      return result.modules||[];
+    }
 
     pilotChecks() { return this.request('/api/v1/pilot'); }
     pilotReadiness() { return this.request('/api/v1/pilot/readiness'); }
