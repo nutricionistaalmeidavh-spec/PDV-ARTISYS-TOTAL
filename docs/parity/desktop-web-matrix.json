@@ -7,7 +7,7 @@
   },
   "web": {
     "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL",
-    "mainAtAudit": "ad036a2095c863aebbdd3b3282957133466a8bd4"
+    "mainAtAudit": "678975d544373aac141aa2b041796effc057d453"
   },
   "parityClaim": "incomplete",
   "definitions": {
@@ -1300,7 +1300,24 @@
       ]
     }
   ],
-  "reviewedAt": "2026-10-17",
+  "reviewedAt": "2026-10-18",
   "scope": "seven-screen-operations",
-  "certification": null
+  "certification": null,
+  "deliveryAudit": {
+    "reviewedAt": "2026-10-18",
+    "sourceMainCommit": "678975d544373aac141aa2b041796effc057d453",
+    "scope": "68 seven-screen contracts; 56 master capability ledger tracked separately",
+    "capabilityStatusSnapshot": {
+      "covered": 33,
+      "partial": 21,
+      "gap": 2
+    },
+    "contractStatusSnapshot": {
+      "covered": 43,
+      "partial": 25,
+      "gap": 0
+    },
+    "evidence": "GitHub Actions PR #75 run 39146957149 succeeded at debf2ce56be8d5c65df6b12adc1d5e9731009fc5",
+    "note": "No physical-equipment QA requirement; covered means independently tested software for declared contract only. Future snapshots must be regenerated from current canonical files."
+  }
 }
