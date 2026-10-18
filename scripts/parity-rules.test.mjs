@@ -39,7 +39,7 @@ test('published desktop manifest prevents silently dropping a capability from th
   assert.throws(()=>verifyCapabilityInventory(matrix,inventory,[...published,'new-published-capability']),/missing published desktop capabilities/);
 });
 
-test('P6 covered LAN capability fails closed without a specific executable test and physical field report',()=>{
+test('P6 covered LAN capability depends on executable parity proof, not physical field inspection',()=>{
   const published=['desktop-windows-local-first','other-published-capability'];
   const row={id:'cap-001',capability:published[0],owner:'operations',dependsOn:[],status:'covered',
     testedContractRefs:[],sourceEvidence:{repo:DESKTOP_REPO,commit:DESKTOP_SHA,
@@ -60,11 +60,14 @@ test('P6 covered LAN capability fails closed without a specific executable test 
     'apps/api/test/p6.test.mjs':"test('cap-001 local first',()=>{const result=true;assert.equal(result, true);});",
     'docs/parity/field-qa/cap-001.md':'Independent physical QA for cap-001 verified on actual LAN'};
   const readSource=path=>files[path]||'';
-  assert.throws(()=>verifyCapabilityInventory(matrix,inventory,published,{readSource}),/FIELD_VERIFIED/);
+  // A covered capability means software code is complete: field inspection cannot block it.
+  assert.equal(verifyCapabilityInventory(matrix,inventory,published,{readSource}).covered,1);
   const withField={...row,fieldVerification:{status:'FIELD_VERIFIED',platform:'Linux',
     deviceModel:'physical laptop',independentReviewer:'Independent QA',verifiedAt:'2026-10-17',
     evidenceFile:'docs/parity/field-qa/cap-001.md'}};
   assert.equal(verifyCapabilityInventory(matrix,{...inventory,contracts:[withField,pending]},published,{readSource}).covered,1);
+  const unverified={...row,fieldVerification:{status:'NOT_TESTED'}};
+  assert.equal(verifyCapabilityInventory(matrix,{...inventory,contracts:[unverified,pending]},published,{readSource}).covered,1);
   assert.throws(()=>verifyCapabilityInventory(matrix,{...inventory,contracts:[
     {...withField,independentEvidence:{...row.independentEvidence,
       testContains:"test('unrelated'"}},pending]},published,{readSource}),/canonical ID/);
