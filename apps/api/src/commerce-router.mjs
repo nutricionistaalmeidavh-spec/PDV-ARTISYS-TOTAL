@@ -398,7 +398,7 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
       if(parts[2]==='items'&&parts[3]==='weighted'&&parts.length===4&&method==='POST')
         return json({sale:await service.addWeightedItem(tenant,branch,id,body,key)});
       if(parts[2]==='weight-items'&&parts.length===4&&method==='DELETE')
-        return json({sale:await service.removeWeightedItem(tenant,branch,id,parts[3])});
+        return json({sale:await service.removeWeightedItem(tenant,branch,id,parts[3],key)});
       if(parts[2]==='items'){
         if(parts.length===5&&parts[4]==='configured'){
           if(method==='PUT')return json({sale:await service.changeConfiguredItemQuantity(tenant,branch,id,parts[3],body.quantity)});
