@@ -541,6 +541,9 @@ try{
   await page.locator('#sidebar-nav [data-route=home]').click();
   await page.locator('#web-home-live [data-home-open-report]').waitFor({timeout:12000});
   assert.match(await page.locator('#web-home-live').innerText(),/Terminais com caixa aberto/i);
+  // home-003: real PWA shows authorized canonical alerts, not a fake fixture.
+  await page.locator('#web-home-operational-alerts').waitFor({timeout:12000});
+  assert.match(await page.locator('#web-home-operational-alerts').innerText(),/Alertas operacionais/);
   await page.locator('#web-home-live [data-home-open-report]').click();
   // P4: Shared ReportsV2 owner, no duplicate report rendering pipeline.
   await page.getByRole('heading',{name:'Relatórios comerciais'}).waitFor({timeout:12000});
@@ -605,6 +608,8 @@ try{
   await page.locator('#app-sidebar [data-route=reports]').click();
   await page.locator('[data-report-web=products][aria-selected=true]').waitFor();
   await page.waitForFunction(top=>document.querySelector('#route-content').scrollTop>=top-8,reportScroll,{timeout:12000});
+  // home-004: the canonical report tab regains focus, not just CSS-selected state.
+  await page.waitForFunction(()=>document.activeElement?.dataset.reportWeb==='products',null,{timeout:12000});
   assert.equal(await page.locator('#web-report-filter [name=from]').inputValue(),'2026-10-17');
   assert.equal(await page.locator('#web-report-filter [name=to]').inputValue(),'2026-10-17');
   await page.locator('[data-report-web=overview]').click();
