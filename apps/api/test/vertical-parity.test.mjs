@@ -482,3 +482,25 @@ test('R4 cap-035: direct food item bypasses production safely without duplicate 
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM r4_station_tickets').bind().first()).n,0);
  }finally{x.close();}
 });
+
+test('R4 cap-039: bakery weighted order reuses KDS, ticket and exact checkout price without second sales domain',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'BAKERYKG',name:'Biscoito por quilo',unit:'KG',salePriceCents:2999,trackStock:false})).body.product;
+   const quote=(await x.request('a','restaurant/weight/quote','POST',{branchId:'filial-a',productId:p.id,grams:450})).body.quote;
+   const order=await x.request('a','restaurant/bakery/orders','POST',{branchId:'filial-a',
+     items:[{productId:p.id,quantity:quote.quantity}]});
+   assert.equal(order.status,201,JSON.stringify(order.body));
+   assert.equal(order.body.order.ticketNumber,1);
+   assert.equal(order.body.order.totalCents,quote.totalCents);
+   const listed=await x.request('a','restaurant/bakery/orders?branchId=filial-a');
+   assert.equal(listed.status,200);assert.equal(listed.body.orders.length,1);
+   const ticket=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0].id;
+   await x.request('a',`restaurant/kitchen/${ticket}`,'PATCH',{branchId:'filial-a',status:'PREPARING'});
+   await x.request('a',`restaurant/kitchen/${ticket}`,'PATCH',{branchId:'filial-a',status:'READY'});
+   await x.request('a',`restaurant/orders/${order.body.order.id}/deliver`,'POST',{branchId:'filial-a'});
+   const sale=await x.request('a','sales','POST',{branchId:'filial-a',restaurantOrderId:order.body.order.id});
+   assert.equal(sale.status,201,JSON.stringify(sale.body));
+   assert.equal(sale.body.sale.totalCents,quote.totalCents);
+   assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM restaurant_orders').bind().first()).n,1);
+ }finally{x.close();}
+});
