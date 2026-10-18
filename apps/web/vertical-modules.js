@@ -142,7 +142,13 @@
   }
 
   async function renderModuleRoute(id){
-    if(api.webMode)return id==='FOOD'?root.PdvRestaurantWebUi?.show?.():root.PdvWebParityUi?.show(id);
+    if(api.webMode){
+      // The wholesale canonical workspace is the only implemented browser owner
+      // for B2B policies and orders. Do not route to the legacy generic parity page.
+      if(id==='FOOD')return root.PdvRestaurantWebUi?.show?.();
+      if(id==='WHOLESALE')return root.PdvWholesaleUi?.show?.();
+      return;
+    }
     if(!modules.length)await loadModules();
     const module=moduleForRoute(id);
     if(!moduleAllowed(module)){
