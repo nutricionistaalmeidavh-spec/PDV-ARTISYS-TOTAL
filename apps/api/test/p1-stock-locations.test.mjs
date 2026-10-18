@@ -33,7 +33,8 @@ test('P1 internal storage location is only an address; canonical stock ledger an
   assert.equal(locations.length,1);
   assert.equal(locations[0].assignedProducts,1);
   const products=await x.service.products('a','front');
-  assert.equal(products.find(item=>item.id===p.id).storageLocationCode,'A-01');
+  assert.equal(products.find(item=>item.id===p.id).sku,'BIN-01');
+  assert.deepEqual((await x.service.storageAssignments('a','front')).map(v=>v.locationCode),['A-01']);
   assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM inventory_movements').bind().first()).n,1);
   assert.equal((await x.db.prepare('SELECT balance_milli AS n FROM stock_positions WHERE product_id=?',p.id).first()).n,8000);
   assert.equal((await x.service.stock('a','front')).find(item=>item.productId===p.id).quantity,8);
@@ -50,7 +51,7 @@ test('P1 locations reject other branch/tenant and malformed codes; clearing does
   await x.service.assignStorageLocation('a','front','person',{productId:p.id,locationId:l.id},key());
   const unassigned=await x.service.assignStorageLocation('a','front','person',{productId:p.id,locationId:null},key());
   assert.equal(unassigned.locationId,null);
-  assert.equal((await x.service.products('a','front')).find(item=>item.id===p.id).storageLocationCode,null);
+  assert.equal((await x.service.storageAssignments('a','front')).length,0);
   assert.equal((await x.service.storageLocations('a','front'))[0].assignedProducts,0);
  }finally{x.close();}
 });
