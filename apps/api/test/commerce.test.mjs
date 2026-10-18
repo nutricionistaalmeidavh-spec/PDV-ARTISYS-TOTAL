@@ -1641,7 +1641,13 @@ test('checkout-005/authorization sale-open-authorization-desktop-v2 honors deskt
 
 test('checkout-005/tenant-isolation sale-open-tenant-desktop-v2 never reveals another tenant sale',async()=>{
   const vector=desktopV2('sale-open-tenant-desktop-v2','checkout-005/tenant-isolation');
-  referenceAuth(vector.capability,vector.permittedProfile,vector.deniedProfile);
+  const readable=desktopAuthorization.createAuthorizationService({
+    resolvePermissions:principal=>desktopProfiles.DEFAULT_PROFILE_PERMISSIONS[
+      principal.id==='owner'?vector.permittedProfile:vector.deniedProfile]||[]
+  });
+  assert.equal(readable.can({principal:{kind:'human',id:'owner'},capability:vector.capability}),true);
+  assert.equal(readable.can({principal:{kind:'human',id:'viewer'},capability:vector.capability}),true,
+    'desktop READ_ONLY permits sales.view; tenant scoping is an independent API constraint');
   const x=await setup();try{
     const opened=await x.write('a','sales',{branchId:'branch-a'});
     assert.equal(opened.status,201,opened.body.error);
