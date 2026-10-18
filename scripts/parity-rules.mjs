@@ -63,7 +63,27 @@ export function verifyCapabilityInventory(matrix,inventory,publishedCapabilities
     requireProof(Array.isArray(tested) && new Set(tested).size===tested.length &&
       tested.every(id=>row.dependsOn.includes(id) && statuses.get(id)==='covered'),
       'capability refers to an unverified seven-screen proof '+row.id);
-    if(row.status==='partial')requireProof(tested.length>0,'partial capability needs covered subset '+row.id);
+    if(row.status==='partial' && tested.length===0){
+      // Capabilities outside the seven-screen matrix (LAN, KDS, devices) have
+      // executable domain tests of their own. They must not be treated as
+      // absent only because they have no unrelated screen-level dependency.
+      const proof=row.implementationEvidence;
+      requireProof(typeof readSource==='function' && proof?.file && proof?.contains &&
+        proof?.testFile && proof?.testContains,
+        'partial capability needs covered subset or executable implementation proof '+row.id);
+      requireProof((proof.testFile.startsWith('apps/api/test/') ||
+        proof.testFile.startsWith('packages/core/test/') ||
+        proof.testFile.startsWith('scripts/')) && !proof.testFile.includes('..') &&
+        /^[A-Za-z0-9_./-]+$/.test(proof.testFile) &&
+        (proof.testFile.endsWith('.test.mjs') || proof.testFile.endsWith('.test.js')),
+        'partial implementation test path invalid '+row.id);
+      requireProof(readSource(proof.file).includes(proof.contains),
+        'partial implementation source not found '+row.id);
+      const testSource=readSource(proof.testFile);
+      requireProof(testSource.includes('test(') && proof.testContains.startsWith("test('") &&
+        testSource.includes(proof.testContains),
+        'partial implementation test not found '+row.id);
+    }
     if(row.status==='gap')requireProof(tested.length===0,'gap incorrectly claims verified subflow '+row.id);
     if(row.status==='covered'){
       requireProof(row.dependsOn.every(id=>statuses.get(id)==='covered'),
