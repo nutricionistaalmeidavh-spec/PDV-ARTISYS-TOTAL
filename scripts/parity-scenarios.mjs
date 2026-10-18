@@ -95,7 +95,9 @@ export function validateScenarioEvidence(scenarios,registry,readSource){
         'scenario evidence missing executable assertion '+result.scenarioId);
       const source=readSource(result.testFile);
       const at=source.indexOf(result.testContains);
-      requireProof(at>=0 && source.slice(at,at+8000).includes(result.testAssertionContains),
+      requireProof(at>=0 && source.slice(at,at+8000).includes(result.testAssertionContains) &&
+        source.slice(at,at+8000).includes(result.scenarioId) &&
+        source.slice(at,at+8000).includes(result.desktopFixtureId),
         'scenario assertion not attached to named test '+result.scenarioId);
       requireProof(typeof result.fixtureFile==='string'&&/^docs\/parity\/fixtures\/[a-z0-9-]+\.json$/.test(result.fixtureFile),
         'scenario proof missing versioned input/expected fixture '+result.scenarioId);
