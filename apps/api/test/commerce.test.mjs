@@ -2489,3 +2489,47 @@ test('R1 checkout-011/012: replayed customer and seller selections cannot revers
   assert.equal(receipts.n,4,'each distinct accepted selection has one transaction receipt');
  }finally{x.close();}
 });
+
+test('R1 checkout-017/019: configured item quantity, removal and stale replay preserve parent totals',async()=>{
+ const x=await setup();try{
+  const pid=await x.id('Crepe Personalizável','CREPE-R1',10);
+  const config={branchId:'branch-a',variants:[
+    {id:'normal',name:'Normal',priceDeltaCents:0},
+    {id:'large',name:'Grande',priceDeltaCents:300}
+  ],groups:[{id:'extras',name:'Extras',selectionType:'MULTIPLE',minSelections:1,maxSelections:1,
+    options:[{id:'cheese',name:'Queijo',priceDeltaCents:150}]}]};
+  assert.equal((await x.write('a','products/'+pid+'/configuration',config,{method:'PUT'})).status,200);
+  const sid=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
+  const addItem=variantId=>x.write('a',`sales/${sid}/items/configured`,{
+    branchId:'branch-a',productId:pid,quantity:1,variantId,selections:['cheese']});
+  assert.equal((await addItem('normal')).status,200);
+  const larger=await addItem('large');assert.equal(larger.status,200);
+  let lines=larger.body.sale.items;
+  assert.equal(lines.length,2);
+  const normal=lines.find(line=>line.configuration.variant.id==='normal');
+  const large=lines.find(line=>line.configuration.variant.id==='large');
+  assert.ok(normal?.id&&large?.id);
+  const route=`sales/${sid}/items/${normal.id}/configured`,oldKey=next();
+  assert.equal((await x.write('a',route,{branchId:'branch-a',quantity:2},{method:'PUT',key:oldKey})).status,200);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',quantity:3},{method:'PUT'})).status,200);
+  const replay=await x.write('a',route,{branchId:'branch-a',quantity:2},{method:'PUT',key:oldKey});
+  assert.equal(replay.status,200);
+  assert.equal(replay.body.sale.items.find(item=>item.id===normal.id).quantity,3);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',quantity:4},{method:'PUT',key:oldKey})).status,409,
+    'same request ID cannot apply a different configured quantity');
+  const largeRoute=`sales/${sid}/items/${large.id}/configured`,removeKey=next();
+  assert.equal((await x.write('a',largeRoute,{branchId:'branch-a'},{method:'DELETE',key:removeKey})).status,200);
+  const again=await addItem('large');assert.equal(again.status,200);
+  const newLarge=again.body.sale.items.find(line=>line.configuration.variant.id==='large');
+  assert.ok(newLarge?.id && newLarge.id!==large.id);
+  const stale=await x.write('a',largeRoute,{branchId:'branch-a'},{method:'DELETE',key:removeKey});
+  assert.equal(stale.status,200);
+  assert.equal(stale.body.sale.items.length,2);
+  assert.equal(stale.body.sale.items.find(item=>item.id===newLarge.id).quantity,1);
+  assert.equal(stale.body.sale.items.find(item=>item.id===normal.id).quantity,3);
+  const parent=await x.db.prepare('SELECT quantity_milli AS qty FROM sale_items WHERE sale_id=?').bind(sid).first();
+  assert.equal(parent.qty,4000,'shared physical parent mirrors its configured children exactly');
+  assert.equal((await x.write('b',route,{branchId:'branch-b',quantity:2},{method:'PUT',who:x.other})).status,404);
+  assert.equal((await x.write('a',route,{branchId:'branch-a',quantity:2},{method:'PUT',who:x.viewer})).status,403);
+ }finally{x.close();}
+});
