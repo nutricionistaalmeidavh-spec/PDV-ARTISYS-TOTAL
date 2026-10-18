@@ -44,9 +44,11 @@ self-hosted           periféricos
 - Dados e permissões são resolvidos no servidor; não usar o `tenant_id` enviado
   pelo navegador como autorização.
 - API não pode ser contornada por escrita do front-end, bridge ou SQLite do navegador.
-- LAN precisa HTTPS e cookies seguros, com autenticação real e testes multi-terminal;
-  o servidor dev atual é restrito a loopback. **Não expor o servidor dev com cookies
-  inseguros em 0.0.0.0**. A existência de configuração LAN não equivale a homologação.
+- A branch já inclui um **novo servidor HTTPS LAN** com PWA única, cookie Secure,
+  sessões canônicas, verificação de Host/Origin, isolamento RBAC e migrações SQLite
+  transacionais. O servidor dev continua restrito a loopback. A CI não substitui
+  certificado confiável e testes reais multi-terminal de balcão. Consulte
+  `docs/SELFHOST-LAN-HTTPS.md`.
 - Backups e restauração fazem parte do núcleo self-hosted, sem dependência de nuvem.
 
 ## Incremento já implementado: backup e restauração local seguros
@@ -99,3 +101,10 @@ rejeição de arquivo adulterado. Não comprova ainda ensaio operacional em ambi
 
 **Não realizar merge automático.** Revisar diffs, testes Node, API, Workerd,
 Chromium e homologação manual aplicável antes de integrar à `main`.
+
+## Incremento funcional: servidor HTTPS na LAN
+
+- `apps/api/src/https-lan-server.mjs` serve PWA e API autoritativa na mesma origem TLS sem serviços de terceiros.
+- `apps/api/src/local-migrations.mjs` e provisionador aplicam versões SQL somente uma vez, com integridade SHA-256, rejeição de schema adulterado e rejeição de base legada sem registro de migrações.
+- `apps/api/test/https-lan-server.test.mjs` testa requisições HTTPS reais, 3 usuários, 2 estabelecimentos, sessões independentes, Host, Origin, perfil e isolamento. `local-migrations.test.mjs` cobre restart, rollback e banco legado.
+- A capacidade `cap-002` permanece `gap`: faltam ensaios com dois terminais físicos, certificado de confiança real, transações concorrentes na UI e revisão independente.
