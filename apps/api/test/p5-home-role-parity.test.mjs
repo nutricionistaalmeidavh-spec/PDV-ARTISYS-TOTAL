@@ -6,6 +6,7 @@ import {createRequire} from 'node:module';
 
 const require=createRequire(import.meta.url);
 const policy=require('../../web/access-policy.js');
+const ui=require('../../web/ui-model.js');
 const {homeForUser}=require('../../web/home-role-model.js');
 const fixture=JSON.parse(readFileSync(new URL('../../../docs/parity/fixtures/p5-home-roles-desktop-pinned.json',import.meta.url)));
 function gitBlobSha(file){
@@ -15,7 +16,7 @@ function gitBlobSha(file){
 function user(entry,tenant='tenant-a'){
  return {tenantId:tenant,profile:{id:tenant+':'+entry.label,name:entry.label},permissions:[...entry.permissions]};
 }
-function tiles(u){return homeForUser(u).sections.flatMap(s=>s.tiles.map(t=>t.route));}
+function tiles(u){return homeForUser(u,ui.HOME_TILES).sections.flatMap(s=>s.tiles.map(t=>t.route));}
 function expected(label){const row=fixture.profiles.find(p=>p.label===label);assert.ok(row);return row;}
 
 test('home-002/nominal p5-home-roles-desktop-pinned-v1 executable original desktop role vectors',()=>{
