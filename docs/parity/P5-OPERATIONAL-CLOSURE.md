@@ -20,3 +20,7 @@ Esta entrega **não conclui automaticamente** todos os contratos P5. Ainda são 
 - Revalidação dos 68 contratos e 56 capacidades publicadas, com GitHub Actions aprovado no commit exato e evidência independente.
 
 A matriz permanece em estado `incomplete` até que **todos** os critérios aplicáveis estejam realmente satisfeitos; aumentar uma contagem sem teste não é conclusão.
+
+## Integração de migrações paralelas
+
+A migração de lotes de estoque é `0016_inventory_lot_receipts.sql`; o cadastro de mínimos é `0017_inventory_minimum_levels.sql`. A ordem é obrigatória nos dois backends. Os testes locais de inicialização validam 17 versões e a CI usa o D1 local em sequência. Esta PR incorpora as atualizações de comparativos e navegação da main, preservando controles canônicos de catálogo e vendas.
