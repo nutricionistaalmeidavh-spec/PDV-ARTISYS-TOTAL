@@ -2339,3 +2339,53 @@ test('checkout-010/failure-recovery price-override-retry-v4 audited API SQLite c
 
  }finally{x.close();}
 });
+
+test('R1 checkout transition retries are keyed: late suspend replay never re-suspends a resumed sale',async()=>{
+  const x=await setup();try{
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(opened.status,201,opened.body.error);
+    const saleId=opened.body.sale.id;
+    const suspendKey=next(),resumeKey=next();
+    const suspend=await x.write('a','sales/'+saleId+'/suspend',{branchId:'branch-a'},{key:suspendKey});
+    assert.equal(suspend.status,200,suspend.body.error);
+    assert.equal(suspend.body.sale.status,'SUSPENDED');
+    const resume=await x.write('a','sales/'+saleId+'/resume',{branchId:'branch-a'},{key:resumeKey});
+    assert.equal(resume.status,200,resume.body.error);
+    assert.equal(resume.body.sale.status,'OPEN');
+    // A delayed network retry of the first suspend must never roll back the later resume.
+    const delayed=await x.write('a','sales/'+saleId+'/suspend',{branchId:'branch-a'},{key:suspendKey});
+    assert.equal(delayed.status,200,delayed.body.error);
+    assert.equal(delayed.body.sale.status,'OPEN');
+    const replayResume=await x.write('a','sales/'+saleId+'/resume',{branchId:'branch-a'},{key:resumeKey});
+    assert.equal(replayResume.status,200,replayResume.body.error);
+    assert.equal(replayResume.body.sale.status,'OPEN');
+    const mutations=await x.db.prepare("SELECT scope,COUNT(*) AS n FROM commerce_mutations WHERE tenant_id=? AND scope LIKE 'sale.transition:%' GROUP BY scope").bind('a').all();
+    assert.equal(mutations.results.length,1,'both transitions share one sale-scoped ledger, distinct mutation IDs');
+    assert.equal(mutations.results[0].n,2,'no extra transition mutation can be inserted on replay');
+    const unexpected=await x.write('a','sales/'+saleId+'/resume',{branchId:'branch-a'});
+    assert.equal(unexpected.status,409,'new resume when already OPEN must remain a conflict');
+  }finally{x.close();}
+});
+
+test('R1 checkout transitions require mutation ID, respect roles and cross-tenant boundaries without mutation',async()=>{
+  const x=await setup();try{
+    const opened=await x.write('a','sales',{branchId:'branch-a'});
+    assert.equal(opened.status,201,opened.body.error);
+    const saleId=opened.body.sale.id;
+    const missing=await x.call(x.path('a','sales/'+saleId+'/suspend'),{
+      method:'POST',cookie:x.owner,body:{branchId:'branch-a'}
+    });
+    assert.equal(missing.status,400,'suspend retries must carry a stable operation key');
+    assert.equal((await x.write('a','sales/'+saleId+'/suspend',{branchId:'branch-a'},{who:x.viewer})).status,403);
+    assert.equal((await x.write('b','sales/'+saleId+'/suspend',{branchId:'branch-b'},{who:x.other})).status,404);
+    const unchanged=await x.get('a','sales/'+saleId+'?branchId=branch-a');
+    assert.equal(unchanged.body.sale.status,'OPEN');
+    const key=next();
+    assert.equal((await x.write('a','sales/'+saleId+'/cancel',{branchId:'branch-a'},{key})).status,200);
+    assert.equal((await x.write('a','sales/'+saleId+'/cancel',{branchId:'branch-a'},{key})).status,200,
+      'retry cancellation of an open sale must not report failure after commit');
+    const cancelled=await x.get('a','sales/'+saleId+'?branchId=branch-a');
+    assert.equal(cancelled.body.sale.status,'CANCELLED');
+    assert.equal((await x.write('a','sales/'+saleId+'/resume',{branchId:'branch-a'})).status,409);
+  }finally{x.close();}
+});
