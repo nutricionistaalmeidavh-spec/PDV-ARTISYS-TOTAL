@@ -256,7 +256,11 @@ export function createVerticalService(db){
      if(tableSessionId)await checkSession(t,b,tableSessionId);
      else if(!(await first('SELECT id FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,orderId)))
        throw err(404,'Pedido não encontrado.');
-     return first(`SELECT s.id AS saleId,s.status,s.total_cents AS totalCents,s.sale_number AS saleNumber,
+     return first(`SELECT s.id AS saleId,s.status,
+         CASE WHEN s.status='OPEN' THEN MAX(0,COALESCE((SELECT SUM(ROUND(si.quantity_milli*si.unit_price_cents/1000.0))
+           FROM sale_items si WHERE si.tenant_id=s.tenant_id AND si.branch_id=s.branch_id AND si.sale_id=s.id),0)-s.discount_cents)
+         ELSE s.total_cents END AS totalCents,
+         s.sale_number AS saleNumber,
          s.terminal_id AS terminalId
        FROM restaurant_sale_links link JOIN sales s ON s.id=link.sale_id AND s.tenant_id=link.tenant_id AND s.branch_id=link.branch_id
        WHERE link.tenant_id=? AND link.branch_id=?
