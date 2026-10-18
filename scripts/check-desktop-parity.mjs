@@ -62,7 +62,7 @@ function visit(id){
 }
 for(const id of dependencies.keys())visit(id);
 const sevenComplete=verifyClaim(all,matrix.parityClaim,matrix.certification||null,'seven-screen-operations');
-const extra=verifyCapabilityInventory(matrix,inventory,manifest);
+const extra=verifyCapabilityInventory(matrix,inventory,manifest,checkedFile);
 const allComplete=sevenComplete && inventory.fullSystemClaim==='complete';
 const readme=checkedFile('README.md');
 if(!allComplete)requireProof(!/PARIDADE COMPLETA COM O DESKTOP|100% DE PARIDADE DESKTOP/i.test(readme),
