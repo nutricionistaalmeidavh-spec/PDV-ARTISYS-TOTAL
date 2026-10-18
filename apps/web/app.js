@@ -1044,7 +1044,7 @@
     content.innerHTML=`<section class="page web-products-page"><header class="page-head">
       <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
       <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
-      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button><button id="web-new-category" class="secondary-button" type="button">+ Categoria</button><button id="web-import-csv" class="secondary-button" type="button">Importar CSV</button>':''}
+      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button><button id="web-new-category" class="secondary-button" type="button">+ Categoria</button><button id="web-import-csv" class="secondary-button" type="button">Importar CSV/XLSX</button>':''}
       ${canStock?'<button id="web-purchase-orders" class="secondary-button" type="button">Pedidos de compra</button>':''}
       ${canManage?`<button id="web-toggle-inactive" class="secondary-button" type="button">${showInactiveWebProducts?'Ocultar inativos':'Mostrar inativos'}</button>`:''}</header>
       <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
@@ -1254,11 +1254,11 @@
   }
 
   async function openWebCsvImport(){
-    openModal('Importar produtos por CSV',`<section class="web-stock-history">
+    openModal('Importar produtos por CSV ou XLSX',`<section class="web-stock-history">
       <p>O arquivo será validado antes da gravação. Todos os preços devem estar em centavos inteiros,
         sem símbolo de moeda ou vírgula decimal. A importação cria produtos; não modifica os existentes.</p>
-      <div class="field"><label>Arquivo CSV (até 13,5 KB)
-        <input type="file" id="web-import-file" accept=".csv,text/csv" /></label></div>
+      <div class="field"><label>Arquivo CSV (13,5 KB) ou XLSX (512 KB, até 100 produtos)
+        <input type="file" id="web-import-file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label></div>
       <p>Colunas obrigatórias: <code>sku;name;salePriceCents</code>.
         Opcionais: <code>unit;barcode;brand;trackStock;categoryId</code>.</p>
       <p>Exemplo: <code>REF-001;Produto de exemplo;1290</code> (R$ 12,90).</p>
@@ -1273,9 +1273,15 @@
       input.addEventListener('change',async()=>{
         confirm.disabled=true;loadedCsv='';mutationId='';feedback.textContent='';
         const file=input.files?.[0];if(!file)return;
-        if(file.size>13500){feedback.textContent='Arquivo acima de 13,5 KB. Divida o catálogo em lotes menores.';return;}
+        const isXlsx=/\.xlsx$/i.test(file.name),isCsv=/\.csv$/i.test(file.name);
+        if(!isXlsx&&!isCsv){feedback.textContent='Selecione um arquivo .csv ou .xlsx válido.';return;}
+        if(file.size>(isXlsx?512*1024:13500)){
+          feedback.textContent='Arquivo muito grande. Use até 100 produtos por importação.';return;
+        }
         try{
-          const csv=await file.text();
+          const csv=isXlsx
+            ?await window.PdvCatalogXlsx.toCsv(await file.arrayBuffer())
+            :await file.text();
           const result=await api.previewCatalogCsv(csv);
           host.innerHTML=`<p><strong>${result.validRows}</strong> válidos de
             ${result.totalRows} itens; <strong>${result.invalidRows}</strong> com erros.</p>
