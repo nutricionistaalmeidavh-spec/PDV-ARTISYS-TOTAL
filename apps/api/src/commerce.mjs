@@ -1729,6 +1729,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         if(commissionCents>0)statements.push(q(`INSERT INTO seller_commission_ledger(id,tenant_id,branch_id,seller_id,sale_id,sale_item_id,kind,amount_cents,reference_key,occurred_at)
           VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,sellerId,id,line.parentItemId,'EARNED',commissionCents,'sale:'+id+':item:'+line.id,completedAt));
       }
+      if(splitShares)for(const tender of splitShares)statements.push(q('INSERT INTO r4_split_tenders(tenant_id,branch_id,sale_id,share_index,amount_cents,method,recorded_at) VALUES(?,?,?,?,?,?,?)',tenant,branch,id,tender.index,tender.amountCents,tender.method,completedAt));
       const wholesaleOrder=await first('SELECT id FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND sale_id=? AND status=?',tenant,branch,id,'CONFIRMED');
       if(wholesaleOrder)statements.push(q("UPDATE wholesale_orders SET status='FULFILLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND status='CONFIRMED'",completedAt,tenant,branch,id));
       // Stock is decremented only in the same D1 batch; no secondary EventBus
