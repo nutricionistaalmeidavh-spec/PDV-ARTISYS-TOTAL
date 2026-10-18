@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import {join} from 'node:path';
+import {readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {openLocalDatabase} from '../src/local-db.mjs';
 import {applyLocalMigrations} from '../src/local-migrations.mjs';
