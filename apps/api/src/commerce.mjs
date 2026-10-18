@@ -1580,8 +1580,25 @@ export function createCommerceService(db,{now=nowISO}={}){
       const pricedRows=await pricedSaleLines(all,tenant,branch,id,rows);
       const mapped=pricedRows.map(row=>({unitPriceCents:row.unit_price_cents,quantity:row.quantity_milli/1000}));
       const totals=calculateSaleTotals({items:mapped,discountCents:sale.discount_cents});
-      const payments=body?.payments;
-      if(!Array.isArray(payments)||!payments.length||payments.length>6)throw error(400,'Informe a forma de pagamento.');
+      let link=null;
+      try{link=await first('SELECT table_session_id AS sessionId FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=? AND sale_id=?',tenant,branch,id);}
+      catch(e){if(!/no such table: restaurant_sale_links/i.test(String(e?.message)))throw e;}
+      const plan=link?.sessionId?await first('SELECT parts,service_charge_bps AS bps FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,link.sessionId):null;
+      let splitShares=null;
+      if(plan){
+        if(sale.discount_cents)throw error(409,'Divisão exige remoção de desconto manual antes de cobrar.');
+        if(!Array.isArray(body?.shares)||body.shares.length!==plan.parts)throw error(409,'Informe pagamento correspondente a cada parte da comanda.');
+        const per=Math.floor(totals.totalCents/plan.parts),extra=totals.totalCents%plan.parts,seen=new Set();
+        splitShares=body.shares.map(share=>{
+          const index=share?.index,amountCents=share?.amountCents;
+          if(!Number.isInteger(index)||index<1||index>plan.parts||seen.has(index)||
+             amountCents!==per+(index<=extra?1:0)||!['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(share?.method))
+            throw error(409,'Parcela divergente ou repetida. Confira a divisão antes de receber.');
+          seen.add(index);return {index,amountCents,method:share.method};
+        });
+      }else if(body?.shares)throw error(400,'Esta venda não possui divisão de conta configurada.');
+      const payments=splitShares||body?.payments;
+      if(!Array.isArray(payments)||!payments.length||payments.length>(splitShares?50:6))throw error(400,'Informe a forma de pagamento.');
       const normalized=payments.map(p=>{
         const method=normalizeMethod(p?.method);
         if(!allowedPayments.has(method)||!integer(p?.amountCents)||p.amountCents<=0)
