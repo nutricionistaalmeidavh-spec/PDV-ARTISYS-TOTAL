@@ -602,6 +602,14 @@
       role="tab" aria-selected="${state.view===key?'true':'false'}"
       tabindex="${state.view===key?'0':'-1'}"
       aria-controls="report-v2-body">${viewLabels[key]}</button>`).join('');
+    // A report date range MUST NOT be presented as filtering a snapshot that ignores it.
+    const viewScopeNotice={
+      inventory:'Posição de estoque atual da filial. O intervalo de datas não altera estes saldos.',
+      cash:'Até 50 sessões de caixa mais recentes. O intervalo de datas ainda não filtra essas sessões.',
+      finance:'Saldos atuais de contas manuais. O intervalo de datas não altera estes saldos.',
+      coverage:'A cobertura considera os 30 dias anteriores à data final. A data inicial não se aplica.',
+      targets:'Metas e comissões são consultadas pelo mês de referência na própria aba, não pelo intervalo acima.'
+    }[state.view]||'';
     content.innerHTML=`<section class="ops-page report-v2-page web-report-page">
       <header class="ops-head"><div><span class="web-section-kicker">DADOS CANÔNICOS · API LOCAL OU CLOUD</span>
         <h1>Relatórios comerciais</h1><p>Dados registrados pelo PDV Total, separados por filial.</p></div>
@@ -613,7 +621,8 @@
         <label>De<input name="from" type="date" class="ops-input" value="${escapeHtml(fromDate)}" required></label>
         <label>Até<input name="to" type="date" class="ops-input" value="${escapeHtml(toDate)}" required></label>
         <button class="ops-primary" type="submit">Aplicar período</button>
-      </form><nav class="report-v2-tabs" role="tablist" aria-label="Categorias de relatório">${tabs}</nav>
+      </form>${viewScopeNotice?'<p class="ops-muted" role="note">'+escapeHtml(viewScopeNotice)+'</p>':''}
+      <nav class="report-v2-tabs" role="tablist" aria-label="Categorias de relatório">${tabs}</nav>
       <div id="report-v2-body" role="tabpanel"><section class="ops-card">
         ${views[state.view]||overview}</section></div>
       <p class="ops-muted">O XLSX contém os dados desta aba; em Vendas detalhadas exporta todos os registros filtrados dentro do limite da API (não apenas a página). O PDF usa a impressão do navegador.</p>
