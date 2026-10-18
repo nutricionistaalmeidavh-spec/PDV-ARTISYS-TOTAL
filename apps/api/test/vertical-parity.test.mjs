@@ -392,3 +392,57 @@ test('R4 cap-037/038: counter ticket daily sequence and delivery courier events 
    assert.equal((await x.db.prepare('SELECT count(*) AS n FROM restaurant_orders WHERE tenant_id=?').bind('a').first()).n,3);
  }finally{x.close();}
 });
+
+test('R4 cap-032: partial item transfer preserves quantity and two canonical table settlements',async()=>{
+ const x=await setup();try{
+   const product=(await x.request('a','products','POST',{branchId:'filial-a',sku:'TRANSFER-ITEM',name:'Prato transferível',salePriceCents:1500,trackStock:false})).body.product;
+   const ta=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Origem itens'})).body.table;
+   const tb=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Destino itens'})).body.table;
+   const a=(await x.request('a',`restaurant/tables/${ta.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+   const b=(await x.request('a',`restaurant/tables/${tb.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+   const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:a.id,items:[{productId:product.id,quantity:2}]})).body.order;
+   const kitchen=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0];
+   await x.request('a',`restaurant/kitchen/${kitchen.id}`,'PATCH',{branchId:'filial-a',status:'PREPARING'});
+   await x.request('a',`restaurant/kitchen/${kitchen.id}`,'PATCH',{branchId:'filial-a',status:'READY'});
+   await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'});
+   const item=await x.db.prepare('SELECT id FROM restaurant_order_items WHERE order_id=?').bind(order.id).first();
+   const transfer=await x.request('a',`restaurant/sessions/${a.id}/transfer-items`,'POST',
+     {branchId:'filial-a',targetSessionId:b.id,items:[{orderItemId:item.id,quantity:1}]});
+   assert.equal(transfer.status,200,JSON.stringify(transfer.body));
+   assert.equal((await x.request('a',`restaurant/sessions/${a.id}/transfer-items`,'POST',
+     {branchId:'filial-a',targetSessionId:b.id,items:[{orderItemId:item.id,quantity:2}]})).status,409);
+   const sa=await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:a.id});
+   const sb=await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:b.id});
+   assert.equal(sa.status,201,JSON.stringify(sa.body));assert.equal(sb.status,201,JSON.stringify(sb.body));
+   assert.equal(sa.body.sale.totalCents,1500);assert.equal(sb.body.sale.totalCents,1500);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM restaurant_orders').bind().first()).n,1);
+ }finally{x.close();}
+});
+
+test('R4 cap-032: equal split plus explicit service charge posts through one sale and immutable tenders',async()=>{
+ const x=await setup();try{
+   const product=(await x.request('a','products','POST',{branchId:'filial-a',sku:'SPLITBASE',name:'Refeição',salePriceCents:1000,trackStock:false})).body.product;
+   const charge=(await x.request('a','products','POST',{branchId:'filial-a',sku:'SERVICE_CHARGE',name:'Taxa de serviço',salePriceCents:0,trackStock:false})).body.product;
+   const table=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Split'})).body.table;
+   const session=(await x.request('a',`restaurant/tables/${table.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+   const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:session.id,items:[{productId:product.id,quantity:1}]})).body.order;
+   const k=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0].id;
+   await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'PREPARING'});
+   await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'READY'});
+   await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'});
+   const plan=await x.request('a',`restaurant/sessions/${session.id}/split`,'POST',
+     {branchId:'filial-a',parts:2,serviceChargeBps:1000,serviceChargeProductId:charge.id});
+   assert.equal(plan.status,200,JSON.stringify(plan.body));assert.deepEqual(plan.body.plan.shares,[550,550]);
+   const opened=await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:session.id});
+   assert.equal(opened.status,201,JSON.stringify(opened.body));assert.equal(opened.body.sale.totalCents,1100);
+   const saleId=opened.body.sale.id;
+   await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0});
+   assert.equal((await x.request('a',`sales/${saleId}/complete`,'POST',{branchId:'filial-a',payments:[{method:'PIX',amountCents:1100}]})).status,409);
+   const done=await x.request('a',`sales/${saleId}/complete`,'POST',{branchId:'filial-a',
+     shares:[{index:1,amountCents:550,method:'PIX'},{index:2,amountCents:550,method:'CASH'}]});
+   assert.equal(done.status,200,JSON.stringify(done.body));
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM r4_split_tenders WHERE sale_id=?').bind(saleId).first()).n,2);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales WHERE tenant_id=?').bind('a').first()).n,1);
+   assert.equal((await x.request('a',`restaurant/sessions/${session.id}/close`,'POST',{branchId:'filial-a'})).status,200);
+ }finally{x.close();}
+});
