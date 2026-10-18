@@ -180,13 +180,13 @@
   }
   async function printSale(sale,opts={}) {
     if(!sale||sale.status!=='COMPLETED'||!sale.id)throw new Error('Venda concluída obrigatória.');
-    if(settings().printerMode==='bridge' && !opts.forceBrowser){const job=await root.PdvLocalBridge.print(sale,receiptText(sale));return {queued:true,job};}
+    if(settings().printerMode==='bridge' && !opts.forceBrowser){const job=await root.PdvLocalBridge.print(sale,receiptText(sale,{branding:opts.branding}),{reprint:opts.reprint===true});return {queued:true,job};}
     if(settings().printerMode==='serial' && !opts.forceBrowser) {
       // On-demand serial transport; never send an automatic second copy through browser.
-      await writeSerial('printer',escpos(receiptText(sale),{cut:settings().cut}),settings().printerBaud);
+      await writeSerial('printer',escpos(receiptText(sale,{branding:opts.branding}),{cut:settings().cut}),settings().printerBaud);
       return {sentToSerial:true};
     }
-    return openPrintDocument(receiptHtml(sale,settings()),opts.popup);
+    return openPrintDocument(receiptHtml(sale,{...settings(),branding:opts.branding}),opts.popup);
   }
   function showSettings() {
     const previous=root.document.getElementById('pdv-peripherals-dialog');
@@ -199,12 +199,24 @@
     root.document.body.append(dialog);
     const form=dialog.querySelector('form');
     const saved=settings();
-    const receiptBrand=root.PdvReceiptBranding?.read()||{name:'PDV TOTAL',address:'',phone:'',logoDataUrl:null};
+    let receiptBrand=root.PdvReceiptBranding?.read()||{name:'PDV TOTAL',address:'',phone:'',logoDataUrl:null};
     for(const [key,value] of [['receiptName',receiptBrand.name],['receiptAddress',receiptBrand.address],['receiptPhone',receiptBrand.phone]])form.elements.namedItem(key).value=value;
     for(const key of ['paperMm','printerMode','scaleProfile','scaleBaud','uranoCommand','printerBaud','drawerBaud'])form.elements.namedItem(key).value=String(saved[key]);
     form.elements.namedItem('cut').checked=saved.cut;
     form.elements.namedItem('autoPrint').checked=saved.autoPrint;
     const status=dialog.querySelector('#pdv-peripherals-status');
+    if(root.PdvReceiptBranding?.load){
+      status.textContent='Carregando identificação da filial…';
+      void root.PdvReceiptBranding.load().then(value=>{
+        receiptBrand=value;
+        for(const [field,key] of [['receiptName','name'],['receiptAddress','address'],['receiptPhone','phone']])
+          form.elements.namedItem(field).value=value[key]||'';
+        status.textContent='Identificação carregada do servidor.';
+      }).catch(error=>{
+        status.textContent='Não foi possível ler a identidade canônica: '+(error?.message||'Conexão indisponível.')+
+          ' A identificação não pode ser alterada offline.';
+      });
+    }
     async function refreshBridgeJobs(){
       const data=await root.PdvLocalBridge.jobs();
       const pane=dialog.querySelector('#pdv-bridge-history');
@@ -270,14 +282,15 @@
             if(!root.PdvReceiptBranding.normalize({logoDataUrl}).logoDataUrl)
               throw Error('Arquivo não contém um logotipo PNG válido.');
           }
-          root.PdvReceiptBranding.write({
+          const updated=await root.PdvReceiptBranding.save({
             name:form.elements.namedItem('receiptName').value,
             address:form.elements.namedItem('receiptAddress').value,
             phone:form.elements.namedItem('receiptPhone').value,
             logoDataUrl});
+          receiptBrand=updated;
           if(token)root.PdvLocalBridge.pair(token);
           saveSettings({...settings(),...Object.fromEntries(new FormData(form)),cut:form.elements.namedItem('cut').checked,autoPrint:form.elements.namedItem('autoPrint').checked});
-          status.textContent='Preferências locais da filial salvas; imagens apenas no diálogo/PDF.';
+          status.textContent='Identificação sincronizada com o servidor. Preferências dos dispositivos salvas neste navegador.';
         }
       }catch(error){status.textContent=error?.message||'Falha ao acessar dispositivo.';}
     });
