@@ -161,7 +161,10 @@ export function createVerticalService(db){
    },
    async createFoodOrder(t,b,user,body,key){
      await branchExists(t,b);
-     const fulfillment=body.fulfillment||'TABLE';isSafeStatus(fulfillment,['TABLE','DELIVERY','PICKUP']);
+     const serviceChannel=body.fulfillment||'TABLE';
+     isSafeStatus(serviceChannel,['TABLE','DELIVERY','PICKUP','COUNTER']);
+     const fulfillment=serviceChannel==='COUNTER'?'PICKUP':serviceChannel;
+     const useTicket=body.useTicket===true;
      const sid=body.tableSessionId||null;
      if(fulfillment==='TABLE'){
        const s=await checkSession(t,b,sid);
@@ -182,9 +185,14 @@ export function createVerticalService(db){
      }
      const stations=[...new Set(routed)];
      return mutate(t,'restaurant.order:'+b,key,async()=>{
-       const id=uuid(),stamp=now(),result={id,status:'OPEN',fulfillment,tableSessionId:sid,totalCents:totals.totalCents,items:lines};
-       const statements=[q(`INSERT INTO restaurant_orders(id,tenant_id,branch_id,table_session_id,customer_id,fulfillment,status,address,contact,note,total_cents,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-         id,t,b,sid,body.customerId||null,fulfillment,'OPEN',clean(body.address,300)||null,clean(body.contact,120)||null,clean(body.note,500)||null,totals.totalCents,user,stamp,stamp)];
+       const id=uuid(),stamp=now(),day=useTicket?stamp.slice(0,10):null;
+       const previous=useTicket?await first('SELECT COALESCE(MAX(ticket_number),0) AS last FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND ticket_day=?',t,b,day):null;
+       const ticketNumber=useTicket?previous.last+1:null;
+       if(ticketNumber>99999)throw err(409,'Limite diário de senhas atingido.');
+       const result={id,status:'OPEN',fulfillment,serviceChannel,tableSessionId:sid,totalCents:totals.totalCents,
+         ticketDay:day,ticketNumber,items:lines};
+       const statements=[q(`INSERT INTO restaurant_orders(id,tenant_id,branch_id,table_session_id,customer_id,fulfillment,status,address,contact,note,total_cents,created_by,created_at,updated_at,service_channel,ticket_day,ticket_number) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         id,t,b,sid,body.customerId||null,fulfillment,'OPEN',clean(body.address,300)||null,clean(body.contact,120)||null,clean(body.note,500)||null,totals.totalCents,user,stamp,stamp,serviceChannel,day,ticketNumber)];
        for(const l of lines)statements.push(q('INSERT INTO restaurant_order_items(id,tenant_id,branch_id,order_id,product_id,product_name,quantity_milli,unit_price_cents) VALUES(?,?,?,?,?,?,?,?)',uuid(),t,b,id,l.productId,l.name,l.milli,l.unitPriceCents));
        statements.push(q('INSERT INTO restaurant_kitchen_tickets(id,tenant_id,branch_id,order_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',uuid(),t,b,id,'NEW',stamp,stamp));
        for(const stationId of stations)statements.push(q(
@@ -208,11 +216,27 @@ export function createVerticalService(db){
        return {statements,result};
      });
    },
+   async dispatchFoodOrder(t,b,id,body,key){
+     await branchExists(t,b);
+     const row=await first('SELECT status,fulfillment FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
+     if(!row)throw err(404,'Pedido não encontrado.');
+     if(row.fulfillment!=='DELIVERY'||row.status!=='READY')throw err(409,'Entrega precisa estar pronta para despacho.');
+     const courier=clean(body.courierName,120);
+     if(!courier)throw err(400,'Informe o nome do entregador.');
+     return mutate(t,'r4.dispatch:'+b+':'+id,key,async()=>{
+       const dispatchedAt=now(),result={id,status:'DISPATCHED',courierName:courier,dispatchedAt};
+       return {result,statements:[q('INSERT INTO r4_delivery_dispatches(tenant_id,branch_id,order_id,courier_name,dispatched_at) VALUES(?,?,?,?,?)',
+         t,b,id,courier,dispatchedAt)]};
+     });
+   },
    async deliverFoodOrder(t,b,id,key){
      await branchExists(t,b);
      const order=await first('SELECT id,status FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
      if(!order)throw err(404,'Pedido não encontrado.');
      if(order.status!=='READY')throw err(409,'Só é possível entregar pedido pronto.');
+     if((await first('SELECT fulfillment FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id))?.fulfillment==='DELIVERY'&&
+        !(await first('SELECT order_id FROM r4_delivery_dispatches WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,id)))
+       throw err(409,'Registre o despacho e o entregador antes da entrega final.');
      return mutate(t,'restaurant.deliver:'+id,key,async()=>{
        const result={id,status:'DELIVERED'};
        return {statements:[q("UPDATE restaurant_orders SET status='DELIVERED',updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='READY'",now(),t,b,id)],result};
