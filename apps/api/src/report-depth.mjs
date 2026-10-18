@@ -8,23 +8,45 @@ const csvCell=value=>'"'+String(value??'')
 export function createReportDepthService(h){
  const {all,branchExists,period,stamp,error,salesHistory}=h;
  const currency=cents=>(Number(cents||0)/100).toFixed(2).replace('.',',');
+ // Resolve names only for the current page. User names require active tenant membership;
+ // customer names are scoped by tenant. Historical identity IDs remain authoritative.
+ const namedDetails=async(tenant,branch,filters={})=>{
+   const page=await salesHistory(tenant,branch,{
+     ...filters,limit:filters.limit??25,offset:filters.offset??0
+   });
+   const sales=page.items||[];
+   const sellers=[...new Set(sales.flatMap(s=>[s.sellerId,s.operatorId]).filter(Boolean))];
+   const customers=[...new Set(sales.map(s=>s.customerId).filter(Boolean))];
+   const sellerNames=sellers.length?await all(`SELECT u.id,u.display_name AS name
+     FROM users u JOIN tenant_memberships tm ON tm.user_id=u.id
+     WHERE tm.tenant_id=? AND tm.active=1 AND u.id IN (${sellers.map(()=>'?').join(',')})`,
+     tenant,...sellers):[];
+   const customerNames=customers.length?await all(`SELECT id,name FROM customers
+     WHERE tenant_id=? AND id IN (${customers.map(()=>'?').join(',')})`,
+     tenant,...customers):[];
+   const sellerLookup=new Map(sellerNames.map(x=>[x.id,x.name]));
+   const customerLookup=new Map(customerNames.map(x=>[x.id,x.name]));
+   return {...page,items:sales.map(s=>({...s,
+     sellerName:s.sellerId?sellerLookup.get(s.sellerId)||null:null,
+     operatorName:s.operatorId?sellerLookup.get(s.operatorId)||null:null,
+     customerName:s.customerId?customerLookup.get(s.customerId)||null:'Consumidor não identificado'
+   }))};
+ };
  return {
-  details:(tenant,branch,filters={})=>salesHistory(tenant,branch,{
-   ...filters,limit:filters.limit??25,offset:filters.offset??0
-  }),
+  details:namedDetails,
   async detailedCsv(tenant,branch,filters={}){
    // If the result cannot be exported in full, refuse instead of making an
    // unlabelled partial CSV that a customer could interpret as a complete audit.
-   const first=await salesHistory(tenant,branch,{...filters,limit:100,offset:0});
+   const first=await namedDetails(tenant,branch,{...filters,limit:100,offset:0});
    if(first.total>MAX_EXPORT_SALES)
      throw error(413,'Mais de 2000 vendas. Divida o período para exportar sem truncamento.');
    const sales=[...first.items];
    for(let offset=100;offset<first.total;offset+=100){
-    const batch=await salesHistory(tenant,branch,{...filters,limit:100,offset});
+    const batch=await namedDetails(tenant,branch,{...filters,limit:100,offset});
     sales.push(...batch.items);
    }
    let rows=0;
-   const lines=[['Venda','Data','Estado','Operador','Vendedor','Cliente ID',
+   const lines=[['Venda','Data','Estado','Operador','Vendedor','Cliente ID','Cliente',
     'SKU','Produto','Configuração vendida','Observação','Quantidade','Preço unitário (R$)','Bruto do item (R$)',
     'Desconto da venda (R$)','Reembolso da venda (R$)','Pagamentos'].map(csvCell).join(';')];
    for(const sale of sales){
@@ -32,7 +54,8 @@ export function createReportDepthService(h){
      rows++;
      if(rows>10000)throw error(413,'Mais de 10 mil itens. Divida o período para exportar sem truncamento.');
      lines.push([sale.saleNumber,sale.completedAt||'',sale.status,
-       sale.operatorId,sale.sellerId,sale.customerId||'',item.sku,item.productName,
+       sale.operatorName||sale.operatorId,sale.sellerName||sale.sellerId,
+       sale.customerId||'',sale.customerName||'',item.sku,item.productName,
        configurationText(item),item.note||'',String(item.quantity).replace('.',','),currency(item.unitPriceCents),
        currency(item.totalCents),currency(sale.discountCents),
        currency(sale.refundedCents),
