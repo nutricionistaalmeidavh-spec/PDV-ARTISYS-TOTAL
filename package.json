@@ -14,10 +14,11 @@
     "test:api": "cd apps/api && npm test",
     "test:core": "node --experimental-sqlite --test packages/core/test/*.test.js",
     "check:web": "node --check apps/web/report-xlsx.js && node --check apps/web/reporting-v2.js && node --check apps/web/api-client.js && node --check apps/web/advanced-finance-web.js && node --check apps/web/web-parity-ui.js && node --check apps/web/restaurant-web-ui.js && node --check apps/web/r2-lan-settings-ui.js && node --check apps/web/r4-advanced-ui.js && node --check apps/web/app.js && node --check apps/web/operational-pages.js && node --check apps/web/catalog-xlsx-import.js && node --check apps/web/peripherals-web.js && node --check apps/web/local-bridge-client.js && node --check apps/web/vertical-api-client.js && node --check tools/local-hardware-bridge/main.mjs && node --check tools/local-hardware-bridge/bridge.mjs && node --check tools/local-hardware-bridge/stty-args.mjs && node --check apps/web/post-sale-receipt-ui.js && node --check scripts/build-web.mjs",
-    "test:parity": "node --test scripts/parity-rules.test.mjs scripts/p6-capability-report.test.mjs scripts/r0-r1-audit.test.mjs scripts/parity-scenarios.test.mjs scripts/parity-desktop-pricing.test.mjs scripts/parity-docs.test.mjs && node scripts/check-desktop-parity.mjs && node scripts/audit-parity-evidence.mjs && node --test scripts/report-xlsx.test.mjs",
+    "test:parity": "node --test scripts/parity-rules.test.mjs scripts/p6-capability-report.test.mjs scripts/r0-r1-audit.test.mjs scripts/parity-scenarios.test.mjs scripts/parity-desktop-pricing.test.mjs scripts/parity-docs.test.mjs scripts/saas-delivery-scope.test.mjs && node scripts/check-desktop-parity.mjs && node scripts/audit-parity-evidence.mjs && node --test scripts/report-xlsx.test.mjs",
     "audit:parity": "node scripts/check-desktop-parity.mjs && node scripts/audit-parity-evidence.mjs",
     "test:selfhost": "node --experimental-sqlite --test scripts/selfhost-backup.test.mjs",
     "report:parity": "node scripts/p6-capability-report.mjs",
+    "report:saas": "node scripts/p6-capability-report.mjs --saas",
     "serve:lan": "npm run build && node --experimental-sqlite apps/api/src/https-lan-server.mjs",
     "audit:r0-r1": "node scripts/r0-r1-audit.mjs"
   },
