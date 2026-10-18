@@ -327,7 +327,11 @@ export function createVerticalService(db){
        return {result:{id,status:'CANCELLED'},statements:[
          q("UPDATE restaurant_orders SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN'",stamp,t,b,id),
          q("UPDATE restaurant_kitchen_tickets SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND order_id=? AND status='NEW'",stamp,t,b,id),
-         q("UPDATE r4_station_tickets SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND order_id=? AND status='NEW'",stamp,t,b,id)
+         q("UPDATE r4_station_tickets SET status='CANCELLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND order_id=? AND status='NEW'",stamp,t,b,id),
+         q(`UPDATE r4_kitchen_print_jobs SET status='CANCELLED',lease_token=NULL,leased_until=NULL,updated_at=?
+           WHERE tenant_id=? AND branch_id=? AND station_ticket_id IN
+            (SELECT st.id FROM r4_station_tickets st WHERE st.tenant_id=? AND st.branch_id=? AND st.order_id=?)
+           AND status IN('PENDING','FAILED','LEASED')`,stamp,t,b,t,b,id)
        ]};
      });
    },
