@@ -1,13 +1,15 @@
 
-# Roadmap v2 — Paridade única do PDV Total (56 capacidades)
+# Roadmap vigente — entrega SaaS web como prioridade; paridade desktop como referência (56 IDs)
 
-**Fonte de verdade:** as 56 capacidades publicadas pelo desktop PDV-ARTISYS no commit 7efea9c61f75be1536a1e516e917218f2b8bf2bf. **Produto:** PDV-ARTISYS-TOTAL, web/PWA com API gratuita Node.js + SQLite; Cloudflare opcional.
+**Produto-alvo:** PDV Total **web/SaaS hospedado**: UI responsiva/PWA no navegador em PC, tablet e celular; API autoritativa remota por HTTPS, autenticação, empresas/filiais isoladas e Cloudflare Workers + D1 na faixa gratuita ou infraestrutura hospedada equivalente. **Não exige instalador, servidor local nem topologia LAN/terminal no estabelecimento.** Node.js + SQLite e HTTPS LAN permanecem **opções de implantação self-hosted**, sem bloquear o SaaS.
+
+**Fonte histórica de paridade:** 56 capacidades publicadas pelo desktop PDV-ARTISYS no commit 7efea9c61f75be1536a1e516e917218f2b8bf2bf. Essa lista fornece rastreabilidade funcional; **não é o contrato de lançamento do SaaS**. A classificação de prioridade da versão web fica em `docs/parity/saas-delivery-scope.json`.
 
 **Não somar 56 + 68:** as 68 operações das sete telas são contratos/testes subordinados às capacidades, nunca outro backlog de funcionalidades.
 
 ## Painel de acompanhamento
 
-O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e mostra os contratos vinculados apenas como evidência interna.
+**`npm run report:saas` é o painel de execução prioritário:** 53 referências ao desktop no escopo web (33 cobertas, 20 parciais e 0 gaps), mais 3 capacidades locais opcionais fora do bloqueio de entrega. **`npm run report:parity`** continua exibindo todas as 56 capacidades da referência desktop e os contratos vinculados como evidência para auditoria. O total de 53 não substitui os gates SaaS de segurança, provisionamento, assinaturas e implantação.
 
 | Estado exibido | O que representa | Próximo passo |
 |---|---|---|
@@ -18,7 +20,7 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 
 **Precisão obrigatória:** gap NÃO comprova ausência de código. O terceiro estado inclui casos ainda não investigados. Não promover a pronto por nome de arquivo, CI verde ou um cenário isolado. Auditoria de código exige revisão explícita e evidências executáveis. Testes em equipamento real não bloqueiam código pronto.
 
-**Fotografia documentada em 18/10/2026 (inventário da `main` no SHA `b2f2a66`; confira o SHA atual antes de usar):** 56 capacidades: **33 cobertas, 23 parciais e 0 não demonstradas**. Por onda: R1 **21 cobertas**; R2 **11 cobertas / 3 parciais**; R3 **8 parciais / 0 lacunas sem implementação demonstrada** (cap-030 e cap-043 passaram a parciais após implementação e simulação, não a cobertas); R4 **1 coberta / 12 parciais**. Os 68 contratos subordinados registram **43 cobertos e 25 parciais**. Execute `npm run report:parity` para obter os valores do inventário versionado. A existência de testes de subconjunto não equivale à certificação integral; testes físicos não bloqueiam código.
+**Fotografia do inventário após PR #78 (`main@94cf5e1f`, 18/10/2026; consulte SHA atual):** 56 referências desktop: **33 cobertas, 23 parciais e 0 não demonstradas**. **Entrega SaaS prioritária:** 53 referências web (33 cobertas, 20 parciais) e três capacidades de implantação local explicitamente opcionais (`cap-001`, `cap-047`, `cap-056`). Por onda: R1 **21 cobertas**; R2 **11 cobertas / 3 parciais**; R3 **8 parciais / 0 lacunas sem implementação demonstrada** (cap-030 e cap-043 passaram a parciais após implementação e simulação, não a cobertas); R4 **1 coberta / 12 parciais**. Os 68 contratos subordinados registram **43 cobertos e 25 parciais**. Execute `npm run report:parity` para obter os valores do inventário versionado. A existência de testes de subconjunto não equivale à certificação integral; testes físicos não bloqueiam código.
 
 ## Ondas de implementação — 56 sem duplicação
 
@@ -26,7 +28,7 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 |---|---|---|
 | **R0 — Diagnóstico e gestão** | Transversal; nenhum ID adicional | Painel de 56, 68 contratos internos, rastreabilidade e estado verificável de código pronto |
 | **R1 — PDV comercial e gestão** | cap-004–008, cap-011–024, cap-040, cap-052 (**21**) | **21/21 cobertas no inventário auditado**. Somente manutenção, regressão e correções comprovadas; não reabrir como implementação pendente |
-| **R2 — Self-hosted e rede local** | cap-001–003, cap-010, cap-042, cap-044–047, cap-051, cap-053–056 (**14**) | API SQLite, HTTPS LAN, terminais independentes, credenciais revogáveis, backup/restauração, diagnósticos. Aceite de código: suíte LAN automatizada com sessões simultâneas, segurança, revogação, backup/restore isolado e falhas simuladas; sem SaaS obrigatório |
+| **R2 — infraestrutura reutilizável e alternativa local** | cap-001–003, cap-010, cap-042, cap-044–047, cap-051, cap-053–056 (**14**) | Contratos herdados de self-hosted/LAN. Os 11 já cobertos ficam preservados. **`cap-001`, `cap-047` e `cap-056` são opcionais e NÃO bloqueiam o SaaS hospedado**. Testar alternativas LAN apenas se essa modalidade for escolhida; UI responsiva mobile do SaaS é verificada pela PWA hospedada. |
 | **R3 — Periféricos e protocolos (teste emulado)** | cap-025–030, cap-043, cap-050 (**8**) | Impressão, reimpressão, filas, balanças, gavetas e serial. Aceite de código: bridge local open source, drivers/protocolos com mocks e emuladores, fila, retry, reconexão simulada; impressão não determina sucesso da venda |
 | **R4 — Alimentação e verticais** | cap-009, cap-031–039, cap-041, cap-048–049 (**13**) | Mesas, comandas, atendimento, KDS, pizza, delivery/retirada, padaria e relatórios específicos. Aceite: fluxo completo por perfil e segmento sem criar outra autoridade de vendas/estoque |
 | **R5 — Certificação de código** | As mesmas 56, sem duplicação | Revisão de paridade, regressão, restore em banco temporário, segurança e E2E em Chromium responsivo; não exige equipamento físico nem piloto |
@@ -37,17 +39,17 @@ O comando **npm run report:parity** lista uma vez cada uma das 56 capacidades e 
 
 **R1: manutenção e regressão, não nova implementação.** As 21 capacidades do R1 estão `covered` no inventário da `main` auditada. Não criar um segundo backlog de vendas, financeiro ou estoque; reabrir um ID apenas por regressão reproduzida, prova inválida ou requisito comprovadamente novo, com teste antes da correção.
 
-**R2: fechar apenas as três capacidades parciais** (`cap-001`, `cap-047`, `cap-056`): inicialização/reinício do servidor local e perfil de instalação, jornada mobile na LAN e distribuição servidor/terminal. Preservar as 11 cobertas, reaproveitar autenticação, credenciais, revogação e backup existentes. Reconciliar a PR #68 com o snapshot já integrado pela #73; não fazer merge integral de branch divergente nem rebaixar provas válidas.
+**R2: nenhuma pendência obrigatória para o lançamento do SaaS hospedado.** `cap-001` (instalador e ciclo de servidor Windows local), `cap-047` (mobile acessando um servidor LAN) e `cap-056` (perfil de implantação servidor/terminal) ficam **adiados e opcionais**. Preservar as 11 capacidades R2 já cobertas e seus testes como infraestrutura reutilizável. **Não confundir `cap-047` com UX mobile web**, que é obrigatória na PWA acessível via Internet e tem testes de responsividade/Chromium próprios.
 
 **R3: fechar as oito capacidades ainda parciais** (`cap-025` a `cap-030`, `cap-043`, `cap-050`). `cap-030` agora possui identificação por loja/filial no navegador, texto no bridge e logo PNG no diálogo/PDF; falta configuração canônica compartilhada e snapshot de reimpressão. `cap-043` agora possui matriz de protocolos versionada e cenários emulados, mas depende também de `checkout-016` ainda parcial. Reaproveitar `tools/local-hardware-bridge/` e certificar paridade com o desktop, sem exigir periférico físico.
 
 **R4: concluir os 12 itens parciais** (cap-009, cap-031, cap-032, cap-034–039, cap-041, cap-048 e cap-049), sem duplicar pedidos, caixa ou ledger. Priorizar divisão individual por pagador/item, corridas entre operadores, roteamento e recuperação do KDS, insumos da pizzaria, delivery, onboarding e relatórios; usar comparações executáveis com o desktop fixado.
 
-**R5:** somente após provas por ID, rodar CI no SHA candidato e revisão independente de equivalência; não marcar paridade sistêmica como completa antes de **56/56 capacidades e 68/68 contratos**. Equipamento físico é etapa opcional de campo, fora do gate de código.
+**R5 — gates distintos:** **lançamento do SaaS web** requer jornadas de vendas/caixa/estoque, autenticação/RBAC, isolamento entre empresas, UI responsive PC/tablet/mobile, integrações necessárias, dados persistentes, rollback/backup e CI no SHA publicado. **Não depende de 56/56 referências desktop** nem da instalação local dos três itens opcionais. O certificado **separado** de equivalência integral com o desktop continua exigindo 56/56 capacidades e 68/68 contratos; não afirmar esse certificado apenas porque o SaaS pode ser publicado.
 
 ### Regra definitiva de pronto
 
-**CÓDIGO PRONTO** = todos os subfluxos existentes no manifesto demonstrados na UI/API/banco, permissões e isolamento corretos, testes automatizados (incluindo falhas e reconexão simuladas) e comparação desktop executada em CI, com revisão independente de código. **Não exige computador, impressora, balança, tablet ou celular físico.** Uma revisão de implantação em campo, caso desejada no futuro, será registro separado e opcional, sem modificar `covered`.
+**SaaS web pronto** = requisitos funcionais da versão hospedada cumpridos com API/banco canônicos, autorização, isolamento entre empresas, testes automatizados PC/tablet/mobile, segurança, operabilidade e deploy verificável; não exigir servidor ou instalador local do lojista. **Paridade desktop pronta** é certificação independente, com comparação de subfluxos do manifesto e testes/revisão; não exige equipamento físico. Uma instalação LAN para cliente específico continua opcional.
 
 ### Fechamento por capacidade
 
@@ -85,4 +87,4 @@ Uma CI verde isolada não prova paridade: exigir cenários por capacidade, regre
 - Comparações: docs/parity/scenario-evidence.json
 - Certificação de código: docs/parity/P0-AUDIT-PLAN.md
 
-O antigo docs/ROADMAP-SAAS-CLOUDFLARE.md permanece como **documentação histórica de arquitetura e implantação**. Este arquivo é o roadmap operacional vigente da paridade.
+O arquivo `docs/ROADMAP-SAAS-CLOUDFLARE.md` conserva o plano de arquitetura SaaS (histórico); este documento é o roadmap vigente, **com execução web priorizada e paridade desktop como auditoria separada**. Referência de exclusões explícitas: `docs/parity/saas-delivery-scope.json`.
