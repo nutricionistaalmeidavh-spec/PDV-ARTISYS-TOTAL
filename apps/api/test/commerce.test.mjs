@@ -881,7 +881,7 @@ test('P4 detailed report applies canonical seller/customer/product/payment filte
   assert.match(csv.body.csv,/PIX/);
   assert.match(csv.body.csv,/Cliente Teste P5/);
   assert.match(csv.body.csv,/"viewer"/);
-  assert.match(csv.body.csv,/Cliente ID;"Cliente"/);
+  assert.match(csv.body.csv,/"Cliente ID";"Cliente"/);
   assert.doesNotMatch(csv.body.csv,/CASH/);
   assert.equal((await x.get('b','reports/details?branchId=branch-b',x.other)).body.details.total,0);
   assert.equal((await x.get('a','reports/details?branchId=branch-b')).status,404);
