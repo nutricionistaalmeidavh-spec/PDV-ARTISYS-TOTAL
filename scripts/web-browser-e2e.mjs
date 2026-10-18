@@ -129,6 +129,17 @@ try{
   },reorderedWorkbook.toString('base64'));
   assert.match(parsedSecond,/XLSX-SHEET2-QA/,'read first logical workbook tab from relationships');
   assert.doesNotMatch(parsedSecond,/Decoy/,'never select unrelated sheet1.xml by filename');
+  // External relationship targets must never be dereferenced or accepted as
+  // a fallback to an unrelated worksheet bundled in the same file.
+  const externalSheet=await page.evaluate(async input=>{
+    try{
+      await window.PdvCatalogXlsx.toCsv(Uint8Array.from(atob(input),c=>c.charCodeAt(0)));
+      return 'accepted';
+    }catch(error){return error.message;}
+  },'UEsDBBQAAAAIALF0Ul0aGetelAAAAOcAAAAPAAAAeGwvd29ya2Jvb2sueG1sjY/RDoIwDEV/ZdkHWGKMJgR40Rc+o0JhC9u6tDP6+RKQd5/ae296btq8WZYn82I+MSRtrSsl1wA6OIqoJ86U1mRiiVhWKTNoFsJRHVGJAc5VdYWIPtmdUMs/DJ4mP9CDh1ekVHaIUMDiOanzWW3XbA36myZhpNbesWDgma3Z3H5s7c0aqf26SD9ezha6Bo5LOJ7rvlBLAwQUAAAACACxdFJdq2b+IqIAAAAPAQAAGgAAAHhsL19yZWxzL3dvcmtib29rLnhtbC5yZWxzjc/BCsIwDAbgVxl9gGUM8SDbTnrYwYv4AqHL1rG2KW3U+fYWRJjgwWPIz5c/zYUsysw+mTmkYnXWp1YZkXAASNqQw1RyIJ83I0eHksc4QUC94ERQV9Ue4tZQXbM1i35oVeyHXa2K6zPQPziP46zpyPrmyMuPG/DguCRDJBnFOJG82ZRdWtEFS6VmB3SfbZnxT+rMQy5wWoWiR6uga+Dr/+4FUEsDBBQAAAAIALF0Ul37OVK6lQAAAN0AAAAUAAAAeGwvc2hhcmVkU3RyaW5ncy54bWxdj7EOgkAQBX/lQq9LKCzMeYkxJBYWGCxoV1jgIrdHbpfEzxdjYUI5M695VkTNO0wsp2xUnY8A0o4UUPZxJl5LH1NAXTENIHMi7GQk0jBBkecHCOg5c1a8s+rktVhQZ+GLP8UYaOsEJ6qSb+lCrLKtza1udvW1LB/F7n7e1irFbtFoGI3QsHCHBp9oei++xf8Y1l/uA1BLAwQUAAAACACxdFJdCpYQtpcAAAA3AQAAGAAAAHhsL3dvcmtzaGVldHMvc2hlZXQyLnhtbF2QbQ7CIAxAr0I4gAVmTDRA4sdFCKIYxyBANo8vTkOQf21f25eWLz4+kzUmo5cbpySwzTkcAJK2xqm08cFMhdx8dCqXNN4hhWjUdR1yIzBCduDUY8KSr7WLykry6BcUBaalqj/BkWKUBU4lnyXhMEsO+sdOLaP/7NwyVhmU/VXCqoQ1zUMnadm2k7CvetiTzgDNSVB/Jd9QSwMEFAAAAAgAsXRSXXKvrsWHAAAAsgAAABgAAAB4bC93b3Jrc2hlZXRzL3NoZWV0MS54bWxNjk0KAjEMha9SegAz48KFtAVhbuAJSo222D/SwIy3NzMLcZHw3hfeI2Zt9B4RkdVWch1WR+Z+BRghYvHj1DpWuTwbFc9i6QWjE/rHESoZztN0geJT1c4cbPHsnaG2KrJ6Fhp2cZu1YqtTzaninUl4Gs6wWzC0jwF2BnYAQUbCsv/a4Pem+wJQSwECFAMUAAAACACxdFJdGhnrXpQAAADnAAAADwAAAAAAAAAAAAAAgAEAAAAAeGwvd29ya2Jvb2sueG1sUEsBAhQDFAAAAAgAsXRSXatm/iKiAAAADwEAABoAAAAAAAAAAAAAAIABwQAAAHhsL19yZWxzL3dvcmtib29rLnhtbC5yZWxzUEsBAhQDFAAAAAgAsXRSXfs5UrqVAAAA3QAAABQAAAAAAAAAAAAAAIABmwEAAHhsL3NoYXJlZFN0cmluZ3MueG1sUEsBAhQDFAAAAAgAsXRSXQqWELaXAAAANwEAABgAAAAAAAAAAAAAAIABYgIAAHhsL3dvcmtzaGVldHMvc2hlZXQyLnhtbFBLAQIUAxQAAAAIALF0Ul1yr67FhwAAALIAAAAYAAAAAAAAAAAAAACAAS8DAAB4bC93b3Jrc2hlZXRzL3NoZWV0MS54bWxQSwUGAAAAAAUABQBTAQAA7AMAAAAA');
+  assert.match(externalSheet,/referências externas/i,
+    'XLSX must reject external sheet targets without importing unrelated data');
+
 
   // P2 counted inventory: exercise the actual canonical stock screen in Chromium.
   await page.locator('#app-sidebar [data-route=inventory]').click();
