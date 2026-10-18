@@ -103,3 +103,60 @@ CREATE TABLE IF NOT EXISTS r4_delivery_dispatches (
  PRIMARY KEY(tenant_id,branch_id,order_id),
  FOREIGN KEY(tenant_id,branch_id,order_id) REFERENCES restaurant_orders(tenant_id,branch_id,id)
 );
+
+-- An immutable item reassignment ledger keeps the original order and KDS history.
+-- Checkout subtracts transferred quantities from the source and adds them to the target.
+CREATE TABLE IF NOT EXISTS r4_item_transfers (
+ id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,
+ order_item_id TEXT NOT NULL REFERENCES restaurant_order_items(id),
+ source_session_id TEXT NOT NULL,target_session_id TEXT NOT NULL,
+ quantity_milli INTEGER NOT NULL CHECK(quantity_milli>0),
+ created_by TEXT NOT NULL REFERENCES users(id),created_at TEXT NOT NULL,
+ FOREIGN KEY(tenant_id,branch_id,source_session_id) REFERENCES restaurant_table_sessions(tenant_id,branch_id,id),
+ FOREIGN KEY(tenant_id,branch_id,target_session_id) REFERENCES restaurant_table_sessions(tenant_id,branch_id,id),
+ CHECK(source_session_id<>target_session_id)
+);
+CREATE INDEX IF NOT EXISTS idx_r4_item_transfer_source ON r4_item_transfers(tenant_id,branch_id,order_item_id);
+CREATE INDEX IF NOT EXISTS idx_r4_item_transfer_target ON r4_item_transfers(tenant_id,branch_id,target_session_id);
+CREATE TRIGGER IF NOT EXISTS r4_item_transfer_limit BEFORE INSERT ON r4_item_transfers
+WHEN NOT EXISTS(
+  SELECT 1 FROM restaurant_order_items oi JOIN restaurant_orders o
+     ON o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id AND o.id=oi.order_id
+  JOIN restaurant_table_sessions src ON src.tenant_id=o.tenant_id AND src.branch_id=o.branch_id AND src.id=o.table_session_id
+  JOIN restaurant_table_sessions dst ON dst.tenant_id=src.tenant_id AND dst.branch_id=src.branch_id AND dst.id=NEW.target_session_id
+  WHERE oi.id=NEW.order_item_id AND oi.tenant_id=NEW.tenant_id AND oi.branch_id=NEW.branch_id
+  AND o.table_session_id=NEW.source_session_id AND o.status='DELIVERED' AND src.status='OPEN' AND dst.status='OPEN'
+) OR
+(SELECT COALESCE(SUM(quantity_milli),0) FROM r4_item_transfers
+ WHERE tenant_id=NEW.tenant_id AND branch_id=NEW.branch_id AND order_item_id=NEW.order_item_id)+NEW.quantity_milli>
+ (SELECT quantity_milli FROM restaurant_order_items WHERE id=NEW.order_item_id AND tenant_id=NEW.tenant_id AND branch_id=NEW.branch_id)
+BEGIN SELECT RAISE(ABORT,'RESTAURANT_TRANSFER_CONFLICT'); END;
+CREATE TRIGGER IF NOT EXISTS r4_item_transfer_immutable_update BEFORE UPDATE ON r4_item_transfers
+BEGIN SELECT RAISE(ABORT,'RESTAURANT_TRANSFER_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS r4_item_transfer_immutable_delete BEFORE DELETE ON r4_item_transfers
+BEGIN SELECT RAISE(ABORT,'RESTAURANT_TRANSFER_IMMUTABLE'); END;
+
+CREATE TABLE IF NOT EXISTS r4_split_plans (
+ tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,table_session_id TEXT NOT NULL,
+ parts INTEGER NOT NULL CHECK(parts BETWEEN 2 AND 50),
+ service_charge_bps INTEGER NOT NULL DEFAULT 0 CHECK(service_charge_bps BETWEEN 0 AND 3000),
+ service_charge_product_id TEXT,updated_at TEXT NOT NULL,
+ PRIMARY KEY(tenant_id,branch_id,table_session_id),
+ FOREIGN KEY(tenant_id,branch_id,table_session_id) REFERENCES restaurant_table_sessions(tenant_id,branch_id,id),
+ FOREIGN KEY(tenant_id,service_charge_product_id) REFERENCES products(tenant_id,id),
+ CHECK(service_charge_bps=0 OR service_charge_product_id IS NOT NULL)
+);
+-- Split tenders are only metadata attached to a completed canonical sale.
+CREATE TABLE IF NOT EXISTS r4_split_tenders (
+ tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,sale_id TEXT NOT NULL,
+ share_index INTEGER NOT NULL CHECK(share_index BETWEEN 1 AND 50),
+ amount_cents INTEGER NOT NULL CHECK(amount_cents>0),
+ method TEXT NOT NULL CHECK(method IN('CASH','PIX','DEBIT_CARD','CREDIT_CARD')),
+ recorded_at TEXT NOT NULL,
+ PRIMARY KEY(tenant_id,branch_id,sale_id,share_index),
+ FOREIGN KEY(tenant_id,branch_id,sale_id) REFERENCES sales(tenant_id,branch_id,id)
+);
+CREATE TRIGGER IF NOT EXISTS r4_split_tender_immutable_update BEFORE UPDATE ON r4_split_tenders
+BEGIN SELECT RAISE(ABORT,'SPLIT_TENDER_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS r4_split_tender_immutable_delete BEFORE DELETE ON r4_split_tenders
+BEGIN SELECT RAISE(ABORT,'SPLIT_TENDER_IMMUTABLE'); END;
