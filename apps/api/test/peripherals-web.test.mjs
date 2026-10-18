@@ -135,3 +135,16 @@ test('cap-026 web renderer preserves frozen branding for browser and textual tra
   assert.match(html,/Loja Antiga/);assert.match(html,/Rua Antiga/);
   assert.doesNotMatch(text,/PDV TOTAL/);
 });
+
+test('cap-029 prebill uses a distinct non-fiscal document and cannot finalize an OPEN sale',()=>{
+  const {window:w,opened}=browser();
+  const open={id:'prebill-1',saleNumber:'1001',status:'OPEN',items:[],payments:[],totalCents:900,changeCents:0};
+  const document={documentType:'PREBILL',sale:open,branding:{name:'Loja Preconta',address:'Rua 3',phone:'',logoDataUrl:null}};
+  const result=w.PdvWebHardware.printPrebill(document);
+  assert.equal(result.dialogOpened,true);
+  assert.match(opened[0].html,/PRÉ-CONTA · NÃO FISCAL/);
+  assert.match(opened[0].html,/Loja Preconta/);
+  assert.equal(open.status,'OPEN');
+  assert.throws(()=>w.PdvWebHardwareUtils.receiptHtml(open),/Somente venda concluída/);
+  assert.throws(()=>w.PdvWebHardware.printPrebill({...document,documentType:'SALE_RECEIPT'}));
+});
