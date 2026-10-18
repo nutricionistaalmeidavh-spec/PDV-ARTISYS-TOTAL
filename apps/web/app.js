@@ -347,8 +347,10 @@
         aria-live="polite"><h2>Indicadores operacionais</h2>
         <p class="ops-muted">Consultando vendas, caixa e estoque registrados nesta filial...</p></section>`);
       const host=content.querySelector('#web-home-live');
+      const homeContext=String(api.tenantId||'')+'|'+String(api.branchId||'');
+      const sameHomeContext=()=>homeContext===String(api.tenantId||'')+'|'+String(api.branchId||'');
       void api.homeIndicators().then(data=>{
-        if(!host||!host.isConnected||document.body.dataset.activeRoute!=='home')return;
+        if(!host||!host.isConnected||document.body.dataset.activeRoute!=='home'||!sameHomeContext())return;
         const metric=(label,value)=>`<article class="ops-metric"><span>${escapeHtml(label)}</span>
           <strong>${escapeHtml(value)}</strong></article>`;
         host.innerHTML=`<h2>Indicadores operacionais · ${escapeHtml(data.asOf)}</h2>
@@ -357,16 +359,24 @@
             ${metric('Vendas líquidas',ui.formatCents(data.netSalesCents))}
             ${metric('Devoluções',ui.formatCents(data.refundedCents))}
             ${metric('Caixa da filial',data.cashOpen?'Aberto':'Fechado')}
+            ${metric('Terminais com caixa aberto',String(data.activeCashTerminals))}
             ${metric('Sem estoque disponível',String(data.outOfStockCount))}
+            ${metric('Produtos com estoque monitorado',String(data.trackedProducts))}
           </div>
           <p class="ops-muted">Dados do caixa, vendas e estoque canônicos. ${
             data.stockCoverageUnknown?'Sem base de consumo para estimar cobertura de '+data.stockCoverageUnknown+' produto(s).':
             'Cobertura estimada a partir de movimentações reais.'}</p>
           ${data.outOfStockCount>0?`<p role="alert">${data.outOfStockCount}
             produto(s) sem disponibilidade após reservas. Consulte Estoque.</p>`:''}
-          ${!data.cashOpen?'<p class="ops-muted">Não existe caixa aberto nesta filial.</p>':''}`;
+          ${!data.cashOpen?'<p class="ops-muted">Não existe caixa aberto nesta filial.</p>':''}
+          <div class="ops-actions">
+            ${canAccessRoute('reports')?'<button type="button" class="ops-secondary" data-home-open-report>Ver relatórios</button>':''}
+            ${data.outOfStockCount>0&&canAccessRoute('products')?'<button type="button" class="ops-secondary" data-home-open-products>Conferir produtos sem disponibilidade</button>':''}
+          </div>`;
+        host.querySelector('[data-home-open-report]')?.addEventListener('click',()=>void navigate('reports'));
+        host.querySelector('[data-home-open-products]')?.addEventListener('click',()=>void navigate('products'));
       }).catch(error=>{
-        if(host?.isConnected&&document.body.dataset.activeRoute==='home')
+        if(host?.isConnected&&document.body.dataset.activeRoute==='home'&&sameHomeContext())
           host.innerHTML=`<h2>Indicadores operacionais</h2><p class="ops-muted">
             Não foi possível consultar os indicadores: ${escapeHtml(error.message)}</p>`;
       });

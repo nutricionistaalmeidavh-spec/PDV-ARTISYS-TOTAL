@@ -431,8 +431,12 @@ try{
   assert.match(await page.locator('#route-content').innerText(),/7,00/);
   await page.screenshot({path:'qa-artifacts/pdv-finance-mobile.png',fullPage:true});
 
+  // P5: authorized home indicators are scoped and link back to the one report route.
+  await page.locator('#sidebar-nav [data-route=home]').click();
+  await page.locator('#web-home-live [data-home-open-report]').waitFor({timeout:12000});
+  assert.match(await page.locator('#web-home-live').innerText(),/Terminais com caixa aberto/i);
+  await page.locator('#web-home-live [data-home-open-report]').click();
   // P4: Shared ReportsV2 owner, no duplicate report rendering pipeline.
-  await page.locator('#app-sidebar [data-route=reports]').click();
   await page.getByRole('heading',{name:'Relatórios comerciais'}).waitFor({timeout:12000});
   const report=await page.locator('#route-content').innerText();
   assert.match(report,/Faturamento registrado/i);
@@ -447,6 +451,26 @@ try{
     null,{timeout:12000});
   assert.match(await page.locator('#report-v2-body').innerText(),/Metas e vendas líquidas|Metas e ranking|Meta mensal/);
   await page.screenshot({path:'qa-artifacts/pdv-seller-targets.png',fullPage:true});
+  await page.locator('[data-report-web=overview]').click();
+  // P5 comparisons use the canonical API and do not invent rates without a base.
+  await page.locator('#web-report-filter [name=from]').fill('2026-10-17');
+  await page.locator('#web-report-filter [name=to]').fill('2026-10-17');
+  await page.locator('#web-report-filter button[type=submit]').click();
+  await page.locator('[data-report-web=overview][aria-selected=true]').waitFor();
+  await page.locator('[data-report-web=comparison]').click();
+  await page.locator('[data-report-web=comparison][aria-selected=true]').waitFor();
+  assert.match(await page.locator('#report-v2-body').innerText(),/Receita líquida|Variação de receita/i);
+  assert.match(await page.locator('#report-v2-body').innerText(),/Sem base comparativa anterior/i);
+  await page.locator('[data-report-web=comparison]').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.locator('[data-report-web=products][aria-selected=true]').waitFor();
+  assert.equal(await page.evaluate(()=>document.activeElement?.dataset.reportWeb),'products',
+    'keyboard tab navigation must restore focus after asynchronous report render');
+  await page.locator('#app-sidebar [data-route=checkout]').click();
+  await page.locator('#app-sidebar [data-route=reports]').click();
+  await page.locator('[data-report-web=products][aria-selected=true]').waitFor();
+  assert.equal(await page.locator('#web-report-filter [name=from]').inputValue(),'2026-10-17');
+  assert.equal(await page.locator('#web-report-filter [name=to]').inputValue(),'2026-10-17');
   await page.locator('[data-report-web=overview]').click();
   const downloadEvent=page.waitForEvent('download');
   await page.locator('#web-report-export').click();
