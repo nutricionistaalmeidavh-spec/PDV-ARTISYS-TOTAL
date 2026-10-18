@@ -16,6 +16,10 @@ on:
       - 'scripts/check-desktop-parity.mjs'
       - 'scripts/parity-rules.mjs'
       - 'scripts/parity-rules.test.mjs'
+      - 'scripts/parity-scenarios.mjs'
+      - 'scripts/parity-scenarios.test.mjs'
+      - 'scripts/parity-desktop-pricing.test.mjs'
+      - 'scripts/audit-parity-evidence.mjs'
       - 'scripts/web-browser-e2e.mjs'
       - '.github/workflows/verify-saas-foundation.yml'
   workflow_dispatch:
@@ -112,6 +116,13 @@ jobs:
           node scripts/smoke-workerd.mjs
       - name: E2E original PDV renderer in Chromium (desktop + mobile)
         run: node scripts/web-browser-e2e.mjs
+      - name: Save independently auditable P0 parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdv-total-parity-evidence
+          path: qa-artifacts/parity/
+          if-no-files-found: error
       - name: Save browser visual QA evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -10,8 +10,8 @@ test('68 of 68 covered can be certified when independent CI evidence is supplied
   const evidence={scope:'seven-screen-operations',desktopBaselineCommit:DESKTOP_SHA,webCommit:'a'.repeat(40),
     testRunUrl:'https://github.com/owner/repo/actions/runs/1234',independentReviewer:'QA independent',
     verifiedAt:'2026-10-17',testSuitePassed:true};
-  assert.equal(verifyClaim(Array.from({length:68},()=>({status:'covered'})),'complete',evidence,'seven-screen-operations'),true);
-  assert.throws(()=>verifyClaim([{status:'covered'}],'complete',null,'seven-screen-operations'),/certification/);
+  assert.equal(verifyClaim(Array.from({length:68},()=>({status:'covered'})),'complete',evidence,'seven-screen-operations',{scenarioEvidenceComplete:true}),true);
+  assert.throws(()=>verifyClaim([{status:'covered'}],'complete',null,'seven-screen-operations',{scenarioEvidenceComplete:true}),/certification/);
 });
 
 test('covered status requires an actual executable test assertion next to its scenario',()=>{
