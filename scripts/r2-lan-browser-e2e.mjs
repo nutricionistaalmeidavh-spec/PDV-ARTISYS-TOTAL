@@ -119,7 +119,11 @@ try{
   assert.equal(live.productsStatus,200,JSON.stringify(live));
   assert.equal(live.revokedStatus,200,JSON.stringify(live));
   assert.equal(live.deniedStatus,401,'cap-047 revoked device cannot continue offline');
-  await page.evaluate(()=>navigator.serviceWorker.ready);
+  const swReady=await page.evaluate(()=>Promise.race([
+    navigator.serviceWorker.ready.then(()=>true),
+    new Promise(resolve=>setTimeout(()=>resolve(false),10000))
+  ]));
+  assert.equal(swReady,true,'cap-047 self-hosted LAN must register its public asset service worker');
   await context.setOffline(true);
   const blocked=await page.evaluate(async()=>{
     try{await fetch('/api/v1/auth/session',{cache:'no-store'});return false;}
