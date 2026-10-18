@@ -17,6 +17,8 @@ on:
       - 'scripts/selfhost-backup.test.mjs'
       - 'scripts/p6-capability-report.mjs'
       - 'scripts/p6-capability-report.test.mjs'
+      - 'scripts/r0-r1-audit.mjs'
+      - 'scripts/r0-r1-audit.test.mjs'
       - 'scripts/check-desktop-parity.mjs'
       - 'scripts/parity-rules.mjs'
       - 'scripts/parity-rules.test.mjs'
@@ -57,6 +59,8 @@ jobs:
           mkdir -p qa-artifacts/parity
           node scripts/p6-capability-report.mjs --json > qa-artifacts/parity/progresso-56.json
           node scripts/p6-capability-report.mjs --markdown > qa-artifacts/parity/progresso-56.md
+          node scripts/r0-r1-audit.mjs --json > qa-artifacts/parity/r0-audit-56.json
+          node scripts/r0-r1-audit.mjs > qa-artifacts/parity/r1-readiness-21.md
       - name: Test free offline SQLite backup and restore
         run: npm run test:selfhost
       - name: Test canonical sales, inventory, cash and authorization contracts
