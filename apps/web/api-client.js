@@ -132,6 +132,14 @@
       if(operation==='customers')return method==='GET'?value.customers:value.customer;
       if(operation==='suppliers')return method==='GET'?value.suppliers:value.supplier;
       if(operation==='sellers')return value.sellers;
+      // A single canonical API returns named envelopes; the wholesale view
+      // consumes the underlying records/arrays just like the catalog screens.
+      if(operation==='wholesale/tiers')return method==='GET'?value.tiers:value.tier;
+      if(operation==='wholesale/price')return value.price;
+      if(/^wholesale\/customers\/[^/]+\/policy$/.test(operation))return value.policy;
+      if(operation==='wholesale/orders')return method==='GET'?value.orders:value.order;
+      if(/^wholesale\/orders\/[^/]+\/(confirm|cancel)$/.test(operation))return value.order;
+      if(/^wholesale\/orders\/[^/]+$/.test(operation))return value.order;
       if(operation.startsWith('recipes/')||operation.startsWith('onboarding/')||operation.startsWith('restaurant/')||operation.startsWith('wholesale/')||operation.startsWith('commissions')||operation.startsWith('credit/'))return value;
       if(operation==='inventory')return value.stock;
       if(operation==='inventory/receipts'||operation==='inventory/adjustments')return value.movement;
