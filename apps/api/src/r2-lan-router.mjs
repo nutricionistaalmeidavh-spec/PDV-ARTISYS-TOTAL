@@ -56,6 +56,34 @@ function viewReadiness(rows){
     checks,readyCount:checks.filter(item=>item.status==='READY').length,total:checks.length};
 }
 
+/**
+ * In LAN mode, a user session is necessary but not sufficient for commercial
+ * API access. Each operation must also present an active, branch-scoped device
+ * credential. Revocation therefore takes effect on the next request, including
+ * checkout; it is not merely a cosmetic status in the administration page.
+ */
+export async function authorizeLanBusinessRequest(request,db,member,tenantId){
+  const id=request.headers.get('x-pdv-device-id')||'';
+  const credential=request.headers.get('x-pdv-device-credential')||'';
+  if(!id||!credential)return err(403,'Pareie este dispositivo em Configurações > Rede local antes de operar.');
+  if(id.length>128||!/^[a-f0-9]{64}$/.test(credential))return err(401,'Credencial do dispositivo inválida.');
+  const row=await db.prepare('SELECT id,branch_id,kind,credential_hash,active FROM r2_devices WHERE id=? AND tenant_id=? AND active=1')
+    .bind(id,tenantId).first();
+  if(!row||await sha256(credential)!==row.credential_hash)
+    return err(401,'Dispositivo não autorizado ou revogado.');
+  if(!DEVICE_ROLES[row.kind]?.has(member.profileKey))
+    return err(403,'Este perfil não pode operar neste dispositivo.');
+  let branchId=new URL(request.url).searchParams.get('branchId');
+  if(!branchId&&request.method!=='GET'&&request.method!=='HEAD'){
+    let body;
+    try{body=await request.clone().json();}catch{return err(400,'Corpo JSON inválido.');}
+    branchId=body?.branchId;
+  }
+  if(!branchId||branchId!==row.branch_id)
+    return err(403,'Este aparelho só pode operar na filial autorizada.');
+  return null;
+}
+
 export async function r2LanRoute(request,db,session,member,tenantId,path,{now=()=>Date.now()}={}){
   if(!path.startsWith('lan/'))return null;
   const method=request.method,parts=path.split('/'),owner=isAdmin(member);
