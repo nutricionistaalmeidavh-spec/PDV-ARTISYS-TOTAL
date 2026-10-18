@@ -446,3 +446,26 @@ test('R4 cap-032: equal split plus explicit service charge posts through one sal
    assert.equal((await x.request('a',`restaurant/sessions/${session.id}/close`,'POST',{branchId:'filial-a'})).status,200);
  }finally{x.close();}
 });
+
+test('R4 cap-036: configured pizza enters unified kitchen order with immutable priced snapshot',async()=>{
+ const x=await setup();try{
+   const pizza=(await x.request('a','products','POST',{branchId:'filial-a',sku:'PIZZACFG',name:'Pizza da casa',salePriceCents:2500,trackStock:false})).body.product;
+   const profile=await x.request('a','restaurant/pizzeria/profiles','POST',{branchId:'filial-a',productId:pizza.id,
+     policy:'HIGHEST_FLAVOR',sizes:[{code:'M',name:'Média',priceCents:3000}],
+     flavors:[{code:'C',name:'Calabresa',priceCents:4400}],crusts:[{code:'B',name:'Borda',priceCents:600}]});
+   assert.equal(profile.status,201);
+   const order=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',
+     items:[{productId:pizza.id,quantity:2,pizza:{sizeCode:'M',flavorCodes:['C'],crustCode:'B'}}]});
+   assert.equal(order.status,201,JSON.stringify(order.body));
+   assert.equal(order.body.order.totalCents,10000);
+   const item=await x.db.prepare('SELECT unit_price_cents AS price,configuration_json AS configuration FROM restaurant_order_items WHERE order_id=?').bind(order.body.order.id).first();
+   assert.equal(item.price,5000);assert.match(item.configuration,/Calabresa/);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM sales').bind().first()).n,0);
+   const ticket=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0].id;
+   await x.request('a',`restaurant/kitchen/${ticket}`,'PATCH',{branchId:'filial-a',status:'PREPARING'});
+   await x.request('a',`restaurant/kitchen/${ticket}`,'PATCH',{branchId:'filial-a',status:'READY'});
+   await x.request('a',`restaurant/orders/${order.body.order.id}/deliver`,'POST',{branchId:'filial-a'});
+   const sale=await x.request('a','sales','POST',{branchId:'filial-a',restaurantOrderId:order.body.order.id});
+   assert.equal(sale.status,201,JSON.stringify(sale.body));assert.equal(sale.body.sale.totalCents,10000);
+ }finally{x.close();}
+});
