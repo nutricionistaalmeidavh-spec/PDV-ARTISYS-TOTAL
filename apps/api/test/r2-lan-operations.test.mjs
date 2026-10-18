@@ -68,7 +68,8 @@ test('R2: hashed one-use pairing, branch+operator scope, revocation, read-only a
   assert.equal(check.status,200);
   assert.equal(check.data.device.branchId,'branch-a');
   assert.equal((await call(base+'/devices/check','POST',{id,credential:'a'.repeat(64)},waiter)).status,401);
-  assert.equal((await call(base+'/devices/check','POST',{id,credential:paired.data.credential},owner)).status,401);
+  assert.equal((await call(base+'/devices/check','POST',{id,credential:paired.data.credential},owner)).status,200);
+  assert.equal((await call(base+'/devices/check','POST',{id,credential:paired.data.credential},cashier)).status,403);
   assert.equal((await call(base+'/devices/check','POST',{id,credential:paired.data.credential},other)).status,404);
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},cashier)).status,403);
   assert.equal((await call(base+'/devices/'+id,'DELETE',{},owner)).status,200);
