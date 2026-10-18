@@ -156,6 +156,7 @@
      }
      if(what==='deliver')await form('/orders/'+encodeURIComponent(id)+'/deliver',{});
      if(what==='preparing'||what==='ready')await action('/kitchen/'+encodeURIComponent(id),'PATCH',{status:what==='preparing'?'PREPARING':'READY'});
+     if(what==='preparing-station'||what==='ready-station')await action('/kitchen/station-tickets/'+encodeURIComponent(id),'PATCH',{status:what==='preparing-station'?'PREPARING':'READY'});
      if(what==='ack'||what==='resolve')await action('/requests/'+encodeURIComponent(id),'PATCH',{status:what==='ack'?'ACKNOWLEDGED':'CLOSED'});
      if(what==='checkout-session'||what==='checkout-order'){
        const session=what==='checkout-session',endpoint=session?'/sessions/'+encodeURIComponent(id):'/orders/'+encodeURIComponent(id);
