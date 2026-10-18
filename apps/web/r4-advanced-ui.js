@@ -11,8 +11,8 @@
   const safe=async f=>{try{return await f();}catch{return null;}};
   const r4=(path,method='GET',body)=>api.request('/api/v1/restaurant'+path,{method,body});
   const uid=v=>encodeURIComponent(String(v||''));
-  const select=(name,rows,labelFn=x=>x.name,empty='Selecione')=>
-    '<select name="'+esc(name)+'" required><option value="">'+esc(empty)+'</option>'+
+  const select=(name,rows,labelFn=x=>x.name,empty='Selecione',required=true)=>
+    '<select name="'+esc(name)+'" '+(required?'required':'')+'><option value="">'+esc(empty)+'</option>'+
     rows.map(v=>'<option value="'+esc(v.id)+'">'+esc(labelFn(v))+'</option>').join('')+'</select>';
   const field=(name,title,type='text',attr='')=>'<label class="field"><span>'+esc(title)+'</span><input name="'+esc(name)+'" type="'+type+'" '+attr+'></label>';
   const toast=(msg,bad=false)=>root.PdvToast?.show?.(msg,bad?'error':'success');
@@ -66,7 +66,7 @@
       (can('restaurant.orders.transfer')?'<form data-r4-advanced="split" class="vertical-form"><h3>Divisão de conta</h3><p>A divisão não gera vendas extras: os valores serão pagos no único checkout da comanda.</p>'+
       field('parts','Número de pessoas','number','min="2" max="50" value="2" required')+
       field('bps','Taxa de serviço (%)','number','min="0" max="30" step="0.01" value="0"')+
-      '<label class="field"><span>Produto não estocável para taxa (se houver)</span>'+select('serviceChargeProductId',fee,p=>p.name,'Sem taxa')+'</label>'+
+      '<label class="field"><span>Produto não estocável para taxa (se houver)</span>'+select('serviceChargeProductId',fee,p=>p.name,'Sem taxa',false)+'</label>'+
       '<button class="primary-button">Calcular e registrar divisão</button></form>'+
       '<form data-r4-advanced="transfer-items" class="vertical-form"><h3>Transferir parte de um item</h3>'+
       '<label class="field"><span>Item entregue</span>'+select('orderItemId',model.orderItems,i=>i.name+' × '+i.quantity,'Escolha um item')+'</label>'+
@@ -86,7 +86,7 @@
       esc(r.productName)+'</strong><small>'+esc(r.mode==='DIRECT'?'Sem KDS':r.stationName)+'</small></div>').join('')+'</div>'+
       (can('products.manage')?'<form class="vertical-form" data-r4-advanced="route"><label class="field"><span>Produto</span>'+
       select('productId',model.products)+'</label><label class="field"><span>Destino</span><select name="mode"><option value="PRODUCTION">Produção / KDS</option><option value="DIRECT">Sem KDS</option></select></label>'+
-      '<label class="field"><span>Setor</span>'+select('stationId',model.stations.filter(s=>s.active),s=>s.name,'Escolha estação')+'</label>'+
+      '<label class="field"><span>Setor</span>'+select('stationId',model.stations.filter(s=>s.active),s=>s.name,'Escolha estação',false)+'</label>'+
       '<button class="primary-button">Salvar destino</button></form>':'')+
       '<h3>Fila por estação</h3><div class="restaurant-list">'+model.tickets.map(t=>'<div class="restaurant-row"><strong>'+
       esc(t.stationName)+' · '+esc(t.orderId?.slice(0,8))+'</strong><small>'+esc(t.status)+' · '+esc((t.items||[]).map(i=>i.productName+' × '+i.quantity).join(', '))+
