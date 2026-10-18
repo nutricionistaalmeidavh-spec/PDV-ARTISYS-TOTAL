@@ -110,7 +110,7 @@
       });
       content.querySelectorAll('[data-r2-module]').forEach(button=>button.addEventListener('click',async()=>{
         if(!window.confirm('Alterar disponibilidade deste módulo para todos os operadores da loja?'))return;
-        try{await req('/modules/'+encodeURIComponent(button.dataset.r2Module),{method:'PATCH',body:{enabled:button.dataset.enabled==='true'}});await render(content,api);}
+        try{await req('/modules/'+encodeURIComponent(button.dataset.r2Module),{method:'PATCH',body:{enabled:button.dataset.enabled==='true'}});await window.PdvModuleGate?.refresh?.();await render(content,api);}
         catch(error){notify(error.message,true);}
       }));
       content.querySelectorAll('[data-r2-revoke]').forEach(button=>button.addEventListener('click',async()=>{
