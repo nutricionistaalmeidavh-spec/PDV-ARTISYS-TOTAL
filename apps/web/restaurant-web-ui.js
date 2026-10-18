@@ -109,13 +109,21 @@
  }
  function checkoutSection(){
    const c=state.checkout;if(!c)return '';
-   return '<section class="data-card"><h2>Pagamento no caixa canônico</h2><p>Venda '+esc(c.saleNumber||c.saleId.slice(0,8))+' · '+money(c.totalCents||0)+'</p>'+
-     (c.status==='COMPLETED'?'<p>Pagamento concluído.</p>':
-       '<form class="vertical-form" data-r4-form="payment">'+
-       '<label class="field"><span>Forma de pagamento</span><select name="method"><option value="PIX">PIX</option><option value="CASH">Dinheiro</option><option value="DEBIT_CARD">Débito</option><option value="CREDIT_CARD">Crédito</option></select></label>'+
-       '<input type="hidden" name="saleId" value="'+esc(c.saleId)+'">'+
-       '<input type="hidden" name="totalCents" value="'+esc(c.totalCents)+'">'+
-       '<p>Para concluir, o caixa do terminal precisa estar aberto.</p><button class="primary-button">Concluir recebimento</button></form>')+'</section>';
+   const split=state.split;
+   const methodOptions='<option value="PIX">PIX</option><option value="CASH">Dinheiro</option><option value="DEBIT_CARD">Débito</option><option value="CREDIT_CARD">Crédito</option>';
+   const tenders=split?'<fieldset><legend>Divisão por pessoa</legend>'+
+      split.shares.map((value,i)=>'<label class="field"><span>Parte '+(i+1)+' · '+money(value)+'</span>'+
+        '<select name="shareMethod'+(i+1)+'">'+methodOptions+'</select></label>').join('')+'</fieldset>':
+      '<label class="field"><span>Forma de pagamento</span><select name="method">'+methodOptions+'</select></label>';
+   return '<section class="data-card"><h2>Pagamento no caixa canônico</h2><p>Venda '+esc(c.saleNumber||c.saleId.slice(0,8))+
+      ' · '+money(c.totalCents||0)+'</p>'+
+      (split?'<p>'+split.parts+' partes · Taxa de serviço '+money(split.serviceChargeCents)+'</p>':'')+
+      (c.status==='COMPLETED'?'<p>Pagamento concluído.</p>':
+        '<form class="vertical-form" data-r4-form="payment">'+tenders+
+        '<input type="hidden" name="saleId" value="'+esc(c.saleId)+'">'+
+        '<input type="hidden" name="totalCents" value="'+esc(c.totalCents)+'">'+
+        '<p>Para concluir, o caixa do terminal precisa estar aberto.</p><button class="primary-button">Concluir recebimento</button></form>')+
+      '</section>';
  }
  function render(){
    if(!host)return;
