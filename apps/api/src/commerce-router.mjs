@@ -390,9 +390,9 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
       }
       requireAccess(member,'sales.create',user);
       if(parts.length===3&&parts[2]==='customer'&&method==='POST')
-        return json({sale:await service.assignSaleCustomer(tenant,branch,id,body.customerId)});
+        return json({sale:await service.assignSaleCustomer(tenant,branch,id,body.customerId,key)});
       if(parts.length===3&&parts[2]==='seller'&&method==='POST')
-        return json({sale:await service.assignSaleSeller(tenant,branch,id,body.sellerId)});
+        return json({sale:await service.assignSaleSeller(tenant,branch,id,body.sellerId,key)});
       if(parts[2]==='items'&&parts[3]==='configured'&&parts.length===4&&method==='POST')
         return json({sale:await service.addConfiguredItem(tenant,branch,id,body,key)});
       if(parts[2]==='items'&&parts[3]==='weighted'&&parts.length===4&&method==='POST')
