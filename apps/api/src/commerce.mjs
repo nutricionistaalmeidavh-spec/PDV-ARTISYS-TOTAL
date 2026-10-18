@@ -6,6 +6,7 @@ import inventoryRules from '../../../packages/core/js/domains/inventory/inventor
 import cashRules from '../../../packages/core/js/domains/cash/cash-rules.js';
 import {createSaleReturnAdapter} from './sale-reversals.mjs';
 import {createLotLedger} from './inventory-lot-ledger.mjs';
+import {pricedSaleLines} from './sale-configured-lines.mjs';
 import {createCatalogDepthService} from './catalog-depth.mjs';
 import {createStorageLocationsService} from './storage-locations.mjs';
 import {createPurchasingService} from './purchasing.mjs';
@@ -68,7 +69,7 @@ function formatSale(sale,items=[],payments=[]){
     discountCents:sale.discount_cents,totalCents:sale.total_cents,
     changeCents:sale.change_cents,completedAt:sale.completed_at,
     items:items.map(row=>({
-      id:row.id,productId:row.product_id,productName:row.product_name,
+      id:row.id,parentItemId:row.parent_item_id||null,productId:row.product_id,productName:row.product_name,
       sku:row.sku,quantity:row.quantity_milli/1000,
       unitPriceCents:row.unit_price_cents,
       catalogUnitPriceCents:row.catalog_unit_price_cents??row.unit_price_cents,
@@ -109,11 +110,12 @@ export function createCommerceService(db,{now=nowISO}={}){
       (SELECT o.reason FROM sale_item_price_overrides o
        WHERE o.sale_item_id=i.id ORDER BY o.created_at DESC,o.id DESC LIMIT 1) AS price_override_reason
       FROM sale_items i WHERE i.sale_id=? ORDER BY i.created_at,i.id`,sale.id);
+    const priced=await pricedSaleLines(all,sale.tenant_id,sale.branch_id,sale.id,items);
     const payments=await all('SELECT * FROM sale_payments WHERE sale_id=? ORDER BY created_at,id',sale.id);
     // A store-credit tender belongs to the credit ledger, not to cash or card payments.
     const credit=await all("SELECT id,'STORE_CREDIT' AS method,amount_cents AS amount_cents FROM customer_credit_ledger WHERE tenant_id=? AND branch_id=? AND sale_id=? AND type='CHARGE'",sale.tenant_id,sale.branch_id,sale.id);
     const returns=await first('SELECT COALESCE(SUM(amount_cents),0) AS refundedCents FROM sale_returns WHERE tenant_id=? AND branch_id=? AND sale_id=?',sale.tenant_id,sale.branch_id,sale.id);
-    const original=formatSale(sale,items,[...payments,...credit]);
+    const original=formatSale(sale,priced,[...payments,...credit]);
     return {...original,refundedCents:returns.refundedCents,netTotalCents:original.totalCents-returns.refundedCents};
   };
   const requireOpen=sale=>{if(sale.status!=='OPEN')throw error(409,'Esta venda não está aberta. Atualize e continue.');};
@@ -209,10 +211,13 @@ export function createCommerceService(db,{now=nowISO}={}){
     // The original desktop recalculate() caps persisted discounts whenever a
     // line is added, removed, re-priced, or its quantity changes. Keep the
     // original single-sale ledger and avoid a latent over-discount on re-add.
-    await run(`UPDATE sales SET discount_cents=MIN(discount_cents,COALESCE((
-        SELECT SUM(ROUND(unit_price_cents*quantity_milli/1000.0)) FROM sale_items
-        WHERE sale_id=sales.id AND tenant_id=sales.tenant_id AND branch_id=sales.branch_id
-      ),0)) WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'`,id,tenant,branch);
+    const parents=await all('SELECT * FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=?',id,tenant,branch);
+    const lines=await pricedSaleLines(all,tenant,branch,id,parents);
+    const cap=calculateSaleTotals({items:lines.map(i=>({
+      unitPriceCents:i.unit_price_cents,quantity:i.quantity_milli/1000
+    })),discountCents:0}).subtotalCents;
+    await run('UPDATE sales SET discount_cents=MIN(discount_cents,?) WHERE id=? AND tenant_id=? AND branch_id=? AND status=\'OPEN\'',
+      cap,id,tenant,branch);
     return snapshot(tenant,branch,id);
   };
   const listing=async(tenant,branch,limit=25,status=null)=>{
@@ -1000,7 +1005,11 @@ export function createCommerceService(db,{now=nowISO}={}){
         .sort((x,y)=>x.method.localeCompare(y.method));
       const originalsByProduct=await all(`SELECT i.product_id AS productId,MAX(i.product_name) AS name,
         SUM(i.quantity_milli) AS milli,COUNT(DISTINCT i.sale_id) AS salesCount,
-        SUM(i.quantity_milli*i.unit_price_cents)/1000 AS grossCents
+        SUM(CASE WHEN EXISTS(
+          SELECT 1 FROM sale_configured_lines cl WHERE cl.sale_item_id=i.id
+        ) THEN (SELECT SUM(cl.quantity_milli*cl.unit_price_cents)
+          FROM sale_configured_lines cl WHERE cl.sale_item_id=i.id)
+        ELSE i.quantity_milli*i.unit_price_cents END)/1000 AS grossCents
         FROM sale_items i JOIN sales s ON s.id=i.sale_id AND s.tenant_id=i.tenant_id AND s.branch_id=i.branch_id
         WHERE i.tenant_id=? AND i.branch_id=? AND s.status IN('COMPLETED','CANCELLED')
           AND s.completed_at BETWEEN ? AND ?
@@ -1183,58 +1192,111 @@ export function createCommerceService(db,{now=nowISO}={}){
     },
     async addConfiguredItem(tenant,branch,id,body,header){
       const key=requiredMutation(body,header),scope='sale.add-configured:'+id;
-      const prior=await applied(tenant,scope,key);
-      if(prior)return snapshot(tenant,branch,id);
+      if(await applied(tenant,scope,key))return snapshot(tenant,branch,id);
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
-      const p=await product(tenant,body?.productId);
-      const milli=quantityMilli(body?.quantity??1);
+      const p=await product(tenant,body?.productId),milli=quantityMilli(body?.quantity??1);
       if(!milli)throw error(400,'Quantidade inválida.');
       const note=body?.note??'';
       if(typeof note!=='string'||note.length>240||
-         /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(note))
+         [...note].some(ch=>ch.charCodeAt(0)<32&&![9,10,13].includes(ch.charCodeAt(0))))
         throw error(400,'Observação inválida.');
+      const cleaned=note.trim();
       const quote=await checkoutConfig.quote(tenant,branch,p.id,body);
-      const configurationJSON=JSON.stringify(quote.configurationSnapshot);
-      const itemId=randomId();
-      const existing=await first('SELECT id FROM sale_items WHERE tenant_id=? AND branch_id=? AND sale_id=? AND product_id=?',
-        tenant,branch,id,p.id);
-      if(!existing&&(await all('SELECT id FROM sale_items WHERE sale_id=?',id)).length>=MAX_LINES)
-        throw error(400,'Máximo de 80 produtos por venda.');
-      // A configuration belongs to the SAME canonical sale_item. The primary
-      // uniqueness constraint permits one configuration per SKU in this phase.
-      // An incompatible choice or altered price must fail atomically rather
-      // than silently merging two different items into a single stock line.
-      await batch([
-        q(`INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,
-          product_name,sku,quantity_milli,unit_price_cents,created_at,
-          catalog_unit_price_cents,note,configuration_json)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
-          ON CONFLICT(sale_id,product_id) DO UPDATE SET quantity_milli=
-            CASE WHEN sale_items.configuration_json=excluded.configuration_json
-              AND sale_items.unit_price_cents=excluded.unit_price_cents
-              AND sale_items.note=excluded.note
-            THEN sale_items.quantity_milli+excluded.quantity_milli ELSE 0 END`,
-          itemId,tenant,branch,id,p.id,p.name,p.sku,milli,quote.unitPriceCents,
-          stamp(),p.sale_price_cents,note.trim(),configurationJSON),
-        audit(tenant,scope,key,{saleId:id,productId:p.id,quantity:milli/1000,
-          priceCents:quote.unitPriceCents,configuration:quote.configurationSnapshot})
-      ]);
+      const json=JSON.stringify(quote.configurationSnapshot),at=stamp();
+      const parent=await first(`SELECT * FROM sale_items WHERE tenant_id=?
+        AND branch_id=? AND sale_id=? AND product_id=?`,tenant,branch,id,p.id);
+      const children=parent?await all(`SELECT * FROM sale_configured_lines WHERE tenant_id=?
+        AND branch_id=? AND sale_id=? AND sale_item_id=?`,
+        tenant,branch,id,parent.id):[];
+      if(parent&&!parent.configuration_json&&!children.length)
+        throw error(409,'Produto simples já está na venda. Remova antes de personalizar.');
+      const matched=children.find(c=>c.configuration_json===json&&
+        c.unit_price_cents===quote.unitPriceCents&&c.note===cleaned);
+      const original=parent&&parent.configuration_json&&!children.length;
+      const parents=await all('SELECT * FROM sale_items WHERE sale_id=?',id);
+      const priced=await pricedSaleLines(all,tenant,branch,id,parents);
+      if(!matched&&priced.length+1>MAX_LINES)
+        throw error(400,'Máximo de 80 linhas de venda.');
+      const parentId=parent?.id||randomId(),statements=[];
+      if(!parent)statements.push(q(`INSERT INTO sale_items
+        (id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,
+         unit_price_cents,created_at,catalog_unit_price_cents,note,configuration_json)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        parentId,tenant,branch,id,p.id,p.name,p.sku,milli,quote.unitPriceCents,
+        at,p.sale_price_cents,cleaned,json));
+      else{
+        if(original)statements.push(q(`INSERT INTO sale_configured_lines
+          (id,tenant_id,branch_id,sale_id,sale_item_id,product_id,quantity_milli,
+           unit_price_cents,catalog_unit_price_cents,note,configuration_json,created_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,id,parentId,p.id,
+          parent.quantity_milli,parent.unit_price_cents,
+          parent.catalog_unit_price_cents??parent.unit_price_cents,
+          parent.note||'',parent.configuration_json,parent.created_at));
+        statements.push(q(`UPDATE sale_items SET quantity_milli=quantity_milli+?
+          WHERE id=? AND tenant_id=? AND branch_id=? AND sale_id=?`,
+          milli,parentId,tenant,branch,id));
+      }
+      if(matched)statements.push(q(`UPDATE sale_configured_lines
+        SET quantity_milli=quantity_milli+? WHERE id=? AND tenant_id=? AND branch_id=?
+        AND sale_id=?`,milli,matched.id,tenant,branch,id));
+      else statements.push(q(`INSERT INTO sale_configured_lines
+        (id,tenant_id,branch_id,sale_id,sale_item_id,product_id,quantity_milli,
+         unit_price_cents,catalog_unit_price_cents,note,configuration_json,created_at)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,id,parentId,p.id,
+         milli,quote.unitPriceCents,p.sale_price_cents,cleaned,json,at));
+      statements.push(audit(tenant,scope,key,{saleId:id,productId:p.id,parentItemId:parentId,
+        quantity:milli/1000,priceCents:quote.unitPriceCents,configuration:quote.configurationSnapshot}));
+      await batch(statements);
       return snapshotAfterCartChange(tenant,branch,id);
     },
     async changeConfiguredItemQuantity(tenant,branch,id,itemId,quantity){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const milli=quantityMilli(quantity);
       if(!milli)throw error(400,'Quantidade inválida.');
+      const child=await first(`SELECT * FROM sale_configured_lines WHERE tenant_id=?
+        AND branch_id=? AND sale_id=? AND id=?`,tenant,branch,id,itemId);
+      if(child){
+        const delta=milli-child.quantity_milli;
+        await batch([
+          q(`UPDATE sale_items SET quantity_milli=quantity_milli+?
+            WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?`,
+            delta,tenant,branch,id,child.sale_item_id),
+          q(`UPDATE sale_configured_lines SET quantity_milli=? WHERE id=? AND tenant_id=?
+            AND branch_id=? AND sale_id=?`,milli,itemId,tenant,branch,id)
+        ]);
+        return snapshotAfterCartChange(tenant,branch,id);
+      }
       const result=await run(`UPDATE sale_items SET quantity_milli=?
         WHERE sale_id=? AND tenant_id=? AND branch_id=? AND id=?
-          AND configuration_json IS NOT NULL`,milli,id,tenant,branch,itemId);
+          AND configuration_json IS NOT NULL
+          AND NOT EXISTS(SELECT 1 FROM sale_configured_lines c WHERE c.sale_item_id=sale_items.id)`,
+        milli,id,tenant,branch,itemId);
       if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
       return snapshotAfterCartChange(tenant,branch,id);
     },
     async removeConfiguredItem(tenant,branch,id,itemId){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
-      const result=await run(`DELETE FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=?
-        AND id=? AND configuration_json IS NOT NULL`,id,tenant,branch,itemId);
+      const child=await first(`SELECT * FROM sale_configured_lines WHERE tenant_id=?
+        AND branch_id=? AND sale_id=? AND id=?`,tenant,branch,id,itemId);
+      if(child){
+        const siblings=await all(`SELECT id FROM sale_configured_lines WHERE tenant_id=?
+          AND branch_id=? AND sale_id=? AND sale_item_id=?`,
+          tenant,branch,id,child.sale_item_id);
+        if(siblings.length===1)await run(`DELETE FROM sale_items WHERE id=? AND
+          tenant_id=? AND branch_id=? AND sale_id=?`,child.sale_item_id,tenant,branch,id);
+        else await batch([
+          q(`DELETE FROM sale_configured_lines WHERE id=? AND tenant_id=?
+            AND branch_id=? AND sale_id=?`,itemId,tenant,branch,id),
+          q(`UPDATE sale_items SET quantity_milli=quantity_milli-?
+            WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?`,
+            child.quantity_milli,tenant,branch,id,child.sale_item_id)
+        ]);
+        return snapshotAfterCartChange(tenant,branch,id);
+      }
+      const result=await run(`DELETE FROM sale_items WHERE sale_id=? AND tenant_id=?
+        AND branch_id=? AND id=? AND configuration_json IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM sale_configured_lines c WHERE c.sale_item_id=sale_items.id)`,
+        id,tenant,branch,itemId);
       if(result.meta?.changes!==1)throw error(404,'Item configurado não encontrado.');
       return snapshotAfterCartChange(tenant,branch,id);
     },
@@ -1247,12 +1309,17 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(typeof note!=='string'||note.length>240||
          /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(note))
         throw error(400,'Observação inválida: use até 240 caracteres.');
-      const item=await first('SELECT id FROM sale_items WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
+      const cleaned=note.trim();
+      const child=await first(`SELECT id FROM sale_configured_lines
+        WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?`,
+        tenant,branch,id,itemId);
+      const item=child||await first('SELECT id FROM sale_items WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
         tenant,branch,id,itemId);
       if(!item)throw error(404,'Item não encontrado nesta venda.');
-      const cleaned=note.trim();
       await batch([
-        q('UPDATE sale_items SET note=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
+        child?q('UPDATE sale_configured_lines SET note=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
+          cleaned,tenant,branch,id,itemId)
+          :q('UPDATE sale_items SET note=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND id=?',
           cleaned,tenant,branch,id,itemId),
         audit(tenant,scope,key,{saleId:id,itemId,note:cleaned,operatorId:user})
       ]);
@@ -1285,6 +1352,8 @@ export function createCommerceService(db,{now=nowISO}={}){
         FROM sale_items WHERE id=? AND sale_id=? AND tenant_id=? AND branch_id=?`,
         itemId,id,tenant,branch);
       if(!row)throw error(404,'Item não encontrado na venda.');
+      if(await first('SELECT id FROM sale_configured_lines WHERE sale_item_id=? LIMIT 1',row.id))
+        throw error(409,'Preço configurado depende das escolhas do catálogo. Edite a configuração antes de vender.');
       const price=requiredNumber(body?.unitPriceCents,'Preço unitário');
       const reason=text(body?.reason,240);
       if(reason.length<3)throw error(400,'Informe a justificativa da alteração de preço.');
@@ -1306,6 +1375,10 @@ export function createCommerceService(db,{now=nowISO}={}){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const milli=quantityMilli(quantity);
       if(!milli)throw error(400,'Quantidade inválida: até três casas decimais.');
+      const parent=await first('SELECT id FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=? AND product_id=?',
+        id,tenant,branch,productId);
+      if(parent&&await first('SELECT 1 AS found FROM sale_configured_lines WHERE sale_item_id=? LIMIT 1',parent.id))
+        throw error(409,'Altere a quantidade de cada configuração individualmente.');
       const result=await run('UPDATE sale_items SET quantity_milli=? WHERE sale_id=? AND tenant_id=? AND branch_id=? AND product_id=?',
         milli,id,tenant,branch,productId);
       if(!result.meta?.changes)throw error(404,'Item não encontrado.');
@@ -1325,12 +1398,13 @@ export function createCommerceService(db,{now=nowISO}={}){
       // Persist the applied value, not the larger request: a later cart change
       // must not resurrect a discount that was never authorized against its total.
       // The subquery rounds each positive item in cents just like pricing.js.
-      const result=await run(`UPDATE sales SET discount_cents=MIN(?,COALESCE((
-          SELECT SUM(ROUND(unit_price_cents*quantity_milli/1000.0)) FROM sale_items
-          WHERE sale_id=sales.id AND tenant_id=sales.tenant_id AND branch_id=sales.branch_id
-        ),0))
-        WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'`,
-        value,id,tenant,branch);
+      const parents=await all('SELECT * FROM sale_items WHERE sale_id=? AND tenant_id=? AND branch_id=?',id,tenant,branch);
+      const priced=await pricedSaleLines(all,tenant,branch,id,parents);
+      const cap=calculateSaleTotals({items:priced.map(i=>({
+        unitPriceCents:i.unit_price_cents,quantity:i.quantity_milli/1000
+      })),discountCents:0}).subtotalCents;
+      const result=await run("UPDATE sales SET discount_cents=MIN(?,?) WHERE id=? AND tenant_id=? AND branch_id=? AND status='OPEN'",
+        value,cap,id,tenant,branch);
       if(result.meta?.changes!==1)throw error(409,'A venda mudou de estado. Atualize antes de aplicar o desconto.');
       return snapshot(tenant,branch,id);
     },
@@ -1357,7 +1431,8 @@ export function createCommerceService(db,{now=nowISO}={}){
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
       const rows=await all('SELECT * FROM sale_items WHERE sale_id=? ORDER BY created_at,id',id);
       if(!rows.length)throw error(400,'Adicione ao menos um produto.');
-      const mapped=rows.map(row=>({unitPriceCents:row.unit_price_cents,quantity:row.quantity_milli/1000}));
+      const pricedRows=await pricedSaleLines(all,tenant,branch,id,rows);
+      const mapped=pricedRows.map(row=>({unitPriceCents:row.unit_price_cents,quantity:row.quantity_milli/1000}));
       const totals=calculateSaleTotals({items:mapped,discountCents:sale.discount_cents});
       const payments=body?.payments;
       if(!Array.isArray(payments)||!payments.length||payments.length>6)throw error(400,'Informe a forma de pagamento.');
@@ -1392,7 +1467,9 @@ export function createCommerceService(db,{now=nowISO}={}){
         subtotalCents:totals.subtotalCents,discountCents:totals.discountCents,
         totalCents:totals.totalCents,changeCents:payment.changeDueCents,
         branchId:branch,terminalId:sale.terminal_id||'DEFAULT',completedAt,
-        items:rows.map(x=>({productId:x.product_id,quantity:x.quantity_milli/1000,unitPriceCents:x.unit_price_cents})),
+        items:pricedRows.map(x=>({saleItemId:x.id,parentItemId:x.parent_item_id||x.id,
+          productId:x.product_id,quantity:x.quantity_milli/1000,unitPriceCents:x.unit_price_cents,
+          configuration:x.configuration_json?JSON.parse(x.configuration_json):null})),
         payments:groupedPayments
       };
       const statements=[
@@ -1459,14 +1536,15 @@ export function createCommerceService(db,{now=nowISO}={}){
       // Commission rules are read from the single tenant registry and snapshotted
       // in an immutable financial ledger in the same transaction as sale completion.
       const sellerId=sale.seller_id||sale.operator_id;
-      const discounted=allocateSaleDiscount(rows.map(r=>({id:r.id,productId:r.product_id,unitPriceCents:r.unit_price_cents,quantity:r.quantity_milli/1000})),totals.discountCents);
+      const discounted=allocateSaleDiscount(pricedRows.map(r=>({id:r.id,parentItemId:r.parent_item_id||r.id,
+        productId:r.product_id,unitPriceCents:r.unit_price_cents,quantity:r.quantity_milli/1000})),totals.discountCents);
       for(const line of discounted){
         const rule=await first(`SELECT commission_bps AS bps FROM seller_commission_rules
           WHERE tenant_id=? AND seller_id=? AND active=1 AND (product_id=? OR product_id IS NULL)
           ORDER BY CASE WHEN product_id=? THEN 0 ELSE 1 END LIMIT 1`,tenant,sellerId,line.productId,line.productId);
         const commissionCents=Math.round(line.netTotalCents*(rule?.bps||0)/10000);
         if(commissionCents>0)statements.push(q(`INSERT INTO seller_commission_ledger(id,tenant_id,branch_id,seller_id,sale_id,sale_item_id,kind,amount_cents,reference_key,occurred_at)
-          VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,sellerId,id,line.id,'EARNED',commissionCents,'sale:'+id+':item:'+line.id,completedAt));
+          VALUES(?,?,?,?,?,?,?,?,?,?)`,randomId(),tenant,branch,sellerId,id,line.parentItemId,'EARNED',commissionCents,'sale:'+id+':item:'+line.id,completedAt));
       }
       const wholesaleOrder=await first('SELECT id FROM wholesale_orders WHERE tenant_id=? AND branch_id=? AND sale_id=? AND status=?',tenant,branch,id,'CONFIRMED');
       if(wholesaleOrder)statements.push(q("UPDATE wholesale_orders SET status='FULFILLED',updated_at=? WHERE tenant_id=? AND branch_id=? AND sale_id=? AND status='CONFIRMED'",completedAt,tenant,branch,id));

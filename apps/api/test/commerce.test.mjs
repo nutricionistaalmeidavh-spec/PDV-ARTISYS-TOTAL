@@ -31,6 +31,7 @@ const lotReceiptMigration=readFileSync(new URL('../migrations/0016_inventory_lot
 const minimumMigration=readFileSync(new URL('../migrations/0017_inventory_minimum_levels.sql',import.meta.url),'utf8');
 const storageMigration=readFileSync(new URL('../migrations/0019_inventory_storage_locations.sql',import.meta.url),'utf8');
 const lotBalanceMigration=readFileSync(new URL('../migrations/0018_inventory_lot_balances.sql',import.meta.url),'utf8');
+const configuredLinesMigration=readFileSync(new URL('../migrations/0020_sale_configured_lines.sql',import.meta.url),'utf8');
 // A fixed business date must reach the commerce adapter, not only session authentication.
 // Otherwise UTC midnight makes period-filtered reports silently disappear in CI.
 const NOW=Date.parse('2026-10-17T14:00:00Z');
@@ -39,7 +40,7 @@ const password='SafeTestPasswordForPdv2026!';
 let num=0;
 const next=()=>('mutation-'+(++num)+'-long');
 async function setup(){
-  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);db.exec(checkoutConfigurationMigration);db.exec(salesTargetsMigration);db.exec(lotReceiptMigration);db.exec(minimumMigration);db.exec(storageMigration);db.exec(lotBalanceMigration);
+  const db=openLocalDatabase();db.exec(identity);db.exec(commerce);db.exec(finance);db.exec(vertical);db.exec(parity);db.exec(transfers);db.exec(reversals);db.exec(catalog);db.exec(purchasing);db.exec(media);db.exec(notesMigration);db.exec(cashTerminalMigration);db.exec(checkoutConfigurationMigration);db.exec(salesTargetsMigration);db.exec(lotReceiptMigration);db.exec(minimumMigration);db.exec(storageMigration);db.exec(lotBalanceMigration);db.exec(configuredLinesMigration);
   const pass=await hashPassword(password);
   for(const [id,email] of [['owner','owner@test.com'],['other','other@test.com'],['viewer','viewer@test.com']])
     await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
@@ -1256,12 +1257,59 @@ test('P3 configured item rejects invalid groups, strangers, cross-tenant selecti
     const sale=(await x.write('a','sales',{branchId:'branch-a'})).body.sale.id;
     const addition='sales/'+sale+'/items/configured';
     assert.equal((await x.write('a',addition,{branchId:'branch-a',productId,quantity:1,selections:['calabresa']})).status,200);
-    assert.equal((await x.write('a',addition,{branchId:'branch-a',productId,quantity:1,selections:['marguerita']})).status,409,
-      'two differently configured units must never be silently merged or undercharged');
+    assert.equal((await x.write('a',addition,{branchId:'branch-a',productId,quantity:1,selections:['marguerita']})).status,200,
+      'same SKU can have distinct validated configurations');
     assert.equal((await x.write('a',addition,{branchId:'branch-a',productId,quantity:1,selections:['calabresa']})).status,200);
     const detail=await x.get('a','sales/'+sale+'?branchId=branch-a');
-    assert.equal(detail.body.sale.items[0].quantity,2);
-    assert.equal(detail.body.sale.items[0].unitPriceCents,1200);
+    assert.equal(detail.body.sale.items.length,2,'two priced choice identities under one catalog SKU');
+    const slices=new Map(detail.body.sale.items.map(i=>[i.configuration.options[0].id,i]));
+    assert.equal(slices.get('calabresa').quantity,2);
+    assert.equal(slices.get('marguerita').quantity,1);
+    assert.equal(slices.get('calabresa').unitPriceCents,1200);
+    assert.equal(slices.get('marguerita').unitPriceCents,1150);
+    assert.equal(detail.body.sale.subtotalCents,3550);
+    assert.equal(new Set(detail.body.sale.items.map(i=>i.productId)).size,1);
+    assert.equal(new Set(detail.body.sale.items.map(i=>i.parentItemId)).size,1);
+    await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+    assert.equal((await x.write('a','sales/'+sale+'/complete',{
+      branchId:'branch-a',payments:[{method:'PIX',amountCents:3550}]})).status,200);
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock
+      .find(i=>i.productId===productId).quantity,1);
+    const reportBefore=await x.get('a','reports/summary?branchId=branch-a&from=2026-10-17&to=2026-10-17');
+    assert.equal(reportBefore.status,200,reportBefore.body.error);
+    assert.equal(reportBefore.body.report.products.find(p=>p.productId===productId).grossCents,3550);
+    const marginsBefore=await x.get('a','reports/margins?branchId=branch-a&from=2026-10-17&to=2026-10-17');
+    assert.equal(marginsBefore.status,200,marginsBefore.body.error);
+    assert.equal(marginsBefore.body.margin.revenueCents,3550);
+    assert.equal(marginsBefore.body.margin.costCents,0);
+    const returned={branchId:'branch-a',saleId:sale,
+      reason:'Cliente devolveu somente a configuração marguerita',
+      items:[{saleItemId:slices.get('marguerita').id,quantity:1}],
+      refunds:[{method:'PIX',amountCents:1150}]};
+    const quote=await x.write('a','sales/'+sale+'/returns/quote',returned);
+    assert.equal(quote.status,200,quote.body.error);
+    assert.equal(quote.body.quote.amountCents,1150);
+    const refund=await x.write('a','returns',returned);
+    assert.equal(refund.status,201,refund.body.error);
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock
+      .find(i=>i.productId===productId).quantity,2);
+    const historic=await x.get('a','sales/'+sale+'?branchId=branch-a');
+    assert.equal(historic.body.sale.items.length,2);
+    assert.equal(historic.body.sale.netTotalCents,2400);
+    const marginsAfter=await x.get('a','reports/margins?branchId=branch-a&from=2026-10-17&to=2026-10-17');
+    assert.equal(marginsAfter.status,200,marginsAfter.body.error);
+    assert.equal(marginsAfter.body.margin.revenueCents,2400);
+    assert.equal(marginsAfter.body.margin.returnedCents,1150);
+    const summaryAfter=await x.get('a','reports/summary?branchId=branch-a&from=2026-10-17&to=2026-10-17');
+    assert.equal(summaryAfter.status,200,summaryAfter.body.error);
+    assert.equal(summaryAfter.body.report.products.find(p=>p.productId===productId).grossCents,3550);
+    assert.equal(summaryAfter.body.report.products.find(p=>p.productId===productId).refundedCents,1150);
+    assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM sale_items WHERE sale_id=?')
+      .bind(sale).first()).n,1,'the historical FK parent remains exactly one');
+    assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM sale_configured_lines WHERE sale_id=?')
+      .bind(sale).first()).n,2);
+    assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM sale_configured_return_lines WHERE sale_id=?')
+      .bind(sale).first()).n,1);
     assert.equal((await x.get('b','products/'+productId+'/configuration?branchId=branch-b',x.other)).status,404);
   }finally{x.close();}
 });
