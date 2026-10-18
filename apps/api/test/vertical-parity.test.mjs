@@ -469,3 +469,16 @@ test('R4 cap-036: configured pizza enters unified kitchen order with immutable p
    assert.equal(sale.status,201,JSON.stringify(sale.body));assert.equal(sale.body.sale.totalCents,10000);
  }finally{x.close();}
 });
+
+test('R4 cap-035: direct food item bypasses production safely without duplicate KDS work',async()=>{
+ const x=await setup();try{
+   const product=(await x.request('a','products','POST',{branchId:'filial-a',sku:'DIRECT-FOOD',name:'Água mineral',salePriceCents:400,trackStock:false})).body.product;
+   assert.equal((await x.request('a','restaurant/kitchen/routes','POST',{branchId:'filial-a',productId:product.id,mode:'DIRECT'})).status,201);
+   const order=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:product.id,quantity:1}]});
+   assert.equal(order.status,201,JSON.stringify(order.body));
+   const k=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets;
+   assert.equal(k.length,1);assert.equal(k[0].status,'READY');
+   assert.equal((await x.request('a',`restaurant/orders/${order.body.order.id}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+   assert.equal((await x.db.prepare('SELECT count(*) AS n FROM r4_station_tickets').bind().first()).n,0);
+ }finally{x.close();}
+});
