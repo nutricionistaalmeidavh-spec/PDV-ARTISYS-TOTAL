@@ -36,7 +36,10 @@ WHEN NOT EXISTS(SELECT 1 FROM inventory_lot_receipts l WHERE l.id=NEW.lot_receip
  OR (NEW.sale_item_id IS NOT NULL AND NOT EXISTS(
    SELECT 1 FROM sale_items i WHERE i.id=NEW.sale_item_id
    AND i.tenant_id=NEW.tenant_id AND i.branch_id=NEW.branch_id
-   AND i.product_id=NEW.product_id))
+   AND (i.product_id=NEW.product_id OR EXISTS(
+     SELECT 1 FROM sale_stock_allocations a
+     WHERE a.tenant_id=NEW.tenant_id AND a.branch_id=NEW.branch_id
+      AND a.sale_item_id=i.id AND a.component_product_id=NEW.product_id))))
 BEGIN SELECT RAISE(ABORT,'LOT_ENTRY_LEDGER_MISMATCH'); END;
 CREATE TRIGGER inventory_lot_entry_project AFTER INSERT ON inventory_lot_entries
 BEGIN
@@ -59,10 +62,3 @@ CREATE TRIGGER inventory_lot_entry_no_update BEFORE UPDATE ON inventory_lot_entr
 BEGIN SELECT RAISE(ABORT,'LOT_LEDGER_IMMUTABLE'); END;
 CREATE TRIGGER inventory_lot_entry_no_delete BEFORE DELETE ON inventory_lot_entries
 BEGIN SELECT RAISE(ABORT,'LOT_LEDGER_IMMUTABLE'); END;
-CREATE TRIGGER inventory_lot_balance_no_direct_update BEFORE UPDATE ON inventory_lot_balances
-WHEN NOT EXISTS(SELECT 1 FROM inventory_lot_entries e WHERE e.id IS NULL)
-BEGIN
- -- Position updates are performed by the ledger trigger. Authoritative writes
- -- are protected at the API edge; do not use this table as a second stock source.
- SELECT 1;
-END;
