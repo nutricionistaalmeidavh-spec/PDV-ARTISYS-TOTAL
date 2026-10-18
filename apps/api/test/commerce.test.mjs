@@ -116,6 +116,20 @@ test('P2 inventory count is tenant-scoped, idempotent, zero-aware and rejects st
     assert.equal((await x.write('a',path,{...count,expectedQuantity:2,countedQuantity:1},{who:x.viewer})).status,403);
     assert.equal((await x.write('b',path,{...count,branchId:'branch-b',expectedQuantity:0,countedQuantity:1},{who:x.other})).status,404);
     assert.equal((await x.get('b','inventory?branchId=branch-b',x.other)).body.stock.length,0);
+    // Distinct terminals reading the same snapshot must never both post
+    // an adjustment for that snapshot, even with distinct mutation IDs.
+    const competing=await Promise.all([
+      x.write('a',path,{...count,expectedQuantity:2,countedQuantity:1},{key:next()}),
+      x.write('a',path,{...count,expectedQuantity:2,countedQuantity:0},{key:next()})
+    ]);
+    assert.deepEqual(competing.map(r=>r.status).sort(),[201,409],
+      'exactly one stale-snapshot adjustment can commit');
+    assert.ok([0,1].includes(await balance()));
+    const finalMovements=await x.db.prepare(
+      "SELECT COUNT(*) AS n FROM inventory_movements WHERE tenant_id='a' AND product_id=? AND type='adjustment'"
+    ).bind(productId).first();
+    assert.equal(finalMovements.n,4,'one count per committed stock movement');
+
   }finally{x.close();}
 });
 
