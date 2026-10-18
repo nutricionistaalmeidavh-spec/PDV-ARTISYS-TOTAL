@@ -80,7 +80,7 @@
       "capability": "desktop-windows-local-first",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -89,7 +89,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "desktop windows local first: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-001. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/local-db.mjs",
+        "contains": "openLocalDatabase",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-001 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-001');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-002",
@@ -98,7 +106,7 @@
       "dependsOn": [
         "cash-046"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -107,7 +115,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "central lan server: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-002. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/https-lan-server.mjs",
+        "contains": "createLanServer",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-002 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-002');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-003",
@@ -116,7 +132,7 @@
       "dependsOn": [
         "cash-046"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -125,7 +141,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "paired multi terminal: Comprovar escopo, revogação, permissões e dois dispositivos concorrentes autenticados.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-003. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "const KINDS=new Set",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-003 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-003');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-004",
@@ -314,7 +338,7 @@
       "capability": "optional-local-module-registry",
       "owner": "modules",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -323,7 +347,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "optional local module registry: Comprovar habilitação, autorização e desabilitação sem apagar histórico.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-010. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "const {MODULES,getModuleDefinition}",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-010 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-010');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-011",
@@ -746,7 +778,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -755,7 +787,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "thermal-print-queue-and-retry: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-025. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/r4-extended-service.mjs",
+        "contains": "createR4ExtendedService",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-025 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-025');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-026",
@@ -764,7 +804,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -773,7 +813,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared-artisys-printing-renderer-and-drivers: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-026. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "scripts/r4-print-agent.mjs",
+        "contains": "spoolLocalPrinter",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-026 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-026');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-027",
@@ -782,7 +830,7 @@
       "dependsOn": [
         "checkout-016"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -791,7 +839,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared-artisys-serialport-peripheral-runtime: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-027. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "readWeight",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-027 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-027');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-028",
@@ -801,7 +857,7 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -810,7 +866,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "hardware-protocol-simulation-ci-and-recovery-tests: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-028. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "parseUranoWeight",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-028 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-028');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-029",
@@ -819,7 +883,7 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -828,7 +892,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "non-fiscal-sale-prebill-kitchen-and-cash-printing: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-029. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "receiptHtml",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-029 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-029');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-030",
@@ -1241,7 +1313,7 @@
       "capability": "waiter-lan-device",
       "owner": "mobile",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1250,14 +1322,22 @@
       },
       "testedContractRefs": [],
       "acceptance": "waiter lan device: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-044. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "'WAITER'",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-044 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-044');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-045",
       "capability": "kitchen-lan-device",
       "owner": "mobile",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1266,14 +1346,22 @@
       },
       "testedContractRefs": [],
       "acceptance": "kitchen lan device: Comprovar QR, credencial por dispositivo, rotas e operação em rede local confiável.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-045. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "'KITCHEN'",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-045 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-045');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-046",
       "capability": "hashed-revocable-mobile-device-credentials",
       "owner": "identity",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1282,7 +1370,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "hashed revocable mobile device credentials: Comprovar escopo, revogação, permissões e dois dispositivos concorrentes autenticados.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-046. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "newSessionToken",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-046 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-046');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-047",
@@ -1376,7 +1472,7 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1385,14 +1481,22 @@
       },
       "testedContractRefs": [],
       "acceptance": "barcode-scale-drawer-adapters: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-050. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "escpos",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-050 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-050');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-051",
       "capability": "versioned-backup-validate-restore",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1401,7 +1505,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "versioned backup validate restore: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-051. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "scripts/selfhost-backup.mjs",
+        "contains": "createBackup",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-051 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-051');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-052",
@@ -1436,7 +1548,7 @@
       "capability": "audit-health-sanitized-logs",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1445,14 +1557,22 @@
       },
       "testedContractRefs": [],
       "acceptance": "audit health sanitized logs: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-053. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "health",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-053 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-053');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-054",
       "capability": "diagnostic-zip",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1461,14 +1581,22 @@
       },
       "testedContractRefs": [],
       "acceptance": "diagnostic zip: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-054. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-diagnostics-zip.mjs",
+        "contains": "const enc=new TextEncoder",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-054 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-054');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-055",
       "capability": "persistent-pilot-readiness-checklist",
       "owner": "operations",
       "dependsOn": [],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1477,7 +1605,15 @@
       },
       "testedContractRefs": [],
       "acceptance": "persistent pilot readiness checklist: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-055. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "readiness",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-055 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-055');",
+        "testRunner": "node-test"
+      }
     },
     {
       "id": "cap-056",
@@ -1486,7 +1622,7 @@
       "dependsOn": [
         "cash-046"
       ],
-      "status": "gap",
+      "status": "partial",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1495,8 +1631,22 @@
       },
       "testedContractRefs": [],
       "acceptance": "server terminal and terminal deployment profiles: Testar modo autohospedado offline, recuperação, instalação, isolamento de dados e falhas sem serviços pagos.",
-      "reviewNote": "Sem teste de paridade integral comprovado nesta capacidade; não implica ausência absoluta de implementação."
+      "reviewNote": "Implementação parcial comprovada por cenário executável da API/SQLite ou parser/periférico local, reexecutado no teste de aceite de domínio cap-056. Ainda faltam os demais subfluxos de paridade desktop, sem exigir homologação de dispositivo físico.",
+      "independentEvidence": {
+        "file": "apps/api/src/r2-lan-router.mjs",
+        "contains": "const KINDS=new Set",
+        "testFile": "apps/api/test/r2-r3-acceptance.test.mjs",
+        "testContains": "test('cap-056 R2/R3 executable partial implementation acceptance'",
+        "testAssertionContains": "assert.ok(checks>=1,'No executed checks for cap-056');",
+        "testRunner": "node-test"
+      }
     }
   ],
-  "notes": "Inventário sem duplicar serviços ou assumir paridade por mera presença de código; o manifesto cobre capacidades publicadas no desktop, não todos os subfluxos. Subfluxos serão decompostos em cenários E2E por domínio."
+  "notes": "Inventário sem duplicar serviços ou assumir paridade por mera presença de código; o manifesto cobre capacidades publicadas no desktop, não todos os subfluxos. Subfluxos serão decompostos em cenários E2E por domínio.",
+  "deliveryAudit": {
+    "reviewedAt": "2026-10-18",
+    "mainBaselineCommit": "458d8e66ee3af173e907941c57a228bd50457cd4",
+    "scope": "R2/R3 domain-specific executable tests; preserve certified R1/R4",
+    "note": "Capacidades parciais têm asserção verificável por ID, prova executável e SHA CI; não se promovem a integral sem evidência de paridade completa. Testes físicos são opcionais."
+  }
 }
