@@ -118,7 +118,7 @@ Os contratos novos ampliam o R4, mas não equivalem automaticamente à certifica
 
 ## PR #65 — tickets KDS são snapshots, não consultas às rotas atuais
 
-A migração incremental `0025_r4_kds_ticket_snapshots.sql` cria `r4_station_ticket_items` imutável. Ao receber um pedido, a mesma transação persiste a estação, os itens, as quantidades, as configurações de pizza e o ticket. A fila consulta **somente essa fotografia**; alterações posteriores nas rotas não deslocam retrospectivamente o pedido para outra cozinha.
+A migração incremental `0026_r4_kds_ticket_snapshots.sql` cria `r4_station_ticket_items` imutável. Ao receber um pedido, a mesma transação persiste a estação, os itens, as quantidades, as configurações de pizza e o ticket. A fila consulta **somente essa fotografia**; alterações posteriores nas rotas não deslocam retrospectivamente o pedido para outra cozinha.
 
 O upgrade recupera itens de tickets anteriores apenas quando a rota ainda permite identificar a estação. Quando essa atribuição histórica não é comprovável, deixa o ticket sem itens retrospectivos ao invés de inventar um destino; o registro original de pedidos e caixa permanece íntegro. Para instalações sem uso anterior não há dados legados a converter.
 
