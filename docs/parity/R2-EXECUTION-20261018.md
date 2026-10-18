@@ -30,26 +30,26 @@ a API de pareamento está indisponível fora de LAN_MODE=true.
 
 ## Rastreabilidade dos 14 IDs
 
-| ID | Escopo e prova atualmente disponível | Bloqueio restante |
+| ID | Escopo e prova atualmente disponível | Lacuna de código / evidência executável |
 | --- | --- | --- |
-| cap-001 | Servidor local Node/SQLite | Instalação/serviço e falha física no Windows |
-| cap-002 | HTTPS LAN, autenticação, isolamento | Certificado confiável e dois PCs reais |
-| cap-003 | Pareamento, troca de operador e revogação efetiva | Concorrência e reinício em máquinas reais |
-| cap-010 | Registro FOOD/WHOLESALE habilitável por loja, API e UI com bloqueio servidor | Comparação independente dos subfluxos desktop e regressão física |
-| cap-042 | QR HTTPS offline, gerador compartilhado | Ensaio em smartphone real |
-| cap-044 | Pareamento WAITER e RBAC | Jornada do salão em tablet real |
-| cap-045 | Pareamento KITCHEN e RBAC | Fluxo KDS e reconexão em hardware |
-| cap-046 | Token 256 bits, hash, escopo, revogação | Homologação de troca de operador e recuperação |
-| cap-047 | Mesma PWA HTTPS adaptável | Instalação e operação em aparelhos reais |
-| cap-051 | Backup nativo e restauração não destrutiva | Ensaio de recuperação completo supervisionado |
+| cap-001 | Servidor local Node/SQLite | Testes automatizados de inicialização Windows e falha/restart |
+| cap-002 | HTTPS LAN, autenticação, isolamento | TLS e duas sessões simultâneas em integração automatizada, prova completa da operação |
+| cap-003 | Pareamento, troca de operador e revogação efetiva | Concorrência, persistência e reinício automatizados |
+| cap-010 | Registro FOOD/WHOLESALE habilitável por loja, API e UI com bloqueio servidor | Comparação automatizada dos subfluxos desktop e regressão |
+| cap-042 | QR HTTPS offline, gerador compartilhado | Teste E2E do QR e navegador móvel emulado |
+| cap-044 | Pareamento WAITER e RBAC | Jornada completa do salão em Chromium responsivo |
+| cap-045 | Pareamento KITCHEN e RBAC | Fluxo KDS e reconexão emulada |
+| cap-046 | Token 256 bits, hash, escopo, revogação | Teste integrado da troca de operador e recuperação |
+| cap-047 | Mesma PWA HTTPS adaptável | PWA instalada e executada em navegação emulada com falhas injetadas |
+| cap-051 | Backup nativo e restauração não destrutiva | Automação de recuperação completo em banco isolado |
 | cap-053 | Saúde, auditoria e isolamento LAN | Paridade integral dos logs sanitizados |
-| cap-054 | ZIP de suporte sanitizado | Validação de artefato Windows/Linux e baseline |
-| cap-055 | Checklist por tenant com referência persistente | Evidência física independente |
-| cap-056 | Servidor, PWA de terminais, pareamento | Troca de host e instalação completa real |
+| cap-054 | ZIP de suporte sanitizado | Validação automatizada do artefato Windows/Linux e baseline |
+| cap-055 | Checklist por tenant com referência persistente | Asserções automatizadas por capacidade e revisão de código |
+| cap-056 | Servidor, PWA de terminais, pareamento | Troca de host e instalação com teste de automação |
 
 **Nenhum status do inventário canônico é promovido por mera existência de
 arquivo ou testes em CI.** A certificação completa exige paridade desktop,
-dependências dos contratos, testes de campo e revisão no SHA exato.
+dependências dos contratos, testes automatizados e revisão de código no SHA exato; testes físicos são opcionais e não impedem `covered`.
 
 ## Operação
 
@@ -59,7 +59,7 @@ de TLS nem exponha SQLite ou a porta de acesso diretamente à Internet.
 
 Acesso: administrador faz login em Configurações > Rede local, gera código
 para a filial e função. O operador consome em seu navegador. Teste acesso
-com dois dispositivos físicos; registre venda concorrente e revogação.
+com duas sessões/instâncias de navegador no ambiente de testes; registre venda concorrente e revogação em suíte automatizada.
 
 Backup: execute scripts/selfhost-backup.mjs nos modos create, verify e
 restore com Node 22 --experimental-sqlite. Use novo destino de restore;
@@ -75,7 +75,7 @@ O arquivo de backup não é criptografado: use volume cifrado fora da web.
 - npm run test:selfhost
 - npm run test:parity
 
-Homologação física manual: preencher
+Inspeção presencial **opcional após código pronto**: caso desejada, preencher
 docs/parity/field-qa/R2-LAN-2-DEVICES-TEMPLATE.md com modelos, SO,
 CA/TLS, cenários de LAN sem internet, transação, reconexão e restore,
-revisor independente e evidências reais. CI não prova essas condições.
+registros do operador. Esse formulário não é critério de aceite nem bloqueia classificação ou merge.
