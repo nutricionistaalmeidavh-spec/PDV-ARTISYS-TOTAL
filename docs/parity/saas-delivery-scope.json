@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "pdv-artisys-total",
+  "primaryProduct": "web-saas-responsive-pwa",
+  "primaryDelivery": "hosted-https-web-api",
+  "primaryRuntime": "Cloudflare Workers + D1 (free tier, within platform limits)",
+  "optionalRuntime": "self-hosted Node.js + SQLite / HTTPS LAN",
+  "defaultClient": "Browser on desktop, tablet and mobile; no installer or local server on merchant device",
+  "sourceInventory": "docs/parity/desktop-capability-inventory.json",
+  "explanation": "Full 56 capability list is historical desktop parity, not the delivery gate for the hosted web SaaS. Only explicitly deferred desktop/LAN items are excluded from the primary SaaS backlog.",
+  "deferredCapabilityIds": [
+    {
+      "id": "cap-001",
+      "reason": "Desktop Windows local-first installer and local host lifecycle; SaaS requires browser access, not installation."
+    },
+    {
+      "id": "cap-047",
+      "reason": "Mobile UX via the local HTTPS LAN server, not responsive mobile browser/PWA access to hosted SaaS."
+    },
+    {
+      "id": "cap-056",
+      "reason": "Local server and terminal installer/distribution profiles are optional self-hosted deployments, not hosted SaaS requirements."
+    }
+  ],
+  "releasePolicy": "Hosted SaaS readiness depends on user-facing browser flows, tenant isolation, canonical API/DB, security, mobile responsive QA, backups and operated deployment; never force 56/56 desktop equivalence before SaaS launch.",
+  "note": "R2 software already merged is preserved; the scope overlay does not erase or change canonical desktop status."
+}

@@ -1,5 +1,7 @@
 # PDV Artisys Total — evolução SaaS do PDV ArtiSys
 
+**Produto principal: SaaS web/PWA por HTTPS**, acessível pelo navegador em PC, tablet e celular. **Não exige instalar executável, hospedar servidor no estabelecimento ou conectar terminais a uma LAN.** A API autoritativa fica no backend hospedado (Cloudflare Workers + D1 como opção da faixa gratuita), com autenticação, empresas/filiais e isolamento de dados. O modo Node/SQLite e HTTPS LAN é uma **alternativa self-hosted opcional**, não uma etapa para lançar o SaaS.
+
 Este é o **único repositório ativo do produto PDV Total**. O repositório [PDV-ARTISYS](https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS) permanece **intocado** e não é upstream de builds, deploys, licenças ou atualizações deste projeto.
 
 ## Estrutura do produto
@@ -16,7 +18,7 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 ## Estado de implementação — panorama auditável (18/10/2026)
 
 - **R1 — comercial e gestão:** 21/21 capacidades classificadas como `covered` no inventário, incluindo vendas, produtos, estoque, clientes, caixa, financeiro e relatórios; isso representa aceite de código, não homologação de produção.
-- **R2 — self-hosted / LAN:** 11/14 `covered`, 3/14 `partial`. O servidor Node.js 22 + SQLite serve **a mesma PWA e API autoritativa via HTTPS na LAN**; há login, perfis, credenciais de terminais, revogação e backup/restore testados. Instalação Windows e perfis finais de servidor/terminal ainda têm lacunas de paridade (`cap-001`, `cap-056`); acesso mobile local (`cap-047`) é parcial.
+- **R2 — alternativa self-hosted / LAN (não bloqueia o SaaS):** 11/14 `covered`, 3/14 `partial` na **matriz histórica de paridade desktop**. Os três itens `cap-001` (instalação Windows local), `cap-047` (mobile servido pela LAN local) e `cap-056` (perfil de instalação servidor/terminal) ficam explicitamente **fora da fila de entrega do SaaS hospedado**. A UI mobile web continua relevante e é verificada no navegador contra a API remota; não depende desses três itens. O código Node.js + SQLite + HTTPS LAN já existente fica preservado como opção de implantação.
 - **R3 — periféricos:** 8/8 `partial`, 0/8 `gap`. Além dos adaptadores web e do **conector local gratuito** com fila SQLite, foi implementada identificação não fiscal por filial neste navegador (nome, endereço, telefone e logo PNG no diálogo/PDF) e uma matriz versionada de protocolos simulados em `docs/parity/hardware-compatibility.json`. `cap-030` ainda requer persistência canônica compartilhada/snapshot de reimpressão; `cap-043` ainda requer integração da dependência parcial `checkout-016` e revisão de paridade. Não confundir prova de protocolo com modelo homologado, nem prometer emissão fiscal.
 - **R4 — alimentação e verticais:** 1/13 `covered`, 12/13 `partial`. Já existem mesas, comandas, KDS com estações, transferência, pizzaria, retirada/delivery, pesagem e relatórios operacionais. Faltam subfluxos e provas de paridade, como split por pagador, concorrência entre operadores, protocolos e fluxos completos de entrega.
 - **PWA:** interface responsiva, manifest e cache de **assets públicos**. Em uma instalação self-hosted, **a loja pode operar sem Internet** enquanto o servidor HTTPS local estiver disponível na rede; Cloudflare não é requisito. **Não há venda offline se a API estiver inacessível**, nem fila independente de vendas no navegador.
@@ -49,11 +51,13 @@ Este é o **único repositório ativo do produto PDV Total**. O repositório [PD
 - [Proveniência do código original (histórica)](docs/IMPORT-MANIFEST.md)
 - [Contrato de fluxo e experiência](docs/ux/P1-P2-CONTRATO-EXPERIENCIA.md)
 
-## Progresso e roadmap atual (56 capacidades)
+## Entrega SaaS e auditoria histórica
 
-A **fila única de implementação** é composta por **56 capacidades do desktop**; os 68 contratos das sete telas são verificações internas associadas a elas, não um segundo backlog. Use `npm run report:parity` para visualizar os quatro estados: copiado integralmente, copiado parcialmente, não copiado/não demonstrado e implementado aguardando auditoria de código. **Atenção:** ausência de prova (`gap`) não significa necessariamente ausência de código.
+A **fila principal de implementação** é a versão **web/SaaS hospedada**, e não os modos LAN/desktop. Na fotografia atual das 56 capacidades herdadas do desktop: **53 referências aplicáveis ao escopo web (33 `covered`, 20 `partial`, 0 `gap`)** e **3 itens opcionais/deferidos** de instalação/local-LAN (`cap-001`, `cap-047`, `cap-056`). Esses 53 são um filtro de referências herdadas — **não constituem o checklist completo de lançamento do SaaS**, que também exige autenticação, segurança, QA mobile, serviços e deploy operacional.
 
-- [Roadmap operacional vigente — 56 capacidades, prioridades R0–R5 e política de migrations](docs/ROADMAP-PARIDADE-56.md)
+Os **56 IDs originais** continuam intactos para comparação/auditoria do desktop. Os **68 contratos de sete telas** são verificações internas, não outra lista de funcionalidades. `npm run report:saas` mostra **somente as pendências relevantes ao SaaS**; `npm run report:parity` mantém os 56 para auditoria, com a separação de escopo. Use `npm run report:parity` para visualizar os quatro estados: copiado integralmente, copiado parcialmente, não copiado/não demonstrado e implementado aguardando auditoria de código. **Atenção:** ausência de prova (`gap`) não significa necessariamente ausência de código.
+
+- [Roadmap operacional vigente — SaaS prioritário, 56 referências auditáveis e opções LAN separadas](docs/ROADMAP-PARIDADE-56.md)
 - [Auditoria R0 e execução R1 — diagnóstico dos 21 itens e testes de suspensão/retomada](docs/parity/R0-R1-EXECUTION-20261018.md)
 - [R1 concluído no escopo de software — 21/21 capacidades com aceites executáveis](docs/parity/R1-SOFTWARE-ACCEPTANCE-20261018.md)
 - Auditoria atualizada: `npm run audit:r0-r1` (56 capacidades e detalhamento dos 21 do R1, sem promoção automática de paridade).
@@ -69,7 +73,7 @@ A paridade permanece **incompleta**. `npm run test:parity` executa testes de reg
 
 A paridade não é declarada automaticamente com build verde. A matriz de 68 contratos das telas e o inventário de 56 capacidades são independentes. O P0 gera cenários de comparação e artefatos auditáveis, preservando o código desktop fixado somente como referência. Use `npm run test:parity` para executar as verificações ou `npm run audit:parity` para gerar os relatórios em `qa-artifacts/parity/`. Cenários sem evidência permanecem pendentes, inclusive os que possuem testes parciais de API. Consulte `docs/parity/P0-AUDIT-PLAN.md`.
 
-### HTTPS na rede local (P6, implantação self-hosted gratuita)
+### HTTPS na rede local (P6, alternativa self-hosted gratuita e opcional)
 
 A interface web pode usar a mesma API autoritativa em **Node.js + SQLite local** sem Cloudflare e sem mensalidade. A implantação LAN exige TLS com certificado confiável nos terminais, autenticação habilitada explicitamente, firewall de rede interna e banco novo com migrações rastreadas. Início: `npm run serve:lan` após configurar as variáveis da documentação.
 
