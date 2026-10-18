@@ -43,10 +43,16 @@
       if(surface!==next||document.body.dataset.activeRoute!==route)return;
       moveTo(top);
       if(restoreReport){
-        const tabId=focusTargets.get(next);
-        const tab=tabId?[...content.querySelectorAll('[data-report-web]')]
-          .find(item=>item.dataset.reportWeb===tabId):null;
-        tab?.focus?.({preventScroll:true});
+        // app.navigate focuses its route container once renderRoute resolves.
+        // Restore the tab on the following frame, after that default focus.
+        requestAnimationFrame(()=>{
+          if(surface!==next||document.body.dataset.activeRoute!==route)return;
+          const tabId=focusTargets.get(next);
+          const tabs=[...content.querySelectorAll('[data-report-web]')];
+          const tab=tabs.find(item=>item.dataset.reportWeb===tabId)||
+            tabs.find(item=>item.getAttribute?.('aria-selected')==='true');
+          tab?.focus?.({preventScroll:true});
+        });
       }
     });
   });
