@@ -71,7 +71,11 @@ export function verifyCapabilityInventory(matrix,inventory,publishedCapabilities
       requireProof(typeof readSource==='function' && proof?.file && proof?.contains &&
         proof?.testFile && proof?.testContains,
         'partial capability needs covered subset or executable implementation proof '+row.id);
-      requireProof(/^((apps\\/api\\/test|packages\\/core\\/test|scripts)\\/)[a-zA-Z0-9_.-]+\\.test\\.(mjs|js)$/.test(proof.testFile),
+      requireProof((proof.testFile.startsWith('apps/api/test/') ||
+        proof.testFile.startsWith('packages/core/test/') ||
+        proof.testFile.startsWith('scripts/')) && !proof.testFile.includes('..') &&
+        /^[A-Za-z0-9_./-]+$/.test(proof.testFile) &&
+        (proof.testFile.endsWith('.test.mjs') || proof.testFile.endsWith('.test.js')),
         'partial implementation test path invalid '+row.id);
       requireProof(readSource(proof.file).includes(proof.contains),
         'partial implementation source not found '+row.id);
