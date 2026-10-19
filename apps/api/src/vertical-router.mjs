@@ -160,6 +160,10 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
          permission(member,user,'restaurant.orders.transfer');
          return json({transfer:await ext.transferItems(tenantId,branch,user,parts[2],body,key)});
        }
+       if(parts.length===6&&parts[3]==='prepayments'&&parts[5]==='refund'&&method==='POST'){
+         permission(member,user,'finance.manage');
+         return json({refund:await svc.refundPrepayment(tenantId,branch,user,parts[2],parts[4],body,key)},201);
+       }
        if(parts.length===4&&parts[3]==='prepayments'){
          if(method==='GET'){permission(member,user,'restaurant.orders.view');return json({prepayments:await svc.prepayments(tenantId,branch,parts[2])});}
          if(method==='POST'){permission(member,user,'restaurant.orders.transfer');
