@@ -183,10 +183,8 @@ test('new tenant creation is owner-only, capped and cannot renew an expired subs
     authorization:'Bearer trial-admin-token-1234567890-strong'
    });
   assert.equal(freeze.status,200);
-  // New trial tenant must not grant suspended owners unlimited fresh trials in this phase.
-  // The owner is allowed to create another tenant while an independent active trial exists,
-  // but maximum tenant count remains server-enforced.
-  assert.equal((await x.request('/api/v1/tenants','POST',{slug:'third-store',name:'Third'},a)).status,201);
-  assert.equal((await x.request('/api/v1/tenants','POST',{slug:'fourth-store',name:'Fourth'},a)).status,403);
+  // An owner with a suspended paid subscription cannot mint additional trial tenants,
+  // even while they own a distinct active trial company.
+  assert.equal((await x.request('/api/v1/tenants','POST',{slug:'third-store',name:'Third'},a)).status,402);
  }finally{x.close();}
 });
