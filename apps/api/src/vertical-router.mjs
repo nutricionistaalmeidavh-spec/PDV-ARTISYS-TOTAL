@@ -176,7 +176,7 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
        }
        if(parts.length===4&&parts[3]==='transfer'&&method==='POST'){
          permission(member,user,'restaurant.orders.transfer');
-         return json({session:await svc.transferTable(tenantId,branch,parts[2],body.targetTableId,key)});
+         return json({session:await svc.transferTable(tenantId,branch,parts[2],body.targetTableId,key,body.expectedTableId??null)});
        }
        if(parts.length===4&&parts[3]==='requests'&&method==='POST'){
          permission(member,user,'restaurant.service.manage');
