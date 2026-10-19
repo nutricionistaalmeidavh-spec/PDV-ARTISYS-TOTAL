@@ -66,6 +66,7 @@
       (can('restaurant.orders.transfer')?'<form data-r4-advanced="split" class="vertical-form"><h3>Divisão de conta</h3><p>A divisão não gera vendas extras: os valores serão pagos no único checkout da comanda.</p>'+
       field('parts','Número de pessoas','number','min="2" max="50" value="2" required')+
       field('bps','Taxa de serviço (%)','number','min="0" max="30" step="0.01" value="0"')+
+      field('individualShares','Valores por pessoa (opcional, em R$ separados por ponto e vírgula)','text','placeholder="33,33; 33,34; 33,34"')+
       '<label class="field"><span>Produto não estocável para taxa (se houver)</span>'+select('serviceChargeProductId',fee,p=>p.name,'Sem taxa',false)+'</label>'+
       '<button class="primary-button">Calcular e registrar divisão</button></form>'+
       '<form data-r4-advanced="transfer-items" class="vertical-form"><h3>Transferir parte de um item</h3>'+
@@ -106,6 +107,7 @@
       '<label class="field"><span>Tamanhos</span><textarea name="sizes" required rows="3" placeholder="Média=30,00"></textarea></label>'+
       '<label class="field"><span>Sabores</span><textarea name="flavors" required rows="3" placeholder="Calabresa=42,00"></textarea></label>'+
       '<label class="field"><span>Bordas (opcional)</span><textarea name="crusts" rows="2" placeholder="Catupiry=6,00"></textarea></label>'+
+      '<label class="field"><span>Adicionais (opcional)</span><textarea name="addons" rows="2" placeholder="Queijo extra=5,00"></textarea></label>'+
       '<button class="primary-button">Salvar cardápio de pizzas</button></form>':'')+
       '<form data-r4-advanced="pizza-quote" class="vertical-form"><h3>Consultar preço</h3><label class="field"><span>Produto</span>'+
       select('productId',model.profiles.map(p=>({id:p.productId,name:model.products.find(x=>x.id===p.productId)?.name||p.productId})))+'</label>'+
@@ -158,7 +160,7 @@
       if(kind==='route')await r4('/kitchen/routes','POST',{productId:v.productId,mode:v.mode,
         stationId:v.mode==='PRODUCTION'?v.stationId:null});
       if(kind==='pizza')await r4('/pizzeria/profiles','POST',{productId:v.productId,policy:v.policy,pricingMode:v.pricingMode,maxFlavors:Number(v.maxFlavors),
-        sizes:parseCatalog(v.sizes),flavors:parseCatalog(v.flavors),crusts:parseCatalog(v.crusts)});
+        sizes:parseCatalog(v.sizes),flavors:parseCatalog(v.flavors),crusts:parseCatalog(v.crusts),addons:parseCatalog(v.addons)});
       if(kind==='pizza-quote'){
         const result=await r4('/pizzeria/products/'+uid(v.productId));
         const profile=result.profile;
@@ -169,11 +171,12 @@
           '<fieldset><legend>Sabores</legend>'+profile.flavors.map(f=>'<label><input type="checkbox" name="flavorCodes" value="'+esc(f.code)+'">'+esc(f.name)+'</label>').join('')+'</fieldset>'+
           '<label class="field"><span>Borda</span><select name="crustCode"><option value="">Sem borda</option>'+
           profile.crusts.map(c=>'<option value="'+esc(c.code)+'">'+esc(c.name)+'</option>').join('')+'</select></label>'+
+          '<fieldset><legend>Adicionais</legend>'+(profile.addons||[]).map(a=>'<label><input type="checkbox" name="addonCodes" value="'+esc(a.code)+'"> '+esc(a.name)+'</label>').join('')+'</fieldset>'+
           '<button class="primary-button">Calcular</button></form>';
         host.querySelector('form')?.addEventListener('submit',async e=>{
           e.preventDefault();const data=new FormData(e.target);try{
             const quote=await r4('/pizzeria/quote','POST',{productId:data.get('productId'),sizeCode:data.get('sizeCode'),
-              flavorCodes:data.getAll('flavorCodes'),crustCode:data.get('crustCode')||null});
+              flavorCodes:data.getAll('flavorCodes'),crustCode:data.get('crustCode')||null,addonCodes:data.getAll('addonCodes')});
             toast('Preço por unidade: '+money(quote.quote.unitPriceCents));
           }catch(error){toast(error.message,true);}
         });
@@ -212,7 +215,8 @@
       if(kind==='split'){
         const bps=Math.round(Number(v.bps||0)*100);
         const result=await r4('/sessions/'+uid(sessionId)+'/split','POST',{parts:Number(v.parts),serviceChargeBps:bps,
-          serviceChargeProductId:bps>0?v.serviceChargeProductId:null});
+          serviceChargeProductId:bps>0?v.serviceChargeProductId:null,
+          ...(String(v.individualShares||'').trim()?{shares:String(v.individualShares).split(';').map(x=>eurosToCents(x.trim()))}:{})});
         toast('Divisão registrada: '+result.plan.shares.map(money).join(' + '));
       }
       if(kind!=='pizza-quote'&&kind!=='weight')await show({sessionId,preserve:true});
