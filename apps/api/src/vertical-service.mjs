@@ -382,7 +382,7 @@ export function createVerticalService(db){
          AND ((? IS NOT NULL AND link.table_session_id=?) OR (? IS NOT NULL AND link.order_id=?))`,
        t,b,tableSessionId,tableSessionId,orderId,orderId);
    },
-   async transferTable(t,b,id,targetTableId,key){
+   async transferTable(t,b,id,targetTableId,key,expectedTableId=null){
      await branchExists(t,b);
      if(!keyOK(key))throw err(400,'Identificador da operação obrigatório.');
      const scope='restaurant.transfer:'+id;
@@ -390,6 +390,7 @@ export function createVerticalService(db){
      if(prior)return JSON.parse(prior.result_json);
      const source=await checkSession(t,b,id);
      if(source.status!=='OPEN')throw err(409,'Somente uma comanda aberta pode mudar de mesa.');
+     if(expectedTableId!==null&&expectedTableId!==source.table_id)throw err(409,'A comanda mudou de mesa. Atualize a tela antes de transferir.');
      if(!targetTableId||targetTableId===source.table_id)throw err(400,'Escolha outra mesa de destino.');
      const target=await first('SELECT id FROM restaurant_tables WHERE tenant_id=? AND branch_id=? AND id=? AND active=1',t,b,targetTableId);
      if(!target)throw err(404,'Mesa de destino não encontrada.');
