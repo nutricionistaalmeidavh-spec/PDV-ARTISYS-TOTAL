@@ -1073,7 +1073,8 @@ test('cap-032: adiantamento por pagador somado ao rateio usa uma venda única e 
   assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,200);
   const splitUrl=`restaurant/sessions/${session.id}/split`;
   assert.equal((await x.request('a',splitUrl,'POST',{branchId:'filial-a',parts:2})).status,200);
-  assert.equal((await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0})).status,201);
+  const cashA=await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0});
+  assert.equal(cashA.status,201);
   const pre=await x.request('a',`restaurant/sessions/${session.id}/prepayments`,'POST',
     {branchId:'filial-a',method:'CASH',amountCents:900,payerIndex:1});
   assert.equal(pre.status,201,JSON.stringify(pre.body));
@@ -1091,6 +1092,12 @@ test('cap-032: adiantamento por pagador somado ao rateio usa uma venda única e 
   assert.equal((await x.request('a',`restaurant/sessions/${session.id}/prepayments`,'POST',
     {branchId:'filial-a',method:'PIX',amountCents:600,payerIndex:1})).status,409);
   assert.equal((await x.request('a',splitUrl,'POST',{branchId:'filial-a',parts:3})).status,409);
+  const closed=await x.request('a','cash/'+cashA.body.session.id+'/close','POST',{branchId:'filial-a',countedCashCents:700});
+  assert.equal(closed.status,200,JSON.stringify(closed.body));
+  assert.equal(closed.body.result.expectedCashCents,700);
+  const cashB=await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0});
+  assert.equal(cashB.status,201,JSON.stringify(cashB.body));
+  assert.notEqual(cashB.body.session.id,cashA.body.session.id);
   const sale=(await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:session.id})).body.sale;
   const settled=await x.request('a','sales/'+sale.id+'/complete','POST',{branchId:'filial-a',
     shares:[{index:1,amountCents:550,method:'PIX'},{index:2,amountCents:1250,method:'PIX'}]});
