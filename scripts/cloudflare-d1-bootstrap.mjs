@@ -38,7 +38,7 @@ export function configForRemoteSchema(config,id){
 export function hasCompleteSchema(rows){
   if(!Array.isArray(rows))return false;
   const names=new Set(rows.map(row=>row?.name));
-  return ['tenants','users','d1_migrations','r4_table_prepayments','public_signup_throttles','saas_subscriptions','saas_invitations'].every(name=>names.has(name));
+  return ['tenants','users','d1_migrations','r4_table_prepayments','public_signup_throttles','saas_subscriptions','saas_invitations','saas_identity_challenges','platform_totp_replay'].every(name=>names.has(name));
 }
 
 function jsonFromWrangler(stdout){
@@ -78,11 +78,11 @@ export function provisionProductionD1({explicit=false}={}){
     console.log('PDV Total D1: applying pending remote schema migrations before production deployment.');
     wrangler(['d1','migrations','apply',DB_NAME,'--remote','--config',temporary]);
     const verify=jsonFromWrangler(wrangler(['d1','execute',DB_NAME,'--remote','--json',
-      '--command',"SELECT name FROM sqlite_master WHERE type='table' AND name IN ('tenants','users','d1_migrations','r4_table_prepayments','public_signup_throttles','saas_subscriptions','saas_invitations')",
+      '--command',"SELECT name FROM sqlite_master WHERE type='table' AND name IN ('tenants','users','d1_migrations','r4_table_prepayments','public_signup_throttles','saas_subscriptions','saas_invitations','saas_identity_challenges','platform_totp_replay')",
       '--config',temporary]));
     const rows=Array.isArray(verify)?verify[0]?.results:verify?.results;
     if(!hasCompleteSchema(rows))throw Error('Remote D1 schema verification failed; deployment aborted');
-    console.log('PDV Total D1: remote schema ready (0001–0031); next step is secure owner provisioning.');
+    console.log('PDV Total D1: remote schema ready (0001–0032); next step is secure owner provisioning.');
   }finally{
     unlinkSync(temporary);
   }

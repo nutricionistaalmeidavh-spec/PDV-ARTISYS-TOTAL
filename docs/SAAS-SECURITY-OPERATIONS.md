@@ -50,3 +50,13 @@ O cadastro público em `/api/v1/auth/register` deixa empresa e OWNER com `active
 ## Acesso do proprietário e operações privadas
 
 O OWNER possui painel **Minha empresa** na PWA; as ações administrativas da plataforma permanecem fora do browser. Para revisão/aprovação de contas e smoke com login real, consulte [Primeiro acesso](SAAS-FIRST-ACCESS.md).
+
+## Identidade P1, operação privada e MFA sem dependência paga
+
+A migration \`0032_identity_security.sql\` preserva contas ativas legadas, mas mantém e-mails das inscrições **pendentes** sem validação. O superadmin deve emitir um código aleatório **somente pela CLI privada** e entregá-lo ao titular por canal já verificado. Para verificar, a pessoa envia \`POST /api/v1/auth/verify-email\` com \`{"token":"..."}\` no corpo JSON; somente depois a aprovação da empresa é permitida. Nenhum código aparece na landing, em links ou em logs públicos.
+
+A recuperação de senha funciona com código emitido pela CLI privada e entregue somente após confirmação independente de identidade. O usuário conclui com \`POST /api/v1/auth/reset-password\` e \`{"token":"...","password":"nova senha forte"}\`. O código expira em **15 minutos**, só pode ser usado uma vez e a redefinição revoga **todas as sessões anteriores**. Envio automático de e-mails não faz parte do núcleo gratuito e é opcional; não se deve divulgar códigos em URL, logs ou canais abertos.
+
+Na CLI: \`node scripts/saas-admin-cli.mjs pending\` exibe \`ownerUserId\`; \`verify-email USER_ID\` e \`reset-password USER_ID\` emitem os códigos. **Não execute isso em CI nem compartilhe saída do terminal.** Não há autoprovisionamento de contas pagas.
+
+Credenciais Cloudflare Workers como secrets: \`PLATFORM_ADMIN_TOKEN\` (somente administração), opcional \`PLATFORM_READ_TOKEN\` (listagem, sem mutação) e \`PLATFORM_TOTP_SECRET\` (chave Base32 TOTP de pelo menos 20 bytes, gerada localmente e cadastrada separadamente no autenticador). Operações de plataforma exigem código TOTP \`x-platform-totp\` quando o segredo está presente. Configure \`PLATFORM_REQUIRE_MFA=true\` **somente após cadastrar/testar TOTP**; sem o segredo, essa flag bloqueia operações administrativas. Na CLI use \`PLATFORM_ADMIN_TOTP\` apenas no processo local (não armazene em arquivo, git ou log). O banco registra janelas TOTP já usadas para impedir replay. Segredos legados e login de clientes **não são rotacionados nem bloqueados automaticamente**.

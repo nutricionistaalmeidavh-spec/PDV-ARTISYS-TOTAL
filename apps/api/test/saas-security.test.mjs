@@ -14,6 +14,7 @@ async function fixture(options={}){
  const db=openLocalDatabase();
  db.exec(readFileSync(new URL('../migrations/0001_identity.sql',import.meta.url),'utf8'));
  db.exec(readFileSync(new URL('../migrations/0031_saas_access.sql',import.meta.url),'utf8'));
+ db.exec(readFileSync(new URL('../migrations/0032_identity_security.sql',import.meta.url),'utf8'));
  const pwd=await hashPassword(password);
  for(const [id,email] of [['alice','alice@example.test'],['bob','bob@example.test'],['operator','operator@example.test']])
    await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)').bind(id,email,id,pwd,stamp).run();
@@ -133,6 +134,7 @@ test('platform can bootstrap exactly one company while public login remains disa
  try{
   db.exec(readFileSync(new URL('../migrations/0001_identity.sql',import.meta.url),'utf8'));
   db.exec(readFileSync(new URL('../migrations/0031_saas_access.sql',import.meta.url),'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0032_identity_security.sql',import.meta.url),'utf8'));
   const api=createApi({DB:db,AUTH_ENABLED:'false',PLATFORM_ADMIN_TOKEN:'another-private-admin-key-123456789'});
   const data={email:'first@example.test',name:'First Store',ownerName:'First Owner',slug:'first-store',password:'First-Owner-Password-2026!'};
   const post=()=>api.fetch(new Request(origin+'/api/v1/platform/bootstrap',{
@@ -193,7 +195,7 @@ test('public signup stays pending until private platform approval; approval is s
  const db=openLocalDatabase();
  const adminToken='platform-approval-secret-with-32-plus-characters';
  try{
-  for(const filename of ['0001_identity.sql','0030_public_registration.sql','0031_saas_access.sql'])
+  for(const filename of ['0001_identity.sql','0030_public_registration.sql','0031_saas_access.sql','0032_identity_security.sql'])
    db.exec(readFileSync(new URL('../migrations/'+filename,import.meta.url),'utf8'));
   const api=createApi({
     DB:db,AUTH_ENABLED:'true',REGISTRATION_ENABLED:'true',SAAS_ENTITLEMENTS_ENABLED:'true',
@@ -216,6 +218,11 @@ test('public signup stays pending until private platform approval; approval is s
   const tenantId=list[0].id;
   assert.equal((await request('/api/v1/auth/login','POST',{email:data.email,password:data.password})).status,403);
   assert.equal((await request('/api/v1/platform/tenants/'+tenantId+'/approve','POST',{},{})).status,403);
+  assert.equal((await request('/api/v1/platform/tenants/'+tenantId+'/approve','POST',{},auth)).status,409);
+  const issued=await request('/api/v1/platform/users/'+list[0].ownerUserId+'/email-verification','POST',{},auth);
+  assert.equal(issued.status,201);
+  const challenge=(await issued.json()).token;
+  assert.equal((await request('/api/v1/auth/verify-email','POST',{token:challenge})).status,200);
   const approved=await request('/api/v1/platform/tenants/'+tenantId+'/approve','POST',{},auth);
   assert.equal(approved.status,200,await approved.clone().text());
   assert.equal((await request('/api/v1/platform/tenants/'+tenantId+'/approve','POST',{},auth)).status,409);
