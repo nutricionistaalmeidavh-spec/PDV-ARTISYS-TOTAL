@@ -1078,17 +1078,26 @@ test('cap-032: adiantamento por pagador somado ao rateio usa uma venda única e 
     {branchId:'filial-a',method:'CASH',amountCents:900,payerIndex:1});
   assert.equal(pre.status,201,JSON.stringify(pre.body));
   assert.equal(pre.body.payment.payerIndex,1);
+  const refundPath=`restaurant/sessions/${session.id}/prepayments/${pre.body.payment.id}/refund`;
+  const key=crypto.randomUUID();
+  const refund=await x.request('a',refundPath,'POST',{branchId:'filial-a',amountCents:200,reason:'Devolução parcial ao cliente'},{key});
+  assert.equal(refund.status,201,JSON.stringify(refund.body));
+  assert.equal((await x.request('a',refundPath,'POST',{branchId:'filial-a',amountCents:200,reason:'Devolução parcial ao cliente'},{key})).body.refund.id,refund.body.refund.id);
+  assert.equal((await x.request('a',refundPath,'POST',{branchId:'filial-a',amountCents:900,reason:'Estorno acima do saldo'})).status,409);
   const detail=(await x.request('a',`restaurant/sessions/${session.id}/prepayments?branchId=filial-a`)).body.prepayments;
   assert.equal(detail.payments[0].payerIndex,1);
+  assert.equal(detail.payments[0].amountCents,700);
+  assert.equal(detail.payments[0].grossAmountCents,900);
   assert.equal((await x.request('a',`restaurant/sessions/${session.id}/prepayments`,'POST',
-    {branchId:'filial-a',method:'PIX',amountCents:400,payerIndex:1})).status,409);
+    {branchId:'filial-a',method:'PIX',amountCents:600,payerIndex:1})).status,409);
   assert.equal((await x.request('a',splitUrl,'POST',{branchId:'filial-a',parts:3})).status,409);
   const sale=(await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:session.id})).body.sale;
   const settled=await x.request('a','sales/'+sale.id+'/complete','POST',{branchId:'filial-a',
-    shares:[{index:1,amountCents:350,method:'PIX'},{index:2,amountCents:1250,method:'PIX'}]});
+    shares:[{index:1,amountCents:550,method:'PIX'},{index:2,amountCents:1250,method:'PIX'}]});
   assert.equal(settled.status,200,JSON.stringify(settled.body));
   assert.equal(settled.body.sale.totalCents,2500);
-  assert.equal((await x.db.prepare('SELECT COALESCE(SUM(amount_cents),0) n FROM cash_movements WHERE sale_id=?').bind(sale.id).first()).n,1600);
+  assert.equal((await x.db.prepare('SELECT COALESCE(SUM(amount_cents),0) n FROM cash_movements WHERE sale_id=?').bind(sale.id).first()).n,1800);
+  assert.equal((await x.db.prepare('SELECT COUNT(*) n FROM r4_table_prepayment_refunds WHERE tenant_id=?').bind('a').first()).n,1);
   assert.equal((await x.db.prepare('SELECT COUNT(*) n FROM sales WHERE tenant_id=?').bind('a').first()).n,1);
   assert.equal((await x.db.prepare('SELECT COUNT(*) n FROM r4_split_tenders WHERE sale_id=?').bind(sale.id).first()).n,2);
  }finally{x.close();}
