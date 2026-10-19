@@ -96,7 +96,7 @@
      const r=await ctx.api.request(path+'/invitations',{method:'POST',body:{
        email:form.elements.email.value,profileKey:form.elements.profileKey.value
      }});
-     // Sensitive code is not written to localStorage, URL or console.
+     // Sensitive code is not written to persistent browser storage, URL or console.
      const value=r.invitationToken||'';
      await render(host,ctx);
      const secret=host.querySelector('#saas-invite-secret');
