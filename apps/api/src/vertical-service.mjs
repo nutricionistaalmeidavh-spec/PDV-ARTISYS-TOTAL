@@ -296,7 +296,7 @@ export function createVerticalService(db){
      const order=await first('SELECT id,fulfillment FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
      if(!order||order.fulfillment!=='DELIVERY')throw err(404,'Entrega não encontrada.');
      const dispatch=await first('SELECT courier_name AS courierName,dispatched_at AS dispatchedAt FROM r4_delivery_dispatches WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,id);
-     const events=await all('SELECT id,kind,courier_name AS courierName,reason,recorded_by AS recordedBy,recorded_at AS recordedAt FROM r4_delivery_events WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY recorded_at,id',t,b,id);
+     const events=await all('SELECT id,sequence,kind,courier_name AS courierName,reason,recorded_by AS recordedBy,recorded_at AS recordedAt FROM r4_delivery_events WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY sequence',t,b,id);
      return {orderId:id,dispatch,events};
    },
    async deliveryCheckpoint(t,b,user,id,body,key){
@@ -309,7 +309,7 @@ export function createVerticalService(db){
      if(!['ARRIVED','RETURNED','REDISPATCHED'].includes(body.kind))throw err(400,'Evento de entrega inválido.');
      const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,'r4.delivery.event:'+b+':'+id,key);
      if(prior)return JSON.parse(prior.result_json);
-     const latest=await first('SELECT kind,courier_name AS courierName FROM r4_delivery_events WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY recorded_at DESC,id DESC LIMIT 1',t,b,id);
+     const latest=await first('SELECT sequence,kind,courier_name AS courierName FROM r4_delivery_events WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY sequence DESC LIMIT 1',t,b,id);
      if(body.kind==='REDISPATCHED'&&latest?.kind!=='RETURNED')throw err(409,'Novo despacho exige retorno prévio.');
      if(body.kind!=='REDISPATCHED'&&latest?.kind==='RETURNED')throw err(409,'Pedido retornado precisa de novo despacho.');
      if(body.kind==='ARRIVED'&&latest?.kind==='ARRIVED')throw err(409,'Chegada já informada.');
@@ -318,9 +318,9 @@ export function createVerticalService(db){
      const reason=clean(body.reason,300);
      if(body.kind==='RETURNED'&&!reason)throw err(400,'Informe motivo do retorno.');
      return mutate(t,'r4.delivery.event:'+b+':'+id,key,async()=>{
-       const event={id:uuid(),orderId:id,kind:body.kind,courierName:courier,reason,recordedAt:now()};
-       return {result:event,statements:[q('INSERT INTO r4_delivery_events(tenant_id,branch_id,order_id,id,kind,courier_name,reason,recorded_by,recorded_at) VALUES(?,?,?,?,?,?,?,?,?)',
-         t,b,id,event.id,event.kind,courier,reason,user,event.recordedAt)]};
+       const event={id:uuid(),orderId:id,sequence:(latest?.sequence||0)+1,kind:body.kind,courierName:courier,reason,recordedAt:now()};
+       return {result:event,statements:[q('INSERT INTO r4_delivery_events(tenant_id,branch_id,order_id,id,sequence,kind,courier_name,reason,recorded_by,recorded_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
+         t,b,id,event.id,event.sequence,event.kind,courier,reason,user,event.recordedAt)]};
      });
    },
    async deliverFoodOrder(t,b,id,key){
@@ -328,7 +328,7 @@ export function createVerticalService(db){
      const order=await first('SELECT id,status FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
      if(!order)throw err(404,'Pedido não encontrado.');
      if(order.status!=='READY')throw err(409,'Só é possível entregar pedido pronto.');
-     if((await first('SELECT kind FROM r4_delivery_events WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY recorded_at DESC,id DESC LIMIT 1',t,b,id))?.kind==='RETURNED')
+     if((await first('SELECT kind FROM r4_delivery_events WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY sequence DESC LIMIT 1',t,b,id))?.kind==='RETURNED')
        throw err(409,'Pedido devolvido ao estabelecimento: registre novo despacho antes de finalizar.');
      if((await first('SELECT fulfillment FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id))?.fulfillment==='DELIVERY'&&
         !(await first('SELECT order_id FROM r4_delivery_dispatches WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,id)))
