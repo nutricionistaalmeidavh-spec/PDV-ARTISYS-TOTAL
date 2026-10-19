@@ -205,9 +205,13 @@
         this.webRequest('/api/v1/tenants/'+encodeURIComponent(tenantId)+'/context')
       ]);
       if(!branches.branches?.length)throw new Error('Este estabelecimento não possui filial ativa.');
+      // A newly created filial may sort before Matriz by name. Never
+      // silently change a fresh browser's checkout to a different branch.
+      // Explicit branch switching remains a separate authenticated action.
+      const defaultBranch=branches.branches.find(item=>String(item.code||'').toUpperCase()==='MAIN')||branches.branches[0];
       this.tenantId=tenantId;
-      this.branchId=branches.branches[0].id;
-      return {branch:branches.branches[0],context};
+      this.branchId=defaultBranch.id;
+      return {branch:defaultBranch,context};
     }
 
     params(values = {}) {
