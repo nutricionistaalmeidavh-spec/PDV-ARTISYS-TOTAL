@@ -1,5 +1,5 @@
 // R4 additive tenant+branch facade. Operational records are never a second cash/stock ledger.
-import {planShares} from './r4-saas-rules.mjs';
+import {planShares,parseWeightedEAN13} from './r4-saas-rules.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const stamp=()=>new Date().toISOString();
 const id=()=>crypto.randomUUID();
@@ -346,6 +346,15 @@ export function createR4ExtendedService(db){
        pricingMode:p.pricingMode,
        size:{code:size.code,name:size.name},flavors:flavors.map(x=>({code:x.code,name:x.name})),
        crust:crust?{code:crust.code,name:crust.name}:null}};
+   },
+   async quoteWeightLabel(t,b,body){
+     await branch(t,b);
+     let label;
+     try{label=parseWeightedEAN13(body.barcode);}catch(e){throw fail(400,e.message);}
+     const p=await first('SELECT id FROM products WHERE tenant_id=? AND sku=? AND active=1',t,label.plu);
+     if(!p)throw fail(404,'Produto da etiqueta não encontrado no catálogo da loja.');
+     const quote=await this.quoteWeight(t,b,{productId:p.id,grams:label.grams});
+     return {...quote,barcode:label.barcode,plu:label.plu,source:'EAN13_WEIGHT_LABEL'};
    },
    async quoteWeight(t,b,body){
      await branch(t,b);const p=await product(t,body.productId);
