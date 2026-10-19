@@ -118,6 +118,7 @@ try{
   }finally{await staffContext.close();}
   await page.locator('#app-sidebar [data-route=checkout]').click();
   await page.locator('body[data-active-route=checkout]').waitFor();
+  await page.locator('#product-search').waitFor({state:'visible',timeout:12000});
 
   assert.equal(await page.locator('#product-search').count(),1,'only the canonical checkout renderer should exist');
   await page.locator('#app-sidebar [data-route=products]').click();
