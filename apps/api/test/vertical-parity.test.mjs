@@ -980,3 +980,38 @@ test('cap-048: duas pessoas não confirmam o mesmo chamado nem abrem dois chamad
   assert.equal((await x.request('b','restaurant/requests?branchId=filial-b','GET',undefined,{as:'b'})).body.requests.length,0);
  }finally{x.close();}
 });
+
+
+test('cap-032: atribui itens entregues a pagadores em centavos sem gerar segunda venda',async()=>{
+ const x=await setup();try{
+  const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'SPLIT-ITEM',name:'Prato do rateio',salePriceCents:1200,trackStock:false})).body.product;
+  const table=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Mesa rateio itens'})).body.table;
+  const session=(await x.request('a',`restaurant/tables/${table.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+  const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:session.id,items:[{productId:p.id,quantity:1},{productId:p.id,quantity:2}]}));
+  // Catalog item configurations may reject duplicate lines. Use two independent orders instead.
+  if(order.status!==201){
+    assert.equal(order.status,400);
+    const one=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:session.id,items:[{productId:p.id,quantity:1}]});
+    assert.equal(one.status,201,JSON.stringify(one.body));
+    const two=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:session.id,items:[{productId:p.id,quantity:2}]});
+    assert.equal(two.status,201,JSON.stringify(two.body));
+  }
+  const tickets=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets;
+  for(const ticket of tickets){
+   assert.equal((await x.request('a',`restaurant/kitchen/${ticket.id}`,'PATCH',{branchId:'filial-a',status:'PREPARING'})).status,200);
+   assert.equal((await x.request('a',`restaurant/kitchen/${ticket.id}`,'PATCH',{branchId:'filial-a',status:'READY'})).status,200);
+   assert.equal((await x.request('a',`restaurant/orders/${ticket.orderId}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+  }
+  const pos=await x.request('a',`restaurant/sessions/${session.id}/position?branchId=filial-a`);
+  assert.equal(pos.status,200,JSON.stringify(pos.body));
+  assert.equal(pos.body.position.items.length,2);
+  const [a,b]=pos.body.position.items;
+  const split=await x.request('a',`restaurant/sessions/${session.id}/split`,'POST',{branchId:'filial-a',parts:2,
+    allocations:[{itemId:a.id,payerIndex:1},{itemId:b.id,payerIndex:2}]});
+  assert.equal(split.status,200,JSON.stringify(split.body));
+  assert.deepEqual(split.body.plan.shares,[a.totalCents,b.totalCents]);
+  const replay=await x.request('a',`restaurant/sessions/${session.id}/split?branchId=filial-a`);
+  assert.equal(replay.body.plan.allocations.length,2);
+  assert.equal((await x.db.prepare("SELECT count(*) AS n FROM sales WHERE tenant_id='a'").bind().first()).n,0);
+ }finally{x.close();}
+});
