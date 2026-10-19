@@ -11,11 +11,11 @@ test('selfhost canonical migrations run once; restart neither repeats ALTERs nor
   const db=openLocalDatabase();
   try{
     const first=await applyLocalMigrations(db);
-    assert.equal(first.applied,33);
-    assert.equal(first.total,33);
+    assert.equal(first.applied,34);
+    assert.equal(first.total,34);
     await db.prepare("INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)").bind('a','site-a','First shop',new Date().toISOString()).run();
     const second=await applyLocalMigrations(db);
-    assert.deepEqual(second,{applied:0,total:33});
+    assert.deepEqual(second,{applied:0,total:34});
     const row=await db.prepare('SELECT name FROM tenants WHERE id=?').bind('a').first();
     assert.equal(row.name,'First shop');
   }finally{db.close();}
