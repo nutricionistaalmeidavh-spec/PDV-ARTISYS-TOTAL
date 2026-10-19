@@ -302,7 +302,8 @@ export function createR4ExtendedService(db){
      const profile=await first('SELECT product_id AS productId,pricing_policy AS policy,pricing_mode AS pricingMode,max_flavors AS maxFlavors FROM r4_pizza_profiles WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,productId);
      if(!profile)return null;
      const entries=await all('SELECT kind,code,name,price_cents AS priceCents FROM r4_pizza_options WHERE tenant_id=? AND branch_id=? AND product_id=? ORDER BY kind,code',t,b,productId);
-     return {...profile,sizes:entries.filter(x=>x.kind==='SIZE'),flavors:entries.filter(x=>x.kind==='FLAVOR'),crusts:entries.filter(x=>x.kind==='CRUST')};
+     const addons=await all('SELECT code,name,price_cents AS priceCents FROM r4_pizza_addons WHERE tenant_id=? AND branch_id=? AND product_id=? ORDER BY code',t,b,productId);
+     return {...profile,sizes:entries.filter(x=>x.kind==='SIZE'),flavors:entries.filter(x=>x.kind==='FLAVOR'),crusts:entries.filter(x=>x.kind==='CRUST'),addons};
    },
    async savePizzaProfile(t,b,body,key){
      await branch(t,b);const p=await product(t,body.productId);
@@ -312,14 +313,17 @@ export function createR4ExtendedService(db){
      if(!['ABSOLUTE_OPTIONS','DESKTOP_DELTAS'].includes(pricingMode))throw fail(400,'Modo de preço inválido.');
      const maxFlavors=integer(body.maxFlavors??4,1,8,'Limite de sabores');
      const sizes=options(body.sizes,'SIZE',true),flavors=options(body.flavors,'FLAVOR',true),crusts=options(body.crusts??[],'CRUST',false);
+     const addons=options(body.addons??[],'ADDON',false);
      return mutation(t,'r4.pizza.profile:'+b+':'+p.id,key,async()=>{
        const entries=[...sizes,...flavors,...crusts];
-       return {result:{productId:p.id,policy,pricingMode,maxFlavors,sizes,flavors,crusts},statements:[
+       return {result:{productId:p.id,policy,pricingMode,maxFlavors,sizes,flavors,crusts,addons},statements:[
          q(`INSERT INTO r4_pizza_profiles(tenant_id,branch_id,product_id,pricing_policy,pricing_mode,max_flavors,updated_at)
           VALUES(?,?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,product_id) DO UPDATE SET
           pricing_policy=excluded.pricing_policy,pricing_mode=excluded.pricing_mode,max_flavors=excluded.max_flavors,updated_at=excluded.updated_at`,
           t,b,p.id,policy,pricingMode,maxFlavors,stamp()),
          q('DELETE FROM r4_pizza_options WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,p.id),
+         q('DELETE FROM r4_pizza_addons WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,p.id),
+         ...addons.map(x=>q('INSERT INTO r4_pizza_addons(tenant_id,branch_id,product_id,code,name,price_cents) VALUES(?,?,?,?,?,?)',t,b,p.id,x.code,x.name,x.priceCents)),
          ...entries.map(x=>q('INSERT INTO r4_pizza_options(tenant_id,branch_id,product_id,kind,code,name,price_cents) VALUES(?,?,?,?,?,?,?)',
           t,b,p.id,x.kind,x.code,x.name,x.priceCents))]};
      });
@@ -336,16 +340,23 @@ export function createR4ExtendedService(db){
      if(flavors.some(x=>!x))throw fail(400,'Sabor inválido.');
      const crust=body.crustCode?p.crusts.find(x=>x.code===body.crustCode):null;
      if(body.crustCode&&!crust)throw fail(400,'Borda inválida.');
+     const addonCodes=body.addonCodes??[];
+     if(!Array.isArray(addonCodes)||addonCodes.length>12||new Set(addonCodes).size!==addonCodes.length)
+       throw fail(400,'Adicionais repetidos ou inválidos.');
+     const addons=addonCodes.map(code=>p.addons.find(x=>x.code===code));
+     if(addons.some(x=>!x))throw fail(400,'Adicional inválido.');
      const flavorCents=p.policy==='HIGHEST_FLAVOR'?Math.max(...flavors.map(x=>x.priceCents)):
        Math.round(flavors.reduce((sum,x)=>sum+x.priceCents,0)/flavors.length);
      const base=p.pricingMode==='DESKTOP_DELTAS'?(await product(t,p.productId)).sale_price_cents:0;
-     const price=p.pricingMode==='DESKTOP_DELTAS'?base+size.priceCents+flavorCents+(crust?.priceCents||0):
-       Math.max(size.priceCents,flavorCents)+(crust?.priceCents||0);
+     const addonsCents=addons.reduce((sum,x)=>sum+x.priceCents,0);
+     const price=(p.pricingMode==='DESKTOP_DELTAS'?base+size.priceCents+flavorCents+(crust?.priceCents||0):
+       Math.max(size.priceCents,flavorCents)+(crust?.priceCents||0))+addonsCents;
      const unitPriceCents=integer(price,0,1_000_000_000,'Preço final');
      return {productId:p.productId,policy:p.policy,pricingMode:p.pricingMode,unitPriceCents,configuration:{
        pricingMode:p.pricingMode,
        size:{code:size.code,name:size.name},flavors:flavors.map(x=>({code:x.code,name:x.name})),
-       crust:crust?{code:crust.code,name:crust.name}:null}};
+       crust:crust?{code:crust.code,name:crust.name}:null,
+       addons:addons.map(x=>({code:x.code,name:x.name,priceCents:x.priceCents}))}};
    },
    async quoteWeightLabel(t,b,body){
      await branch(t,b);
