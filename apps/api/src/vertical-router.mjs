@@ -160,6 +160,10 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
          permission(member,user,'restaurant.orders.transfer');
          return json({transfer:await ext.transferItems(tenantId,branch,user,parts[2],body,key)});
        }
+       if(parts.length===4&&parts[3]==='position'&&method==='GET'){
+         permission(member,user,'restaurant.orders.view');
+         return json({position:await ext.sessionPosition(tenantId,branch,parts[2])});
+       }
        if(parts.length===4&&parts[3]==='split'){
          if(method==='GET'){
            permission(member,user,'restaurant.orders.view');
