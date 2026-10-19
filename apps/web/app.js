@@ -2255,7 +2255,7 @@ function openCategoryForm() {
         <div class="field"><label for="web-password">Senha</label><input id="web-password" name="password" type="password" autocomplete="current-password" required></div>
         <p class="web-login-feedback" id="web-login-feedback" role="status" aria-live="polite">${escapeHtml(message)}</p>
         <button class="primary-button" type="submit">Entrar no PDV</button>
-      </form><small>O acesso depende da liberação do estabelecimento pela ArtiSys.</small></section>`;
+      </form><small>O acesso depende da liberação do estabelecimento pela ArtiSys.</small><p class="web-login-links"><a href="/">Conhecer o produto</a> · <a href="/#cadastro">Criar conta</a></p></section>`;
     const form=authOverlay.querySelector('#web-login-form');
     form.addEventListener('submit',async event=>{
       event.preventDefault();
