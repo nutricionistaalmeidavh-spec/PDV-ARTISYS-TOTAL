@@ -234,6 +234,8 @@ export function createR4ExtendedService(db){
    async saveSplit(t,b,sessionId,body,key){
      const position=await this.sessionPosition(t,b,sessionId);
      if(position.status!=='OPEN'||position.baseCents<1)throw fail(409,'Somente comanda aberta com itens entregues pode ser dividida.');
+     if(await first('SELECT 1 FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId))
+       throw fail(409,'Esta comanda já recebeu antecipação. Finalize os recebimentos sem alterar a divisão.');
      const parts=integer(body.parts,2,50,'Número de partes');
      const bps=integer(body.serviceChargeBps??0,0,3000,'Percentual de serviço');
      const feeId=bps?label(body.serviceChargeProductId,128):null;
