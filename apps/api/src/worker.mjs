@@ -1,5 +1,7 @@
 import { sha256, verifyPassword, newSessionToken } from './password.mjs';
 import {registerPublicAccount} from './public-registration.mjs';
+import {billingConnectorRoute,billingCustomerRoute} from './artisys-billing.mjs';
+import {beginMfaLogin,finishMfaLogin,emailVerifyPublic,accountSecurityRoute} from './account-security.mjs';
 import {commerceRoute} from './commerce-router.mjs';
 import {tenantWriteAllowed,loginIpThrottled,recordLoginIpFailure,
  identityManagementRoute,invitationRegistrationRoute,acceptInvitationRoute,
@@ -55,7 +57,8 @@ async function sessionFor(request,db,now,env){
     FROM auth_sessions s JOIN users u ON u.id=s.user_id
     WHERE s.token_hash=? AND s.expires_at>? AND u.active=1`).bind(tokenHash,now).first();
   if(!entry)return null;
-  return {userId:entry.userId,email:entry.email,displayName:entry.displayName,tokenHash,expiresAt:entry.expiresAt};
+  const verified=env.EMAIL_VERIFICATION_REQUIRED==='true'?await db.prepare('SELECT email_verified_at AS at FROM users WHERE id=?').bind(entry.userId).first():null;
+  return {userId:entry.userId,email:entry.email,displayName:entry.displayName,emailVerified:!!verified?.at,tokenHash,expiresAt:entry.expiresAt};
 }
 async function membershipsFor(db,userId) {
   const {results}=await db.prepare(`SELECT m.tenant_id AS tenantId,t.slug,t.name,
@@ -107,18 +110,26 @@ async function login(request,env,db,now){
       updated_at=?`).bind(key,now,now-15*60*1000,now-15*60*1000,now+15*60*1000,now).run();
     return failure(401,'Credenciais inválidas.');
   }
-  const memberships=await membershipsFor(db,user.id);
-  if(!memberships.length)return failure(403,'Usuário sem estabelecimento ativo.');
   await db.prepare('DELETE FROM login_throttles WHERE email_hash=?').bind(key).run();
-  const token=newSessionToken(),tokenHash=await sha256(token);
-  await db.prepare('INSERT INTO auth_sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)')
-    .bind(tokenHash,user.id,now,now+MAX_SESSION_MS).run();
-  return response({sessionId:tokenHash.slice(0,12),user:{id:user.id,email:user.email,displayName:user.displayName},memberships,expiresAt:new Date(now+MAX_SESSION_MS).toISOString()},200,
-    {'set-cookie':cookieHeader(token,request,env)});
+  const challenge=await beginMfaLogin(db,env,user.id,now);
+  if(challenge)return response({mfaRequired:true,challengeToken:challenge},202);
+  return issueLoginSession(user,request,env,db,now);
+}
+async function issueLoginSession(user,request,env,db,now){
+ const memberships=await membershipsFor(db,user.id);
+ if(!memberships.length)return failure(403,'Usuário sem estabelecimento ativo.');
+ const token=newSessionToken(),tokenHash=await sha256(token);
+ await db.prepare('INSERT INTO auth_sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)').bind(tokenHash,user.id,now,now+MAX_SESSION_MS).run();
+ const verified=env.EMAIL_VERIFICATION_REQUIRED==='true'?await db.prepare('SELECT email_verified_at AS at FROM users WHERE id=?').bind(user.id).first():null;
+ return response({sessionId:tokenHash.slice(0,12),
+  user:{id:user.id,email:user.email,displayName:user.displayName,emailVerified:!!verified?.at},
+  emailVerificationRequired:env.EMAIL_VERIFICATION_REQUIRED==='true'&&!verified?.at,
+  memberships,expiresAt:new Date(now+MAX_SESSION_MS).toISOString()},200,
+  {'set-cookie':cookieHeader(token,request,env)});
 }
 function identity(session,memberships) {
   return {
-    user:{id:session.userId,email:session.email,displayName:session.displayName},
+    user:{id:session.userId,email:session.email,displayName:session.displayName,emailVerified:!!session.emailVerified},
     principal:principalFromSession({userId:session.userId}),
     memberships,
     expiresAt:new Date(session.expiresAt).toISOString()
@@ -144,7 +155,9 @@ export function createApi(env,{now=()=>Date.now()}={}){
       // before schema, anti-abuse protections and customer onboarding are ready.
       // An explicitly authenticated platform bootstrap may run while client logins
       // remain disabled. Browser origins cannot perform cross-site admin mutations.
-      if(path.startsWith('/api/v1/platform/')){
+      if(path==='/api/v1/integrations/artisys/billing')
+         return await billingConnectorRoute(request,db,env,now());
+       if(path.startsWith('/api/v1/platform/')){
         if(!['GET','HEAD'].includes(method)&&!originAllowed(request))
           return failure(403,'Origem da solicitação inválida.');
         return await platformManagementRoute(request,db,env,path,now());
@@ -156,8 +169,17 @@ export function createApi(env,{now=()=>Date.now()}={}){
       if(method==='POST'&&path==='/api/v1/auth/register-invite')
         return await invitationRegistrationRoute(request,db,now());
       if(method==='POST'&&path==='/api/v1/auth/login')return await login(request,env,db,now());
+      if(method==='POST'&&path==='/api/v1/auth/mfa/login'){
+        const user=await finishMfaLogin(request,db,env,now());
+        if(!user)return failure(401,'Código ou desafio de autenticação inválido.');
+        return issueLoginSession(user,request,env,db,now());
+      }
+      if(method==='POST'&&path==='/api/v1/auth/email/verify')
+        return emailVerifyPublic(request,db,now());
       const session=await sessionFor(request,db,now(),env);
       if(!session)return failure(401,'Sessão inválida ou expirada.');
+      const security=await accountSecurityRoute(request,db,env,session,now(),path);
+      if(security)return security;
       const sessions=await identityManagementRoute(request,db,session,now(),path);
       if(sessions)return sessions;
       if(method==='POST'&&path==='/api/v1/invitations/accept')
@@ -170,6 +192,8 @@ export function createApi(env,{now=()=>Date.now()}={}){
       }
       if(method==='GET'&&path==='/api/v1/auth/session')
         return response(identity(session,await membershipsFor(db,session.userId)));
+      if(env.EMAIL_VERIFICATION_REQUIRED==='true'&&!session.emailVerified)
+        return failure(403,'Confirme o endereço de e-mail antes de acessar a loja.');
       if(method==='GET'&&path==='/api/v1/tenants')
         return response({tenants:await membershipsFor(db,session.userId)});
       const match=path.match(/^\/api\/v1\/tenants\/([^/]+)\/(context|branches|members)$/);
@@ -190,6 +214,13 @@ export function createApi(env,{now=()=>Date.now()}={}){
           FROM tenant_memberships m JOIN users u ON u.id=m.user_id
           WHERE m.tenant_id=? AND m.active=1 AND u.active=1 ORDER BY u.display_name,u.id`).bind(membership.tenantId).all();
         return response({tenantId:membership.tenantId,members:results});
+      }
+      const billingMatch=path.match(/^\/api\/v1\/tenants\/([^/]+)\/(billing\/(?:plans|checkout|orders))$/);
+      if(billingMatch){
+        const tenantId=decodeURIComponent(billingMatch[1]);
+        const member=await requireMembership(db,session.userId,tenantId);
+        if(!member)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
+        return await billingCustomerRoute(request,db,env,session,member,tenantId,billingMatch[2],now());
       }
       // Company administration still checks current membership, owner permission,
       // and tenant entitlement on the server (never UI flags or client tenant claims).
