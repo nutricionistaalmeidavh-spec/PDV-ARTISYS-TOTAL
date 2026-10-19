@@ -38,7 +38,7 @@ export function createVerticalService(db){
    const batch=[...statements,q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) VALUES(?,?,?,?,?)',
      t,scope,key,JSON.stringify(result),now())];
    try{await db.batch(batch);}catch(e){
-     if(/constraint|UNIQUE|FOREIGN KEY|CASH|CREDIT|IMMUTABLE|STALE|TABLE_PREPAYMENT/i.test(String(e?.message)))throw err(409,'Conflito com dados atuais. Atualize e tente novamente.');
+     if(/constraint|UNIQUE|FOREIGN KEY|CASH|CREDIT|IMMUTABLE|STALE|TABLE_PREPAYMENT|PREPAYMENT_REFUND/i.test(String(e?.message)))throw err(409,'Conflito com dados atuais. Atualize e tente novamente.');
      throw e;
    }
    return result;
@@ -427,9 +427,13 @@ export function createVerticalService(db){
 
    async prepayments(t,b,sessionId){
      await branchExists(t,b);await checkSession(t,b,sessionId);
-     const payments=await all(`SELECT id,table_session_id AS tableSessionId,method,amount_cents AS amountCents,payer_index AS payerIndex,
-       received_at AS receivedAt,received_by AS receivedBy FROM r4_table_prepayments
-       WHERE tenant_id=? AND branch_id=? AND table_session_id=? ORDER BY received_at,id`,t,b,sessionId);
+     const payments=await all(`SELECT p.id,p.table_session_id AS tableSessionId,p.method,
+       p.amount_cents AS grossAmountCents,p.amount_cents-COALESCE((
+         SELECT SUM(r.amount_cents) FROM r4_table_prepayment_refunds r
+         WHERE r.tenant_id=p.tenant_id AND r.branch_id=p.branch_id AND r.prepayment_id=p.id
+       ),0) AS amountCents,p.payer_index AS payerIndex,
+       p.received_at AS receivedAt,p.received_by AS receivedBy FROM r4_table_prepayments p
+       WHERE p.tenant_id=? AND p.branch_id=? AND p.table_session_id=? ORDER BY p.received_at,p.id`,t,b,sessionId);
      return {tableSessionId:sessionId,payments,totalCents:payments.reduce((sum,p)=>sum+p.amountCents,0)};
    },
    async receivePrepayment(t,b,user,sessionId,body,key){
@@ -450,7 +454,8 @@ export function createVerticalService(db){
        if(!Number.isSafeInteger(payerIndex)||payerIndex<1||payerIndex>plan.parts)throw err(400,'Identifique o pagador da antecipação.');
        const shares=plan.sharesJson?JSON.parse(plan.sharesJson):null;
        if(!shares||shares.length!==plan.parts)throw err(409,'Atualize a divisão antes de receber.');
-       const existingPayer=await first('SELECT COALESCE(SUM(amount_cents),0) AS amount FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? AND table_session_id=? AND payer_index=?',t,b,sessionId,payerIndex);
+       const payerHistory=await this.prepayments(t,b,sessionId);
+       const existingPayer={amount:payerHistory.payments.filter(x=>x.payerIndex===payerIndex).reduce((sum,p)=>sum+p.amountCents,0)};
        if(existingPayer.amount+amount>shares[payerIndex-1])throw err(409,'A antecipação supera a parte deste pagador.');
      }else if(payerIndex!==null)throw err(400,'Configure a divisão antes de atribuir antecipação a um pagador.');
      const cash=await first(`SELECT id FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND terminal_id=?
@@ -467,6 +472,34 @@ export function createVerticalService(db){
        return {result:payment,statements:[q(`INSERT INTO r4_table_prepayments
          (id,tenant_id,branch_id,table_session_id,cash_session_id,method,amount_cents,payer_index,mutation_id,received_by,received_at)
          VALUES(?,?,?,?,?,?,?,?,?,?,?)`,payment.id,t,b,sessionId,cash.id,method,amount,payerIndex,key,user,payment.receivedAt)]};
+     });
+   },
+   async refundPrepayment(t,b,user,sessionId,paymentId,body,key){
+     await branchExists(t,b);
+     if(!keyOK(key))throw err(400,'Identificador da operação obrigatório.');
+     const scope='restaurant.prepay.refund:'+sessionId+':'+paymentId;
+     const replay=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(replay)return JSON.parse(replay.result_json);
+     const session=await checkSession(t,b,sessionId);
+     if(session.status!=='OPEN')throw err(409,'A comanda não está aberta para estorno de adiantamento.');
+     if(await first('SELECT 1 FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId))
+       throw err(409,'A comanda já possui checkout. Faça a reversão pelo fluxo canônico da venda.');
+     const payment=await first('SELECT id,method,amount_cents AS amountCents FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? AND table_session_id=? AND id=?',t,b,sessionId,paymentId);
+     if(!payment)throw err(404,'Recebimento antecipado não encontrado.');
+     const amount=cents(body.amountCents,'Valor do estorno');
+     if(!amount)throw err(400,'Informe um valor de estorno positivo.');
+     const reason=clean(body.reason,200);
+     if(reason.length<4)throw err(400,'Informe o motivo do estorno.');
+     const previous=await first('SELECT COALESCE(SUM(amount_cents),0) AS cents FROM r4_table_prepayment_refunds WHERE tenant_id=? AND branch_id=? AND prepayment_id=?',t,b,paymentId);
+     if(amount>payment.amountCents-previous.cents)throw err(409,'O estorno excede o saldo antecipado.');
+     const cash=await first(`SELECT id FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND terminal_id=?
+       AND status='OPEN' ORDER BY opened_at DESC LIMIT 1`,t,b,clean(body.terminalId||'DEFAULT',80));
+     if(!cash)throw err(409,'Abra o caixa do terminal antes de registrar a devolução.');
+     return mutate(t,scope,key,async()=>{
+       const refund={id:uuid(),tableSessionId:sessionId,prepaymentId:paymentId,method:payment.method,amountCents:amount,reason,refundedBy:user,refundedAt:now()};
+       return {result:refund,statements:[q(`INSERT INTO r4_table_prepayment_refunds
+         (id,tenant_id,branch_id,prepayment_id,table_session_id,cash_session_id,method,amount_cents,reason,refunded_by,refunded_at,mutation_id)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,refund.id,t,b,paymentId,sessionId,cash.id,payment.method,amount,reason,user,refund.refundedAt,key)]};
      });
    },
    async serviceRequests(t,b){
