@@ -61,7 +61,7 @@
 
 ## Migrações: política para aplicativo ainda novo
 
-As migrações SQL são incrementais e numeradas; a sequência vigente é de 0001 a 0026. Não são 26 versões distribuídas a clientes, nem importações de dados do desktop.
+As migrações SQL são incrementais e numeradas; a sequência vigente é de 0001 a 0028. Não são 28 versões distribuídas a clientes, nem importações de dados do desktop.
 
 - Mudança de classificação **não** deve gerar migration. Só alterações reais do banco exigem mudança de schema.
 - Não criar compatibilidade com bases de clientes antigos por padrão; como o app ainda não teve usuários, não inventar histórico a migrar. A importação de um banco desktop real seria tarefa separada, opcional e com consentimento.
