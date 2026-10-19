@@ -1571,6 +1571,14 @@
         "reviewedAt": "2026-10-19",
         "basis": "CI SaaS branch https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39269330637 ; regressão unitária SQLite/D1 e E2E Chromium; escopo de software, sem certificação física",
         "missingSoftwareWork": ""
+      },
+      "independentEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "async function readWeight()",
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('cap-050 simulated scale and drawer",
+        "testAssertionContains": "assert.equal(weight.weight,1.275);",
+        "testRunner": "node-test"
       }
     },
     {
