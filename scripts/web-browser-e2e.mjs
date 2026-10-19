@@ -107,6 +107,7 @@ try{
     await staffPage.locator('#web-invite-form [name=displayName]').fill('Funcionario QA');
     await staffPage.locator('#web-invite-form [name=password]').fill('Employee-Strong-2026-Pass!');
     await staffPage.locator('#web-invite-form button[type=submit]').click();
+    await staffPage.getByText('Conta ativada. Entre com seu e-mail e senha.').waitFor({timeout:12000});
     await staffPage.locator('#web-login-form').waitFor({timeout:12000});
     await staffPage.locator('#web-email').fill('web-employee-qa@example.test');
     await staffPage.locator('#web-password').fill('Employee-Strong-2026-Pass!');
