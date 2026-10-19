@@ -1026,3 +1026,36 @@ test('cap-032: atribui itens entregues a pagadores em centavos sem gerar segunda
   assert.equal((await x.db.prepare("SELECT count(*) AS n FROM sales WHERE tenant_id='a'").bind().first()).n,0);
  }finally{x.close();}
 });
+
+
+test('cap-032: antecipação parcial é idempotente e aparece só uma vez no caixa ao concluir a venda',async()=>{
+ const x=await setup();try{
+  const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'EARLY-RECEIPT',name:'Refeição antecipada',salePriceCents:2500,trackStock:false})).body.product;
+  const table=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Mesa recebimento parcial'})).body.table;
+  const session=(await x.request('a',`restaurant/tables/${table.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+  const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:session.id,items:[{productId:p.id,quantity:1}]})).body.order;
+  const k=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0].id;
+  await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'PREPARING'});
+  await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'READY'});
+  await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'});
+  await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0});
+  const path=`restaurant/sessions/${session.id}/prepayments`;
+  const key=crypto.randomUUID();
+  const paid=await x.request('a',path,'POST',{branchId:'filial-a',method:'CASH',amountCents:900},{key});
+  assert.equal(paid.status,201,JSON.stringify(paid.body));
+  const replay=await x.request('a',path,'POST',{branchId:'filial-a',method:'CASH',amountCents:900},{key});
+  assert.equal(replay.body.payment.id,paid.body.payment.id);
+  assert.equal((await x.request('a',path,'POST',{branchId:'filial-a',method:'PIX',amountCents:2000})).status,409);
+  const read=await x.request('a',path+'?branchId=filial-a');
+  assert.equal(read.body.prepayments.totalCents,900);
+  assert.equal((await x.request('b',path+'?branchId=filial-b','GET',undefined,{as:'b'})).status,404);
+  const sale=(await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:session.id})).body.sale;
+  const complete=await x.request('a','sales/'+sale.id+'/complete','POST',{branchId:'filial-a',payments:[{method:'PIX',amountCents:1600}]});
+  assert.equal(complete.status,200,JSON.stringify(complete.body));
+  assert.equal(complete.body.sale.totalCents,2500);
+  const cash=(await x.db.prepare("SELECT COALESCE(SUM(amount_cents),0) n FROM cash_movements WHERE tenant_id='a' AND sale_id=?").bind(sale.id).first()).n;
+  assert.equal(cash,1600,'somente recebimento novo entra em cash_movements');
+  assert.equal((await x.db.prepare("SELECT COUNT(*) n FROM r4_table_prepayments WHERE tenant_id='a' AND table_session_id=?").bind(session.id).first()).n,1);
+  assert.equal((await x.db.prepare("SELECT COUNT(*) n FROM sales WHERE tenant_id='a'").bind().first()).n,1);
+ }finally{x.close();}
+});
