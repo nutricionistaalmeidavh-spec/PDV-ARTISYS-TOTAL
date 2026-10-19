@@ -45,6 +45,7 @@ BEGIN SELECT RAISE(ABORT,'RESTAURANT_SERVICE_STALE'); END;
 CREATE TABLE IF NOT EXISTS r4_table_prepayments(
  id TEXT NOT NULL,tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,table_session_id TEXT NOT NULL,
  cash_session_id TEXT NOT NULL,method TEXT NOT NULL CHECK(method IN('CASH','PIX','DEBIT_CARD','CREDIT_CARD')),
+ payer_index INTEGER CHECK(payer_index BETWEEN 1 AND 50),
  amount_cents INTEGER NOT NULL CHECK(amount_cents>0),mutation_id TEXT NOT NULL,
  received_by TEXT NOT NULL,received_at TEXT NOT NULL,
  PRIMARY KEY(tenant_id,branch_id,id),
@@ -86,3 +87,21 @@ CREATE TRIGGER IF NOT EXISTS r4_prepaid_item_transfer_guard BEFORE INSERT ON r4_
 WHEN EXISTS(SELECT 1 FROM r4_table_prepayments p WHERE p.tenant_id=NEW.tenant_id AND p.branch_id=NEW.branch_id
  AND p.table_session_id IN(NEW.source_session_id,NEW.target_session_id))
 BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_TRANSFER_CONFLICT'); END;
+
+-- A split payer can receive advances in independent steps, but never more
+-- than that payer owes. Check in the INSERT transaction to close race windows.
+CREATE TRIGGER IF NOT EXISTS r4_prepayment_payer_limit BEFORE INSERT ON r4_table_prepayments
+WHEN EXISTS(SELECT 1 FROM r4_split_plans s
+ WHERE s.tenant_id=NEW.tenant_id AND s.branch_id=NEW.branch_id
+ AND s.table_session_id=NEW.table_session_id)
+AND (
+ NEW.payer_index IS NULL OR
+ NEW.amount_cents+(
+   SELECT COALESCE(SUM(p.amount_cents),0) FROM r4_table_prepayments p
+   WHERE p.tenant_id=NEW.tenant_id AND p.branch_id=NEW.branch_id
+   AND p.table_session_id=NEW.table_session_id AND p.payer_index=NEW.payer_index
+ ) > COALESCE((SELECT json_extract(s.shares_json,'$['||(NEW.payer_index-1)||']')
+   FROM r4_split_plans s WHERE s.tenant_id=NEW.tenant_id AND s.branch_id=NEW.branch_id
+     AND s.table_session_id=NEW.table_session_id),0)
+)
+BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_PAYER_EXCEEDED'); END;
