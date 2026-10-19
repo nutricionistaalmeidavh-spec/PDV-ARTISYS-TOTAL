@@ -1,0 +1,21 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"><meta name="referrer" content="no-referrer"><title>Minha conta | PDV Total</title><link rel="stylesheet" href="/conta/conta.css"><script defer src="/conta/conta.js"></script></head>
+<body><header><a href="/" class="logo"><b>A</b><span><strong>artisys</strong><small>PDV TOTAL</small></span></a><nav><a href="/app/">Abrir PDV</a><a href="/">Conhecer o produto</a></nav></header>
+<main><p class="eyebrow">ÁREA DO CLIENTE</p><h1>Minha conta e assinatura</h1><p class="intro">Gerencie a segurança do acesso e a assinatura do estabelecimento sem interferir nas vendas.</p>
+<p id="notice" role="status" aria-live="polite"></p>
+<div id="auth-required" hidden class="panel"><h2>Entre no sistema</h2><p>Acesse sua loja com e-mail e senha antes de gerenciar sua conta.</p><a class="button" href="/app/">Ir para login</a></div>
+<div id="content" hidden>
+<div class="user"><div><small>CONTA</small><h2 id="user-name"></h2><p id="user-email"></p></div><span id="verified" class="tag"></span></div>
+<div class="columns">
+<section class="panel"><span class="eyebrow">SEGURANÇA</span><h2>Proteja seu acesso</h2><p id="mfa-status"></p>
+<div id="email-actions"><h3>Verificação de e-mail</h3><p>Confirme o endereço associado à sua conta para habilitar políticas avançadas de acesso.</p><button id="send-verification" class="secondary">Enviar link de confirmação</button></div>
+<div id="mfa-enroll" class="field-group"><h3>Autenticação em duas etapas</h3><p>Use Google Authenticator, Aegis, 2FAS ou outro aplicativo TOTP gratuito.</p><form id="enroll-form"><label>Senha atual<input type="password" name="password" required autocomplete="current-password"></label><button type="submit">Configurar autenticador</button></form></div>
+<div id="mfa-setup" hidden class="field-group"><h3>Configure o aplicativo</h3><p>Adicione uma conta TOTP e informe a chave abaixo. Depois digite o código gerado.</p><code id="mfa-secret" class="secret"></code><a id="mfa-otp-link" href="#">Abrir aplicativo autenticador</a><form id="confirm-form"><label>Código de 6 dígitos<input inputmode="numeric" maxlength="6" pattern="[0-9]{6}" name="code" required autocomplete="one-time-code"></label><button type="submit">Ativar MFA</button></form></div>
+<div id="mfa-disable" hidden class="field-group"><h3>Desativar MFA</h3><form id="disable-form"><label>Senha atual<input type="password" name="password" required></label><label>Código TOTP ou recuperação<input name="code" required></label><button type="submit" class="danger">Desativar MFA</button></form></div>
+<div id="recovery" hidden class="field-group"><h3>Códigos de recuperação</h3><p>Guarde em local seguro. Eles aparecem somente uma vez e cada um funciona uma única vez.</p><pre id="codes"></pre><button id="copy-codes" class="secondary">Copiar códigos</button></div>
+</section>
+<section class="panel"><span class="eyebrow">COBRANÇA</span><h2>Assinatura da loja</h2><div id="billing-owner" hidden><label>Estabelecimento<select id="tenant"></select></label>
+<p id="subscription-status"></p><h3>Escolha o período</h3><div id="plans" class="plans"></div>
+<form id="checkout-form"><label>Cupom promocional (opcional)<input name="couponCode" maxlength="40" placeholder="SEUCUPOM" autocomplete="off"></label><button id="checkout" type="submit">Continuar para pagamento seguro</button></form>
+<p class="fine">Pagamento processado na central ArtiSys/Asaas. Um checkout iniciado não ativa o PDV: a liberação depende da confirmação financeira autenticada.</p><h3>Compras iniciadas</h3><ol id="orders"></ol>
+</div><div id="billing-not-owner"><p>A gestão financeira do estabelecimento é exclusiva do proprietário.</p></div></section>
+</div></div></main><footer>ArtiSys · PDV Total · <a href="/">Página inicial</a></footer></body></html>
