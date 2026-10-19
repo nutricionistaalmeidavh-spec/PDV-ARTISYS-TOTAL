@@ -10,6 +10,8 @@ test('marketing is a distinct public entry, not a duplicate operating renderer',
   const html=source('apps/landing/index.html');
   assert.match(html,/<main id="conteudo">/);
   assert.match(html,/id="registration-form"/);
+  assert.match(html,/id="security-verify-form"/);
+  assert.match(html,/id="security-recovery-form"/);
   assert.match(html,/data-demo="mesas"/);
   assert.match(html,/data-demo="cardapio"/);
   assert.match(html,/data-demo="cozinha"/);
@@ -21,6 +23,8 @@ test('registration sends only to the same-origin API and has no external depende
   const js=source('apps/landing/landing.js');
   assert.match(js,/fetch\('\/api\/v1\/auth\/register'/);
   assert.match(js,/credentials:'same-origin'/);
+  assert.match(js,/bindSecurityForm\('security-verify-form','\/api\/v1\/auth\/verify-email'\)/);
+  assert.match(js,/bindSecurityForm\('security-recovery-form','\/api\/v1\/auth\/reset-password'\)/);
   assert.doesNotMatch(js,/https?:\/\//);
   const wrangler=source('wrangler.jsonc');
   assert.match(wrangler,/"REGISTRATION_ENABLED": "false"/);

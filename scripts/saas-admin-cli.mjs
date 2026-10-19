@@ -6,6 +6,8 @@
  */
 const endpoint=process.env.PDV_TOTAL_BASE_URL||'';
 const token=process.env.PLATFORM_ADMIN_TOKEN||'';
+const readToken=process.env.PLATFORM_READ_TOKEN||'';
+const totp=process.env.PLATFORM_ADMIN_TOTP||'';
 const args=process.argv.slice(2);
 const command=args[0];
 function stop(message){console.error(message);process.exitCode=1;}
@@ -22,7 +24,10 @@ async function call(base,path,method='GET',body,secret=token,cookie=''){
  const headers={accept:'application/json'};
  if(secret)headers.authorization='Bearer '+secret;
  if(cookie)headers.cookie=cookie;
- if(method!=='GET'&&method!=='HEAD')headers.origin=base;
+ if(method!=='GET'&&method!=='HEAD'){
+  headers.origin=base;
+  if(secret&&totp)headers['x-platform-totp']=totp;
+ }
  if(body)headers['content-type']='application/json';
  const response=await fetch(base+path,{method,headers,...(body?{body:JSON.stringify(body)}:{})});
  let data={};try{data=await response.json();}catch{}
@@ -37,8 +42,8 @@ function requireSecret(){
 }
 async function run(){
  const base=getBase();
- if(!['pending','approve','subscription','bootstrap','smoke'].includes(command))
-  throw Error('Uso: saas-admin-cli.mjs pending | approve ID | subscription ID ESTADO PLANO EXPIRACAO_ISO | bootstrap | smoke');
+ if(!['pending','approve','subscription','bootstrap','smoke','verify-email','reset-password'].includes(command))
+  throw Error('Uso: saas-admin-cli.mjs pending | approve ID | subscription ID ESTADO PLANO EXPIRACAO_ISO | bootstrap | smoke | verify-email USER_ID | reset-password USER_ID');
  if(command==='smoke'){
   const email=process.env.PDV_OWNER_EMAIL,password=process.env.PDV_OWNER_PASSWORD;
   if(!email||!password)throw Error('Informe PDV_OWNER_EMAIL e PDV_OWNER_PASSWORD no ambiente para o smoke.');
@@ -57,10 +62,17 @@ async function run(){
   console.log('PASS — autenticação, sessão, tenant, filial e entitlement. Sessão de homologação revogada.');
   return;
  }
- requireSecret();
+ if(command!=='pending'||!readToken)requireSecret();
+ if(command==='verify-email'||command==='reset-password'){
+  if(!args[1]||!/^[-_a-zA-Z0-9]{1,128}$/.test(args[1]))throw Error('Informe ID de usuário válido.');
+  const path='/api/v1/platform/users/'+encodeURIComponent(args[1])+'/'+(command==='verify-email'?'email-verification':'password-recovery');
+  const {data}=await call(base,path,'POST',{});
+  console.log('Código privado de uso único (entregue apenas ao titular confirmado por canal independente):',data.token);
+  console.log('Destinatário:',data.recipient,'Expira em:',data.expiresAt);return;
+ }
  if(command==='pending'){
-  const {data}=await call(base,'/api/v1/platform/tenants');
-  const list=(data.pendingTenants||[]).map(t=>({id:t.id,name:t.name,ownerEmail:t.ownerEmail,status:t.status,planKey:t.planKey}));
+  const {data}=await call(base,'/api/v1/platform/tenants','GET',undefined,readToken||token);
+  const list=(data.pendingTenants||[]).map(t=>({id:t.id,name:t.name,ownerEmail:t.ownerEmail,ownerUserId:t.ownerUserId,emailVerifiedAt:t.emailVerifiedAt,status:t.status,planKey:t.planKey}));
   console.log(JSON.stringify(list,null,2));return;
  }
  if(command==='approve'){

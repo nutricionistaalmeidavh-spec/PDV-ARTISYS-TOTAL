@@ -1,5 +1,6 @@
 import { sha256, verifyPassword, newSessionToken } from './password.mjs';
 import {registerPublicAccount} from './public-registration.mjs';
+import {publicIdentityRoute} from './identity-security.mjs';
 import {commerceRoute} from './commerce-router.mjs';
 import {tenantWriteAllowed,loginIpThrottled,recordLoginIpFailure,
  identityManagementRoute,invitationRegistrationRoute,acceptInvitationRoute,
@@ -153,6 +154,8 @@ export function createApi(env,{now=()=>Date.now()}={}){
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
       if(!['GET','HEAD'].includes(method)&&!originAllowed(request))return failure(403,'Origem da solicitação inválida.');
       if(method==='POST'&&path==='/api/v1/auth/register')return await registerPublicAccount(request,env,db,now());
+       if(method==='POST'&&(path==='/api/v1/auth/verify-email'||path==='/api/v1/auth/reset-password'))
+         return await publicIdentityRoute(request,db,path,now());
       if(method==='POST'&&path==='/api/v1/auth/register-invite')
         return await invitationRegistrationRoute(request,db,now());
       if(method==='POST'&&path==='/api/v1/auth/login')return await login(request,env,db,now());

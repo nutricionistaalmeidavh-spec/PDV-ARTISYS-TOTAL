@@ -7,9 +7,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "node scripts/verify-cloudflare-build.mjs && node scripts/build-web.mjs && node scripts/cloudflare-d1-bootstrap.mjs",
+    "build": "node scripts/verify-cloudflare-build.mjs && node scripts/build-web.mjs",
     "test": "npm run test:core && npm run test:api && npm run check:web && npm run check:landing && npm run test:selfhost && npm run test:parity",
     "deploy": "wrangler deploy",
+    "deploy:production": "node scripts/cloudflare-d1-bootstrap.mjs --production && wrangler deploy",
     "preview": "wrangler preview",
     "test:api": "cd apps/api && npm test",
     "test:core": "node --experimental-sqlite --test packages/core/test/*.test.js",

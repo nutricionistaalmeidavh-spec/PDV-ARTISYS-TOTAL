@@ -63,4 +63,38 @@
       button.disabled=false;button.textContent=original;
     }finally{form.dataset.pending='false';}
   });
+
+  const securityDialog=document.getElementById('security-dialog');
+  document.querySelectorAll('[data-open-security]').forEach(node=>node.addEventListener('click',()=>{
+    if(dialog.open)dialog.close();
+    securityDialog.showModal();
+    securityDialog.querySelector('input').focus();
+  }));
+  securityDialog.querySelector('[data-close-security]').addEventListener('click',()=>securityDialog.close());
+  securityDialog.addEventListener('click',event=>{if(event.target===securityDialog)securityDialog.close();});
+  function bindSecurityForm(id,endpoint){
+    const node=document.getElementById(id),feedback=node.querySelector('[role="status"]');
+    node.addEventListener('submit',async event=>{
+      event.preventDefault();
+      if(node.dataset.pending==='true')return;
+      const body=Object.fromEntries(new FormData(node).entries());
+      const button=node.querySelector('[type="submit"]'),original=button.textContent;
+      node.dataset.pending='true';button.disabled=true;feedback.textContent='';
+      feedback.classList.remove('success');
+      try{
+        const response=await fetch(endpoint,{method:'POST',credentials:'same-origin',
+          headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify(body)});
+        const payload=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(payload.error||'Código não aceito ou expirado.');
+        feedback.classList.add('success');
+        feedback.textContent=endpoint.endsWith('/verify-email')
+         ?'E-mail confirmado. A liberação depende de aprovação da ArtiSys.'
+         :'Senha atualizada. Todas as sessões antigas foram encerradas. Faça login novamente.';
+        node.reset();
+      }catch(error){feedback.textContent=error instanceof TypeError?'Sem conexão com o servidor.':error.message;}
+      finally{button.disabled=false;button.textContent=original;node.dataset.pending='false';}
+    });
+  }
+  bindSecurityForm('security-verify-form','/api/v1/auth/verify-email');
+  bindSecurityForm('security-recovery-form','/api/v1/auth/reset-password');
 })();

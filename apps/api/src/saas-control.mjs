@@ -1,5 +1,6 @@
 // SaaS control plane. Never duplicates sales, inventory or cash ledgers.
 import {sha256,hashPassword,newSessionToken} from './password.mjs';
+import {verifyPlatformSecondFactor,platformIdentityRoute} from './identity-security.mjs';
 const fail=(status,msg)=>Object.assign(new Error(msg),{status});
 const output=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'private, no-store','x-content-type-options':'nosniff'}});
 const err=e=>output({error:e.status?e.message:'Falha na operação.'},e.status||500);
@@ -174,13 +175,20 @@ export async function tenantManagementRoute(request,db,env,session,member,tenant
   return null;
  }catch(e){return err(e);}
 }
+function bearerEquals(header,secret){
+ if(typeof secret!=='string'||secret.length<32||!header.startsWith('Bearer ')||header.length!==secret.length+7)return false;
+ let diff=0;for(let i=0;i<secret.length;i++)diff|=secret.charCodeAt(i)^header.charCodeAt(i+7);
+ return diff===0;
+}
 export async function platformManagementRoute(request,db,env,path,now){
  if(!path.startsWith('/api/v1/platform/'))return null;
- const secret=env.PLATFORM_ADMIN_TOKEN,header=request.headers.get('authorization')||'';
- if(typeof secret!=='string'||secret.length<32||!header.startsWith('Bearer ')||header.length!==secret.length+7)
-  return output({error:'Acesso administrativo negado.'},403);
- let diff=0;for(let i=0;i<secret.length;i++)diff|=secret.charCodeAt(i)^header.charCodeAt(i+7);
- if(diff)return output({error:'Acesso administrativo negado.'},403);
+ const readonly=['GET','HEAD'].includes(request.method),header=request.headers.get('authorization')||'';
+ if(!bearerEquals(header,env.PLATFORM_ADMIN_TOKEN)&&!(readonly&&bearerEquals(header,env.PLATFORM_READ_TOKEN)))
+   return output({error:'Acesso administrativo negado.'},403);
+ if(!readonly&&!await verifyPlatformSecondFactor(request,db,env,now))
+   return output({error:'Segundo fator administrativo obrigatório ou já utilizado.'},403);
+ const identity=await platformIdentityRoute(request,db,path,now);
+ if(identity)return identity;
  if(path==='/api/v1/platform/bootstrap'&&request.method==='POST'){
   try{
    const data=await bodyOf(request);
@@ -207,7 +215,7 @@ export async function platformManagementRoute(request,db,env,path,now){
  }
  if(path==='/api/v1/platform/tenants'&&request.method==='GET'){
   try{
-   const pending=await q(db,`SELECT t.id,t.slug,t.name,t.created_at AS createdAt,u.email_norm AS ownerEmail
+   const pending=await q(db,`SELECT t.id,t.slug,t.name,t.created_at AS createdAt,u.email_norm AS ownerEmail,u.id AS ownerUserId,u.email_verified_at AS emailVerifiedAt
      FROM tenants t JOIN tenant_memberships m ON m.tenant_id=t.id AND m.profile_key='OWNER'
      JOIN users u ON u.id=m.user_id
      WHERE t.active=0 AND m.active=0 ORDER BY t.created_at DESC,t.id LIMIT 100`).all();
@@ -223,6 +231,8 @@ export async function platformManagementRoute(request,db,env,path,now){
    if(tenant.active!==0)throw fail(409,'Empresa já avaliada.');
    const membership=await q(db,"SELECT user_id AS ownerId FROM tenant_memberships WHERE tenant_id=? AND profile_key='OWNER' AND active=0",tenantId).first();
    if(!membership)throw fail(409,'Cadastro incompleto: proprietário não encontrado.');
+   const proof=await q(db,'SELECT email_verified_at AS verifiedAt FROM users WHERE id=?',membership.ownerId).first();
+   if(!proof?.verifiedAt)throw fail(409,'Comprove a titularidade do e-mail antes de aprovar esta empresa.');
    const approvedAt=stamp(now),endsAt=stamp(now+14*86400000);
    await db.batch([
     q(db,"INSERT INTO saas_subscriptions(tenant_id,plan_key,status,ends_at,updated_at,updated_by) VALUES(?,?,'TRIAL',?,?,?)",
