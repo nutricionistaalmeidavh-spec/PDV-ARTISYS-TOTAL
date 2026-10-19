@@ -35,11 +35,19 @@ test('self-hosted static server resolves only exact landing and app entrypoints'
   const dir=mkdtempSync(join(tmpdir(),'pdv-public-'));
   try{
     mkdirSync(join(dir,'app'));
+    for(const name of ['admin','conta','verificar-email']){
+      mkdirSync(join(dir,name));
+      writeFileSync(join(dir,name,'index.html'),'Área '+name);
+    }
     writeFileSync(join(dir,'index.html'),'Landing PDV Total');
     writeFileSync(join(dir,'app','index.html'),'PDV autenticado');
     assert.equal(await (await serveLocalPwa('/',{rootDir:dir})).text(),'Landing PDV Total');
     for(const p of ['/app','/app/'])assert.equal(await (await serveLocalPwa(p,{rootDir:dir})).text(),'PDV autenticado');
-    assert.equal((await serveLocalPwa('/admin/',{rootDir:dir})).status,400);
+    for(const p of ['admin','conta','verificar-email']){
+      assert.equal(await (await serveLocalPwa('/'+p+'/',{rootDir:dir})).text(),'Área '+p);
+      assert.equal(await (await serveLocalPwa('/'+p,{rootDir:dir})).text(),'Área '+p);
+    }
+    assert.equal((await serveLocalPwa('/area-nao-registrada/',{rootDir:dir})).status,400);
     assert.notEqual((await serveLocalPwa('/../index.html',{rootDir:dir})).status,200);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
