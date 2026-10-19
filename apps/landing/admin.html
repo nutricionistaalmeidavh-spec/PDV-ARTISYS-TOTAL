@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'">
+<meta name="referrer" content="no-referrer"><title>ArtiSys | Administração PDV Total</title>
+<link rel="stylesheet" href="/admin/admin.css"><script defer src="/admin/admin.js"></script>
+</head>
+<body>
+<header><a class="brand" href="/"><b>A</b><span><strong>artisys</strong><small>PDV TOTAL / PLATAFORMA</small></span></a><div class="header-actions"><a href="/app/">Acessar PDV</a><a href="https://pagamentos-artisys-central.nutricionistaalmeidavh.workers.dev/admin" target="_blank" rel="noopener noreferrer">Central de pagamentos ↗</a></div></header>
+<main>
+<section class="intro"><div><div class="eyebrow">PAINEL PRIVADO DA PLATAFORMA</div><h1>Gestão de estabelecimentos</h1><p>Cadastros, aprovações, assinaturas, auditoria e configuração comercial em um único lugar.</p></div><span class="notice">Acesso restrito à ArtiSys</span></section>
+<section class="auth" aria-label="Autenticação administrativa"><div><label for="admin-secret">Token administrativo da plataforma</label><p>Insira o segredo configurado no servidor. Ele não é gravado no navegador.</p></div><input type="password" id="admin-secret" autocomplete="off" spellcheck="false" placeholder="PLATFORM_ADMIN_TOKEN"><button id="connect">Entrar no painel</button><button id="disconnect" class="secondary" hidden>Encerrar acesso</button></section>
+<p id="feedback" role="status" aria-live="polite"></p>
+<div id="dashboard" hidden>
+<section class="metrics" aria-label="Indicadores"><article><small>EMPRESAS</small><strong id="total">—</strong></article><article><small>AGUARDANDO APROVAÇÃO</small><strong id="pending">—</strong></article><article><small>APROVADAS</small><strong id="approved">—</strong></article><article><small>ASSINATURAS ATIVAS</small><strong id="active">—</strong></article></section>
+<div class="section-heading"><div><div class="eyebrow">ESTABELECIMENTOS</div><h2>Contas e assinaturas</h2></div><div class="filter"><label for="status-filter">Exibir</label><select id="status-filter"><option value="all">Todas</option><option value="pending">Pendentes</option><option value="active">Aprovadas</option></select><button class="secondary" id="refresh">Atualizar</button></div></div>
+<div class="table-scroll"><table><thead><tr><th>Estabelecimento</th><th>Proprietário</th><th>Situação</th><th>Assinatura</th><th>Vigência</th><th>Ações</th></tr></thead><tbody id="tenants"></tbody></table></div>
+<div class="grid-two"><section class="panel"><div class="eyebrow">COBRANÇA</div><h2>Gestão financeira</h2><p>Cadastre preços mensal/anual e cupons promocionais no painel de Pagamentos ArtiSys. O PDV usa essas ofertas canônicas e só libera acesso após o evento financeiro autenticado.</p><a class="inline-link" href="https://pagamentos-artisys-central.nutricionistaalmeidavh.workers.dev/admin" target="_blank" rel="noopener noreferrer">Administrar ofertas e cupons ↗</a></section>
+<section class="panel"><div class="eyebrow">SEGURANÇA</div><h2>Registro de ações</h2><ol id="audit" class="audit"></ol></section></div>
+</div>
+<dialog id="subscription-dialog"><form method="dialog" id="subscription-form"><h2>Gerenciar assinatura</h2><p id="selected-tenant"></p><label>Plano (ID interno)<input id="plan-key" required minlength="2" maxlength="48" pattern="[a-z0-9_-]{2,48}" value="monthly"></label><label>Situação<select id="subscription-status"><option>ACTIVE</option><option>TRIAL</option><option>PAST_DUE</option><option>SUSPENDED</option><option>CANCELLED</option></select></label><label>Vigência até (UTC)<input id="subscription-ends" type="datetime-local" required></label><p class="warning">Concessões manuais são auditadas. A cobrança automática usa confirmação da central de pagamentos, não esta tela.</p><menu><button type="button" id="cancel-subscription" class="secondary">Cancelar</button><button type="submit" id="save-subscription">Salvar alteração</button></menu></form></dialog>
+</main>
+<footer>ArtiSys · administração interna do PDV Total · <a href="/">Voltar à página pública</a></footer>
+</body></html>
