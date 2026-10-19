@@ -45,16 +45,16 @@
     });
   }
   async function load(){
-    const [products,stations,routes,tickets,profiles,onboard,orders,tables,ticketClock,modules]=await Promise.all([
+    const [products,stations,routes,tickets,profiles,onboard,orders,tables,ticketClock,modules,position]=await Promise.all([
       safe(()=>api.products(false)),safe(()=>r4('/kitchen/stations').then(x=>x.stations)),
       safe(()=>r4('/kitchen/routes').then(x=>x.routes)),safe(()=>r4('/kitchen/station-tickets').then(x=>x.tickets)),
       safe(()=>r4('/pizzeria/profiles').then(x=>x.profiles)),
       safe(()=>api.request('/api/v1/onboarding/segments')),
       safe(()=>r4('/orders').then(x=>x.orders)),safe(()=>r4('/tables').then(x=>x.tables)),
-      safe(()=>r4('/tickets/time-zone')),safe(()=>api.modules())
+      safe(()=>r4('/tickets/time-zone')),safe(()=>api.modules()),sessionId?safe(()=>r4('/sessions/'+uid(sessionId)+'/position').then(x=>x.position)):null
     ]);
     model={products:products||[],stations:stations||[],routes:routes||[],tickets:tickets||[],
-      profiles:profiles||[],onboard:onboard||{},modules:modules||[],orders:orders||[],tables:tables||[],ticketClock:ticketClock||{timeZone:'America/Sao_Paulo'}};
+      profiles:profiles||[],onboard:onboard||{},modules:modules||[],position:position||null,orders:orders||[],tables:tables||[],ticketClock:ticketClock||{timeZone:'America/Sao_Paulo'}};
     model.sessionOrders=model.orders.filter(o=>o.table_session_id===sessionId);
     model.orderItems=model.sessionOrders.filter(o=>o.status==='DELIVERED')
       .flatMap(o=>(o.items||[]).map(i=>({...i,orderId:o.id})));
@@ -68,6 +68,14 @@
       field('parts','Número de pessoas','number','min="2" max="50" value="2" required')+
       field('bps','Taxa de serviço (%)','number','min="0" max="30" step="0.01" value="0"')+
       field('individualShares','Valores por pessoa (opcional, em R$ separados por ponto e vírgula)','text','placeholder="33,33; 33,34; 33,34"')+
+      '<details><summary>Ratear por item entregue (em vez de por valores)</summary><label><input type="checkbox" name="allocationMode"> Atribuir cada item a um pagador</label>'+
+      '<p>Indique a parte 1, 2, 3 etc. para cada item. Todas devem ser preenchidas e a quantidade de partes corresponde ao campo acima.</p>'+
+      ((model.position?.items)||[]).map(item=>{
+        const name=model.orderItems.find(x=>x.id===item.id)?.name||item.id.slice(0,8);
+        return '<label class="field"><span>'+esc(name)+' · '+money(item.totalCents)+'</span><select name="payer_'+esc(item.id)+'">'+
+          '<option value="">Selecione o pagador</option>'+
+          Array.from({length:50},(_,i)=>'<option value="'+(i+1)+'">Pagador '+(i+1)+'</option>').join('')+'</select></label>';
+      }).join('')+'</details>'+
       '<label class="field"><span>Produto não estocável para taxa (se houver)</span>'+select('serviceChargeProductId',fee,p=>p.name,'Sem taxa',false)+'</label>'+
       '<button class="primary-button">Calcular e registrar divisão</button></form>'+
       '<form data-r4-advanced="transfer-items" class="vertical-form"><h3>Transferir parte de um item</h3>'+
@@ -258,9 +266,13 @@
       }
       if(kind==='split'){
         const bps=Math.round(Number(v.bps||0)*100);
+        const allocationMode=v.allocationMode==='on';
+        if(allocationMode&&String(v.individualShares||'').trim())throw Error('Escolha rateio por itens ou valores, não os dois.');
+        if(allocationMode&&!model.position?.items?.length)throw Error('Aguarde os itens serem entregues para ratear.');
+        const allocations=allocationMode?model.position.items.map(item=>({itemId:item.id,payerIndex:Number(v['payer_'+item.id])})):null;
         const result=await r4('/sessions/'+uid(sessionId)+'/split','POST',{parts:Number(v.parts),serviceChargeBps:bps,
           serviceChargeProductId:bps>0?v.serviceChargeProductId:null,
-          ...(String(v.individualShares||'').trim()?{shares:String(v.individualShares).split(';').map(x=>eurosToCents(x.trim()))}:{})});
+          ...(allocationMode?{allocations}:(String(v.individualShares||'').trim()?{shares:String(v.individualShares).split(';').map(x=>eurosToCents(x.trim()))}:{}))});
         toast('Divisão registrada: '+result.plan.shares.map(money).join(' + '));
       }
       if(kind!=='pizza-quote'&&kind!=='weight')await show({sessionId,preserve:true});
