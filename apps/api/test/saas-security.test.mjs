@@ -188,3 +188,50 @@ test('new tenant creation is owner-only, capped and cannot renew an expired subs
   assert.equal((await x.request('/api/v1/tenants','POST',{slug:'third-store',name:'Third'},a)).status,402);
  }finally{x.close();}
 });
+
+test('platform admin reviews and approves pending registration only, with a real trial and audit',async()=>{
+ const x=await fixture({PLATFORM_ADMIN_TOKEN:'ci-platform-supersecret-2026-test-123'});
+ try{
+  const h={authorization:'Bearer ci-platform-supersecret-2026-test-123'};
+  await x.db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
+    .bind('pending-u','pending@example.test','Pendente',await hashPassword('PasswordForPending2026!'),stamp).run();
+  await x.db.prepare('INSERT INTO tenants(id,slug,name,active,created_at) VALUES(?,?,?,?,?)')
+    .bind('pending-t','pending-t','Restaurante Pendente',0,stamp).run();
+  await x.db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,active,created_at) VALUES(?,?,?,?,?)')
+    .bind('pending-t','pending-u','OWNER',0,stamp).run();
+  await x.db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)')
+    .bind('pending-b','pending-t','MAIN','Matriz',stamp).run();
+
+  const denied=await x.request('/api/v1/platform/tenants','GET');
+  assert.equal(denied.status,403,'merchant user cannot use platform endpoint without independent secret');
+  const list=await x.request('/api/v1/platform/tenants','GET',null,'',h);
+  assert.equal(list.status,200);
+  assert.ok((await list.json()).tenants.some(t=>t.id==='pending-t'&&t.status==='PENDING'));
+  const alice=await x.login('alice@example.test');
+  assert.equal((await x.request('/api/v1/platform/tenants/pending-t/approve','POST',{},alice)).status,403);
+  const approved=await x.request('/api/v1/platform/tenants/pending-t/approve','POST',{},'',h);
+  assert.equal(approved.status,200,await approved.clone().text());
+  assert.equal((await x.request('/api/v1/platform/tenants/pending-t/approve','POST',{},'',h)).status,409);
+  const t=await x.db.prepare('SELECT active FROM tenants WHERE id=?').bind('pending-t').first();
+  const m=await x.db.prepare('SELECT active FROM tenant_memberships WHERE tenant_id=? AND user_id=?').bind('pending-t','pending-u').first();
+  const sub=await x.db.prepare('SELECT status,ends_at AS endsAt FROM saas_subscriptions WHERE tenant_id=?').bind('pending-t').first();
+  assert.equal(t.active,1);assert.equal(m.active,1);
+  assert.equal(sub.status,'TRIAL');assert.ok(Date.parse(sub.endsAt)>NOW);
+  const audit=await x.db.prepare("SELECT COUNT(*) AS n FROM saas_audit_events WHERE tenant_id=? AND kind='TENANT_APPROVED'").bind('pending-t').first();
+  assert.equal(audit.n,1);
+  const firstLogin=await x.request('/api/v1/auth/login','POST',{email:'pending@example.test',password:'PasswordForPending2026!'});
+  assert.equal(firstLogin.status,200,'newly-approved owner can now log in');
+ }finally{x.close();}
+});
+
+test('platform approval requires a pending owner, no foreign tenant activations',async()=>{
+ const x=await fixture({PLATFORM_ADMIN_TOKEN:'ci-platform-supersecret-2026-test-123'});
+ try{
+  const h={authorization:'Bearer ci-platform-supersecret-2026-test-123'};
+  assert.equal((await x.request('/api/v1/platform/tenants/a/approve','POST',{},'',h)).status,409);
+  assert.equal((await x.request('/api/v1/platform/tenants/missing/approve','POST',{},'',h)).status,404);
+  const list=await x.request('/api/v1/platform/tenants','GET',null,'',h);
+  assert.ok((await list.json()).tenants.every(t=>t.id!=='pending-z'));
+  assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM saas_subscriptions').bind().first()).n,0);
+ }finally{x.close();}
+});
