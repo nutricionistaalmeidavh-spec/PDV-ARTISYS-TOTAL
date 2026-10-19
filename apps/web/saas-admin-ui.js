@@ -45,7 +45,7 @@
    '<div class="saas-admin-grid">'+
    '<section class="saas-panel"><h2>Filiais</h2><p>Estabelecimentos da mesma empresa.</p>'+
    '<ul class="saas-list">'+data.branches.map(b=>'<li><strong>'+esc(b.name)+'</strong><span>'+esc(b.code)+'</span></li>').join('')+'</ul>'+
-   '<form id="saas-branch-form" class="saas-inline-form"><label>Código<input name="code" maxlength="24" placeholder="FILIAL02" pattern="[A-Za-z0-9_-]{2,24}" required '+(!canWrite?'disabled':'')+'></label>'+
+   '<form id="saas-branch-form" class="saas-inline-form"><label>Código<input name="code" maxlength="24" placeholder="FILIAL02" pattern="[A-Za-z0-9_\\\\-]{2,24}" required '+(!canWrite?'disabled':'')+'></label>'+
    '<label>Nome da filial<input name="name" maxlength="100" placeholder="Unidade Centro" required '+(!canWrite?'disabled':'')+'></label>'+
    '<button type="submit" '+(!canWrite?'disabled':'')+'>Adicionar filial</button></form></section>'+
    '<section class="saas-panel"><h2>Convidar funcionário</h2><p>O convite dura 48 horas. Envie o código diretamente ao funcionário.</p>'+
