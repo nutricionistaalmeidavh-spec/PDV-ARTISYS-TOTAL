@@ -38,7 +38,7 @@ export function createVerticalService(db){
    const batch=[...statements,q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) VALUES(?,?,?,?,?)',
      t,scope,key,JSON.stringify(result),now())];
    try{await db.batch(batch);}catch(e){
-     if(/constraint|UNIQUE|FOREIGN KEY|CASH|CREDIT|IMMUTABLE/i.test(String(e?.message)))throw err(409,'Conflito com dados atuais. Atualize e tente novamente.');
+     if(/constraint|UNIQUE|FOREIGN KEY|CASH|CREDIT|IMMUTABLE|STALE/i.test(String(e?.message)))throw err(409,'Conflito com dados atuais. Atualize e tente novamente.');
      throw e;
    }
    return result;
@@ -457,6 +457,7 @@ export function createVerticalService(db){
      const row=await first('SELECT id,status FROM restaurant_service_requests WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
      if(!row)throw err(404,'Chamado não encontrado.');
      const status=body.status;isSafeStatus(status,['ACKNOWLEDGED','CLOSED']);
+     if(body.expectedStatus!==undefined&&body.expectedStatus!==row.status)throw err(409,'Outro operador já atualizou o chamado. Atualize a fila.');
      if((row.status==='OPEN'&&status!=='ACKNOWLEDGED')||(row.status==='ACKNOWLEDGED'&&status!=='CLOSED')||row.status==='CLOSED')
        throw err(409,'Transição de chamado inválida.');
      return mutate(t,scope,key,async()=>{
