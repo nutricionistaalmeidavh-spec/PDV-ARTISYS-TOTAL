@@ -160,8 +160,12 @@ export function createCommerceService(db,{now=nowISO}={}){
       received_at AS createdAt,'SALE' AS type,NULL AS saleId,customer_id AS customerId
       FROM customer_credit_receipts WHERE tenant_id=? AND branch_id=? AND cash_session_id=?
       ORDER BY received_at,id`,tenant,branch,id);
+    const prepayments=await all(`SELECT id,method AS paymentMethod,amount_cents AS amountCents,
+      received_at AS createdAt,'SALE' AS type,NULL AS saleId,
+      table_session_id AS tableSessionId FROM r4_table_prepayments
+      WHERE tenant_id=? AND branch_id=? AND cash_session_id=?`,tenant,branch,id);
     const refunds=await all("SELECT id,'CASH' AS paymentMethod,amount_cents AS amountCents,created_at AS createdAt,'REVERSAL' AS type,sale_id AS saleId FROM sale_refund_movements WHERE tenant_id=? AND branch_id=? AND cash_session_id=? AND method='CASH'",tenant,branch,id);
-    return [...sales,...adjustments,...credits,...refunds].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id)));
+    return [...sales,...adjustments,...credits,...prepayments,...refunds].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id)));
   };
   const cashClosing=async(tenant,branch,session,countedCashCents=0)=>{
     const lines=await cashLines(tenant,branch,session.id);
@@ -1729,6 +1733,10 @@ export function createCommerceService(db,{now=nowISO}={}){
       try{link=await first('SELECT table_session_id AS sessionId FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=? AND sale_id=?',tenant,branch,id);}
       catch(e){if(!/no such table: restaurant_sale_links/i.test(String(e?.message)))throw e;}
       const plan=link?.sessionId?await first('SELECT parts,service_charge_bps AS bps,shares_json AS sharesJson FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,link.sessionId):null;
+      const prepayments=link?.sessionId?await all(
+        'SELECT method,amount_cents AS amountCents FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? AND table_session_id=?',
+        tenant,branch,link.sessionId):[];
+      if(plan&&prepayments.length)throw error(409,'Não é possível dividir novamente uma conta com valores antecipados; concilie a comanda antes de cobrar.');
       let splitShares=null;
       if(plan){
         if(sale.discount_cents)throw error(409,'Divisão exige remoção de desconto manual antes de cobrar.');
@@ -1745,8 +1753,8 @@ export function createCommerceService(db,{now=nowISO}={}){
           seen.add(index);return {index,amountCents,method:share.method};
         });
       }else if(body?.shares)throw error(400,'Esta venda não possui divisão de conta configurada.');
-      const payments=splitShares||body?.payments;
-      if(!Array.isArray(payments)||!payments.length||payments.length>(splitShares?50:6))throw error(400,'Informe a forma de pagamento.');
+      const payments=splitShares||body?.payments||[];
+      if(!Array.isArray(payments)||(!payments.length&&!prepayments.length)||payments.length>(splitShares?50:6))throw error(400,'Informe a forma de pagamento.');
       const normalized=payments.map(p=>{
         const method=normalizeMethod(p?.method);
         if(!allowedPayments.has(method)||!integer(p?.amountCents)||p.amountCents<=0)
@@ -1770,8 +1778,10 @@ export function createCommerceService(db,{now=nowISO}={}){
           throw error(409,'Forma de pagamento não autorizada para este cliente de atacado.');
       }
       // Cash movements are one per method; coalesce duplicate methods, preserving total.
-      const grouped=new Map();
-      for(const p of normalized)grouped.set(p.method,(grouped.get(p.method)||0)+p.amountCents);
+      const newlyCollected=new Map();
+      for(const p of normalized)newlyCollected.set(p.method,(newlyCollected.get(p.method)||0)+p.amountCents);
+      const grouped=new Map(newlyCollected);
+      for(const p of prepayments)grouped.set(p.method,(grouped.get(p.method)||0)+p.amountCents);
       const groupedPayments=[...grouped].map(([method,amountCents])=>({method,amountCents}));
       const creditCents=grouped.get('STORE_CREDIT')||0;
        let customer=null,usedCreditCents=0;
@@ -1920,7 +1930,10 @@ export function createCommerceService(db,{now=nowISO}={}){
           randomId(),tenant,branch,id,p.method,p.amountCents,completedAt));
         // The tendered cash and change are reported separately; only net cash
         // enters the drawer. A zero net amount must not generate a movement.
-        const drawerCents=p.method==='CASH'?p.amountCents-payment.changeDueCents:p.amountCents;
+        // The advance receipt already appeared in the physical cash shift it was
+        // collected in. Only the additional balance enters sale cash movements.
+        const freshCents=newlyCollected.get(p.method)||0;
+        const drawerCents=p.method==='CASH'?freshCents-payment.changeDueCents:freshCents;
         if(drawerCents>0)statements.push(q('INSERT INTO cash_movements(id,tenant_id,branch_id,cash_session_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?,?)',
           randomId(),tenant,branch,cash.id,id,p.method,drawerCents,completedAt));
       }
