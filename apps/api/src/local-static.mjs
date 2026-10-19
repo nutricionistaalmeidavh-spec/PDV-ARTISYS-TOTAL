@@ -18,7 +18,8 @@ export async function serveLocalPwa(pathname,{rootDir,method='GET'}={}){
   try{decoded=decodeURIComponent(pathname);}catch{return new Response('',{status:400});}
   if(/[\u0000-\u001F\\]/.test(decoded))return new Response('',{status:400});
   // Exact app entrypoint mapping; refuse arbitrary directory traversal or listings.
-  const assetPath=decoded==='/'?'/index.html':(decoded==='/app'||decoded==='/app/'?'/app/index.html':decoded);
+  const entries={'/':'/index.html','/app':'/app/index.html','/app/':'/app/index.html','/admin':'/admin/index.html','/admin/':'/admin/index.html','/conta':'/conta/index.html','/conta/':'/conta/index.html','/verificar-email':'/verificar-email/index.html','/verificar-email/':'/verificar-email/index.html'};
+  const assetPath=entries[decoded]||decoded;
   const parts=assetPath.split('/').slice(1);
   if(parts.some(part=>!part||part==='.'||part==='..'||part.startsWith('.')))
     return new Response('',{status:400});
