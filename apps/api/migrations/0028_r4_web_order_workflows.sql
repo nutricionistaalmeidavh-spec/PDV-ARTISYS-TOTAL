@@ -20,3 +20,11 @@ CREATE TABLE IF NOT EXISTS r4_delivery_events(
 );
 CREATE INDEX IF NOT EXISTS idx_r4_delivery_events_order
  ON r4_delivery_events(tenant_id,branch_id,order_id,recorded_at);
+
+-- Addons are catalog prices, not client-supplied adjustments.
+CREATE TABLE IF NOT EXISTS r4_pizza_addons(
+ tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,product_id TEXT NOT NULL,
+ code TEXT NOT NULL,name TEXT NOT NULL,price_cents INTEGER NOT NULL CHECK(price_cents BETWEEN 0 AND 1000000000),
+ PRIMARY KEY(tenant_id,branch_id,product_id,code),
+ FOREIGN KEY(tenant_id,branch_id,product_id) REFERENCES r4_pizza_profiles(tenant_id,branch_id,product_id)
+);
