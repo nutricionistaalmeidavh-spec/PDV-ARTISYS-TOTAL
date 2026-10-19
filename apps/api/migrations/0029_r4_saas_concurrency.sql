@@ -1,3 +1,6 @@
+-- Explicit per-item split assignment is metadata of the one canonical sale, never a separate payment ledger.
+ALTER TABLE r4_split_plans ADD COLUMN item_allocations_json TEXT CHECK(item_allocations_json IS NULL OR json_valid(item_allocations_json));
+
 -- R4 SaaS: a stale concurrent transfer must never be recorded as completed.
 -- commerce_mutations and the table update are in one atomic SQLite/D1 db.batch.
 CREATE TRIGGER IF NOT EXISTS r4_transfer_requires_committed_destination
