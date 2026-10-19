@@ -64,8 +64,10 @@ BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_IMMUTABLE'); END;
 -- The guard is inside the atomic insert transaction, not only the API read.
 CREATE TRIGGER IF NOT EXISTS r4_prepayment_balance_guard BEFORE INSERT ON r4_table_prepayments
 WHEN NEW.amount_cents+
- (SELECT COALESCE(SUM(amount_cents),0) FROM r4_table_prepayments p
-  WHERE p.tenant_id=NEW.tenant_id AND p.branch_id=NEW.branch_id AND p.table_session_id=NEW.table_session_id)
+ (SELECT COALESCE(SUM(p.amount_cents-COALESCE((SELECT SUM(r.amount_cents) FROM r4_table_prepayment_refunds r
+   WHERE r.tenant_id=p.tenant_id AND r.branch_id=p.branch_id AND r.prepayment_id=p.id),0)),0)
+  FROM r4_table_prepayments p WHERE p.tenant_id=NEW.tenant_id AND p.branch_id=NEW.branch_id
+  AND p.table_session_id=NEW.table_session_id)
  >
  (SELECT COALESCE(SUM(ROUND(oi.quantity_milli*oi.unit_price_cents/1000.0)),0)
   FROM restaurant_order_items oi JOIN restaurant_orders o
@@ -85,7 +87,9 @@ BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_SESSION_CONFLICT'); END;
 -- A paid table cannot move delivered line value to another session without refund.
 CREATE TRIGGER IF NOT EXISTS r4_prepaid_item_transfer_guard BEFORE INSERT ON r4_item_transfers
 WHEN EXISTS(SELECT 1 FROM r4_table_prepayments p WHERE p.tenant_id=NEW.tenant_id AND p.branch_id=NEW.branch_id
- AND p.table_session_id IN(NEW.source_session_id,NEW.target_session_id))
+ AND p.table_session_id IN(NEW.source_session_id,NEW.target_session_id)
+ AND p.amount_cents>COALESCE((SELECT SUM(r.amount_cents) FROM r4_table_prepayment_refunds r
+ WHERE r.tenant_id=p.tenant_id AND r.branch_id=p.branch_id AND r.prepayment_id=p.id),0))
 BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_TRANSFER_CONFLICT'); END;
 
 -- A split payer can receive advances in independent steps, but never more
@@ -97,8 +101,9 @@ WHEN EXISTS(SELECT 1 FROM r4_split_plans s
 AND (
  NEW.payer_index IS NULL OR
  NEW.amount_cents+(
-   SELECT COALESCE(SUM(p.amount_cents),0) FROM r4_table_prepayments p
-   WHERE p.tenant_id=NEW.tenant_id AND p.branch_id=NEW.branch_id
+   SELECT COALESCE(SUM(p.amount_cents-COALESCE((SELECT SUM(r.amount_cents) FROM r4_table_prepayment_refunds r
+    WHERE r.tenant_id=p.tenant_id AND r.branch_id=p.branch_id AND r.prepayment_id=p.id),0)),0)
+    FROM r4_table_prepayments p WHERE p.tenant_id=NEW.tenant_id AND p.branch_id=NEW.branch_id
    AND p.table_session_id=NEW.table_session_id AND p.payer_index=NEW.payer_index
  ) > COALESCE((SELECT json_extract(s.shares_json,'$['||(NEW.payer_index-1)||']')
    FROM r4_split_plans s WHERE s.tenant_id=NEW.tenant_id AND s.branch_id=NEW.branch_id
