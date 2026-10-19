@@ -140,3 +140,52 @@ WHEN NEW.amount_cents + (SELECT COALESCE(SUM(r.amount_cents),0) FROM r4_table_pr
  OR NOT EXISTS(SELECT 1 FROM cash_sessions s WHERE s.tenant_id=NEW.tenant_id
  AND s.branch_id=NEW.branch_id AND s.id=NEW.cash_session_id AND s.status='OPEN')
 BEGIN SELECT RAISE(ABORT,'PREPAYMENT_REFUND_CONFLICT'); END;
+
+-- R4_CASH_RECONCILIATION_V2: keep the canonical database-side stale-balance
+-- guard aligned with the commerce adapter. It must include early receipts,
+-- their append-only refunds, and existing canonical receipt/refund journals.
+-- Older migration 0003 is never rewritten.
+DROP TRIGGER IF EXISTS cash_close_reconciliation_guard;
+CREATE TRIGGER cash_close_reconciliation_guard BEFORE UPDATE OF status ON cash_sessions
+WHEN NEW.status='CLOSED' AND OLD.status='OPEN' AND (
+ NEW.counted_cash_cents IS NULL OR NEW.counted_cash_cents<0 OR
+ NEW.expected_cash_cents IS NULL OR
+ NEW.expected_cash_cents <> (
+   OLD.opening_cents
+   + COALESCE((SELECT SUM(cm.amount_cents) FROM cash_movements cm WHERE cm.tenant_id=OLD.tenant_id
+       AND cm.branch_id=OLD.branch_id AND cm.cash_session_id=OLD.id AND cm.method='CASH'),0)
+   + COALESCE((SELECT SUM(CASE WHEN a.type='SUPPLY' THEN a.amount_cents ELSE -a.amount_cents END)
+       FROM cash_adjustments a WHERE a.tenant_id=OLD.tenant_id AND a.branch_id=OLD.branch_id
+       AND a.cash_session_id=OLD.id),0)
+   + COALESCE((SELECT SUM(cr.amount_cents) FROM customer_credit_receipts cr WHERE cr.tenant_id=OLD.tenant_id
+       AND cr.branch_id=OLD.branch_id AND cr.cash_session_id=OLD.id AND cr.method='CASH'),0)
+   + COALESCE((SELECT SUM(p.amount_cents) FROM r4_table_prepayments p WHERE p.tenant_id=OLD.tenant_id
+       AND p.branch_id=OLD.branch_id AND p.cash_session_id=OLD.id AND p.method='CASH'),0)
+   - COALESCE((SELECT SUM(r.amount_cents) FROM r4_table_prepayment_refunds r WHERE r.tenant_id=OLD.tenant_id
+       AND r.branch_id=OLD.branch_id AND r.cash_session_id=OLD.id AND r.method='CASH'),0)
+   - COALESCE((SELECT SUM(r.amount_cents) FROM sale_refund_movements r WHERE r.tenant_id=OLD.tenant_id
+       AND r.branch_id=OLD.branch_id AND r.cash_session_id=OLD.id AND r.method='CASH'),0)
+ )
+)
+BEGIN SELECT RAISE(ABORT,'CASH_CLOSING_STALE'); END;
+
+DROP TRIGGER IF EXISTS cash_withdraw_cannot_overdraw;
+CREATE TRIGGER cash_withdraw_cannot_overdraw BEFORE INSERT ON cash_adjustments
+WHEN NEW.type='WITHDRAWAL' AND NEW.amount_cents > (
+ SELECT s.opening_cents
+   + COALESCE((SELECT SUM(cm.amount_cents) FROM cash_movements cm WHERE cm.tenant_id=s.tenant_id
+       AND cm.branch_id=s.branch_id AND cm.cash_session_id=s.id AND cm.method='CASH'),0)
+   + COALESCE((SELECT SUM(CASE WHEN a.type='SUPPLY' THEN a.amount_cents ELSE -a.amount_cents END)
+       FROM cash_adjustments a WHERE a.tenant_id=s.tenant_id AND a.branch_id=s.branch_id
+       AND a.cash_session_id=s.id),0)
+   + COALESCE((SELECT SUM(cr.amount_cents) FROM customer_credit_receipts cr WHERE cr.tenant_id=s.tenant_id
+       AND cr.branch_id=s.branch_id AND cr.cash_session_id=s.id AND cr.method='CASH'),0)
+   + COALESCE((SELECT SUM(p.amount_cents) FROM r4_table_prepayments p WHERE p.tenant_id=s.tenant_id
+       AND p.branch_id=s.branch_id AND p.cash_session_id=s.id AND p.method='CASH'),0)
+   - COALESCE((SELECT SUM(r.amount_cents) FROM r4_table_prepayment_refunds r WHERE r.tenant_id=s.tenant_id
+       AND r.branch_id=s.branch_id AND r.cash_session_id=s.id AND r.method='CASH'),0)
+   - COALESCE((SELECT SUM(r.amount_cents) FROM sale_refund_movements r WHERE r.tenant_id=s.tenant_id
+       AND r.branch_id=s.branch_id AND r.cash_session_id=s.id AND r.method='CASH'),0)
+ FROM cash_sessions s WHERE s.tenant_id=NEW.tenant_id AND s.branch_id=NEW.branch_id AND s.id=NEW.cash_session_id
+)
+BEGIN SELECT RAISE(ABORT,'CASH_INSUFFICIENT'); END;
