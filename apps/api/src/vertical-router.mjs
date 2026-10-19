@@ -199,6 +199,10 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
        permission(member,user,'restaurant.orders.transfer');
        return json({order:await svc.cancelFoodOrder(tenantId,branch,parts[2],key)});
      }
+     if(parts[1]==='orders'&&parts.length===4&&parts[3]==='delivery-events'){
+       if(method==='GET'){permission(member,user,'restaurant.orders.view');return json(await svc.deliveryEvents(tenantId,branch,parts[2]));}
+       if(method==='POST'){permission(member,user,'restaurant.orders.transfer');return json({event:await svc.deliveryCheckpoint(tenantId,branch,user,parts[2],body,key)});}
+     }
      if(parts[1]==='orders'&&parts.length===4&&parts[3]==='dispatch'&&method==='POST'){
        permission(member,user,'restaurant.orders.transfer');
        return json({order:await svc.dispatchFoodOrder(tenantId,branch,parts[2],body,key)});
