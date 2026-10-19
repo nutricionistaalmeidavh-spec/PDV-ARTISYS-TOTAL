@@ -148,3 +148,53 @@ test('cap-029 prebill uses a distinct non-fiscal document and cannot finalize an
   assert.throws(()=>w.PdvWebHardwareUtils.receiptHtml(open),/Somente venda concluída/);
   assert.throws(()=>w.PdvWebHardware.printPrebill({...document,documentType:'SALE_RECEIPT'}));
 });
+
+test('checkout-016 R3 WebSerial stable fragmented scale response is normalized before canonical weighted sale',async()=>{
+  const {window:w}=browser(),parse=w.PdvWebHardwareUtils.parseWeight;
+  assert.equal(parse('ST,GS,+ 1.250 kg').weight,1.25);
+  assert.equal(parse('ST,NT, +1,250 kg').weight,1.25);
+  assert.throws(()=>parse('US,GS,+1.250 kg'),/inválida/);
+  let chunks=[new TextEncoder().encode('ST,GS,+ 1.'),new TextEncoder().encode('250 kg\r\n')];
+  let portClosed=false;
+  const port={open:async()=>{},close:async()=>{portClosed=true;},readable:{getReader:()=>({
+    read:async()=>({value:chunks.shift()||new Uint8Array(),done:false}),
+    cancel:async()=>{},releaseLock(){}
+  })}};
+  w.navigator.serial={requestPort:async()=>port};
+  await w.PdvWebHardware.connect('scale');
+  const result=await w.PdvWebHardware.readWeight();
+  assert.equal(result.weight,1.25);
+  assert.equal(portClosed,true);
+});
+
+test('cap-030 R3 ESC/POS serial sends logo raster before sale text, never sends text-only on decoder error',async()=>{
+  const {window:w}=browser();
+  const writes=[],image=[29,118,48,0,1,0,1,0,128],png='data:image/png;base64,VALID';
+  w.PdvReceiptBranding={normalize:v=>v};
+  w.PdvEscposLogo={encode:async()=>Uint8Array.from(image)};
+  const port={open:async()=>{},close:async()=>{},writable:{getWriter:()=>({
+    write:async bytes=>writes.push(Array.from(bytes)),releaseLock(){}
+  })}};
+  w.navigator.serial={requestPort:async()=>port};
+  w.PdvWebHardware.saveSettings({printerMode:'serial',paperMm:58});
+  await w.PdvWebHardware.connect('printer');
+  const sale={id:'sale-logo-1',status:'COMPLETED',saleNumber:'1',totalCents:100,changeCents:0,items:[],payments:[]};
+  const brand={name:'Loja Logo',address:'Rua A',phone:'16',logoDataUrl:png};
+  const result=await w.PdvWebHardware.printSale(sale,{branding:brand});
+  assert.equal(result.sentToSerial,true);
+  assert.deepEqual(writes[0].slice(0,2+image.length),[27,64,...image]);
+  assert.match(new TextDecoder().decode(Uint8Array.from(writes[0].slice(2+image.length))),/Loja Logo/);
+  w.PdvEscposLogo={encode:async()=>{throw Error('broken bitmap');}};
+  await assert.rejects(w.PdvWebHardware.printSale(sale,{branding:brand}),/broken bitmap/);
+  assert.equal(writes.length,1,'must never send a text-only ticket when frozen logo raster fails');
+});
+
+test('cap-029 R3 untrusted operational document text is HTML escaped and does not edit accounting state',()=>{
+  const {window:w,opened}=browser();
+  const document={fiscal:false,documentType:'KITCHEN_TICKET',text:'COZINHA\n<script>alert(1)</script>'};
+  const out=w.PdvWebHardware.printTextDocument(document);
+  assert.equal(out.dialogOpened,true);
+  assert.match(opened[0].html,/&lt;script&gt;/);
+  assert.doesNotMatch(opened[0].html,/<script>/);
+  assert.throws(()=>w.PdvWebHardware.printTextDocument({...document,fiscal:true}),/não fiscal/i);
+});
