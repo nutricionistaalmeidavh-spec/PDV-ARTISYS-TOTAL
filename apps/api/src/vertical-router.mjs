@@ -198,7 +198,14 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
        });
      }
      if(parts[1]==='orders'&&parts.length===2){
-       if(method==='GET'){permission(member,user,'restaurant.orders.view');return json({orders:await svc.foodOrders(tenantId,branch,url.searchParams.get('fulfillment')||'')});}
+       if(method==='GET'){
+         permission(member,user,'restaurant.orders.view');
+         const size=url.searchParams.get('limit');
+         const limit=size===null?100:Number(size);
+         return json(await svc.foodOrders(tenantId,branch,url.searchParams.get('fulfillment')||'',{
+           limit,cursor:url.searchParams.get('cursor'),paged:true
+         }));
+       }
        if(method==='POST'){permission(member,user,'restaurant.orders.create');return json({order:await svc.createFoodOrder(tenantId,branch,user,body,key)},201);}
      }
      if(parts[1]==='orders'&&parts.length===4&&parts[3]==='checkout'&&method==='GET'){
