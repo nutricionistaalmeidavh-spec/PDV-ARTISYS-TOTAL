@@ -230,7 +230,7 @@ export async function createAdditionalTenant(request,db,env,session,now){
   if(!n.n||n.n>=3)throw fail(403,'Limite de três empresas por proprietário.');
   // A suspended owner must not mint a new trial tenant to bypass payment.
   if(env.SAAS_ENTITLEMENTS_ENABLED==='true'){
-   const eligible=await q(db,"SELECT s.tenant_id FROM saas_subscriptions s JOIN tenant_memberships m ON m.tenant_id=s.tenant_id WHERE m.user_id=? AND m.active=1 AND m.profile_key='OWNER' AND s.status IN ('ACTIVE','TRIAL') AND s.ends_at>? LIMIT 1",session.userId,stamp(now)).first();
+   const eligible=await q(db,"SELECT s.tenant_id FROM saas_subscriptions s JOIN tenant_memberships m ON m.tenant_id=s.tenant_id WHERE m.user_id=? AND m.active=1 AND m.profile_key='OWNER' AND s.status='ACTIVE' AND s.plan_key!='trial' AND s.ends_at>? LIMIT 1",session.userId,stamp(now)).first();
    if(!eligible)throw fail(402,'Assinatura principal inativa.');
   }
   const id=newId(),branchId=newId(),endsAt=stamp(now+14*86400000);
