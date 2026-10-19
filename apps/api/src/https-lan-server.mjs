@@ -74,7 +74,7 @@ export function createLanServer({origin,tlsKey,tlsCert,db,webRoot}){
     throw Error('Servidor LAN exige origem HTTPS exata.');
   if(!db||!tlsKey||!tlsCert)throw Error('Banco e TLS obrigatórios.');
   requireWebBuild(webRoot);
-  const api=createApi({DB:db,COOKIE_SECURE:'true',AUTH_ENABLED:'true',LOCAL_MEDIA_ENABLED:'true',LAN_MODE:'true'});
+  const api=createApi({DB:db,COOKIE_SECURE:'true',AUTH_ENABLED:'true',LOCAL_MEDIA_ENABLED:'true',LAN_MODE:'true',MFA_ENABLED:process.env.MFA_ENABLED||'false',MFA_ENCRYPTION_KEY:process.env.MFA_ENCRYPTION_KEY,EMAIL_VERIFICATION_REQUIRED:process.env.EMAIL_VERIFICATION_REQUIRED||'false',EMAIL_DELIVERY_URL:process.env.EMAIL_DELIVERY_URL,EMAIL_DELIVERY_TOKEN:process.env.EMAIL_DELIVERY_TOKEN,ARTISYS_BILLING_ENABLED:process.env.ARTISYS_BILLING_ENABLED||'false',ARTISYS_BILLING_SECRET:process.env.ARTISYS_BILLING_SECRET,ARTISYS_BINDING_SECRET:process.env.ARTISYS_BINDING_SECRET,ARTISYS_PAYMENTS_URL:process.env.ARTISYS_PAYMENTS_URL,ARTISYS_PDV_MONTHLY_OFFER_ID:process.env.ARTISYS_PDV_MONTHLY_OFFER_ID,ARTISYS_PDV_YEARLY_OFFER_ID:process.env.ARTISYS_PDV_YEARLY_OFFER_ID,SAAS_ENTITLEMENTS_ENABLED:process.env.SAAS_ENTITLEMENTS_ENABLED||'false',PLATFORM_ADMIN_TOKEN:process.env.PLATFORM_ADMIN_TOKEN});
   return createServer({key:tlsKey,cert:tlsCert,minVersion:'TLSv1.2'},async(req,res)=>{
     try{
       if(req.headers.host!==expected.host){
