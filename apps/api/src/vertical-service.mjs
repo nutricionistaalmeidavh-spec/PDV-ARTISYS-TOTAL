@@ -189,7 +189,14 @@ export function createVerticalService(db){
      const rows=await all(`SELECT * FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND (?='' OR fulfillment=?) ORDER BY created_at DESC LIMIT 100`,t,b,fulfillment,fulfillment);
      return Promise.all(rows.map(async row=>{
        const items=await all('SELECT id,product_id AS productId,product_name AS name,quantity_milli / 1000.0 AS quantity,unit_price_cents AS unitPriceCents,configuration_json AS configurationJson FROM restaurant_order_items WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,row.id);
-       return {...row,items:items.map(({configurationJson,...item})=>({...item,configuration:configurationJson?JSON.parse(configurationJson):null}))};
+       let deliveryStage=null,courierName=null;
+       if(row.fulfillment==='DELIVERY'){
+         const checkpoint=await first('SELECT kind,courier_name AS courierName FROM r4_delivery_events WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY sequence DESC LIMIT 1',t,b,row.id);
+         const dispatch=await first('SELECT courier_name AS courierName FROM r4_delivery_dispatches WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,row.id);
+         deliveryStage=checkpoint?.kind||(dispatch?'DISPATCHED':null);
+         courierName=checkpoint?.courierName||dispatch?.courierName||null;
+       }
+       return {...row,deliveryStage,courierName,items:items.map(({configurationJson,...item})=>({...item,configuration:configurationJson?JSON.parse(configurationJson):null}))};
      }));
    },
    async createFoodOrder(t,b,user,body,key){
