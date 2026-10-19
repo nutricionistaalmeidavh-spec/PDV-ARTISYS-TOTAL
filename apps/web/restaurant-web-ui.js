@@ -12,7 +12,7 @@
  const path='/api/v1/restaurant';
  const today=new Date().toISOString().slice(0,10);
  const monthAgo=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
- let state={tables:[],orders:[],tickets:[],stationTickets:[],printJobs:[],requests:[],products:[],split:null,report:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
+ let state={tables:[],orders:[],nextCursor:null,tickets:[],stationTickets:[],printJobs:[],requests:[],products:[],split:null,report:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
  const notice=(value,error=false)=>root.PdvToast?.show?.(value,error?'error':'success');
  const action=(endpoint,method='GET',body)=>api.request(path+endpoint,{method,body});
  const safe=async(fn,fallback=[])=>{try{return await fn();}catch{return fallback;}};
@@ -62,12 +62,12 @@
  }
  function title(value){return ({TABLE:'Mesa',PICKUP:'Retirada',DELIVERY:'Entrega',OPEN:'Aberto',READY:'Pronto',DELIVERED:'Entregue',CANCELLED:'Cancelado',NEW:'Novo',PREPARING:'Preparando',ACKNOWLEDGED:'Em atendimento',CLOSED:'Finalizado',WAITER:'Garçom',BILL:'Conta'})[value]||value;}
  async function load(){
-   const [tables,orders,tickets,stationTickets,printJobs,requests,products,report]=await Promise.all([
-     safe(()=>action('/tables').then(v=>v.tables)),safe(()=>action('/orders').then(v=>v.orders)),
+   const [tables,orderPage,tickets,stationTickets,printJobs,requests,products,report]=await Promise.all([
+     safe(()=>action('/tables').then(v=>v.tables)),safe(()=>action('/orders?limit=40'),{orders:[],nextCursor:null}),
      safe(()=>action('/kitchen').then(v=>v.tickets)),safe(()=>action('/kitchen/station-tickets').then(v=>v.tickets)),safe(()=>action('/kitchen/print-jobs').then(v=>v.jobs)),safe(()=>action('/requests').then(v=>v.requests)),
      safe(()=>api.products(false)),safe(()=>action('/reports/summary?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to)).then(v=>v.report),null)
    ]);
-   Object.assign(state,{tables,orders,tickets,stationTickets,printJobs,requests,products,report});
+   Object.assign(state,{tables,orders:orderPage.orders||[],nextCursor:orderPage.nextCursor||null,tickets,stationTickets,printJobs,requests,products,report});
  }
  function tableSection(){
    if(!can('restaurant.orders.view'))return '<p class="vertical-empty">Seu perfil não possui acesso às mesas.</p>';
@@ -114,7 +114,7 @@
        (o.status==='READY'&&(o.fulfillment!=='DELIVERY'||o.deliveryStage!=='RETURNED')?btn('Entregue / retirado','deliver',o.id):'')+
        (o.status==='OPEN'?btn('Cancelar','cancel',o.id):'')+
        (o.status==='DELIVERED'&&o.fulfillment!=='TABLE'?btn('Cobrar','checkout-order',o.id):'')+
-       '</div></div>').join('')+'</div></section>';
+       '</div></div>').join('')+'</div>'+(state.nextCursor?btn('Carregar mais pedidos','more-orders'):'')+'</section>';
  }
  function kitchenSection(){
    if(!can('kitchen.view'))return '<p class="vertical-empty">Seu perfil não possui acesso à cozinha.</p>';
@@ -202,6 +202,16 @@
    if(what==='tab'){state.section=id;state.checkout=null;state.split=null;return render();}
    if(what==='select'){state.selected=id;return render();}
    if(what==='refresh')return reload();
+   if(what==='more-orders'){
+     if(!state.nextCursor)return;
+     try{
+       const result=await action('/orders?limit=40&cursor='+encodeURIComponent(state.nextCursor));
+       const seen=new Set(state.orders.map(o=>o.id));
+       state.orders.push(...(result.orders||[]).filter(o=>!seen.has(o.id)));
+       state.nextCursor=result.nextCursor||null;render();
+     }catch(e){notice(e.message,true);}
+     return;
+   }
    if(what==='advanced')return root.PdvR4AdvancedUi?.show?.({sessionId:id||state.selected});
    if(what==='dispatch-kds'){
      if(!can('kitchen.update_status'))return notice('Sem permissão para enviar à impressora.',true);
