@@ -16,15 +16,15 @@ test('hosted SaaS backlog never blocks launch on Windows installer, local LAN mo
   const saas=buildSaasDeliveryReport(historical,scope);
   assert.deepEqual(saas.deferred.ids,['cap-001','cap-047','cap-056']);
   assert.equal(saas.deferred.total,3);
-  assert.deepEqual(saas.active.counts,{covered:40,partial:13,gap:0});
+  assert.deepEqual(saas.active.counts,{covered:46,partial:7,gap:0});
   assert.equal(saas.active.total,53);
-  assert.equal(saas.active.pending.length,13);
+  assert.equal(saas.active.pending.length,7);
   for(const id of saas.deferred.ids){
     assert.ok(!saas.active.pending.some(row=>row.id===id),'LAN/desktop task must never be an SaaS backlog blocker: '+id);
     assert.equal(inventory.contracts.find(row=>row.id===id).status,'partial','historical parity status remains untouched');
   }
   assert.equal(historical.summary.total,56);
-  assert.equal(historical.summary.partial,16,'historical 56 remains auditable');
+  assert.equal(historical.summary.partial,10,'historical 56 remains auditable');
   assert.equal(saas.primaryDelivery,'hosted-https-web-api');
   assert.ok(saas.deferred.items.every(row=>row.reason.length>=25));
 });
