@@ -9,7 +9,7 @@
   "scripts": {
     "test": "node --experimental-sqlite --test test/*.test.mjs",
     "dev": "node --experimental-sqlite src/server.mjs",
-    "check": "node --check src/advanced-finance.mjs && node --check src/advanced-finance-router.mjs && node --check src/commerce.mjs && node --check src/commerce-router.mjs && node --check src/r4-extended-service.mjs && node --check src/vertical-service.mjs && node --check src/vertical-router.mjs && node --check src/worker.mjs && node --check src/server.mjs && node --check src/provision.mjs && node --check src/local-static.mjs && node --check src/local-migrations.mjs && node --check src/https-lan-server.mjs && node --check src/r2-lan-router.mjs && node --check src/r2-diagnostics-zip.mjs",
+    "check": "node --check src/advanced-finance.mjs && node --check src/advanced-finance-router.mjs && node --check src/commerce.mjs && node --check src/commerce-router.mjs && node --check src/r4-extended-service.mjs && node --check src/vertical-service.mjs && node --check src/vertical-router.mjs && node --check src/public-registration.mjs && node --check src/saas-control.mjs && node --check src/worker.mjs && node --check src/server.mjs && node --check src/provision.mjs && node --check src/local-static.mjs && node --check src/local-migrations.mjs && node --check src/https-lan-server.mjs && node --check src/r2-lan-router.mjs && node --check src/r2-diagnostics-zip.mjs",
     "start:lan": "node --experimental-sqlite src/https-lan-server.mjs"
   }
 }
