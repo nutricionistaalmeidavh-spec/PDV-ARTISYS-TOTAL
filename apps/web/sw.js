@@ -20,7 +20,7 @@ self.addEventListener('fetch',event=>{
   if(url.origin!==self.location.origin||API_PATH.test(url.pathname)||request.method!=='GET')return;
   if(request.mode==='navigate'){
     event.respondWith(fetch(request,{cache:'no-store'}).catch(async()=>(
-      (await caches.match('/index.html'))||Response.error()
+      (await caches.match(url.pathname.startsWith('/app')?'/app/index.html':'/index.html'))||Response.error()
     )));
     return;
   }

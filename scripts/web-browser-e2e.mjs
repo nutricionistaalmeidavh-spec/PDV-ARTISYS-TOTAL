@@ -44,7 +44,15 @@ try{
     if(message.text().includes('status of 401 (Unauthorized)'))return;
     errors.push(message.text());
   });
-  await page.goto(origin,{waitUntil:'domcontentloaded'});
+  // Public marketing landing is separate from the canonical cashier renderer.
+  await page.goto(origin+'/',{waitUntil:'domcontentloaded'});
+  await page.locator('#hero-title').waitFor({timeout:12000});
+  assert.equal(await page.locator('#web-login-form').count(),0,'marketing must not render the cashier overlay');
+  await page.screenshot({path:'qa-artifacts/pdv-landing-desktop.png',fullPage:true});
+  await page.locator('[data-open-register]').first().click();
+  assert.equal(await page.locator('#registration-dialog').evaluate(el=>el.open),true);
+  await page.locator('[data-close-register]').click();
+  await page.goto(origin+'/app/',{waitUntil:'domcontentloaded'});
   await page.locator('#web-login-form').waitFor({timeout:12000});
   await page.locator('#web-email').fill('owner@example.test');
   await page.locator('#web-password').fill('DummyStrongPassOnlyForCI2026');
@@ -288,7 +296,7 @@ try{
   const secondContext=await browser.newContext({viewport:{width:1366,height:860}});
   const secondPage=await secondContext.newPage();
   secondPage.on('pageerror',error=>errors.push('second-terminal: '+error.message));
-  await secondPage.goto(origin,{waitUntil:'domcontentloaded'});
+  await secondPage.goto(origin+'/app/',{waitUntil:'domcontentloaded'});
   await secondPage.locator('#web-login-form').waitFor({timeout:12000});
   await secondPage.locator('#web-email').fill('owner@example.test');
   await secondPage.locator('#web-password').fill('DummyStrongPassOnlyForCI2026');

@@ -1,4 +1,5 @@
 import { sha256, verifyPassword, newSessionToken } from './password.mjs';
+import {registerPublicAccount} from './public-registration.mjs';
 import {commerceRoute} from './commerce-router.mjs';
 import {productMediaRoute} from './product-media.mjs';
 import {advancedFinanceRoute} from './advanced-finance-router.mjs';
@@ -139,6 +140,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
       if(env.AUTH_ENABLED==='false')return failure(503,'Acesso ainda não habilitado para clientes.');
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
       if(!['GET','HEAD'].includes(method)&&!originAllowed(request))return failure(403,'Origem da solicitação inválida.');
+      if(method==='POST'&&path==='/api/v1/auth/register')return await registerPublicAccount(request,env,db,now());
       if(method==='POST'&&path==='/api/v1/auth/login')return await login(request,env,db,now());
       const session=await sessionFor(request,db,now(),env);
       if(!session)return failure(401,'Sessão inválida ou expirada.');
