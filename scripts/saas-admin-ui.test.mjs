@@ -31,3 +31,15 @@ test('platform CLI requires private environment token and HTTPS outside localhos
  assert.match(cli,/\/api\/v1\/auth\/session/);
  assert.doesNotMatch(cli,/localStorage|sessionStorage/);
 });
+
+test('branch code form pattern is valid in Chromium Unicode v mode and accepts hyphens',()=>{
+ const ui=read('apps/web/saas-admin-ui.js');
+ const source=ui.match(/pattern="([^"]+)"/)?.[1];
+ assert.ok(source,'branch form must validate its code');
+ // Convert the JavaScript string escape to the HTML attribute used by Chromium.
+ const runtime=source.replaceAll('\\\\','\\');
+ const pattern=new RegExp('^(?:'+runtime+')$','v');
+ assert.ok(pattern.test('FILIAL-02'));
+ assert.ok(pattern.test('LOJA_03'));
+ assert.ok(!pattern.test('LOJA!03'));
+});
