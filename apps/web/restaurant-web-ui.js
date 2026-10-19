@@ -295,6 +295,8 @@
      if(what==='ack'||what==='resolve')await action('/requests/'+encodeURIComponent(id),'PATCH',{status:what==='ack'?'ACKNOWLEDGED':'CLOSED',expectedStatus:state.requests.find(r=>r.id===id)?.status});
      if(what==='checkout-session'||what==='checkout-order'){
        const session=what==='checkout-session',endpoint=session?'/sessions/'+encodeURIComponent(id):'/orders/'+encodeURIComponent(id);
+       if(session){state.selected=id;state.prepayments=await safe(()=>action('/sessions/'+encodeURIComponent(id)+'/prepayments').then(v=>v.prepayments),null);}
+       else state.prepayments=null;
        let linked=(await action(endpoint+'/checkout')).checkout;
        if(!linked){
          try{
@@ -347,7 +349,7 @@
      if(what==='dates'){state.from=v.from;state.to=v.to;}
      if(what==='payment'){
        const body=state.split?{shares:state.split.shares.map((amountCents,i)=>({index:i+1,amountCents,method:v['shareMethod'+(i+1)]}))}:
-         {payments:[{method:v.method,amountCents:Number(v.totalCents)}]};
+         {payments:Number(v.totalCents)>0?[{method:v.method,amountCents:Number(v.totalCents)}]:[]};
        const sale=await api.request('/api/v1/sales/'+encodeURIComponent(v.saleId)+'/complete',{method:'POST',body});
        const settled=sale.sale||sale;
        state.checkout={...state.checkout,status:settled.status};
