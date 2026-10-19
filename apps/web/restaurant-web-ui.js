@@ -12,7 +12,7 @@
  const path='/api/v1/restaurant';
  const today=new Date().toISOString().slice(0,10);
  const monthAgo=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
- let state={tables:[],orders:[],nextCursor:null,prepayments:null,tickets:[],stationTickets:[],printJobs:[],requests:[],products:[],split:null,report:null,reportRows:[],reportNextCursor:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
+ let state={tables:[],orders:[],nextCursor:null,prepayments:null,splitPlan:null,tickets:[],stationTickets:[],printJobs:[],requests:[],products:[],split:null,report:null,reportRows:[],reportNextCursor:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
  const notice=(value,error=false)=>root.PdvToast?.show?.(value,error?'error':'success');
  const action=(endpoint,method='GET',body)=>api.request(path+endpoint,{method,body});
  const safe=async(fn,fallback=[])=>{try{return await fn();}catch{return fallback;}};
@@ -62,14 +62,15 @@
  }
  function title(value){return ({TABLE:'Mesa',PICKUP:'Retirada',DELIVERY:'Entrega',OPEN:'Aberto',READY:'Pronto',DELIVERED:'Entregue',CANCELLED:'Cancelado',NEW:'Novo',PREPARING:'Preparando',ACKNOWLEDGED:'Em atendimento',CLOSED:'Finalizado',WAITER:'Garçom',BILL:'Conta'})[value]||value;}
  async function load(){
-   const [tables,orderPage,tickets,stationTickets,printJobs,requests,products,report,reportPage,prepayments]=await Promise.all([
+   const [tables,orderPage,tickets,stationTickets,printJobs,requests,products,report,reportPage,prepayments,splitPlan]=await Promise.all([
      safe(()=>action('/tables').then(v=>v.tables)),safe(()=>action('/orders?limit=40'),{orders:[],nextCursor:null}),
      safe(()=>action('/kitchen').then(v=>v.tickets)),safe(()=>action('/kitchen/station-tickets').then(v=>v.tickets)),safe(()=>action('/kitchen/print-jobs').then(v=>v.jobs)),safe(()=>action('/requests').then(v=>v.requests)),
      safe(()=>api.products(false)),safe(()=>action('/reports/summary?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to)).then(v=>v.report),null),
      safe(()=>action('/reports/orders?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to)+'&limit=30'),{orders:[],nextCursor:null}),
-     state.selected?safe(()=>action('/sessions/'+encodeURIComponent(state.selected)+'/prepayments').then(x=>x.prepayments),null):null
+     state.selected?safe(()=>action('/sessions/'+encodeURIComponent(state.selected)+'/prepayments').then(x=>x.prepayments),null):null,
+     state.selected?safe(()=>action('/sessions/'+encodeURIComponent(state.selected)+'/split').then(x=>x.plan),null):null
    ]);
-   Object.assign(state,{tables,orders:orderPage.orders||[],nextCursor:orderPage.nextCursor||null,tickets,stationTickets,printJobs,requests,products,report,reportRows:reportPage.orders||[],reportNextCursor:reportPage.nextCursor||null,prepayments:prepayments||null});
+   Object.assign(state,{tables,orders:orderPage.orders||[],nextCursor:orderPage.nextCursor||null,tickets,stationTickets,printJobs,requests,products,report,reportRows:reportPage.orders||[],reportNextCursor:reportPage.nextCursor||null,prepayments:prepayments||null,splitPlan:splitPlan||null});
  }
  function tableSection(){
    if(!can('restaurant.orders.view'))return '<p class="vertical-empty">Seu perfil não possui acesso às mesas.</p>';
@@ -92,6 +93,9 @@
          (can('restaurant.orders.transfer')?'<details><summary>Registrar recebimento parcial</summary><form data-r4-form="prepay" class="vertical-form">'+
            '<input type="hidden" name="sessionId" value="'+esc(state.selected)+'">'+
            field('Valor recebido (R$)','amountReais','number','min="0.01" max="10000000" step="0.01" required')+
+           (state.splitPlan?'<label class="field"><span>Pagador</span><select name="payerIndex" required>'+
+             state.splitPlan.shares.map((share,i)=>'<option value="'+(i+1)+'">Pagador '+(i+1)+' · '+money(share)+'</option>').join('')+'</select></label>':
+             '<small>Para atribuir adiantamentos por pessoa, registre a divisão antes de receber.</small>')+
            '<label class="field"><span>Forma</span><select name="method"><option value="CASH">Dinheiro</option><option value="PIX">PIX</option><option value="DEBIT_CARD">Débito</option><option value="CREDIT_CARD">Crédito</option></select></label>'+
            '<p>Registre apenas valores recebidos. O caixa do terminal deve estar aberto.</p><button class="secondary-button">Confirmar antecipação</button></form></details>':'')+
          (can('restaurant.orders.transfer')&&free.length?'<form class="vertical-form" data-r4-form="transfer"><input type="hidden" name="sessionId" value="'+esc(state.selected)+'"><input type="hidden" name="expectedTableId" value="'+esc(s.id)+'"><label class="field"><span>Mudar para mesa livre</span><select name="targetTableId">'+free.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.label)+'</option>').join('')+'</select></label><button class="secondary-button">Transferir mesa</button></form>':'')+
@@ -173,9 +177,13 @@
    const methodOptions='<option value="PIX">PIX</option><option value="CASH">Dinheiro</option><option value="DEBIT_CARD">Débito</option><option value="CREDIT_CARD">Crédito</option>';
    const prepaid=state.prepayments?.totalCents||0;
    const outstanding=Math.max(0,Number(c.totalCents||0)-prepaid);
-   const tenders=split?'<fieldset><legend>Divisão por pessoa</legend>'+
-      split.shares.map((value,i)=>'<label class="field"><span>Parte '+(i+1)+' · '+money(value)+'</span>'+
-        '<select name="shareMethod'+(i+1)+'">'+methodOptions+'</select></label>').join('')+'</fieldset>':
+   const splitDues=split?split.shares.map((value,i)=>({
+     index:i+1,originalCents:value,
+     prepaidCents:(state.prepayments?.payments||[]).filter(p=>p.payerIndex===i+1).reduce((sum,p)=>sum+p.amountCents,0)
+   })).map(x=>({...x,amountCents:Math.max(0,x.originalCents-x.prepaidCents)})).filter(x=>x.amountCents>0):[];
+   const tenders=split?'<fieldset><legend>Divisão por pessoa · saldo após antecipações</legend>'+
+      splitDues.map(share=>'<label class="field"><span>Pagador '+share.index+' · restante '+money(share.amountCents)+'</span>'+
+        '<select name="shareMethod'+share.index+'">'+methodOptions+'</select></label>').join('')+'</fieldset>':
       '<label class="field"><span>Forma de pagamento</span><select name="method">'+methodOptions+'</select></label>';
    return '<section class="data-card"><h2>Pagamento no caixa canônico</h2><p>Venda '+esc(c.saleNumber||c.saleId.slice(0,8))+
       ' · '+money(c.totalCents||0)+'</p>'+(prepaid?'<p>Antecipado: '+money(prepaid)+' · Saldo pendente: '+money(outstanding)+'</p>':'')+
@@ -326,7 +334,7 @@
        const reais=Number(v.amountReais),amountCents=Math.round(reais*100);
        if(!Number.isFinite(reais)||!Number.isSafeInteger(amountCents)||amountCents<1||
           Math.abs(reais*100-amountCents)>1e-6)throw Error('Informe o valor recebido em reais, com até duas casas decimais.');
-       await form('/sessions/'+encodeURIComponent(v.sessionId)+'/prepayments',{amountCents,method:v.method});
+       await form('/sessions/'+encodeURIComponent(v.sessionId)+'/prepayments',{amountCents,method:v.method,...(v.payerIndex?{payerIndex:Number(v.payerIndex)}:{})});
      }
      if(what==='transfer')await form('/sessions/'+encodeURIComponent(v.sessionId)+'/transfer',{targetTableId:v.targetTableId,expectedTableId:v.expectedTableId});
      if(what==='order'){
@@ -353,7 +361,7 @@
      }
      if(what==='dates'){state.from=v.from;state.to=v.to;}
      if(what==='payment'){
-       const body=state.split?{shares:state.split.shares.map((amountCents,i)=>({index:i+1,amountCents,method:v['shareMethod'+(i+1)]}))}:
+       const body=state.split?{shares:state.split.shares.map((amountCents,i)=>({index:i+1,amountCents:amountCents-(state.prepayments?.payments||[]).filter(p=>p.payerIndex===i+1).reduce((sum,p)=>sum+p.amountCents,0),method:v['shareMethod'+(i+1)]})).filter(p=>p.amountCents>0)}:
          {payments:Number(v.totalCents)>0?[{method:v.method,amountCents:Number(v.totalCents)}]:[]};
        const sale=await api.request('/api/v1/sales/'+encodeURIComponent(v.saleId)+'/complete',{method:'POST',body});
        const settled=sale.sale||sale;
