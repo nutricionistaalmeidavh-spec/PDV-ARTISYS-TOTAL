@@ -1,6 +1,7 @@
 // D1 persistence adapter for the one PDV domain. Arithmetic, stock rounding and
 // payment rules are imported unchanged from packages/core; this is NOT a second core.
 import salePricing from '../../../packages/core/js/domains/sales/pricing.js';
+import {planShares} from './r4-saas-rules.mjs';
 import paymentRules from '../../../packages/core/js/domains/payments/payment-rules.js';
 import inventoryRules from '../../../packages/core/js/domains/inventory/inventory-rules.js';
 import cashRules from '../../../packages/core/js/domains/cash/cash-rules.js';
@@ -1727,16 +1728,19 @@ export function createCommerceService(db,{now=nowISO}={}){
       let link=null;
       try{link=await first('SELECT table_session_id AS sessionId FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=? AND sale_id=?',tenant,branch,id);}
       catch(e){if(!/no such table: restaurant_sale_links/i.test(String(e?.message)))throw e;}
-      const plan=link?.sessionId?await first('SELECT parts,service_charge_bps AS bps FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,link.sessionId):null;
+      const plan=link?.sessionId?await first('SELECT parts,service_charge_bps AS bps,shares_json AS sharesJson FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,link.sessionId):null;
       let splitShares=null;
       if(plan){
         if(sale.discount_cents)throw error(409,'Divisão exige remoção de desconto manual antes de cobrar.');
         if(!Array.isArray(body?.shares)||body.shares.length!==plan.parts)throw error(409,'Informe pagamento correspondente a cada parte da comanda.');
-        const per=Math.floor(totals.totalCents/plan.parts),extra=totals.totalCents%plan.parts,seen=new Set();
+        let expectedShares;
+        try{expectedShares=planShares(totals.totalCents,plan.parts,plan.sharesJson?JSON.parse(plan.sharesJson):null);}
+        catch(e){throw error(409,'O valor da comanda mudou: recalcule a divisão antes de cobrar.');}
+        const seen=new Set();
         splitShares=body.shares.map(share=>{
           const index=share?.index,amountCents=share?.amountCents;
           if(!Number.isInteger(index)||index<1||index>plan.parts||seen.has(index)||
-             amountCents!==per+(index<=extra?1:0)||!['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(share?.method))
+             amountCents!==expectedShares[index-1]||!['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(share?.method))
             throw error(409,'Parcela divergente ou repetida. Confira a divisão antes de receber.');
           seen.add(index);return {index,amountCents,method:share.method};
         });
