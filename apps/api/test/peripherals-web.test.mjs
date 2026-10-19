@@ -237,7 +237,7 @@ test('cap-050 simulated scale and drawer use separately consented serial ports, 
  w.navigator.serial={requestPort:async()=>{
    const n=ports.length,port={
      open:async()=>{},close:async()=>{},
-     readable:{getReader:()=>({read:async()=>({done:false,value:new TextEncoder().encode('1.275 kg\\r\\n')}),cancel:async()=>{},releaseLock(){}})},
+     readable:{getReader:()=>({read:async()=>({done:false,value:new TextEncoder().encode('1.275 kg\r\n')}),cancel:async()=>{},releaseLock(){}})},
      writable:{getWriter:()=>({write:async bytes=>receipts.push({n,bytes:Array.from(bytes)}),releaseLock(){}})}
    };
    ports.push(port);return port;
