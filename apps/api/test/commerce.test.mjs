@@ -2626,3 +2626,36 @@ test('R1 checkout-017/019: configured item quantity, removal and stale replay pr
   assert.equal((await x.write('a',route,{branchId:'branch-a',quantity:2},{method:'PUT',who:x.viewer})).status,403);
  }finally{x.close();}
 });
+
+test('checkout-016 R3 stable scale and manual weighted sale share exactly one canonical price, branch and stock ledger',async()=>{
+  const x=await setup();try{
+    const win={document:{addEventListener(){}},navigator:{},isSecureContext:true};
+    runInNewContext(readFileSync(new URL('../../web/peripherals-web.js',import.meta.url),'utf8'),
+      {window:win,TextEncoder,TextDecoder,Uint8Array,FormData,setTimeout,clearTimeout});
+    const scale=win.PdvWebHardwareUtils.parseWeight('ST,GS,+ 1.250 kg');
+    assert.equal(scale.weight,1.25);
+    assert.throws(()=>win.PdvWebHardwareUtils.parseWeight('US,GS,+1.250 kg'));
+    const p=await x.write('a','products',{branchId:'branch-a',name:'Castanhas por peso',sku:'CASTANHA-KG',unit:'KG',salePriceCents:3990,trackStock:true});
+    assert.equal(p.status,201,p.body.error);
+    await x.write('a','inventory/receipts',{branchId:'branch-a',productId:p.body.product.id,quantity:10,type:'opening'});
+    await x.write('a','cash/open',{branchId:'branch-a',openingCents:0});
+    const prices=[];
+    for(const source of ['SCALE','MANUAL']){
+      const opened=await x.write('a','sales',{branchId:'branch-a'});
+      const saleId=opened.body.sale.id,mutation=next();
+      const body={branchId:'branch-a',productId:p.body.product.id,grams:Math.round(scale.weight*1000),source};
+      const response=await x.write('a','sales/'+saleId+'/items/weighted',body,{key:mutation});
+      assert.equal(response.status,200,response.body.error);
+      prices.push(response.body.sale.totalCents);
+      const repeated=await x.write('a','sales/'+saleId+'/items/weighted',body,{key:mutation});
+      assert.equal(repeated.body.sale.items[0].quantity,1.25);
+      const paid=await x.write('a','sales/'+saleId+'/complete',{branchId:'branch-a',payments:[{method:'PIX',amountCents:4988}]});
+      assert.equal(paid.status,200,paid.body.error);
+    }
+    assert.deepEqual(prices,[4988,4988]);
+    assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock[0].quantity,7.5);
+    const one=await x.db.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE type='sale' AND tenant_id='a'").bind().first();
+    assert.equal(one.n,2);
+    assert.equal((await x.get('b','inventory?branchId=branch-b')).body.stock.length,0);
+  }finally{x.close();}
+});
