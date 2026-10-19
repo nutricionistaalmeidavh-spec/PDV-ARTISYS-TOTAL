@@ -7,7 +7,7 @@ const schema=readFileSync(new URL('../migrations/0001_identity.sql',import.meta.
 const signupSchema=readFileSync(new URL('../migrations/0030_public_registration.sql',import.meta.url),'utf8');
 const origin='https://pdvtotal.example.test',now=Date.parse('2026-10-19T14:00:00Z');
 const valid={displayName:'Ana Silva',businessName:'Restaurante Ana',email:'ana@example.com',password:'SenhaLongaSegura2026!'};
-function fixture(vars={AUTH_ENABLED:'true',REGISTRATION_ENABLED:'true'}){
+function fixture(vars={AUTH_ENABLED:'true',REGISTRATION_ENABLED:'true',TRUST_CF_CONNECTING_IP:'true'}){
   const db=openLocalDatabase();
   db.exec(schema);db.exec(signupSchema);
   const api=createApi({DB:db,...vars},{now:()=>now});
@@ -77,4 +77,13 @@ test('bot honeypot does not provision identity records',async()=>{
     assert.equal((await x.send({...valid,website:'bot.example'})).status,202);
     assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM users').bind().first()).n,0);
   }finally{x.close();}
+});
+
+test('untrusted headers cannot rotate registration IP rate-limit buckets in self-hosted mode',async()=>{
+ const x=fixture({AUTH_ENABLED:'true',REGISTRATION_ENABLED:'true',TRUST_CF_CONNECTING_IP:'false'});
+ try{
+  for(let i=0;i<3;i++)
+   assert.equal((await x.send({...valid,email:'untrusted'+i+'@example.test'},'198.51.100.'+(i+1))).status,202);
+  assert.equal((await x.send({...valid,email:'untrusted4@example.test'},'198.51.100.70')).status,429);
+ }finally{x.close();}
 });
