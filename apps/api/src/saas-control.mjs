@@ -181,6 +181,30 @@ export async function platformManagementRoute(request,db,env,path,now){
   return output({error:'Acesso administrativo negado.'},403);
  let diff=0;for(let i=0;i<secret.length;i++)diff|=secret.charCodeAt(i)^header.charCodeAt(i+7);
  if(diff)return output({error:'Acesso administrativo negado.'},403);
+ if(path==='/api/v1/platform/bootstrap'&&request.method==='POST'){
+  try{
+   const data=await bodyOf(request);
+   const email=validEmail(data.email),name=validText(data.name,100),ownerName=validText(data.ownerName,100),slug=validText(data.slug,64)?.toLowerCase();
+   if(!email||!name||!ownerName||!slug||!/^[a-z0-9][a-z0-9-]{2,63}$/.test(slug)||
+     typeof data.password!=='string'||data.password.length<12||data.password.length>256)
+    throw fail(400,'Dados do primeiro proprietário inválidos.');
+   const exists=await q(db,'SELECT id FROM tenants LIMIT 1').first();
+   if(exists)throw fail(409,'Bootstrap bloqueado: já existe empresa no banco.');
+   const id=newId(),userId=newId(),branchId=newId(),when=stamp(now),endsAt=stamp(now+14*86400000);
+   const hashed=await hashPassword(data.password);
+   // Atomic one-time bootstrap. Concurrent requests cannot create another tenant:
+   // a no-op tenant INSERT makes later FK-bound inserts fail and roll back.
+   await db.batch([
+    q(db,'INSERT INTO tenants(id,slug,name,created_at) SELECT ?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM tenants)',id,slug,name,when),
+    q(db,'INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)',userId,email,ownerName,hashed,when),
+    q(db,'INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)',id,userId,'OWNER',when),
+    q(db,'INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)',branchId,id,'MAIN','Matriz',when),
+    q(db,'INSERT INTO saas_subscriptions(tenant_id,plan_key,status,ends_at,updated_at,updated_by) VALUES(?,?,?,?,?,?)',id,'trial','TRIAL',endsAt,when,'PLATFORM'),
+    audit(db,id,'PLATFORM','INITIAL_BOOTSTRAP',id,now)
+   ]);
+   return output({created:true,tenantId:id,branchId,subscription:{status:'TRIAL',endsAt}},201);
+  }catch(e){return e.status?err(e):output({error:'Bootstrap já executado ou conflito de dados.'},409);}
+ }
  const match=path.match(/^\/api\/v1\/platform\/tenants\/([^/]{1,128})\/subscription$/);
  if(!match||request.method!=='PUT')return output({error:'Rota administrativa indisponível.'},404);
  try{
@@ -204,6 +228,11 @@ export async function createAdditionalTenant(request,db,env,session,now){
   if(!slug||!name||!/^[a-z0-9][a-z0-9-]{2,63}$/.test(slug))throw fail(400,'Identificação inválida.');
   const n=await q(db,"SELECT COUNT(*) AS n FROM tenant_memberships m JOIN tenants t ON t.id=m.tenant_id WHERE m.user_id=? AND m.profile_key='OWNER' AND m.active=1 AND t.active=1",session.userId).first();
   if(!n.n||n.n>=3)throw fail(403,'Limite de três empresas por proprietário.');
+  // A suspended owner must not mint a new trial tenant to bypass payment.
+  if(env.SAAS_ENTITLEMENTS_ENABLED==='true'){
+   const eligible=await q(db,"SELECT s.tenant_id FROM saas_subscriptions s JOIN tenant_memberships m ON m.tenant_id=s.tenant_id WHERE m.user_id=? AND m.active=1 AND m.profile_key='OWNER' AND s.status IN ('ACTIVE','TRIAL') AND s.ends_at>? LIMIT 1",session.userId,stamp(now)).first();
+   if(!eligible)throw fail(402,'Assinatura principal inativa.');
+  }
   const id=newId(),branchId=newId(),endsAt=stamp(now+14*86400000);
   try{await db.batch([
    q(db,'INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)',id,slug,name,stamp(now)),
