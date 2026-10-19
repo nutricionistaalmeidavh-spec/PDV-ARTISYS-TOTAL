@@ -100,8 +100,8 @@ try{
   const staffPage=await staffContext.newPage();
   try{
     await staffPage.goto(origin+'/app/',{waitUntil:'domcontentloaded'});
-    await staffPage.locator('#web-invite-form').waitFor({timeout:12000});
     await staffPage.locator('.web-invite-activation summary').click();
+    await staffPage.locator('#web-invite-form').waitFor({timeout:12000});
     await staffPage.locator('#web-invite-form [name=token]').fill(code);
     await staffPage.locator('#web-invite-form [name=email]').fill('web-employee-qa@example.test');
     await staffPage.locator('#web-invite-form [name=displayName]').fill('Funcionario QA');
