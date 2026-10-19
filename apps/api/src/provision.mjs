@@ -17,13 +17,15 @@ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!ownerName||!/^[a-z0-9][a-z0-9-]{2
 if(password.length<12||password.length>256)throw new Error('PDV_OWNER_PASSWORD deve ter de 12 a 256 caracteres.');
 const quote=value=>"'"+String(value).replace(/'/g,"''")+"'";
 const tenantId=randomUUID(),userId=randomUUID(),branchId=randomUUID(),createdAt=new Date().toISOString();
+const trialEndsAt=new Date(Date.parse(createdAt)+14*86400000).toISOString();
 const pwHash=await hashPassword(password);
 const sql=[
 '-- PDV TOTAL: execute uma única vez em um banco novo e isolado. NÃO envie este arquivo ao GitHub.',
 `INSERT INTO tenants(id,slug,name,created_at) VALUES(${[tenantId,slug,name,createdAt].map(quote).join(',')});`,
 `INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(${[userId,email,ownerName,pwHash,createdAt].map(quote).join(',')});`,
 `INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(${[tenantId,userId,'OWNER',createdAt].map(quote).join(',')});`,
-`INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(${[branchId,tenantId,'MAIN','Matriz',createdAt].map(quote).join(',')});`
+`INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(${[branchId,tenantId,'MAIN','Matriz',createdAt].map(quote).join(',')});`,
+`INSERT INTO saas_subscriptions(tenant_id,plan_key,status,ends_at,updated_at,updated_by) VALUES(${[tenantId,'trial','TRIAL',trialEndsAt,createdAt,userId].map(quote).join(',')});`
 ].join('\n')+'\n';
 if(process.argv.includes('--local')){
   const localFile=process.env.LOCAL_DB_PATH||resolve(here,'../.local/pdv-total.sqlite');
