@@ -39,3 +39,44 @@ AND (
  )
 )
 BEGIN SELECT RAISE(ABORT,'RESTAURANT_SERVICE_STALE'); END;
+
+-- Advance tenders belong to the canonical table session until a sale completes;
+-- they are never a new sale or a duplicated stock/finance record.
+CREATE TABLE IF NOT EXISTS r4_table_prepayments(
+ id TEXT NOT NULL,tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,table_session_id TEXT NOT NULL,
+ cash_session_id TEXT NOT NULL,method TEXT NOT NULL CHECK(method IN('CASH','PIX','DEBIT_CARD','CREDIT_CARD')),
+ amount_cents INTEGER NOT NULL CHECK(amount_cents>0),mutation_id TEXT NOT NULL,
+ received_by TEXT NOT NULL,received_at TEXT NOT NULL,
+ PRIMARY KEY(tenant_id,branch_id,id),
+ UNIQUE(tenant_id,branch_id,table_session_id,mutation_id),
+ FOREIGN KEY(tenant_id,branch_id,table_session_id) REFERENCES restaurant_table_sessions(tenant_id,branch_id,id),
+ FOREIGN KEY(tenant_id,branch_id,cash_session_id) REFERENCES cash_sessions(tenant_id,branch_id,id),
+ FOREIGN KEY(received_by) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_r4_table_prepayment_session ON r4_table_prepayments(tenant_id,branch_id,table_session_id,received_at);
+CREATE INDEX IF NOT EXISTS idx_r4_table_prepayment_cash ON r4_table_prepayments(tenant_id,branch_id,cash_session_id,received_at);
+CREATE TRIGGER IF NOT EXISTS r4_table_prepayment_no_update BEFORE UPDATE ON r4_table_prepayments
+BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS r4_table_prepayment_no_delete BEFORE DELETE ON r4_table_prepayments
+BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_IMMUTABLE'); END;
+-- Concurrent prepayments cannot exceed the value of already delivered items.
+-- The guard is inside the atomic insert transaction, not only the API read.
+CREATE TRIGGER IF NOT EXISTS r4_prepayment_balance_guard BEFORE INSERT ON r4_table_prepayments
+WHEN NEW.amount_cents+
+ (SELECT COALESCE(SUM(amount_cents),0) FROM r4_table_prepayments p
+  WHERE p.tenant_id=NEW.tenant_id AND p.branch_id=NEW.branch_id AND p.table_session_id=NEW.table_session_id)
+ >
+ (SELECT COALESCE(SUM(ROUND(oi.quantity_milli*oi.unit_price_cents/1000.0)),0)
+  FROM restaurant_order_items oi JOIN restaurant_orders o
+   ON o.tenant_id=oi.tenant_id AND o.branch_id=oi.branch_id AND o.id=oi.order_id
+  WHERE o.tenant_id=NEW.tenant_id AND o.branch_id=NEW.branch_id AND o.table_session_id=NEW.table_session_id
+    AND o.status='DELIVERED')
+BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_EXCEEDS_DELIVERED'); END;
+CREATE TRIGGER IF NOT EXISTS r4_prepayment_session_guard BEFORE INSERT ON r4_table_prepayments
+WHEN NOT EXISTS(SELECT 1 FROM restaurant_table_sessions s WHERE s.tenant_id=NEW.tenant_id AND s.branch_id=NEW.branch_id
+ AND s.id=NEW.table_session_id AND s.status='OPEN')
+ OR EXISTS(SELECT 1 FROM restaurant_sale_links l WHERE l.tenant_id=NEW.tenant_id
+  AND l.branch_id=NEW.branch_id AND l.table_session_id=NEW.table_session_id)
+ OR NOT EXISTS(SELECT 1 FROM cash_sessions c WHERE c.tenant_id=NEW.tenant_id AND c.branch_id=NEW.branch_id
+  AND c.id=NEW.cash_session_id AND c.status='OPEN')
+BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_SESSION_CONFLICT'); END;
