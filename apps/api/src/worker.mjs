@@ -141,11 +141,16 @@ export function createApi(env,{now=()=>Date.now()}={}){
       }
       // A new Cloudflare Git deployment must not accept credentials or write D1
       // before schema, anti-abuse protections and customer onboarding are ready.
+      // An explicitly authenticated platform bootstrap may run while client logins
+      // remain disabled. Browser origins cannot perform cross-site admin mutations.
+      if(path.startsWith('/api/v1/platform/')){
+        if(!['GET','HEAD'].includes(method)&&!originAllowed(request))
+          return failure(403,'Origem da solicitação inválida.');
+        return await platformManagementRoute(request,db,env,path,now());
+      }
       if(env.AUTH_ENABLED==='false')return failure(503,'Acesso ainda não habilitado para clientes.');
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
       if(!['GET','HEAD'].includes(method)&&!originAllowed(request))return failure(403,'Origem da solicitação inválida.');
-      const platform=await platformManagementRoute(request,db,env,path,now());
-      if(platform)return platform;
       if(method==='POST'&&path==='/api/v1/auth/register-invite')
         return await invitationRegistrationRoute(request,db,now());
       if(method==='POST'&&path==='/api/v1/auth/login')return await login(request,env,db,now());
