@@ -89,7 +89,12 @@
          '<p>Pedidos operacionais: '+money(total)+'. A cobrança é feita no caixa canônico.</p>'+btn('Imprimir pré-conta','prebill-table',state.selected)+
          orders.map(o=>'<div class="restaurant-row">'+esc(orderLines(o))+' · '+esc(title(o.status))+'</div>').join('')+
          (can('restaurant.service.manage')?btn('Chamar garçom','service-waiter',state.selected)+btn('Solicitar conta','service-bill',state.selected):'')+
-         '<p>Recebimentos antecipados: '+money(state.prepayments?.totalCents||0)+'. O saldo é acertado no caixa canônico.</p>'+
+         '<p>Recebimentos antecipados líquidos: '+money(state.prepayments?.totalCents||0)+'. O saldo é acertado no caixa canônico.</p>'+
+         (state.prepayments?.payments?.length?'<div class="restaurant-list">'+state.prepayments.payments.map(p=>
+           '<div class="restaurant-row"><strong>'+esc(p.method)+' · '+money(p.amountCents)+
+           '</strong><small>Recebido '+money(p.grossAmountCents)+' · '+esc(p.receivedAt)+
+           (p.payerIndex?' · Pagador '+p.payerIndex:'')+'</small>'+
+           (p.amountCents>0&&can('finance.manage')?btn('Estornar antecipação','refund-prepay',p.id):'')+'</div>').join('')+'</div>':'')+
          (can('restaurant.orders.transfer')?'<details><summary>Registrar recebimento parcial</summary><form data-r4-form="prepay" class="vertical-form">'+
            '<input type="hidden" name="sessionId" value="'+esc(state.selected)+'">'+
            field('Valor recebido (R$)','amountReais','number','min="0.01" max="10000000" step="0.01" required')+
@@ -280,6 +285,20 @@
      if(what==='open')await form('/tables/'+encodeURIComponent(id)+'/open',{partySize:1});
      if(what==='close')await form('/sessions/'+encodeURIComponent(id)+'/close',{});
      if(what==='service-waiter'||what==='service-bill')await form('/sessions/'+encodeURIComponent(id)+'/requests',{type:what==='service-waiter'?'WAITER':'BILL'});
+     if(what==='refund-prepay'){
+       if(!can('finance.manage'))throw Error('Perfil sem permissão para estornar.');
+       const p=(state.prepayments?.payments||[]).find(x=>x.id===id);
+       if(!p||p.amountCents<=0)throw Error('Recebimento sem saldo para estornar.');
+       const raw=window.prompt('Quanto devolver (R$)?',String((p.amountCents/100).toFixed(2)).replace('.',','));
+       if(raw===null)return;
+       if(!/^\\d+(?:[.,]\\d{1,2})?$/.test(raw.trim()))throw Error('Informe valor em reais com até duas casas.');
+       const cents=Math.round(Number(raw.trim().replace(',','.'))*100);
+       if(!Number.isSafeInteger(cents)||cents<=0||cents>p.amountCents)throw Error('Valor de estorno inválido ou acima do recebido.');
+       const reason=window.prompt('Motivo da devolução:');
+       if(!reason||reason.trim().length<4)return;
+       await form('/sessions/'+encodeURIComponent(state.selected)+'/prepayments/'+encodeURIComponent(id)+'/refund',
+         {amountCents:cents,reason:reason.trim()});
+     }
      if(what==='cancel')await form('/orders/'+encodeURIComponent(id)+'/cancel',{});
      if(what==='dispatch'){
        const courier=window.prompt('Nome do entregador responsável:');
