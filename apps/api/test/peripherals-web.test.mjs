@@ -202,11 +202,11 @@ test('cap-029 R3 untrusted operational document text is HTML escaped and does no
 test('cap-026 R3 ESC/POS CP850 preserves Brazilian accents and never prints untrusted ESC sequences',()=>{
  const {window:w}=browser();
  const bytes=w.PdvWebHardwareUtils.escpos('Ação café: pão, maçã\n\x1b[31m',{cut:true});
- assert.deepEqual(bytes.slice(0,5),[27,64,27,116,2]);
+ assert.deepEqual(Array.from(bytes.slice(0,5)),[27,64,27,116,2]);
  assert.ok(bytes.includes(135)); // ç
  assert.ok(bytes.includes(130)); // é
  assert.ok(bytes.includes(198)); // ã
  assert.ok(bytes.includes(160)); // á
  assert.equal(bytes.slice(5,-3).includes(27),false,'ESC control bytes must be replaced');
- assert.deepEqual(bytes.slice(-3),[29,86,0]);
+ assert.deepEqual(Array.from(bytes.slice(-3)),[29,86,0]);
 });
