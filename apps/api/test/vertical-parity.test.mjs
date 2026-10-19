@@ -732,6 +732,13 @@ test('cap-032 customized restaurant account split keeps precise person shares an
   assert.deepEqual(res.body.plan.shares,[3333,3334,3334]);
   const saved=await x.request('a',url+'?branchId=filial-a');
   assert.deepEqual(saved.body.plan.shares,[3333,3334,3334]);
+  await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0});
+  const sale=(await x.request('a','sales','POST',{branchId:'filial-a',restaurantSessionId:session.id})).body.sale;
+  const paid=await x.request('a','sales/'+sale.id+'/complete','POST',{branchId:'filial-a',
+    shares:[{index:1,amountCents:3333,method:'PIX'},{index:2,amountCents:3334,method:'CASH'},{index:3,amountCents:3334,method:'PIX'}]});
+  assert.equal(paid.status,200,JSON.stringify(paid.body));
+  assert.equal((await x.db.prepare('SELECT COUNT(*) n FROM r4_split_tenders WHERE sale_id=?').bind(sale.id).first()).n,3);
+  assert.equal((await x.db.prepare("SELECT COUNT(*) n FROM sales WHERE tenant_id='a'").bind().first()).n,1);
   assert.equal((await x.request('a',url,'POST',{...body,shares:[3333,3333,3333]})).status,400);
   assert.equal((await x.request('b',url+'?branchId=filial-b','GET',undefined,{as:'b'})).status,404);
  }finally{x.close();}
