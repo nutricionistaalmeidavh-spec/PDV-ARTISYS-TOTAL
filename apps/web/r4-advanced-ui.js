@@ -45,16 +45,16 @@
     });
   }
   async function load(){
-    const [products,stations,routes,tickets,profiles,onboard,orders,tables,ticketClock]=await Promise.all([
+    const [products,stations,routes,tickets,profiles,onboard,orders,tables,ticketClock,modules]=await Promise.all([
       safe(()=>api.products(false)),safe(()=>r4('/kitchen/stations').then(x=>x.stations)),
       safe(()=>r4('/kitchen/routes').then(x=>x.routes)),safe(()=>r4('/kitchen/station-tickets').then(x=>x.tickets)),
       safe(()=>r4('/pizzeria/profiles').then(x=>x.profiles)),
       safe(()=>api.request('/api/v1/onboarding/segments')),
       safe(()=>r4('/orders').then(x=>x.orders)),safe(()=>r4('/tables').then(x=>x.tables)),
-      safe(()=>r4('/tickets/time-zone'))
+      safe(()=>r4('/tickets/time-zone')),safe(()=>api.modules())
     ]);
     model={products:products||[],stations:stations||[],routes:routes||[],tickets:tickets||[],
-      profiles:profiles||[],onboard:onboard||{},orders:orders||[],tables:tables||[],ticketClock:ticketClock||{timeZone:'America/Sao_Paulo'}};
+      profiles:profiles||[],onboard:onboard||{},modules:modules||[],orders:orders||[],tables:tables||[],ticketClock:ticketClock||{timeZone:'America/Sao_Paulo'}};
     model.sessionOrders=model.orders.filter(o=>o.table_session_id===sessionId);
     model.orderItems=model.sessionOrders.filter(o=>o.status==='DELIVERED')
       .flatMap(o=>(o.items||[]).map(i=>({...i,orderId:o.id})));
@@ -149,7 +149,15 @@
       '<option value="'+esc(z)+'" '+(model.ticketClock?.timeZone===z?'selected':'')+'>'+esc(z)+'</option>').join('')+
       '</select></label><button class="primary-button">Salvar fuso</button></form>':'')+
       '<div class="restaurant-list">'+items.map(s=>'<div class="restaurant-row"><strong>'+esc(s.label)+'</strong><small>'+
-      (s.recommended.length?'Recomendado: '+esc(s.recommended.join(', ')):'Núcleo padrão')+'</small></div>').join('')+'</div></section>';
+      (s.recommended.length?'Recomendado: '+esc(s.recommended.join(', ')):'Núcleo padrão')+'</small></div>').join('')+'</div>'+
+      '<h3>Áreas opcionais da loja</h3><p>Ative ou desative individualmente. As permissões continuam definidas pelo seu perfil; nenhuma licença é criada.</p>'+
+      (model.modules||[]).map(m=>'<form class="vertical-form" data-r4-advanced="module-toggle">'+
+       '<input type="hidden" name="moduleId" value="'+esc(m.id)+'">'+
+       '<label><input type="checkbox" name="enabled" '+(m.enabled?'checked ':'')+
+       ((!m.manageCapability||can(m.manageCapability))&&can('settings.manage')?'':'disabled')+'>'+
+       esc(m.name||m.id)+'</label>'+
+       (can('settings.manage')&&(!m.manageCapability||can(m.manageCapability))?'<button class="secondary-button">Salvar área</button>':'<small>Sem permissão para alterar</small>')+
+       '</form>').join('')+'</section>';
   }
   function render(){
     const renderer={service,production,pizza,weight,recipe,segments};
@@ -232,6 +240,13 @@
       }
       if(kind==='segment'){
         await api.request('/api/v1/onboarding/segments',{method:'PUT',body:{segmentId:v.segmentId}});
+      }
+      if(kind==='module-toggle'){
+        const target=(model.modules||[]).find(m=>m.id===v.moduleId);
+        if(!target||!can('settings.manage')||(target.manageCapability&&!can(target.manageCapability)))
+          throw Error('Sem permissão para configurar esta área.');
+        await api.saveSetting('modules.'+target.id+'.enabled',v.enabled==='on','global');
+        toast('Preferência da área salva para o estabelecimento.');
       }
       if(kind==='transfer-items'){
         await r4('/sessions/'+uid(sessionId)+'/transfer-items','POST',{targetSessionId:v.targetSessionId,
