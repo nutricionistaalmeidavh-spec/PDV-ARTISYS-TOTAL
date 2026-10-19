@@ -114,30 +114,44 @@ export function createR4ExtendedService(db){
    async updateTicket(t,b,ticketId,status,key){
      await branch(t,b);
      if(!['PREPARING','READY'].includes(status))throw fail(400,'Estado de produção inválido.');
+     if(!keyValid(key))throw fail(400,'Chave de operação obrigatória.');
      const scope='r4.ticket:'+b+':'+ticketId+':'+status;
-     if(keyValid(key)){
-       const old=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
-       if(old)return JSON.parse(old.result_json);
-     }
+     const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(prior)return JSON.parse(prior.result_json);
      const current=await first('SELECT id,order_id AS orderId,status FROM r4_station_tickets WHERE tenant_id=? AND branch_id=? AND id=?',t,b,ticketId);
      if(!current)throw fail(404,'Ticket não encontrado.');
      if((current.status==='NEW'&&status!=='PREPARING')||
-        (current.status==='PREPARING'&&status!=='READY')||current.status==='READY'||current.status==='CANCELLED')
-        throw fail(409,'Transição de produção inválida.');
-     return mutation(t,scope,key,async()=>{
-       const time=stamp(),out={id:ticketId,orderId:current.orderId,status};
-       const statements=[q('UPDATE r4_station_tickets SET status=?,updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status=?',
-         status,time,t,b,ticketId,current.status),
+        (current.status==='PREPARING'&&status!=='READY')||!['NEW','PREPARING'].includes(current.status))
+       throw fail(409,'Transição de produção inválida.');
+     const time=stamp(),result={id:ticketId,orderId:current.orderId,status};
+     // SQL changes() makes the same CAS transaction the authority for both the
+     // operator's success and the downstream shared KDS update.
+     const proof=`EXISTS(SELECT 1 FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?)`;
+     try{
+       await db.batch([
+         q('UPDATE r4_station_tickets SET status=?,updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status=?',
+           status,time,t,b,ticketId,current.status),
+         q(`INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at)
+            SELECT ?,?,?,?,? WHERE changes()=1`,t,scope,key,JSON.stringify(result),time),
          q(`UPDATE restaurant_kitchen_tickets SET status=
-           CASE WHEN NOT EXISTS (SELECT 1 FROM r4_station_tickets x WHERE x.tenant_id=? AND x.branch_id=?
-               AND x.order_id=? AND x.status<>'READY') THEN 'READY' ELSE 'PREPARING' END, updated_at=?
-             WHERE tenant_id=? AND branch_id=? AND order_id=? AND status IN('NEW','PREPARING')`,
-           t,b,current.orderId,time,t,b,current.orderId),
-         q(`UPDATE restaurant_orders SET status='READY',updated_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN'
-          AND EXISTS(SELECT 1 FROM restaurant_kitchen_tickets k WHERE k.tenant_id=? AND k.branch_id=? AND k.order_id=? AND k.status='READY')`,
-           time,t,b,current.orderId,t,b,current.orderId)];
-       return {result:out,statements};
-     });
+            CASE WHEN NOT EXISTS(SELECT 1 FROM r4_station_tickets x WHERE x.tenant_id=? AND x.branch_id=?
+              AND x.order_id=? AND x.status<>'READY') THEN 'READY' ELSE 'PREPARING' END,
+            updated_at=? WHERE tenant_id=? AND branch_id=? AND order_id=?
+            AND status IN('NEW','PREPARING') AND ${proof}`,
+           t,b,current.orderId,time,t,b,current.orderId,t,scope,key),
+         q(`UPDATE restaurant_orders SET status='READY',updated_at=?
+            WHERE tenant_id=? AND branch_id=? AND id=? AND status='OPEN'
+            AND EXISTS(SELECT 1 FROM restaurant_kitchen_tickets k WHERE k.tenant_id=? AND k.branch_id=?
+              AND k.order_id=? AND k.status='READY') AND ${proof}`,
+           time,t,b,current.orderId,t,b,current.orderId,t,scope,key)
+       ]);
+     }catch(e){
+       if(/UNIQUE|CONSTRAINT|locked/i.test(String(e?.message)))throw fail(409,'Outra operação alterou o ticket.');
+       throw e;
+     }
+     const won=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(!won)throw fail(409,'Outra pessoa atualizou o ticket. Atualize o KDS.');
+     return JSON.parse(won.result_json);
    },
 
    async transferItems(t,b,user,sourceSessionId,body,key){
