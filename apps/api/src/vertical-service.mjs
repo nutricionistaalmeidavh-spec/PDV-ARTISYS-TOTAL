@@ -3,6 +3,7 @@
 import canonicalPricing from '../../../packages/core/js/domains/sales/pricing.js';
 import inventoryRules from '../../../packages/core/js/domains/inventory/inventory-rules.js';
 import {createR4ExtendedService} from './r4-extended-service.mjs';
+import {localTicketDay} from './r4-saas-rules.mjs';
 const {calculateSaleTotals}=canonicalPricing;
 const {roundQuantity}=inventoryRules;
 const err=(status,message)=>Object.assign(new Error(message),{status});
@@ -168,6 +169,22 @@ export function createVerticalService(db){
        return {statements:[q("UPDATE restaurant_table_sessions SET status='CLOSED',closed_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status IN('OPEN','CHECKOUT')",now(),t,b,id)],result};
      });
    },
+   async ticketClock(t,b){
+     await branchExists(t,b);
+     const row=await first('SELECT time_zone AS timeZone FROM r4_branch_ticket_clock WHERE tenant_id=? AND branch_id=?',t,b);
+     return {timeZone:row?.timeZone||'America/Sao_Paulo'};
+   },
+   async saveTicketClock(t,b,body,key){
+     await branchExists(t,b);
+     const timeZone=clean(body.timeZone,64);
+     try{localTicketDay(now(),timeZone);}catch{throw err(400,'Fuso horário IANA inválido.');}
+     return mutate(t,'r4.ticket.clock:'+b,key,async()=>({
+       result:{timeZone},
+       statements:[q(`INSERT INTO r4_branch_ticket_clock(tenant_id,branch_id,time_zone,updated_at)
+         VALUES(?,?,?,?) ON CONFLICT(tenant_id,branch_id)
+         DO UPDATE SET time_zone=excluded.time_zone,updated_at=excluded.updated_at`,t,b,timeZone,now())]
+     }));
+   },
    async foodOrders(t,b,fulfillment=''){await branchExists(t,b);
      const rows=await all(`SELECT * FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND (?='' OR fulfillment=?) ORDER BY created_at DESC LIMIT 100`,t,b,fulfillment,fulfillment);
      return Promise.all(rows.map(async row=>{
@@ -212,7 +229,8 @@ export function createVerticalService(db){
      const stations=[...new Set(routed)];
      const allDirect=directCount===lines.length;
      return mutate(t,'restaurant.order:'+b,key,async()=>{
-       const id=uuid(),stamp=now(),day=useTicket?stamp.slice(0,10):null;
+       const id=uuid(),stamp=now(),timeZone=useTicket?(await this.ticketClock(t,b)).timeZone:null,
+         day=useTicket?localTicketDay(stamp,timeZone):null;
        const previous=useTicket?await first('SELECT COALESCE(MAX(ticket_number),0) AS last FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND ticket_day=?',t,b,day):null;
        const ticketNumber=useTicket?previous.last+1:null;
        if(ticketNumber>99999)throw err(409,'Limite diário de senhas atingido.');
