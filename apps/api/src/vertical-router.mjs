@@ -160,6 +160,20 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
          permission(member,user,'restaurant.orders.transfer');
          return json({transfer:await ext.transferItems(tenantId,branch,user,parts[2],body,key)});
        }
+       if(parts.length===6&&parts[3]==='prepayments'&&parts[5]==='refund'&&method==='POST'){
+         permission(member,user,'finance.manage');
+         return json({refund:await svc.refundPrepayment(tenantId,branch,user,parts[2],parts[4],body,key)},201);
+       }
+       if(parts.length===4&&parts[3]==='prepayments'){
+         if(method==='GET'){permission(member,user,'restaurant.orders.view');return json({prepayments:await svc.prepayments(tenantId,branch,parts[2])});}
+         if(method==='POST'){permission(member,user,'restaurant.orders.transfer');
+           return json({payment:await svc.receivePrepayment(tenantId,branch,user,parts[2],body,key)},201);
+         }
+       }
+       if(parts.length===4&&parts[3]==='position'&&method==='GET'){
+         permission(member,user,'restaurant.orders.view');
+         return json({position:await ext.sessionPosition(tenantId,branch,parts[2])});
+       }
        if(parts.length===4&&parts[3]==='split'){
          if(method==='GET'){
            permission(member,user,'restaurant.orders.view');
@@ -176,7 +190,7 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
        }
        if(parts.length===4&&parts[3]==='transfer'&&method==='POST'){
          permission(member,user,'restaurant.orders.transfer');
-         return json({session:await svc.transferTable(tenantId,branch,parts[2],body.targetTableId,key)});
+         return json({session:await svc.transferTable(tenantId,branch,parts[2],body.targetTableId,key,body.expectedTableId??null)});
        }
        if(parts.length===4&&parts[3]==='requests'&&method==='POST'){
          permission(member,user,'restaurant.service.manage');
@@ -193,12 +207,24 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
        permission(member,user,'reports.view');
        const from=url.searchParams.get('from'),to=url.searchParams.get('to');
        if(parts[2]==='summary')return json({report:await svc.restaurantReport(tenantId,branch,from,to)});
+       if(parts[2]==='orders'){
+         const raw=url.searchParams.get('limit');
+         const limit=raw===null?50:Number(raw);
+         return json(await svc.restaurantReportRows(tenantId,branch,from,to,{limit,cursor:url.searchParams.get('cursor')}));
+       }
        if(parts[2]==='csv')return new Response(await svc.restaurantReport(tenantId,branch,from,to,{csv:true}),{
          status:200,headers:{'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename="restaurant-operations.csv"','cache-control':'no-store','x-content-type-options':'nosniff'}
        });
      }
      if(parts[1]==='orders'&&parts.length===2){
-       if(method==='GET'){permission(member,user,'restaurant.orders.view');return json({orders:await svc.foodOrders(tenantId,branch,url.searchParams.get('fulfillment')||'')});}
+       if(method==='GET'){
+         permission(member,user,'restaurant.orders.view');
+         const size=url.searchParams.get('limit');
+         const limit=size===null?100:Number(size);
+         return json(await svc.foodOrders(tenantId,branch,url.searchParams.get('fulfillment')||'',{
+           limit,cursor:url.searchParams.get('cursor'),paged:true
+         }));
+       }
        if(method==='POST'){permission(member,user,'restaurant.orders.create');return json({order:await svc.createFoodOrder(tenantId,branch,user,body,key)},201);}
      }
      if(parts[1]==='orders'&&parts.length===4&&parts[3]==='checkout'&&method==='GET'){

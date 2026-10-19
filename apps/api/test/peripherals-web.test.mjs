@@ -229,3 +229,33 @@ test('cap-028 R3 serial harness completes 250 explicit open/write/close cycles w
  assert.equal(writes,250);
  assert.equal(closed,250);
 });
+
+
+test('cap-050 simulated scale and drawer use separately consented serial ports, no implicit connection',async()=>{
+ const {window:w}=browser();
+ const receipts=[],ports=[];
+ w.navigator.serial={requestPort:async()=>{
+   const n=ports.length,port={
+     open:async()=>{},close:async()=>{},
+     readable:{getReader:()=>({read:async()=>({done:false,value:new TextEncoder().encode('1.275 kg\r\n')}),cancel:async()=>{},releaseLock(){}})},
+     writable:{getWriter:()=>({write:async bytes=>receipts.push({n,bytes:Array.from(bytes)}),releaseLock(){}})}
+   };
+   ports.push(port);return port;
+ }};
+ await assert.rejects(w.PdvWebHardware.readWeight(),/Conecte este dispositivo/);
+ await w.PdvWebHardware.connect('scale');
+ const weight=await w.PdvWebHardware.readWeight();
+ assert.equal(weight.weight,1.275);
+ await assert.rejects(w.PdvWebHardware.openDrawer(),/Conecte este dispositivo/);
+ await w.PdvWebHardware.connect('drawer');
+ await w.PdvWebHardware.openDrawer();
+ assert.equal(ports.length,2,'scale cannot silently authorize printer/drawer');
+ assert.deepEqual(receipts.map(x=>x.n),[1]);
+ assert.ok(receipts[0].bytes.join(',').includes('27,112,0,25,250'),'ESC/POS drawer pulse required');
+});
+test('cap-050 WebSerial never opens devices in an insecure context',async()=>{
+ const {window:w}=browser();
+ w.isSecureContext=false;
+ await assert.rejects(w.PdvWebHardware.connect('drawer'),/HTTPS/);
+ await assert.rejects(w.PdvWebHardware.connect('scale'),/HTTPS/);
+});

@@ -12,7 +12,7 @@
  const path='/api/v1/restaurant';
  const today=new Date().toISOString().slice(0,10);
  const monthAgo=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
- let state={tables:[],orders:[],tickets:[],stationTickets:[],printJobs:[],requests:[],products:[],split:null,report:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
+ let state={tables:[],orders:[],nextCursor:null,prepayments:null,splitPlan:null,tickets:[],stationTickets:[],printJobs:[],requests:[],products:[],split:null,report:null,reportRows:[],reportNextCursor:null,from:monthAgo,to:today,selected:'',checkout:null,section:'tables'};
  const notice=(value,error=false)=>root.PdvToast?.show?.(value,error?'error':'success');
  const action=(endpoint,method='GET',body)=>api.request(path+endpoint,{method,body});
  const safe=async(fn,fallback=[])=>{try{return await fn();}catch{return fallback;}};
@@ -62,12 +62,15 @@
  }
  function title(value){return ({TABLE:'Mesa',PICKUP:'Retirada',DELIVERY:'Entrega',OPEN:'Aberto',READY:'Pronto',DELIVERED:'Entregue',CANCELLED:'Cancelado',NEW:'Novo',PREPARING:'Preparando',ACKNOWLEDGED:'Em atendimento',CLOSED:'Finalizado',WAITER:'Garçom',BILL:'Conta'})[value]||value;}
  async function load(){
-   const [tables,orders,tickets,stationTickets,printJobs,requests,products,report]=await Promise.all([
-     safe(()=>action('/tables').then(v=>v.tables)),safe(()=>action('/orders').then(v=>v.orders)),
+   const [tables,orderPage,tickets,stationTickets,printJobs,requests,products,report,reportPage,prepayments,splitPlan]=await Promise.all([
+     safe(()=>action('/tables').then(v=>v.tables)),safe(()=>action('/orders?limit=40'),{orders:[],nextCursor:null}),
      safe(()=>action('/kitchen').then(v=>v.tickets)),safe(()=>action('/kitchen/station-tickets').then(v=>v.tickets)),safe(()=>action('/kitchen/print-jobs').then(v=>v.jobs)),safe(()=>action('/requests').then(v=>v.requests)),
-     safe(()=>api.products(false)),safe(()=>action('/reports/summary?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to)).then(v=>v.report),null)
+     safe(()=>api.products(false)),safe(()=>action('/reports/summary?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to)).then(v=>v.report),null),
+     safe(()=>action('/reports/orders?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to)+'&limit=30'),{orders:[],nextCursor:null}),
+     state.selected?safe(()=>action('/sessions/'+encodeURIComponent(state.selected)+'/prepayments').then(x=>x.prepayments),null):null,
+     state.selected?safe(()=>action('/sessions/'+encodeURIComponent(state.selected)+'/split').then(x=>x.plan),null):null
    ]);
-   Object.assign(state,{tables,orders,tickets,stationTickets,printJobs,requests,products,report});
+   Object.assign(state,{tables,orders:orderPage.orders||[],nextCursor:orderPage.nextCursor||null,tickets,stationTickets,printJobs,requests,products,report,reportRows:reportPage.orders||[],reportNextCursor:reportPage.nextCursor||null,prepayments:prepayments||null,splitPlan:splitPlan||null});
  }
  function tableSection(){
    if(!can('restaurant.orders.view'))return '<p class="vertical-empty">Seu perfil não possui acesso às mesas.</p>';
@@ -86,7 +89,21 @@
          '<p>Pedidos operacionais: '+money(total)+'. A cobrança é feita no caixa canônico.</p>'+btn('Imprimir pré-conta','prebill-table',state.selected)+
          orders.map(o=>'<div class="restaurant-row">'+esc(orderLines(o))+' · '+esc(title(o.status))+'</div>').join('')+
          (can('restaurant.service.manage')?btn('Chamar garçom','service-waiter',state.selected)+btn('Solicitar conta','service-bill',state.selected):'')+
-         (can('restaurant.orders.transfer')&&free.length?'<form class="vertical-form" data-r4-form="transfer"><input type="hidden" name="sessionId" value="'+esc(state.selected)+'"><label class="field"><span>Mudar para mesa livre</span><select name="targetTableId">'+free.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.label)+'</option>').join('')+'</select></label><button class="secondary-button">Transferir mesa</button></form>':'')+
+         '<p>Recebimentos antecipados líquidos: '+money(state.prepayments?.totalCents||0)+'. O saldo é acertado no caixa canônico.</p>'+
+         (state.prepayments?.payments?.length?'<div class="restaurant-list">'+state.prepayments.payments.map(p=>
+           '<div class="restaurant-row"><strong>'+esc(p.method)+' · '+money(p.amountCents)+
+           '</strong><small>Recebido '+money(p.grossAmountCents)+' · '+esc(p.receivedAt)+
+           (p.payerIndex?' · Pagador '+p.payerIndex:'')+'</small>'+
+           (p.amountCents>0&&can('finance.manage')?btn('Estornar antecipação','refund-prepay',p.id):'')+'</div>').join('')+'</div>':'')+
+         (can('restaurant.orders.transfer')?'<details><summary>Registrar recebimento parcial</summary><form data-r4-form="prepay" class="vertical-form">'+
+           '<input type="hidden" name="sessionId" value="'+esc(state.selected)+'">'+
+           field('Valor recebido (R$)','amountReais','number','min="0.01" max="10000000" step="0.01" required')+
+           (state.splitPlan?'<label class="field"><span>Pagador</span><select name="payerIndex" required>'+
+             state.splitPlan.shares.map((share,i)=>'<option value="'+(i+1)+'">Pagador '+(i+1)+' · '+money(share)+'</option>').join('')+'</select></label>':
+             '<small>Para atribuir adiantamentos por pessoa, registre a divisão antes de receber.</small>')+
+           '<label class="field"><span>Forma</span><select name="method"><option value="CASH">Dinheiro</option><option value="PIX">PIX</option><option value="DEBIT_CARD">Débito</option><option value="CREDIT_CARD">Crédito</option></select></label>'+
+           '<p>Registre apenas valores recebidos. O caixa do terminal deve estar aberto.</p><button class="secondary-button">Confirmar antecipação</button></form></details>':'')+
+         (can('restaurant.orders.transfer')&&free.length?'<form class="vertical-form" data-r4-form="transfer"><input type="hidden" name="sessionId" value="'+esc(state.selected)+'"><input type="hidden" name="expectedTableId" value="'+esc(s.id)+'"><label class="field"><span>Mudar para mesa livre</span><select name="targetTableId">'+free.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.label)+'</option>').join('')+'</select></label><button class="secondary-button">Transferir mesa</button></form>':'')+
          btn('Dividir / transferir itens','advanced',state.selected)+btn('Preparar cobrança','checkout-session',state.selected)+
          (can('restaurant.tables.manage')?btn('Encerrar mesa','close',state.selected):'')+
          '</div>';
@@ -114,7 +131,7 @@
        (o.status==='READY'&&(o.fulfillment!=='DELIVERY'||o.deliveryStage!=='RETURNED')?btn('Entregue / retirado','deliver',o.id):'')+
        (o.status==='OPEN'?btn('Cancelar','cancel',o.id):'')+
        (o.status==='DELIVERED'&&o.fulfillment!=='TABLE'?btn('Cobrar','checkout-order',o.id):'')+
-       '</div></div>').join('')+'</div></section>';
+       '</div></div>').join('')+'</div>'+(state.nextCursor?btn('Carregar mais pedidos','more-orders'):'')+'</section>';
  }
  function kitchenSection(){
    if(!can('kitchen.view'))return '<p class="vertical-empty">Seu perfil não possui acesso à cozinha.</p>';
@@ -155,23 +172,31 @@
      '<div class="restaurant-kpis"><div class="restaurant-kpi"><span>Pedidos</span><strong>'+esc(r.ordersCount??'—')+'</strong></div>'+
      '<div class="restaurant-kpi"><span>Cancelados</span><strong>'+esc(r.cancelledCount??'—')+'</strong></div>'+
      '<div class="restaurant-kpi"><span>Valor operacional</span><strong>'+money(r.orderedCents)+'</strong></div></div>'+
-     '<p>Pedidos não são necessariamente vendas pagas. Consulte o caixa para faturamento e recebimento.</p>'+btn('Exportar CSV','csv')+'</section>';
+     '<p>Pedidos não são necessariamente vendas pagas. Consulte o caixa para faturamento e recebimento.</p>'+btn('Exportar CSV','csv')+
+     '<h3>Detalhes do período</h3><div class="restaurant-list">'+state.reportRows.map(o=>'<div class="restaurant-row"><strong>'+esc(o.id.slice(0,8))+'</strong><small>'+esc(o.createdAt)+' · '+esc(title(o.serviceChannel||o.fulfillment))+' · '+esc(title(o.status))+' · '+money(o.totalCents)+'</small></div>').join('')+'</div>'+
+     (state.reportNextCursor?btn('Carregar mais linhas do relatório','more-report'):'')+'</section>';
  }
  function checkoutSection(){
    const c=state.checkout;if(!c)return '';
    const split=state.split;
    const methodOptions='<option value="PIX">PIX</option><option value="CASH">Dinheiro</option><option value="DEBIT_CARD">Débito</option><option value="CREDIT_CARD">Crédito</option>';
-   const tenders=split?'<fieldset><legend>Divisão por pessoa</legend>'+
-      split.shares.map((value,i)=>'<label class="field"><span>Parte '+(i+1)+' · '+money(value)+'</span>'+
-        '<select name="shareMethod'+(i+1)+'">'+methodOptions+'</select></label>').join('')+'</fieldset>':
+   const prepaid=state.prepayments?.totalCents||0;
+   const outstanding=Math.max(0,Number(c.totalCents||0)-prepaid);
+   const splitDues=split?split.shares.map((value,i)=>({
+     index:i+1,originalCents:value,
+     prepaidCents:(state.prepayments?.payments||[]).filter(p=>p.payerIndex===i+1).reduce((sum,p)=>sum+p.amountCents,0)
+   })).map(x=>({...x,amountCents:Math.max(0,x.originalCents-x.prepaidCents)})).filter(x=>x.amountCents>0):[];
+   const tenders=split?'<fieldset><legend>Divisão por pessoa · saldo após antecipações</legend>'+
+      splitDues.map(share=>'<label class="field"><span>Pagador '+share.index+' · restante '+money(share.amountCents)+'</span>'+
+        '<select name="shareMethod'+share.index+'">'+methodOptions+'</select></label>').join('')+'</fieldset>':
       '<label class="field"><span>Forma de pagamento</span><select name="method">'+methodOptions+'</select></label>';
    return '<section class="data-card"><h2>Pagamento no caixa canônico</h2><p>Venda '+esc(c.saleNumber||c.saleId.slice(0,8))+
-      ' · '+money(c.totalCents||0)+'</p>'+
+      ' · '+money(c.totalCents||0)+'</p>'+(prepaid?'<p>Antecipado: '+money(prepaid)+' · Saldo pendente: '+money(outstanding)+'</p>':'')+
       (split?'<p>'+split.parts+' partes · Taxa de serviço '+money(split.serviceChargeCents)+'</p>':'')+
       (c.status==='COMPLETED'?'<p>Pagamento concluído.</p>':
         '<form class="vertical-form" data-r4-form="payment">'+tenders+
         '<input type="hidden" name="saleId" value="'+esc(c.saleId)+'">'+
-        '<input type="hidden" name="totalCents" value="'+esc(c.totalCents)+'">'+
+        '<input type="hidden" name="totalCents" value="'+esc(outstanding)+'">'+
         '<p>Para concluir, o caixa do terminal precisa estar aberto.</p><button class="primary-button">Concluir recebimento</button></form>')+
       '</section>';
  }
@@ -200,8 +225,28 @@
    const what=el.dataset.r4Action,id=el.dataset.id;
    if(what==='back')return root.PdvAppNavigation?.navigate?.('home');
    if(what==='tab'){state.section=id;state.checkout=null;state.split=null;return render();}
-   if(what==='select'){state.selected=id;return render();}
+   if(what==='select'){state.selected=id;return reload();}
    if(what==='refresh')return reload();
+   if(what==='more-report'){
+     if(!state.reportNextCursor)return;
+     try{
+       const query='/reports/orders?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to)+'&limit=30&cursor='+encodeURIComponent(state.reportNextCursor);
+       const page=await action(query),known=new Set(state.reportRows.map(x=>x.id));
+       state.reportRows.push(...(page.orders||[]).filter(x=>!known.has(x.id)));
+       state.reportNextCursor=page.nextCursor||null;render();
+     }catch(e){notice(e.message,true);}
+     return;
+   }
+   if(what==='more-orders'){
+     if(!state.nextCursor)return;
+     try{
+       const result=await action('/orders?limit=40&cursor='+encodeURIComponent(state.nextCursor));
+       const seen=new Set(state.orders.map(o=>o.id));
+       state.orders.push(...(result.orders||[]).filter(o=>!seen.has(o.id)));
+       state.nextCursor=result.nextCursor||null;render();
+     }catch(e){notice(e.message,true);}
+     return;
+   }
    if(what==='advanced')return root.PdvR4AdvancedUi?.show?.({sessionId:id||state.selected});
    if(what==='dispatch-kds'){
      if(!can('kitchen.update_status'))return notice('Sem permissão para enviar à impressora.',true);
@@ -240,6 +285,20 @@
      if(what==='open')await form('/tables/'+encodeURIComponent(id)+'/open',{partySize:1});
      if(what==='close')await form('/sessions/'+encodeURIComponent(id)+'/close',{});
      if(what==='service-waiter'||what==='service-bill')await form('/sessions/'+encodeURIComponent(id)+'/requests',{type:what==='service-waiter'?'WAITER':'BILL'});
+     if(what==='refund-prepay'){
+       if(!can('finance.manage'))throw Error('Perfil sem permissão para estornar.');
+       const p=(state.prepayments?.payments||[]).find(x=>x.id===id);
+       if(!p||p.amountCents<=0)throw Error('Recebimento sem saldo para estornar.');
+       const raw=window.prompt('Quanto devolver (R$)?',String((p.amountCents/100).toFixed(2)).replace('.',','));
+       if(raw===null)return;
+       if(!/^\\d+(?:[.,]\\d{1,2})?$/.test(raw.trim()))throw Error('Informe valor em reais com até duas casas.');
+       const cents=Math.round(Number(raw.trim().replace(',','.'))*100);
+       if(!Number.isSafeInteger(cents)||cents<=0||cents>p.amountCents)throw Error('Valor de estorno inválido ou acima do recebido.');
+       const reason=window.prompt('Motivo da devolução:');
+       if(!reason||reason.trim().length<4)return;
+       await form('/sessions/'+encodeURIComponent(state.selected)+'/prepayments/'+encodeURIComponent(id)+'/refund',
+         {amountCents:cents,reason:reason.trim()});
+     }
      if(what==='cancel')await form('/orders/'+encodeURIComponent(id)+'/cancel',{});
      if(what==='dispatch'){
        const courier=window.prompt('Nome do entregador responsável:');
@@ -260,9 +319,11 @@
      if(what==='deliver')await form('/orders/'+encodeURIComponent(id)+'/deliver',{});
      if(what==='preparing'||what==='ready')await action('/kitchen/'+encodeURIComponent(id),'PATCH',{status:what==='preparing'?'PREPARING':'READY'});
      if(what==='preparing-station'||what==='ready-station')await action('/kitchen/station-tickets/'+encodeURIComponent(id),'PATCH',{status:what==='preparing-station'?'PREPARING':'READY'});
-     if(what==='ack'||what==='resolve')await action('/requests/'+encodeURIComponent(id),'PATCH',{status:what==='ack'?'ACKNOWLEDGED':'CLOSED'});
+     if(what==='ack'||what==='resolve')await action('/requests/'+encodeURIComponent(id),'PATCH',{status:what==='ack'?'ACKNOWLEDGED':'CLOSED',expectedStatus:state.requests.find(r=>r.id===id)?.status});
      if(what==='checkout-session'||what==='checkout-order'){
        const session=what==='checkout-session',endpoint=session?'/sessions/'+encodeURIComponent(id):'/orders/'+encodeURIComponent(id);
+       if(session){state.selected=id;state.prepayments=await safe(()=>action('/sessions/'+encodeURIComponent(id)+'/prepayments').then(v=>v.prepayments),null);}
+       else state.prepayments=null;
        let linked=(await action(endpoint+'/checkout')).checkout;
        if(!linked){
          try{
@@ -288,7 +349,13 @@
    const what=formEl.dataset.r4Form,v=Object.fromEntries(new FormData(formEl));
    try{
      if(what==='table')await form('/tables',{label:String(v.label).trim(),seats:Number(v.seats)});
-     if(what==='transfer')await form('/sessions/'+encodeURIComponent(v.sessionId)+'/transfer',{targetTableId:v.targetTableId});
+     if(what==='prepay'){
+       const reais=Number(v.amountReais),amountCents=Math.round(reais*100);
+       if(!Number.isFinite(reais)||!Number.isSafeInteger(amountCents)||amountCents<1||
+          Math.abs(reais*100-amountCents)>1e-6)throw Error('Informe o valor recebido em reais, com até duas casas decimais.');
+       await form('/sessions/'+encodeURIComponent(v.sessionId)+'/prepayments',{amountCents,method:v.method,...(v.payerIndex?{payerIndex:Number(v.payerIndex)}:{})});
+     }
+     if(what==='transfer')await form('/sessions/'+encodeURIComponent(v.sessionId)+'/transfer',{targetTableId:v.targetTableId,expectedTableId:v.expectedTableId});
      if(what==='order'){
        const fulfillment=v.fulfillment;
        if(fulfillment==='TABLE'&&!v.tableSessionId)throw new Error('Selecione uma comanda.');
@@ -313,8 +380,8 @@
      }
      if(what==='dates'){state.from=v.from;state.to=v.to;}
      if(what==='payment'){
-       const body=state.split?{shares:state.split.shares.map((amountCents,i)=>({index:i+1,amountCents,method:v['shareMethod'+(i+1)]}))}:
-         {payments:[{method:v.method,amountCents:Number(v.totalCents)}]};
+       const body=state.split?{shares:state.split.shares.map((amountCents,i)=>({index:i+1,amountCents:amountCents-(state.prepayments?.payments||[]).filter(p=>p.payerIndex===i+1).reduce((sum,p)=>sum+p.amountCents,0),method:v['shareMethod'+(i+1)]})).filter(p=>p.amountCents>0)}:
+         {payments:Number(v.totalCents)>0?[{method:v.method,amountCents:Number(v.totalCents)}]:[]};
        const sale=await api.request('/api/v1/sales/'+encodeURIComponent(v.saleId)+'/complete',{method:'POST',body});
        const settled=sale.sale||sale;
        state.checkout={...state.checkout,status:settled.status};

@@ -38,7 +38,7 @@ export function createVerticalService(db){
    const batch=[...statements,q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) VALUES(?,?,?,?,?)',
      t,scope,key,JSON.stringify(result),now())];
    try{await db.batch(batch);}catch(e){
-     if(/constraint|UNIQUE|FOREIGN KEY|CASH|CREDIT|IMMUTABLE/i.test(String(e?.message)))throw err(409,'Conflito com dados atuais. Atualize e tente novamente.');
+     if(/constraint|UNIQUE|FOREIGN KEY|CASH|CREDIT|IMMUTABLE|STALE|TABLE_PREPAYMENT|PREPAYMENT_REFUND/i.test(String(e?.message)))throw err(409,'Conflito com dados atuais. Atualize e tente novamente.');
      throw e;
    }
    return result;
@@ -185,9 +185,23 @@ export function createVerticalService(db){
          DO UPDATE SET time_zone=excluded.time_zone,updated_at=excluded.updated_at`,t,b,timeZone,now())]
      }));
    },
-   async foodOrders(t,b,fulfillment=''){await branchExists(t,b);
-     const rows=await all(`SELECT * FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND (?='' OR fulfillment=?) ORDER BY created_at DESC LIMIT 100`,t,b,fulfillment,fulfillment);
-     return Promise.all(rows.map(async row=>{
+   async foodOrders(t,b,fulfillment='',{limit=100,cursor=null,paged=false}={}){await branchExists(t,b);
+     if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw err(400,'Tamanho de página inválido (1 a 100).');
+     let before='',beforeId='';
+     if(cursor!==null){
+       if(typeof cursor!=='string'||cursor.length>240||!/^\d{4}-\d{2}-\d{2}T.*\|[a-zA-Z0-9_-]{1,100}$/.test(cursor))
+         throw err(400,'Cursor do histórico inválido.');
+       [before,beforeId]=cursor.split('|');
+       if(!Number.isFinite(Date.parse(before))||new Date(before).toISOString()!==before)
+         throw err(400,'Data do cursor inválida.');
+     }
+     const allRows=await all(`SELECT * FROM restaurant_orders WHERE tenant_id=? AND branch_id=?
+       AND (?='' OR fulfillment=?) AND (?='' OR created_at<? OR (created_at=? AND id<?))
+       ORDER BY created_at DESC,id DESC LIMIT ?`,t,b,fulfillment,fulfillment,before,before,before,beforeId,limit+1);
+     const hasMore=allRows.length>limit,rows=allRows.slice(0,limit);
+     const last=rows.at(-1);
+     const nextCursor=hasMore&&last?last.created_at+'|'+last.id:null;
+     const orders=await Promise.all(rows.map(async row=>{
        const items=await all('SELECT id,product_id AS productId,product_name AS name,quantity_milli / 1000.0 AS quantity,unit_price_cents AS unitPriceCents,configuration_json AS configurationJson FROM restaurant_order_items WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,row.id);
        let deliveryStage=null,courierName=null;
        if(row.fulfillment==='DELIVERY'){
@@ -198,6 +212,7 @@ export function createVerticalService(db){
        }
        return {...row,deliveryStage,courierName,items:items.map(({configurationJson,...item})=>({...item,configuration:configurationJson?JSON.parse(configurationJson):null}))};
      }));
+     return paged?{orders,nextCursor}:orders;
    },
    async createFoodOrder(t,b,user,body,key){
      await branchExists(t,b);
@@ -367,7 +382,7 @@ export function createVerticalService(db){
          AND ((? IS NOT NULL AND link.table_session_id=?) OR (? IS NOT NULL AND link.order_id=?))`,
        t,b,tableSessionId,tableSessionId,orderId,orderId);
    },
-   async transferTable(t,b,id,targetTableId,key){
+   async transferTable(t,b,id,targetTableId,key,expectedTableId=null){
      await branchExists(t,b);
      if(!keyOK(key))throw err(400,'Identificador da operação obrigatório.');
      const scope='restaurant.transfer:'+id;
@@ -375,6 +390,7 @@ export function createVerticalService(db){
      if(prior)return JSON.parse(prior.result_json);
      const source=await checkSession(t,b,id);
      if(source.status!=='OPEN')throw err(409,'Somente uma comanda aberta pode mudar de mesa.');
+     if(expectedTableId!==null&&expectedTableId!==source.table_id)throw err(409,'A comanda mudou de mesa. Atualize a tela antes de transferir.');
      if(!targetTableId||targetTableId===source.table_id)throw err(400,'Escolha outra mesa de destino.');
      const target=await first('SELECT id FROM restaurant_tables WHERE tenant_id=? AND branch_id=? AND id=? AND active=1',t,b,targetTableId);
      if(!target)throw err(404,'Mesa de destino não encontrada.');
@@ -406,6 +422,84 @@ export function createVerticalService(db){
             (SELECT st.id FROM r4_station_tickets st WHERE st.tenant_id=? AND st.branch_id=? AND st.order_id=?)
            AND status IN('PENDING','FAILED','LEASED')`,stamp,t,b,t,b,id)
        ]};
+     });
+   },
+
+   async prepayments(t,b,sessionId){
+     await branchExists(t,b);await checkSession(t,b,sessionId);
+     const payments=await all(`SELECT p.id,p.table_session_id AS tableSessionId,p.method,
+       p.amount_cents AS grossAmountCents,p.amount_cents-COALESCE((
+         SELECT SUM(r.amount_cents) FROM r4_table_prepayment_refunds r
+         WHERE r.tenant_id=p.tenant_id AND r.branch_id=p.branch_id AND r.prepayment_id=p.id
+       ),0) AS amountCents,p.payer_index AS payerIndex,
+       p.received_at AS receivedAt,p.received_by AS receivedBy FROM r4_table_prepayments p
+       WHERE p.tenant_id=? AND p.branch_id=? AND p.table_session_id=? ORDER BY p.received_at,p.id`,t,b,sessionId);
+     return {tableSessionId:sessionId,payments,totalCents:payments.reduce((sum,p)=>sum+p.amountCents,0)};
+   },
+   async receivePrepayment(t,b,user,sessionId,body,key){
+     await branchExists(t,b);
+     if(!keyOK(key))throw err(400,'Identificador da operação obrigatório.');
+     const scope='restaurant.prepay:'+sessionId;
+     const previous=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(previous)return JSON.parse(previous.result_json);
+     const session=await checkSession(t,b,sessionId);
+     if(session.status!=='OPEN')throw err(409,'Somente comandas abertas recebem antecipações.');
+     const method=String(body.method||'').toUpperCase();
+     if(!['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(method))throw err(400,'Forma de recebimento inválida.');
+     const amount=cents(body.amountCents,'Recebimento');
+     if(amount<=0)throw err(400,'Informe valor positivo.');
+     const plan=await first('SELECT parts,shares_json AS sharesJson FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId);
+     const payerIndex=body.payerIndex??null;
+     if(plan){
+       if(!Number.isSafeInteger(payerIndex)||payerIndex<1||payerIndex>plan.parts)throw err(400,'Identifique o pagador da antecipação.');
+       const shares=plan.sharesJson?JSON.parse(plan.sharesJson):null;
+       if(!shares||shares.length!==plan.parts)throw err(409,'Atualize a divisão antes de receber.');
+       const payerHistory=await this.prepayments(t,b,sessionId);
+       const existingPayer={amount:payerHistory.payments.filter(x=>x.payerIndex===payerIndex).reduce((sum,p)=>sum+p.amountCents,0)};
+       if(existingPayer.amount+amount>shares[payerIndex-1])throw err(409,'A antecipação supera a parte deste pagador.');
+     }else if(payerIndex!==null)throw err(400,'Configure a divisão antes de atribuir antecipação a um pagador.');
+     const cash=await first(`SELECT id FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND terminal_id=?
+       AND status='OPEN' ORDER BY opened_at DESC LIMIT 1`,t,b,clean(body.terminalId||'DEFAULT',80));
+     if(!cash)throw err(409,'Abra o caixa do terminal para receber.');
+     const available=await first(`SELECT COALESCE(SUM(ROUND(oi.quantity_milli*oi.unit_price_cents/1000.0)),0) AS total
+       FROM restaurant_order_items oi JOIN restaurant_orders o ON o.tenant_id=oi.tenant_id
+       AND o.branch_id=oi.branch_id AND o.id=oi.order_id
+       WHERE o.tenant_id=? AND o.branch_id=? AND o.table_session_id=? AND o.status='DELIVERED'`,t,b,sessionId);
+     const existing=await this.prepayments(t,b,sessionId);
+     if(amount>available.total-existing.totalCents)throw err(409,'Recebimento maior que os itens já entregues da comanda.');
+     return mutate(t,scope,key,async()=>{
+       const payment={id:uuid(),tableSessionId:sessionId,method,amountCents:amount,payerIndex,receivedBy:user,receivedAt:now()};
+       return {result:payment,statements:[q(`INSERT INTO r4_table_prepayments
+         (id,tenant_id,branch_id,table_session_id,cash_session_id,method,amount_cents,payer_index,mutation_id,received_by,received_at)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,payment.id,t,b,sessionId,cash.id,method,amount,payerIndex,key,user,payment.receivedAt)]};
+     });
+   },
+   async refundPrepayment(t,b,user,sessionId,paymentId,body,key){
+     await branchExists(t,b);
+     if(!keyOK(key))throw err(400,'Identificador da operação obrigatório.');
+     const scope='restaurant.prepay.refund:'+sessionId+':'+paymentId;
+     const replay=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(replay)return JSON.parse(replay.result_json);
+     const session=await checkSession(t,b,sessionId);
+     if(session.status!=='OPEN')throw err(409,'A comanda não está aberta para estorno de adiantamento.');
+     if(await first('SELECT 1 FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId))
+       throw err(409,'A comanda já possui checkout. Faça a reversão pelo fluxo canônico da venda.');
+     const payment=await first('SELECT id,method,amount_cents AS amountCents FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? AND table_session_id=? AND id=?',t,b,sessionId,paymentId);
+     if(!payment)throw err(404,'Recebimento antecipado não encontrado.');
+     const amount=cents(body.amountCents,'Valor do estorno');
+     if(!amount)throw err(400,'Informe um valor de estorno positivo.');
+     const reason=clean(body.reason,200);
+     if(reason.length<4)throw err(400,'Informe o motivo do estorno.');
+     const previous=await first('SELECT COALESCE(SUM(amount_cents),0) AS cents FROM r4_table_prepayment_refunds WHERE tenant_id=? AND branch_id=? AND prepayment_id=?',t,b,paymentId);
+     if(amount>payment.amountCents-previous.cents)throw err(409,'O estorno excede o saldo antecipado.');
+     const cash=await first(`SELECT id FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND terminal_id=?
+       AND status='OPEN' ORDER BY opened_at DESC LIMIT 1`,t,b,clean(body.terminalId||'DEFAULT',80));
+     if(!cash)throw err(409,'Abra o caixa do terminal antes de registrar a devolução.');
+     return mutate(t,scope,key,async()=>{
+       const refund={id:uuid(),tableSessionId:sessionId,prepaymentId:paymentId,method:payment.method,amountCents:amount,reason,refundedBy:user,refundedAt:now()};
+       return {result:refund,statements:[q(`INSERT INTO r4_table_prepayment_refunds
+         (id,tenant_id,branch_id,prepayment_id,table_session_id,cash_session_id,method,amount_cents,reason,refunded_by,refunded_at,mutation_id)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,refund.id,t,b,paymentId,sessionId,cash.id,payment.method,amount,reason,user,refund.refundedAt,key)]};
      });
    },
    async serviceRequests(t,b){
@@ -441,6 +535,7 @@ export function createVerticalService(db){
      const row=await first('SELECT id,status FROM restaurant_service_requests WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
      if(!row)throw err(404,'Chamado não encontrado.');
      const status=body.status;isSafeStatus(status,['ACKNOWLEDGED','CLOSED']);
+     if(body.expectedStatus!==undefined&&body.expectedStatus!==row.status)throw err(409,'Outro operador já atualizou o chamado. Atualize a fila.');
      if((row.status==='OPEN'&&status!=='ACKNOWLEDGED')||(row.status==='ACKNOWLEDGED'&&status!=='CLOSED')||row.status==='CLOSED')
        throw err(409,'Transição de chamado inválida.');
      return mutate(t,scope,key,async()=>{
@@ -459,21 +554,52 @@ export function createVerticalService(db){
      const a=dateValue(from),z=dateValue(to);
      if(z<a||z-a>366*86400000)throw err(400,'Período inválido ou maior que 366 dias.');
      const start=new Date(a).toISOString(),end=new Date(z+86400000).toISOString();
-     const rows=await all('SELECT id,fulfillment,status,total_cents AS totalCents,created_at AS createdAt FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND created_at>=? AND created_at<? ORDER BY created_at,id LIMIT 3001',t,b,start,end);
-     if(rows.length>3000)throw err(413,'Mais de 3000 pedidos. Reduza o período para exportar sem truncamento.');
      if(csv){
+       const rows=await all('SELECT id,fulfillment,status,total_cents AS totalCents,created_at AS createdAt FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND created_at>=? AND created_at<? ORDER BY created_at,id LIMIT 3001',t,b,start,end);
+       if(rows.length>3000)throw err(413,'Mais de 3000 pedidos para CSV. Reduza o período; o resumo continua completo.');
        const cell=value=>'"'+String(value??'').replace(/"/g,'""').replace(/^[=+@-]/,"'")+'"';
        return '\uFEFFPedido;Criado em UTC;Canal;Estado;Valor operacional (R$)\r\n'+rows.map(x=>
          [x.id,x.createdAt,x.fulfillment,x.status,(x.totalCents/100).toFixed(2).replace('.',',')].map(cell).join(';')).join('\r\n');
      }
-     const active=rows.filter(r=>r.status!=='CANCELLED');
-     const totals={ordersCount:rows.length,cancelledCount:rows.length-active.length,
-       orderedCents:active.reduce((sum,r)=>sum+r.totalCents,0),
-       deliveredCount:active.filter(r=>r.status==='DELIVERED').length,
-       deliveredCents:active.filter(r=>r.status==='DELIVERED').reduce((sum,r)=>sum+r.totalCents,0)};
-     return {branchId:b,from,to,timezone:'UTC',...totals,
-       channels:Object.fromEntries(['TABLE','DELIVERY','PICKUP'].map(channel=>[channel,active.filter(r=>r.fulfillment===channel).length])),
+     const totals=await first('SELECT COUNT(*) AS ordersCount,'+
+       "COALESCE(SUM(CASE WHEN status='CANCELLED' THEN 1 ELSE 0 END),0) AS cancelledCount,"+
+       "COALESCE(SUM(CASE WHEN status<>'CANCELLED' THEN total_cents ELSE 0 END),0) AS orderedCents,"+
+       "COALESCE(SUM(CASE WHEN status='DELIVERED' THEN 1 ELSE 0 END),0) AS deliveredCount,"+
+       "COALESCE(SUM(CASE WHEN status='DELIVERED' THEN total_cents ELSE 0 END),0) AS deliveredCents,"+
+       "COALESCE(SUM(CASE WHEN status<>'CANCELLED' AND COALESCE(service_channel,fulfillment)='TABLE' THEN 1 ELSE 0 END),0) AS tableCount,"+
+       "COALESCE(SUM(CASE WHEN status<>'CANCELLED' AND COALESCE(service_channel,fulfillment)='DELIVERY' THEN 1 ELSE 0 END),0) AS deliveryCount,"+
+       "COALESCE(SUM(CASE WHEN status<>'CANCELLED' AND COALESCE(service_channel,fulfillment)='PICKUP' THEN 1 ELSE 0 END),0) AS pickupCount,"+
+       "COALESCE(SUM(CASE WHEN status<>'CANCELLED' AND service_channel='COUNTER' THEN 1 ELSE 0 END),0) AS counterCount "+
+       'FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND created_at>=? AND created_at<?',t,b,start,end);
+     const {tableCount,deliveryCount,pickupCount,counterCount,...summary}=totals;
+     return {branchId:b,from,to,timezone:'UTC',...summary,
+       channels:{TABLE:tableCount,DELIVERY:deliveryCount,PICKUP:pickupCount,COUNTER:counterCount},
        note:'Indicadores operacionais: pedido entregue não equivale a venda recebida. Faturamento, caixa e estoque pertencem ao checkout canônico.'};
+   },
+   async restaurantReportRows(t,b,from,to,{limit=50,cursor=null}={}){
+     await branchExists(t,b);
+     if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw err(400,'Limite inválido para relatório.');
+     const checkDate=value=>{
+       if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T00:00:00Z'))||
+         new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)throw err(400,'Data do relatório inválida.');
+       return Date.parse(value+'T00:00:00Z');
+     };
+     const a=checkDate(from),z=checkDate(to);
+     if(z<a||z-a>366*86400000)throw err(400,'Período inválido ou acima de 366 dias.');
+     let before='',beforeId='';
+     if(cursor!==null){
+       if(typeof cursor!=='string'||cursor.length>240||!/^\d{4}-\d{2}-\d{2}T.*\|[a-zA-Z0-9_-]{1,100}$/.test(cursor))
+         throw err(400,'Cursor inválido.');
+       [before,beforeId]=cursor.split('|');
+       if(!Number.isFinite(Date.parse(before))||new Date(before).toISOString()!==before)throw err(400,'Cursor inválido.');
+     }
+     const start=new Date(a).toISOString(),end=new Date(z+86400000).toISOString();
+     const results=await all('SELECT id,created_at AS createdAt,fulfillment,service_channel AS serviceChannel,status,'+
+       'total_cents AS totalCents FROM restaurant_orders WHERE tenant_id=? AND branch_id=? '+
+       "AND created_at>=? AND created_at<? AND (?='' OR created_at<? OR (created_at=? AND id<?)) "+
+       'ORDER BY created_at DESC,id DESC LIMIT ?',t,b,start,end,before,before,before,beforeId,limit+1);
+     const rows=results.slice(0,limit),last=rows.at(-1);
+     return {orders:rows,nextCursor:results.length>limit&&last?last.createdAt+'|'+last.id:null};
    },
    async wholesaleCustomerPolicy(t,b,customerId){
      await branchExists(t,b);

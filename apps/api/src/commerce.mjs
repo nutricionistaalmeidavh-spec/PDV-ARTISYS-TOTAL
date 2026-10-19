@@ -160,8 +160,26 @@ export function createCommerceService(db,{now=nowISO}={}){
       received_at AS createdAt,'SALE' AS type,NULL AS saleId,customer_id AS customerId
       FROM customer_credit_receipts WHERE tenant_id=? AND branch_id=? AND cash_session_id=?
       ORDER BY received_at,id`,tenant,branch,id);
+    let prepayments=[];
+    try{
+      prepayments=await all(`SELECT id,method AS paymentMethod,amount_cents AS amountCents,
+        received_at AS createdAt,'SALE' AS type,NULL AS saleId,
+        table_session_id AS tableSessionId FROM r4_table_prepayments
+        WHERE tenant_id=? AND branch_id=? AND cash_session_id=?`,tenant,branch,id);
+    }catch(e){
+      // Older minimal-core fixtures deliberately omit optional restaurant migrations.
+      // Real SaaS provisioning applies the full schema before enabling restaurant routes.
+      if(!/no such table: r4_table_prepayments/i.test(String(e?.message)))throw e;
+    }
+    let prepaymentRefunds=[];
+    try{
+      prepaymentRefunds=await all(`SELECT id,method AS paymentMethod,amount_cents AS amountCents,
+        refunded_at AS createdAt,'REVERSAL' AS type,NULL AS saleId,
+        table_session_id AS tableSessionId FROM r4_table_prepayment_refunds
+        WHERE tenant_id=? AND branch_id=? AND cash_session_id=?`,tenant,branch,id);
+    }catch(e){if(!/no such table: r4_table_prepayment_refunds/i.test(String(e?.message)))throw e;}
     const refunds=await all("SELECT id,'CASH' AS paymentMethod,amount_cents AS amountCents,created_at AS createdAt,'REVERSAL' AS type,sale_id AS saleId FROM sale_refund_movements WHERE tenant_id=? AND branch_id=? AND cash_session_id=? AND method='CASH'",tenant,branch,id);
-    return [...sales,...adjustments,...credits,...refunds].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id)));
+    return [...sales,...adjustments,...credits,...prepayments,...prepaymentRefunds,...refunds].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id)));
   };
   const cashClosing=async(tenant,branch,session,countedCashCents=0)=>{
     const lines=await cashLines(tenant,branch,session.id);
@@ -1729,24 +1747,39 @@ export function createCommerceService(db,{now=nowISO}={}){
       try{link=await first('SELECT table_session_id AS sessionId FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=? AND sale_id=?',tenant,branch,id);}
       catch(e){if(!/no such table: restaurant_sale_links/i.test(String(e?.message)))throw e;}
       const plan=link?.sessionId?await first('SELECT parts,service_charge_bps AS bps,shares_json AS sharesJson FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,link.sessionId):null;
+      const prepayments=link?.sessionId?await all(
+        `SELECT p.method,p.payer_index AS payerIndex,
+         p.amount_cents-COALESCE((SELECT SUM(r.amount_cents) FROM r4_table_prepayment_refunds r
+           WHERE r.tenant_id=p.tenant_id AND r.branch_id=p.branch_id AND r.prepayment_id=p.id),0) AS amountCents
+         FROM r4_table_prepayments p WHERE p.tenant_id=? AND p.branch_id=? AND p.table_session_id=?`,
+        tenant,branch,link.sessionId):[];
       let splitShares=null;
       if(plan){
         if(sale.discount_cents)throw error(409,'Divisão exige remoção de desconto manual antes de cobrar.');
-        if(!Array.isArray(body?.shares)||body.shares.length!==plan.parts)throw error(409,'Informe pagamento correspondente a cada parte da comanda.');
         let expectedShares;
         try{expectedShares=planShares(totals.totalCents,plan.parts,plan.sharesJson?JSON.parse(plan.sharesJson):null);}
         catch(e){throw error(409,'O valor da comanda mudou: recalcule a divisão antes de cobrar.');}
+        if(prepayments.some(p=>!Number.isSafeInteger(p.payerIndex)||p.payerIndex<1||p.payerIndex>plan.parts))
+          throw error(409,'Antecipações anteriores precisam ter pagador atribuído antes da divisão.');
+        const paidPerPayer=Array(plan.parts).fill(0);
+        for(const pay of prepayments)paidPerPayer[pay.payerIndex-1]+=pay.amountCents;
+        const due=expectedShares.map((sum,i)=>sum-paidPerPayer[i]);
+        if(due.some(n=>n<0))throw error(409,'Antecipação superior à parte combinada da conta.');
+        const expectedCount=due.filter(n=>n>0).length;
+        if(!Array.isArray(body?.shares)||body.shares.length!==expectedCount)
+          throw error(409,'Informe o saldo devido por cada pagador, abatidas as antecipações.');
         const seen=new Set();
         splitShares=body.shares.map(share=>{
           const index=share?.index,amountCents=share?.amountCents;
           if(!Number.isInteger(index)||index<1||index>plan.parts||seen.has(index)||
-             amountCents!==expectedShares[index-1]||!['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(share?.method))
-            throw error(409,'Parcela divergente ou repetida. Confira a divisão antes de receber.');
+             amountCents!==due[index-1]||amountCents<=0||
+             !['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(share?.method))
+            throw error(409,'Saldo por pessoa divergente ou repetido. Confira as antecipações antes de receber.');
           seen.add(index);return {index,amountCents,method:share.method};
         });
-      }else if(body?.shares)throw error(400,'Esta venda não possui divisão de conta configurada.');
-      const payments=splitShares||body?.payments;
-      if(!Array.isArray(payments)||!payments.length||payments.length>(splitShares?50:6))throw error(400,'Informe a forma de pagamento.');
+            }else if(body?.shares)throw error(400,'Esta venda não possui divisão de conta configurada.');
+      const payments=splitShares||body?.payments||[];
+      if(!Array.isArray(payments)||(!payments.length&&!prepayments.length)||payments.length>(splitShares?50:6))throw error(400,'Informe a forma de pagamento.');
       const normalized=payments.map(p=>{
         const method=normalizeMethod(p?.method);
         if(!allowedPayments.has(method)||!integer(p?.amountCents)||p.amountCents<=0)
@@ -1770,8 +1803,10 @@ export function createCommerceService(db,{now=nowISO}={}){
           throw error(409,'Forma de pagamento não autorizada para este cliente de atacado.');
       }
       // Cash movements are one per method; coalesce duplicate methods, preserving total.
-      const grouped=new Map();
-      for(const p of normalized)grouped.set(p.method,(grouped.get(p.method)||0)+p.amountCents);
+      const newlyCollected=new Map();
+      for(const p of normalized)newlyCollected.set(p.method,(newlyCollected.get(p.method)||0)+p.amountCents);
+      const grouped=new Map(newlyCollected);
+      for(const p of prepayments)if(p.amountCents>0)grouped.set(p.method,(grouped.get(p.method)||0)+p.amountCents);
       const groupedPayments=[...grouped].map(([method,amountCents])=>({method,amountCents}));
       const creditCents=grouped.get('STORE_CREDIT')||0;
        let customer=null,usedCreditCents=0;
@@ -1920,7 +1955,10 @@ export function createCommerceService(db,{now=nowISO}={}){
           randomId(),tenant,branch,id,p.method,p.amountCents,completedAt));
         // The tendered cash and change are reported separately; only net cash
         // enters the drawer. A zero net amount must not generate a movement.
-        const drawerCents=p.method==='CASH'?p.amountCents-payment.changeDueCents:p.amountCents;
+        // The advance receipt already appeared in the physical cash shift it was
+        // collected in. Only the additional balance enters sale cash movements.
+        const freshCents=newlyCollected.get(p.method)||0;
+        const drawerCents=p.method==='CASH'?freshCents-payment.changeDueCents:freshCents;
         if(drawerCents>0)statements.push(q('INSERT INTO cash_movements(id,tenant_id,branch_id,cash_session_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?,?)',
           randomId(),tenant,branch,cash.id,id,p.method,drawerCents,completedAt));
       }

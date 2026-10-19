@@ -209,23 +209,33 @@ export function createR4ExtendedService(db){
        WHERE tr.tenant_id=? AND tr.branch_id=? AND tr.target_session_id=? AND o.status='DELIVERED'`,
        t,b,sessionId,t,b,sessionId);
      const items=base.filter(x=>x.milli>0);
-     const baseCents=items.reduce((sum,x)=>sum+Math.round(x.unitPriceCents*x.milli/1000),0);
-     return {sessionId,status:s.status,itemsCount:items.length,baseCents};
+     const byItem=new Map();
+     for(const item of items){
+       const previous=byItem.get(item.id)||{id:item.id,quantityMilli:0,unitPriceCents:item.unitPriceCents,totalCents:0};
+       previous.quantityMilli+=item.milli;
+       previous.totalCents+=Math.round(item.unitPriceCents*item.milli/1000);
+       byItem.set(item.id,previous);
+     }
+     const lineItems=[...byItem.values()];
+     const baseCents=lineItems.reduce((sum,x)=>sum+x.totalCents,0);
+     return {sessionId,status:s.status,itemsCount:lineItems.length,baseCents,items:lineItems};
    },
    async split(t,b,sessionId){
      const position=await this.sessionPosition(t,b,sessionId);
-     const plan=await first('SELECT parts,service_charge_bps AS serviceChargeBps,service_charge_product_id AS serviceChargeProductId,shares_json AS sharesJson FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId);
+     const plan=await first('SELECT parts,service_charge_bps AS serviceChargeBps,service_charge_product_id AS serviceChargeProductId,shares_json AS sharesJson,item_allocations_json AS allocationsJson FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId);
      if(!plan)return null;
      const serviceChargeCents=Math.round(position.baseCents*plan.serviceChargeBps/10000);
      const totalCents=position.baseCents+serviceChargeCents;
      const shares=planShares(totalCents,plan.parts,plan.sharesJson?JSON.parse(plan.sharesJson):null);
      return {sessionId,parts:plan.parts,baseCents:position.baseCents,serviceChargeBps:plan.serviceChargeBps,
        serviceChargeProductId:plan.serviceChargeProductId,serviceChargeCents,totalCents,
-       shares};
+       shares,allocations:plan.allocationsJson?JSON.parse(plan.allocationsJson):[]};
    },
    async saveSplit(t,b,sessionId,body,key){
      const position=await this.sessionPosition(t,b,sessionId);
      if(position.status!=='OPEN'||position.baseCents<1)throw fail(409,'Somente comanda aberta com itens entregues pode ser dividida.');
+     if(await first('SELECT 1 FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId))
+       throw fail(409,'Esta comanda já recebeu antecipação. Finalize os recebimentos sem alterar a divisão.');
      const parts=integer(body.parts,2,50,'Número de partes');
      const bps=integer(body.serviceChargeBps??0,0,3000,'Percentual de serviço');
      const feeId=bps?label(body.serviceChargeProductId,128):null;
@@ -236,15 +246,38 @@ export function createR4ExtendedService(db){
      return mutation(t,'r4.split:'+b+':'+sessionId,key,async()=>{
        const serviceChargeCents=Math.round(position.baseCents*bps/10000);
        const totalCents=position.baseCents+serviceChargeCents;
-       let shares;
-       try{shares=planShares(totalCents,parts,body.shares??null);}catch(e){throw fail(400,e.message);}
+       let shares,allocations=null;
+       if(body.allocations!==undefined){
+         if(body.shares!==undefined)throw fail(400,'Escolha divisão por itens ou valores, não ambos.');
+         if(!Array.isArray(body.allocations)||body.allocations.length!==position.items.length||body.allocations.length>80)
+           throw fail(400,'Atribua todos os itens da comanda uma única vez.');
+         const byId=new Map(position.items.map(item=>[item.id,item]));
+         const selected=new Set(),subtotals=Array(parts).fill(0);
+         allocations=body.allocations.map(entry=>{
+           const item=byId.get(entry?.itemId),payerIndex=entry?.payerIndex;
+           if(!item||selected.has(item.id)||!Number.isSafeInteger(payerIndex)||payerIndex<1||payerIndex>parts)
+             throw fail(400,'Item ou pagador de rateio inválido/repetido.');
+           selected.add(item.id);
+           subtotals[payerIndex-1]+=item.totalCents;
+           return {itemId:item.id,payerIndex,totalCents:item.totalCents};
+         });
+         if(subtotals.some(value=>value<=0))throw fail(400,'Cada pagador precisa ter ao menos um item atribuído.');
+         const fees=subtotals.map(value=>Math.floor(serviceChargeCents*value/position.baseCents));
+         for(let remainder=serviceChargeCents-fees.reduce((a,b)=>a+b,0),i=0;remainder>0;remainder--,i++)
+           fees[i%parts]++;
+         shares=subtotals.map((value,i)=>value+fees[i]);
+       }else{
+         try{shares=planShares(totalCents,parts,body.shares??null);}catch(e){throw fail(400,e.message);}
+       }
+       try{shares=planShares(totalCents,parts,shares);}catch(e){throw fail(400,e.message);}
        return {result:{sessionId,parts,baseCents:position.baseCents,serviceChargeBps:bps,serviceChargeProductId:feeId,
-         serviceChargeCents,totalCents,shares},
-         statements:[q(`INSERT INTO r4_split_plans(tenant_id,branch_id,table_session_id,parts,service_charge_bps,service_charge_product_id,shares_json,updated_at)
-           VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,table_session_id) DO UPDATE SET
+         serviceChargeCents,totalCents,shares,allocations:allocations||[]},
+         statements:[q(`INSERT INTO r4_split_plans(tenant_id,branch_id,table_session_id,parts,service_charge_bps,service_charge_product_id,shares_json,item_allocations_json,updated_at)
+           VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,table_session_id) DO UPDATE SET
            parts=excluded.parts,service_charge_bps=excluded.service_charge_bps,
-           service_charge_product_id=excluded.service_charge_product_id,shares_json=excluded.shares_json,updated_at=excluded.updated_at`,
-           t,b,sessionId,parts,bps,feeId,body.shares?JSON.stringify(shares):null,stamp())]};
+           service_charge_product_id=excluded.service_charge_product_id,shares_json=excluded.shares_json,
+           item_allocations_json=excluded.item_allocations_json,updated_at=excluded.updated_at`,
+           t,b,sessionId,parts,bps,feeId,JSON.stringify(shares),allocations?JSON.stringify(allocations):null,stamp())]};
      });
    },
 
