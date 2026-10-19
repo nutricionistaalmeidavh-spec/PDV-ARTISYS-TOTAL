@@ -1,6 +1,7 @@
 // D1 persistence adapter for the one PDV domain. Arithmetic, stock rounding and
 // payment rules are imported unchanged from packages/core; this is NOT a second core.
 import salePricing from '../../../packages/core/js/domains/sales/pricing.js';
+import {planShares} from './r4-saas-rules.mjs';
 import paymentRules from '../../../packages/core/js/domains/payments/payment-rules.js';
 import inventoryRules from '../../../packages/core/js/domains/inventory/inventory-rules.js';
 import cashRules from '../../../packages/core/js/domains/cash/cash-rules.js';
@@ -1727,16 +1728,19 @@ export function createCommerceService(db,{now=nowISO}={}){
       let link=null;
       try{link=await first('SELECT table_session_id AS sessionId FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=? AND sale_id=?',tenant,branch,id);}
       catch(e){if(!/no such table: restaurant_sale_links/i.test(String(e?.message)))throw e;}
-      const plan=link?.sessionId?await first('SELECT parts,service_charge_bps AS bps FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,link.sessionId):null;
+      const plan=link?.sessionId?await first('SELECT parts,service_charge_bps AS bps,shares_json AS sharesJson FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,link.sessionId):null;
       let splitShares=null;
       if(plan){
         if(sale.discount_cents)throw error(409,'Divisão exige remoção de desconto manual antes de cobrar.');
         if(!Array.isArray(body?.shares)||body.shares.length!==plan.parts)throw error(409,'Informe pagamento correspondente a cada parte da comanda.');
-        const per=Math.floor(totals.totalCents/plan.parts),extra=totals.totalCents%plan.parts,seen=new Set();
+        let expectedShares;
+        try{expectedShares=planShares(totals.totalCents,plan.parts,plan.sharesJson?JSON.parse(plan.sharesJson):null);}
+        catch(e){throw error(409,'O valor da comanda mudou: recalcule a divisão antes de cobrar.');}
+        const seen=new Set();
         splitShares=body.shares.map(share=>{
           const index=share?.index,amountCents=share?.amountCents;
           if(!Number.isInteger(index)||index<1||index>plan.parts||seen.has(index)||
-             amountCents!==per+(index<=extra?1:0)||!['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(share?.method))
+             amountCents!==expectedShares[index-1]||!['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(share?.method))
             throw error(409,'Parcela divergente ou repetida. Confira a divisão antes de receber.');
           seen.add(index);return {index,amountCents,method:share.method};
         });
@@ -1833,12 +1837,56 @@ export function createCommerceService(db,{now=nowISO}={}){
           (tenant_id,branch_id,sale_id,sale_item_id,product_id,version,created_at) VALUES(?,?,?,?,?,?,?)`,
           tenant,branch,id,line.id,line.product_id,recipeVersion,completedAt));
         const composition=recipe.length?recipe:kit;
+        // Restaurant pizza choices are frozen in sale_configured_lines. The base
+        // recipe applies to the parent quantity; each selected option adds its
+        // ingredient consumption to the SAME sale-stock ledger.
+        const optionAllocations=[];
+        let configured=[];
+        try{
+          configured=await all('SELECT quantity_milli AS quantityMilli,configuration_json AS configurationJson FROM sale_configured_lines WHERE tenant_id=? AND branch_id=? AND sale_item_id=?',tenant,branch,line.id);
+        }catch(e){if(!/no such table: sale_configured_lines/i.test(String(e?.message)))throw e;}
+        for(const choice of configured){
+          const conf=choice.configurationJson?JSON.parse(choice.configurationJson):{};
+          const selected=[
+            ...(conf.size?.code?[['SIZE',conf.size.code]]:[]),
+            ...(Array.isArray(conf.flavors)?conf.flavors.map(x=>['FLAVOR',x.code]):[]),
+            ...(conf.crust?.code?[['CRUST',conf.crust.code]]:[]),
+            ...(Array.isArray(conf.addons)?conf.addons.map(x=>['ADDON',x.code]):[])
+          ];
+          const seenOptions=new Set();
+          for(const [kind,code] of selected){
+            if(typeof code!=='string'||code.length>32)throw error(409,'Opção de ficha técnica inválida.');
+            const unique=kind+':'+code;
+            if(seenOptions.has(unique))throw error(409,'Opção repetida em ficha técnica.');
+            seenOptions.add(unique);
+            let latest=null;
+            try{
+              latest=await first('SELECT MAX(version) AS version FROM r4_recipe_option_versions WHERE tenant_id=? AND branch_id=? AND product_id=? AND option_kind=? AND option_code=?',
+                tenant,branch,line.product_id,kind,code);
+            }catch(e){if(!/no such table: r4_recipe_option_versions/i.test(String(e?.message)))throw e;}
+            if(!latest?.version)continue;
+            const pieces=await all(`SELECT oi.ingredient_id AS productId,oi.quantity_milli AS quantityMilli,p.last_cost_cents AS unitCostCents
+              FROM r4_recipe_option_ingredients oi JOIN products p ON p.tenant_id=oi.tenant_id AND p.id=oi.ingredient_id
+              WHERE oi.tenant_id=? AND oi.branch_id=? AND oi.product_id=? AND oi.option_kind=? AND oi.option_code=? AND oi.version=?`,
+              tenant,branch,line.product_id,kind,code,latest.version);
+            for(const piece of pieces){
+              const numerator=choice.quantityMilli*piece.quantityMilli;
+              if(!Number.isSafeInteger(numerator)||numerator%1000!==0)
+                throw error(409,'Quantidade configurada é incompatível com precisão do insumo.');
+              const milli=numerator/1000;
+              if(milli<1)throw error(409,'Quantidade configurada abaixo da precisão do estoque.');
+              optionAllocations.push({productId:piece.productId,milli,cost:piece.unitCostCents});
+            }
+          }
+        }
         const allocations=composition.length?composition.map(c=>{
           const numerator=line.quantity_milli*c.quantityMilli;
           if(!Number.isSafeInteger(numerator)||numerator%1000!==0)
             throw error(409,'Composição do kit não suporta esta quantidade fracionada.');
           return {productId:c.productId,milli:numerator/1000,cost:c.unitCostCents};
         }):p.track_stock?[{productId:p.id,milli:line.quantity_milli,cost:p.last_cost_cents||0}]:[];
+        if(p.track_stock&&optionAllocations.length)throw error(409,'Pizza composta não pode ter estoque próprio ativo.');
+        allocations.push(...optionAllocations);
         for(const a of allocations){
           if(a.milli<=0)throw error(409,'Componente fracionário abaixo da precisão de estoque.');
           debits.set(a.productId,(debits.get(a.productId)||0)+a.milli);

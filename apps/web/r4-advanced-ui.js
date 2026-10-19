@@ -45,15 +45,16 @@
     });
   }
   async function load(){
-    const [products,stations,routes,tickets,profiles,onboard,orders,tables]=await Promise.all([
+    const [products,stations,routes,tickets,profiles,onboard,orders,tables,ticketClock]=await Promise.all([
       safe(()=>api.products(false)),safe(()=>r4('/kitchen/stations').then(x=>x.stations)),
       safe(()=>r4('/kitchen/routes').then(x=>x.routes)),safe(()=>r4('/kitchen/station-tickets').then(x=>x.tickets)),
       safe(()=>r4('/pizzeria/profiles').then(x=>x.profiles)),
       safe(()=>api.request('/api/v1/onboarding/segments')),
-      safe(()=>r4('/orders').then(x=>x.orders)),safe(()=>r4('/tables').then(x=>x.tables))
+      safe(()=>r4('/orders').then(x=>x.orders)),safe(()=>r4('/tables').then(x=>x.tables)),
+      safe(()=>r4('/tickets/time-zone'))
     ]);
     model={products:products||[],stations:stations||[],routes:routes||[],tickets:tickets||[],
-      profiles:profiles||[],onboard:onboard||{},orders:orders||[],tables:tables||[]};
+      profiles:profiles||[],onboard:onboard||{},orders:orders||[],tables:tables||[],ticketClock:ticketClock||{timeZone:'America/Sao_Paulo'}};
     model.sessionOrders=model.orders.filter(o=>o.table_session_id===sessionId);
     model.orderItems=model.sessionOrders.filter(o=>o.status==='DELIVERED')
       .flatMap(o=>(o.items||[]).map(i=>({...i,orderId:o.id})));
@@ -66,6 +67,7 @@
       (can('restaurant.orders.transfer')?'<form data-r4-advanced="split" class="vertical-form"><h3>Divisão de conta</h3><p>A divisão não gera vendas extras: os valores serão pagos no único checkout da comanda.</p>'+
       field('parts','Número de pessoas','number','min="2" max="50" value="2" required')+
       field('bps','Taxa de serviço (%)','number','min="0" max="30" step="0.01" value="0"')+
+      field('individualShares','Valores por pessoa (opcional, em R$ separados por ponto e vírgula)','text','placeholder="33,33; 33,34; 33,34"')+
       '<label class="field"><span>Produto não estocável para taxa (se houver)</span>'+select('serviceChargeProductId',fee,p=>p.name,'Sem taxa',false)+'</label>'+
       '<button class="primary-button">Calcular e registrar divisão</button></form>'+
       '<form data-r4-advanced="transfer-items" class="vertical-form"><h3>Transferir parte de um item</h3>'+
@@ -106,6 +108,7 @@
       '<label class="field"><span>Tamanhos</span><textarea name="sizes" required rows="3" placeholder="Média=30,00"></textarea></label>'+
       '<label class="field"><span>Sabores</span><textarea name="flavors" required rows="3" placeholder="Calabresa=42,00"></textarea></label>'+
       '<label class="field"><span>Bordas (opcional)</span><textarea name="crusts" rows="2" placeholder="Catupiry=6,00"></textarea></label>'+
+      '<label class="field"><span>Adicionais (opcional)</span><textarea name="addons" rows="2" placeholder="Queijo extra=5,00"></textarea></label>'+
       '<button class="primary-button">Salvar cardápio de pizzas</button></form>':'')+
       '<form data-r4-advanced="pizza-quote" class="vertical-form"><h3>Consultar preço</h3><label class="field"><span>Produto</span>'+
       select('productId',model.profiles.map(p=>({id:p.productId,name:model.products.find(x=>x.id===p.productId)?.name||p.productId})))+'</label>'+
@@ -115,8 +118,9 @@
   function weight(){
     return '<section class="data-card"><h2>Padaria e venda por peso</h2><p>Informe a quantidade em gramas. O preço será calculado no servidor.</p>'+
       '<form data-r4-advanced="weight" class="vertical-form"><label class="field"><span>Produto em quilos</span>'+
-      select('productId',model.products.filter(p=>String(p.unit).toUpperCase()==='KG'))+'</label>'+
-      field('grams','Peso (gramas)','number','min="1" max="100000000" step="1" required')+
+      select('productId',model.products.filter(p=>String(p.unit).toUpperCase()==='KG'),p=>p.name,'Produto selecionado manualmente',false)+'</label>'+
+      field('grams','Peso (gramas, se não tiver etiqueta)','number','min="1" max="100000000" step="1"')+
+      field('barcode','Etiqueta EAN-13 (bipagem opcional)','text','maxlength="13" inputmode="numeric" placeholder="20..."')+
       '<button class="primary-button">Calcular preço</button></form><output data-r4-result></output></section>';
   }
   function recipe(){
@@ -125,14 +129,25 @@
       select('productId',model.products.filter(p=>p.trackStock===false))+'</label>'+
       '<label class="field"><span>Ingredientes e quantidade (por unidade preparada)</span><textarea name="ingredients" required rows="4" placeholder="SKU-FARINHA=0,250"></textarea></label>'+
       '<p>Uma linha por ingrediente: SKU=quantidade, até três casas decimais.</p>'+
-      '<button class="primary-button">Salvar nova versão</button></form>':'')+'<output data-r4-result></output></section>';
+      '<button class="primary-button">Salvar nova versão</button></form>'+
+      '<form data-r4-advanced="option-recipe" class="vertical-form"><h3>Insumos de sabor, tamanho, borda ou adicional</h3>'+
+      '<label class="field"><span>Produto de pizza</span>'+select('productId',model.profiles.map(p=>({id:p.productId,name:model.products.find(x=>x.id===p.productId)?.name||p.productId})))+'</label>'+
+      '<label class="field"><span>Tipo da opção</span><select name="kind"><option>FLAVOR</option><option>SIZE</option><option>CRUST</option><option>ADDON</option></select></label>'+
+      field('code','Código exato da opção','text','required maxlength="32"')+
+      '<label class="field"><span>Insumos por unidade (SKU=quantidade)</span><textarea name="ingredients" required rows="3" placeholder="QUEIJO=0,150"></textarea></label>'+
+      '<button class="primary-button">Salvar ficha da opção</button></form>':'')+'<output data-r4-result></output></section>';
   }
   function segments(){
     const data=model.onboard,items=data.segments||[];
     return '<section class="data-card"><h2>Perfil da loja</h2><p>O segmento sugere recursos. Nenhum módulo será ativado automaticamente e não altera a licença.</p>'+
       (can('settings.manage')?'<form data-r4-advanced="segment" class="vertical-form"><label class="field"><span>Segmento</span>'+
         '<select name="segmentId">'+items.map(s=>'<option value="'+esc(s.id)+'" '+(data.selectedId===s.id?'selected':'')+'>'+esc(s.label)+'</option>').join('')+
-        '</select></label><button class="primary-button">Salvar preferência</button></form>':'')+
+        '</select></label><button class="primary-button">Salvar preferência</button></form>'+
+      '<form data-r4-advanced="ticket-clock" class="vertical-form"><h3>Data local da senha diária</h3>'+
+      '<label class="field"><span>Fuso horário da filial</span><select name="timeZone">'+
+      ['America/Sao_Paulo','America/Manaus','America/Cuiaba','America/Belem','America/Recife','UTC'].map(z=>
+      '<option value="'+esc(z)+'" '+(model.ticketClock?.timeZone===z?'selected':'')+'>'+esc(z)+'</option>').join('')+
+      '</select></label><button class="primary-button">Salvar fuso</button></form>':'')+
       '<div class="restaurant-list">'+items.map(s=>'<div class="restaurant-row"><strong>'+esc(s.label)+'</strong><small>'+
       (s.recommended.length?'Recomendado: '+esc(s.recommended.join(', ')):'Núcleo padrão')+'</small></div>').join('')+'</div></section>';
   }
@@ -158,7 +173,7 @@
       if(kind==='route')await r4('/kitchen/routes','POST',{productId:v.productId,mode:v.mode,
         stationId:v.mode==='PRODUCTION'?v.stationId:null});
       if(kind==='pizza')await r4('/pizzeria/profiles','POST',{productId:v.productId,policy:v.policy,pricingMode:v.pricingMode,maxFlavors:Number(v.maxFlavors),
-        sizes:parseCatalog(v.sizes),flavors:parseCatalog(v.flavors),crusts:parseCatalog(v.crusts)});
+        sizes:parseCatalog(v.sizes),flavors:parseCatalog(v.flavors),crusts:parseCatalog(v.crusts),addons:parseCatalog(v.addons)});
       if(kind==='pizza-quote'){
         const result=await r4('/pizzeria/products/'+uid(v.productId));
         const profile=result.profile;
@@ -169,28 +184,41 @@
           '<fieldset><legend>Sabores</legend>'+profile.flavors.map(f=>'<label><input type="checkbox" name="flavorCodes" value="'+esc(f.code)+'">'+esc(f.name)+'</label>').join('')+'</fieldset>'+
           '<label class="field"><span>Borda</span><select name="crustCode"><option value="">Sem borda</option>'+
           profile.crusts.map(c=>'<option value="'+esc(c.code)+'">'+esc(c.name)+'</option>').join('')+'</select></label>'+
+          '<fieldset><legend>Adicionais</legend>'+(profile.addons||[]).map(a=>'<label><input type="checkbox" name="addonCodes" value="'+esc(a.code)+'"> '+esc(a.name)+'</label>').join('')+'</fieldset>'+
           '<button class="primary-button">Calcular</button></form>';
         host.querySelector('form')?.addEventListener('submit',async e=>{
           e.preventDefault();const data=new FormData(e.target);try{
             const quote=await r4('/pizzeria/quote','POST',{productId:data.get('productId'),sizeCode:data.get('sizeCode'),
-              flavorCodes:data.getAll('flavorCodes'),crustCode:data.get('crustCode')||null});
+              flavorCodes:data.getAll('flavorCodes'),crustCode:data.get('crustCode')||null,addonCodes:data.getAll('addonCodes')});
             toast('Preço por unidade: '+money(quote.quote.unitPriceCents));
           }catch(error){toast(error.message,true);}
         });
         return;
       }
       if(kind==='weight'){
-        const quote=await r4('/weight/quote','POST',{productId:v.productId,grams:Number(v.grams)});
+        if(!v.barcode&&!v.productId)throw Error('Selecione um produto ou leia uma etiqueta EAN-13.');
+        const quote=v.barcode?await r4('/weight/label','POST',{barcode:String(v.barcode).trim()}):
+          await r4('/weight/quote','POST',{productId:v.productId,grams:Number(v.grams)});
         const output=node.querySelector('[data-r4-result]');
         if(output){
           output.innerHTML='<p>Preço calculado: '+money(quote.quote.totalCents)+'</p><button type="button" class="primary-button" data-r4-bakery-order>Gerar pedido de balcão</button>';
           output.querySelector('[data-r4-bakery-order]')?.addEventListener('click',async()=>{
-            try{const order=await r4('/bakery/orders','POST',{items:[{productId:v.productId,quantity:quote.quote.quantity}]});
+            try{const order=await r4('/bakery/orders','POST',{items:[{productId:quote.quote.productId,quantity:quote.quote.quantity}]});
               toast('Pedido de balcão registrado. Senha '+order.order.ticketNumber+'.');
               await show({sessionId,preserve:true});
             }catch(error){toast(error.message,true);}
           });
         }return;
+      }
+      if(kind==='option-recipe'){
+        const ingredients=String(v.ingredients).split(/\r?\n/).filter(line=>line.trim()).map(line=>{
+          const [sku,qty]=line.split('='),product=model.products.find(p=>p.sku===sku?.trim());
+          if(!product||!qty||!/^\d+(?:[.,]\d{1,3})?$/.test(qty.trim()))throw Error('Informe SKU=quantidade com até três casas.');
+          return {ingredientId:product.id,quantity:Number(qty.replace(',','.'))};
+        });
+        const out=await api.request('/api/v1/recipes/'+uid(v.productId)+'/options/'+uid(v.kind)+'/'+uid(v.code.trim()),{
+          method:'PUT',body:{ingredients}});
+        toast('Ficha da opção salva, versão '+out.recipe.version+'.');
       }
       if(kind==='recipe'){
         const ingredients=String(v.ingredients).split(/\r?\n/).filter(s=>s.trim()).map(line=>{
@@ -209,10 +237,15 @@
         await r4('/sessions/'+uid(sessionId)+'/transfer-items','POST',{targetSessionId:v.targetSessionId,
           items:[{orderItemId:v.orderItemId,quantity:Number(v.quantity)}]});
       }
+      if(kind==='ticket-clock'){
+        await r4('/tickets/time-zone','PUT',{timeZone:String(v.timeZone)});
+        toast('Data local das senhas atualizada para '+v.timeZone+'.');
+      }
       if(kind==='split'){
         const bps=Math.round(Number(v.bps||0)*100);
         const result=await r4('/sessions/'+uid(sessionId)+'/split','POST',{parts:Number(v.parts),serviceChargeBps:bps,
-          serviceChargeProductId:bps>0?v.serviceChargeProductId:null});
+          serviceChargeProductId:bps>0?v.serviceChargeProductId:null,
+          ...(String(v.individualShares||'').trim()?{shares:String(v.individualShares).split(';').map(x=>eurosToCents(x.trim()))}:{})});
         toast('Divisão registrada: '+result.plan.shares.map(money).join(' + '));
       }
       if(kind!=='pizza-quote'&&kind!=='weight')await show({sessionId,preserve:true});

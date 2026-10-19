@@ -48,7 +48,9 @@
        '<fieldset><legend>Sabores (até '+esc(profile.maxFlavors)+')</legend>'+profile.flavors.map(x=>
          '<label><input type="checkbox" name="flavorCodes" value="'+esc(x.code)+'"> '+esc(x.name)+'</label>').join('')+'</fieldset>'+
        '<label class="field"><span>Borda</span><select name="crustCode"><option value="">Sem borda</option>'+
-       profile.crusts.map(x=>'<option value="'+esc(x.code)+'">'+esc(x.name)+'</option>').join('')+'</select></label></fieldset>';
+       profile.crusts.map(x=>'<option value="'+esc(x.code)+'">'+esc(x.name)+'</option>').join('')+'</select></label>'+
+       '<fieldset><legend>Adicionais</legend>'+(profile.addons||[]).map(x=>
+         '<label><input type="checkbox" name="addonCodes" value="'+esc(x.code)+'"> '+esc(x.name)+' · '+money(x.priceCents)+'</label>').join('')+'</fieldset></fieldset>';
    }catch(e){if(select.value!==id)return;row.dataset.r4PizzaState='error';output.textContent='Não foi possível carregar opções de pizza. Atualize ou selecione outro produto.';}
  }
  function bindOrderRow(row){
@@ -104,8 +106,12 @@
        '<button class="primary-button" type="submit">Enviar pedido para cozinha</button></form></details>':'')+
      '<div class="restaurant-list">'+state.orders.map(o=>
        '<div class="restaurant-row"><div><strong>'+esc(title(o.service_channel||o.fulfillment))+' · '+esc(o.ticket_number?'Senha '+o.ticket_number:o.id.slice(0,8))+'</strong><small>'+esc(title(o.status))+' · '+esc(orderLines(o))+'</small></div><div class="restaurant-actions">'+
-       (o.status==='READY'&&o.fulfillment==='DELIVERY'?btn('Despachar','dispatch',o.id):'')+
-        (o.status==='READY'?btn('Entregue / retirado','deliver',o.id):'')+
+       (o.status==='READY'&&o.fulfillment==='DELIVERY'&&!o.deliveryStage?btn('Despachar','dispatch',o.id):'')+
+       (o.status==='READY'&&o.fulfillment==='DELIVERY'&&['DISPATCHED','REDISPATCHED'].includes(o.deliveryStage)?
+         btn('Chegou ao destino','delivery-arrived',o.id)+btn('Retornou','delivery-return',o.id):'')+
+       (o.status==='READY'&&o.fulfillment==='DELIVERY'&&o.deliveryStage==='ARRIVED'?btn('Retornou','delivery-return',o.id):'')+
+       (o.status==='READY'&&o.fulfillment==='DELIVERY'&&o.deliveryStage==='RETURNED'?btn('Novo despacho','delivery-redispatch',o.id):'')+
+       (o.status==='READY'&&(o.fulfillment!=='DELIVERY'||o.deliveryStage!=='RETURNED')?btn('Entregue / retirado','deliver',o.id):'')+
        (o.status==='OPEN'?btn('Cancelar','cancel',o.id):'')+
        (o.status==='DELIVERED'&&o.fulfillment!=='TABLE'?btn('Cobrar','checkout-order',o.id):'')+
        '</div></div>').join('')+'</div></section>';
@@ -240,6 +246,17 @@
        if(!courier)return;
        await form('/orders/'+encodeURIComponent(id)+'/dispatch',{courierName:courier.trim()});
      }
+     if(what==='delivery-return'){
+       const reason=window.prompt('Motivo do retorno (obrigatório):');
+       if(!reason?.trim())return;
+       await form('/orders/'+encodeURIComponent(id)+'/delivery-events',{kind:'RETURNED',reason:reason.trim()});
+     }
+     if(what==='delivery-redispatch'){
+       const courier=window.prompt('Novo entregador:');
+       if(!courier?.trim())return;
+       await form('/orders/'+encodeURIComponent(id)+'/delivery-events',{kind:'REDISPATCHED',courierName:courier.trim()});
+     }
+     if(what==='delivery-arrived')await form('/orders/'+encodeURIComponent(id)+'/delivery-events',{kind:'ARRIVED'});
      if(what==='deliver')await form('/orders/'+encodeURIComponent(id)+'/deliver',{});
      if(what==='preparing'||what==='ready')await action('/kitchen/'+encodeURIComponent(id),'PATCH',{status:what==='preparing'?'PREPARING':'READY'});
      if(what==='preparing-station'||what==='ready-station')await action('/kitchen/station-tickets/'+encodeURIComponent(id),'PATCH',{status:what==='preparing-station'?'PREPARING':'READY'});
@@ -286,7 +303,8 @@
            const selected=[...row.querySelectorAll('[name="flavorCodes"]:checked')].map(input=>input.value);
            if(!selected.length||selected.length>Number(row.dataset.r4MaxFlavors))throw new Error('Escolha os sabores da pizza.');
            item.pizza={sizeCode:row.querySelector('[name="sizeCode"]').value,
-             flavorCodes:selected,crustCode:row.querySelector('[name="crustCode"]').value||null};
+             flavorCodes:selected,crustCode:row.querySelector('[name="crustCode"]').value||null,
+             addonCodes:[...row.querySelectorAll('[name="addonCodes"]:checked')].map(input=>input.value)};
          }
          return item;
        });

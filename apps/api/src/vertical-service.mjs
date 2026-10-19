@@ -3,6 +3,7 @@
 import canonicalPricing from '../../../packages/core/js/domains/sales/pricing.js';
 import inventoryRules from '../../../packages/core/js/domains/inventory/inventory-rules.js';
 import {createR4ExtendedService} from './r4-extended-service.mjs';
+import {localTicketDay} from './r4-saas-rules.mjs';
 const {calculateSaleTotals}=canonicalPricing;
 const {roundQuantity}=inventoryRules;
 const err=(status,message)=>Object.assign(new Error(message),{status});
@@ -168,11 +169,34 @@ export function createVerticalService(db){
        return {statements:[q("UPDATE restaurant_table_sessions SET status='CLOSED',closed_at=? WHERE tenant_id=? AND branch_id=? AND id=? AND status IN('OPEN','CHECKOUT')",now(),t,b,id)],result};
      });
    },
+   async ticketClock(t,b){
+     await branchExists(t,b);
+     const row=await first('SELECT time_zone AS timeZone FROM r4_branch_ticket_clock WHERE tenant_id=? AND branch_id=?',t,b);
+     return {timeZone:row?.timeZone||'America/Sao_Paulo'};
+   },
+   async saveTicketClock(t,b,body,key){
+     await branchExists(t,b);
+     const timeZone=clean(body.timeZone,64);
+     try{localTicketDay(now(),timeZone);}catch{throw err(400,'Fuso horário IANA inválido.');}
+     return mutate(t,'r4.ticket.clock:'+b,key,async()=>({
+       result:{timeZone},
+       statements:[q(`INSERT INTO r4_branch_ticket_clock(tenant_id,branch_id,time_zone,updated_at)
+         VALUES(?,?,?,?) ON CONFLICT(tenant_id,branch_id)
+         DO UPDATE SET time_zone=excluded.time_zone,updated_at=excluded.updated_at`,t,b,timeZone,now())]
+     }));
+   },
    async foodOrders(t,b,fulfillment=''){await branchExists(t,b);
      const rows=await all(`SELECT * FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND (?='' OR fulfillment=?) ORDER BY created_at DESC LIMIT 100`,t,b,fulfillment,fulfillment);
      return Promise.all(rows.map(async row=>{
        const items=await all('SELECT id,product_id AS productId,product_name AS name,quantity_milli / 1000.0 AS quantity,unit_price_cents AS unitPriceCents,configuration_json AS configurationJson FROM restaurant_order_items WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,row.id);
-       return {...row,items:items.map(({configurationJson,...item})=>({...item,configuration:configurationJson?JSON.parse(configurationJson):null}))};
+       let deliveryStage=null,courierName=null;
+       if(row.fulfillment==='DELIVERY'){
+         const checkpoint=await first('SELECT kind,courier_name AS courierName FROM r4_delivery_events WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY sequence DESC LIMIT 1',t,b,row.id);
+         const dispatch=await first('SELECT courier_name AS courierName FROM r4_delivery_dispatches WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,row.id);
+         deliveryStage=checkpoint?.kind||(dispatch?'DISPATCHED':null);
+         courierName=checkpoint?.courierName||dispatch?.courierName||null;
+       }
+       return {...row,deliveryStage,courierName,items:items.map(({configurationJson,...item})=>({...item,configuration:configurationJson?JSON.parse(configurationJson):null}))};
      }));
    },
    async createFoodOrder(t,b,user,body,key){
@@ -212,7 +236,8 @@ export function createVerticalService(db){
      const stations=[...new Set(routed)];
      const allDirect=directCount===lines.length;
      return mutate(t,'restaurant.order:'+b,key,async()=>{
-       const id=uuid(),stamp=now(),day=useTicket?stamp.slice(0,10):null;
+       const id=uuid(),stamp=now(),timeZone=useTicket?(await this.ticketClock(t,b)).timeZone:null,
+         day=useTicket?localTicketDay(stamp,timeZone):null;
        const previous=useTicket?await first('SELECT COALESCE(MAX(ticket_number),0) AS last FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND ticket_day=?',t,b,day):null;
        const ticketNumber=useTicket?previous.last+1:null;
        if(ticketNumber>99999)throw err(409,'Limite diário de senhas atingido.');
@@ -273,11 +298,45 @@ export function createVerticalService(db){
          t,b,id,courier,dispatchedAt)]};
      });
    },
+   async deliveryEvents(t,b,id){
+     await branchExists(t,b);
+     const order=await first('SELECT id,fulfillment FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
+     if(!order||order.fulfillment!=='DELIVERY')throw err(404,'Entrega não encontrada.');
+     const dispatch=await first('SELECT courier_name AS courierName,dispatched_at AS dispatchedAt FROM r4_delivery_dispatches WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,id);
+     const events=await all('SELECT id,sequence,kind,courier_name AS courierName,reason,recorded_by AS recordedBy,recorded_at AS recordedAt FROM r4_delivery_events WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY sequence',t,b,id);
+     return {orderId:id,dispatch,events};
+   },
+   async deliveryCheckpoint(t,b,user,id,body,key){
+     await branchExists(t,b);
+     const order=await first('SELECT id,status,fulfillment FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
+     if(!order||order.fulfillment!=='DELIVERY')throw err(404,'Entrega não encontrada.');
+     if(order.status!=='READY')throw err(409,'Pedido não está em etapa de entrega.');
+     const dispatch=await first('SELECT courier_name AS courierName FROM r4_delivery_dispatches WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,id);
+     if(!dispatch)throw err(409,'Despacho obrigatório antes de informar etapa do entregador.');
+     if(!['ARRIVED','RETURNED','REDISPATCHED'].includes(body.kind))throw err(400,'Evento de entrega inválido.');
+     const prior=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,'r4.delivery.event:'+b+':'+id,key);
+     if(prior)return JSON.parse(prior.result_json);
+     const latest=await first('SELECT sequence,kind,courier_name AS courierName FROM r4_delivery_events WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY sequence DESC LIMIT 1',t,b,id);
+     if(body.kind==='REDISPATCHED'&&latest?.kind!=='RETURNED')throw err(409,'Novo despacho exige retorno prévio.');
+     if(body.kind!=='REDISPATCHED'&&latest?.kind==='RETURNED')throw err(409,'Pedido retornado precisa de novo despacho.');
+     if(body.kind==='ARRIVED'&&latest?.kind==='ARRIVED')throw err(409,'Chegada já informada.');
+     const courier=body.kind==='REDISPATCHED'?clean(body.courierName,120):(latest?.courierName||dispatch.courierName);
+     if(!courier)throw err(400,'Informe o entregador.');
+     const reason=clean(body.reason,300);
+     if(body.kind==='RETURNED'&&!reason)throw err(400,'Informe motivo do retorno.');
+     return mutate(t,'r4.delivery.event:'+b+':'+id,key,async()=>{
+       const event={id:uuid(),orderId:id,sequence:(latest?.sequence||0)+1,kind:body.kind,courierName:courier,reason,recordedAt:now()};
+       return {result:event,statements:[q('INSERT INTO r4_delivery_events(tenant_id,branch_id,order_id,id,sequence,kind,courier_name,reason,recorded_by,recorded_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
+         t,b,id,event.id,event.sequence,event.kind,courier,reason,user,event.recordedAt)]};
+     });
+   },
    async deliverFoodOrder(t,b,id,key){
      await branchExists(t,b);
      const order=await first('SELECT id,status FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id);
      if(!order)throw err(404,'Pedido não encontrado.');
      if(order.status!=='READY')throw err(409,'Só é possível entregar pedido pronto.');
+     if((await first('SELECT kind FROM r4_delivery_events WHERE tenant_id=? AND branch_id=? AND order_id=? ORDER BY sequence DESC LIMIT 1',t,b,id))?.kind==='RETURNED')
+       throw err(409,'Pedido devolvido ao estabelecimento: registre novo despacho antes de finalizar.');
      if((await first('SELECT fulfillment FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND id=?',t,b,id))?.fulfillment==='DELIVERY'&&
         !(await first('SELECT order_id FROM r4_delivery_dispatches WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,id)))
        throw err(409,'Registre o despacho e o entregador antes da entrega final.');

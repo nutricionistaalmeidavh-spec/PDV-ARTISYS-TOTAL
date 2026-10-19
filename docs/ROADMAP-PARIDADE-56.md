@@ -9,7 +9,7 @@
 
 ## Painel de acompanhamento
 
-**`npm run report:saas` é o painel de execução prioritário:** 53 referências ao desktop no escopo web (40 cobertas, 13 parciais e 0 gaps), mais 3 capacidades locais opcionais fora do bloqueio de entrega. **`npm run report:parity`** continua exibindo todas as 56 capacidades da referência desktop e os contratos vinculados como evidência para auditoria. O total de 53 não substitui os gates SaaS de segurança, provisionamento, assinaturas e implantação.
+**`npm run report:saas` é o painel de execução prioritário:** 53 referências ao desktop no escopo web (46 cobertas, 7 parciais e 0 gaps), mais 3 capacidades locais opcionais fora do bloqueio de entrega. **`npm run report:parity`** continua exibindo todas as 56 capacidades da referência desktop e os contratos vinculados como evidência para auditoria. O total de 53 não substitui os gates SaaS de segurança, provisionamento, assinaturas e implantação.
 
 | Estado exibido | O que representa | Próximo passo |
 |---|---|---|
@@ -20,7 +20,7 @@
 
 **Precisão obrigatória:** gap NÃO comprova ausência de código. O terceiro estado inclui casos ainda não investigados. Não promover a pronto por nome de arquivo, CI verde ou um cenário isolado. Auditoria de código exige revisão explícita e evidências executáveis. Testes em equipamento real não bloqueiam código pronto.
 
-**Fotografia versionada da matriz R3 (confira CI no SHA candidato):** 56 referências desktop: **40 cobertas, 16 parciais e 0 não demonstradas**. **Entrega SaaS prioritária:** 53 referências web (40 cobertas, 13 parciais), mais três capacidades opcionais de instalação local (`cap-001`, `cap-047`, `cap-056`). Por onda: R1 **21 cobertas**; R2 **11 cobertas / 3 parciais** (não bloqueiam SaaS); R3 **7 cobertas / 1 parcial** (`cap-050`); R4 **1 coberta / 12 parciais**. Os 68 contratos subordinados registram **44 cobertos e 24 parciais** após conclusão de `checkout-016`. `npm run report:parity` verifica evidências por ID. Equipamento físico não é gate de software, e a certificação integral dos 56 continua incompleta.
+**Fotografia versionada da entrega funcional R4 (19/10/2026; confira o SHA atual):** 56 referências desktop: **46 cobertas, 10 parciais e 0 não demonstradas**. **Entrega SaaS prioritária:** 53 referências web (46 cobertas, 7 parciais), mais três capacidades opcionais de instalação local (`cap-001`, `cap-047`, `cap-056`). Por onda: R1 **21 cobertas**; R2 **11 cobertas / 3 parciais** (não bloqueiam SaaS); R3 **7 cobertas / 1 parcial** (`cap-050`); R4 **7 cobertas / 6 parciais**. Os 68 contratos subordinados registram **44 cobertos e 24 parciais**, sem contagem dupla. O roteiro web contém 7 pendências funcionais, das quais 3 desta rodada permanecem parciais. `npm run report:parity` exige evidência executável por capacidade. Homologação física de dispositivos é separada.
 
 ## Ondas de implementação — 56 sem duplicação
 
@@ -43,7 +43,7 @@
 
 **R3: sete capacidades concluídas no contrato de software web (`cap-025` a `cap-030` e `cap-043`)** com cenários independentes e reutilização do renderizador canônico (venda, mesa, cozinha, caixa), fila SQLite idempotente e protocolo KDS claim/ACK, WebSerial reconectável, pesagem estável, 250 ciclos de estresse, impressora ESC/POS CP850 e raster PNG bounded. `checkout-016` também foi certificado com lançamentos SCALE/MANUAL idempotentes e estoque/valor canônicos. **Resta `cap-050` parcial**, que engloba outras variações integradas de scanner/balança/gaveta; tratar sem reabrir as sete concluídas. A homologação física por modelo é separada e opcional. A implantação continua sendo SaaS no navegador, sem servidor Windows obrigatório.
 
-**R4: concluir os 12 itens parciais** (cap-009, cap-031, cap-032, cap-034–039, cap-041, cap-048 e cap-049), sem duplicar pedidos, caixa ou ledger. Priorizar divisão individual por pagador/item, corridas entre operadores, roteamento e recuperação do KDS, insumos da pizzaria, delivery, onboarding e relatórios; usar comparações executáveis com o desktop fixado.
+**R4: seis capacidades avançaram para cobertas** (`cap-009`, `cap-034` a `cap-037`, `cap-039`) com testes de receita configurada, preço catalogado, ledger único, impressão KDS com lease e concorrência, entrega/retorno/redespacho e etiqueta EAN13. **Continuam parciais `cap-031`, `cap-032` e `cap-038` desta rodada**: corrida entre duas transferências de mesas, pagamentos independentes ainda durante o atendimento e rateio por item, histórico paginado com virada de dia em concorrência. Além delas, `cap-041`, `cap-048`, `cap-049` permanecem parciais. Não duplicar vendas, caixa ou estoque. A migração `0028` é incremental, testada em SQLite e D1 local, **sem presumir aplicação no banco remoto de produção**.
 
 **R5 — gates distintos:** **lançamento do SaaS web** requer jornadas de vendas/caixa/estoque, autenticação/RBAC, isolamento entre empresas, UI responsive PC/tablet/mobile, integrações necessárias, dados persistentes, rollback/backup e CI no SHA publicado. **Não depende de 56/56 referências desktop** nem da instalação local dos três itens opcionais. O certificado **separado** de equivalência integral com o desktop continua exigindo 56/56 capacidades e 68/68 contratos; não afirmar esse certificado apenas porque o SaaS pode ser publicado.
 
@@ -61,7 +61,7 @@
 
 ## Migrações: política para aplicativo ainda novo
 
-As migrações SQL são incrementais e numeradas; a sequência vigente é de 0001 a 0026. Não são 26 versões distribuídas a clientes, nem importações de dados do desktop.
+As migrações SQL são incrementais e numeradas; a sequência vigente é de 0001 a 0028. Não são 28 versões distribuídas a clientes, nem importações de dados do desktop.
 
 - Mudança de classificação **não** deve gerar migration. Só alterações reais do banco exigem mudança de schema.
 - Não criar compatibilidade com bases de clientes antigos por padrão; como o app ainda não teve usuários, não inventar histórico a migrar. A importação de um banco desktop real seria tarefa separada, opcional e com consentimento.

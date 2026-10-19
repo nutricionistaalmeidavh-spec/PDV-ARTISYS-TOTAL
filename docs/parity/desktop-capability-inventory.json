@@ -307,7 +307,7 @@
         "products-031",
         "checkout-019"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -316,13 +316,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "recipe versioning and ingredient consumption: Comprovar leitura/edição e persistência do catálogo, versões e efeitos exatos sobre o estoque.",
-      "reviewNote": "Fichas versionadas e consumo de ingredientes na venda única comprovados; faltam equivalência de consumo para cada configuração do desktop.",
+      "reviewNote": "Receitas base e opções SIZE/FLAVOR/CRUST/ADDON são versionadas imutavelmente; checkout aplica a composição congelada no pedido ao mesmo ledger de estoque canônico, sem dupla baixa, com isolamento por empresa e teste completo de pizza com adicionais.",
       "independentEvidence": {
-        "file": "apps/api/src/r4-extended-service.mjs",
-        "contains": "async saveRecipe(",
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "optionAllocations.push",
         "testFile": "apps/api/test/vertical-parity.test.mjs",
-        "testContains": "test('R4 cap-009:",
-        "testAssertionContains": "assert.equal(movement.delta,-600);",
+        "testContains": "test('cap-009/036 configured pizza freezes selected addon recipe",
+        "testAssertionContains": "assert.equal(m.get(cheese.id),-300);",
         "testRunner": "node-test"
       },
       "softwareAssessment": {
@@ -991,7 +991,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "restaurant tables tabs orders and table transfer: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Transferência de mesa sem clonar pedidos, destinos ocupados rejeitados e isolamento demonstrados; faltam corridas multicaixa e estados desktop.",
+      "reviewNote": "Restrição única parcial garante somente uma comanda OPEN/CHECKOUT por mesa no mesmo banco; teste de duas aberturas concorrentes passa. A transferência CAS e disputa simultânea entre duas mesas ainda requer cenário de corrida determinístico para certificação.",
       "independentEvidence": {
         "file": "apps/api/src/vertical-service.mjs",
         "contains": "async transferTable(",
@@ -1025,7 +1025,7 @@
         "checkout-008"
       ],
       "acceptance": "restaurant advanced split settlement service charge and item transfer: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Divisão igual, taxa de serviço, recebimentos e transferência de itens provados; faltam split personalizados por item/pagador e pagamentos parciais independentes.",
+      "reviewNote": "Divisão desigual por pagador aceita parcelas em centavos validadas e é efetivamente recebida no checkout de venda única, com recibos imutáveis. Ainda requer abatimentos parciais ao longo do atendimento e rateio individual por item sem fechamento antecipado.",
       "independentEvidence": {
         "file": "apps/api/src/r4-extended-service.mjs",
         "contains": "async split(",
@@ -1083,7 +1083,7 @@
         "checkout-017",
         "checkout-018"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1092,13 +1092,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "kitchen kds stations product routing and printer routing: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "KDS por estação, fila durável, lease, retry e cancelamento provados; falta cobertura de todos os protocolos simulados de impressão e permissões de spool.",
+      "reviewNote": "KDS roteado por estação e permissão, fila idempotente, lease/ACK único e concorrência simulada no banco com 1 de 2 operadores vencedor, lease inválido rejeitado e tenant isolado. Confirmação de spooler não afirma papel fisicamente impresso.",
       "independentEvidence": {
         "file": "apps/api/src/r4-extended-service.mjs",
         "contains": "async claimPrint(",
         "testFile": "apps/api/test/vertical-parity.test.mjs",
-        "testContains": "test('R4 cap-034: kitchen print outbox",
-        "testAssertionContains": "assert.equal(second.status,409);",
+        "testContains": "test('cap-034: KDS claim is single-owner",
+        "testAssertionContains": "assert.equal([a.status,b.status].filter(s=>s===200).length,1);",
         "testRunner": "node-test"
       },
       "softwareAssessment": {
@@ -1114,7 +1114,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1123,13 +1123,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "shared kds routing for food orders: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Canal direto e KDS compartilhado operam na mesma ordem; snapshot da estação testado contra mudança de rota. Faltam transições concorrentes por canal/perfil.",
+      "reviewNote": "Transições KDS NEW→PREPARING→READY usam CAS e recibo de mutação no mesmo batch, propagadas ao pedido canônico; dois operadores simultâneos não avançam o mesmo ticket duas vezes. Canais de pedidos compartilham os mesmos registros sem criar outra venda.",
       "independentEvidence": {
         "file": "apps/api/src/r4-extended-service.mjs",
-        "contains": "async tickets(",
+        "contains": "async updateTicket(",
         "testFile": "apps/api/test/vertical-parity.test.mjs",
-        "testContains": "test('R4 cap-035: direct food item",
-        "testAssertionContains": "assert.equal((await x.db.prepare('SELECT count(*) AS n FROM r4_station_tickets').bind().first()).n,0);",
+        "testContains": "test('cap-035: concurrent kitchen status requests",
+        "testAssertionContains": "assert.equal(changes.filter(x=>x.status===200).length,1",
         "testRunner": "node-test"
       },
       "softwareAssessment": {
@@ -1145,7 +1145,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1154,13 +1154,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "optional pizzeria size flavors crust and pricing policy: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Pizza com variações da mesma SKU, tamanhos, bordas e preços absolutos/delta comprovados; faltam adicionais e equivalência de insumos por sabor desktop.",
+      "reviewNote": "Pizza usa SKU canônica, tamanhos, sabores, bordas, adicionais de preço catalogado e composição versionada dos insumos por opção; orçamento do servidor congelado no pedido e duas pizzas consomem farinha e queijo da mesma venda canônica.",
       "independentEvidence": {
         "file": "apps/api/src/r4-extended-service.mjs",
         "contains": "async quotePizza(",
         "testFile": "apps/api/test/vertical-parity.test.mjs",
-        "testContains": "test('R4 cap-036: same pizza SKU",
-        "testAssertionContains": "assert.deepEqual(children.results.map(r=>r.price),[4000,5000]);",
+        "testContains": "test('cap-036 pizza addons have catalog-owned",
+        "testAssertionContains": "assert.equal(quote.body.quote.unitPriceCents,5000);",
         "testRunner": "node-test"
       },
       "softwareAssessment": {
@@ -1176,7 +1176,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1185,13 +1185,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "food delivery pickup counter workflow: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Retirada, balcão, delivery e despacho reutilizam pedido, KDS e caixa. Falta ciclo completo de entregador, retornos e reconexão concorrente.",
+      "reviewNote": "Fluxo web de entrega inclui preparo, despacho, retorno justificado, redespacho com novo entregador, entrega concluída, histórico append-only de sequência/operador e bloqueio da finalização durante retorno, sem segunda venda nem estoque paralelo.",
       "independentEvidence": {
         "file": "apps/api/src/vertical-service.mjs",
-        "contains": "async dispatchFoodOrder(",
+        "contains": "async deliveryCheckpoint(",
         "testFile": "apps/api/test/vertical-parity.test.mjs",
-        "testContains": "test('R4 cap-033/cap-037:",
-        "testAssertionContains": "assert.equal((await x.request('a','sales','POST',{branchId:'filial-a',restaurantOrderId:orderId})).status,409);",
+        "testContains": "test('cap-037 delivery checkpoint returns to courier",
+        "testAssertionContains": "assert.equal(history.body.events.length,2);",
         "testRunner": "node-test"
       },
       "softwareAssessment": {
@@ -1217,7 +1217,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "food unified orders with optional daily ticket and legacy history: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Pedidos únicos e cancelamento idempotente provados, senhas diárias têm cenários próprios. Falta testar dia local/histórico, sem exigir migração fictícia de usuários inexistentes.",
+      "reviewNote": "Senha diária agora usa fuso IANA configurável da filial, com cálculo em virada de dia e índice único por empresa/filial/dia; registros de pedido continuam canônicos e idempotentes. Falta histórico paginado além das últimas 100 ordens e regressão de concorrência cruzando meia-noite local.",
       "independentEvidence": {
         "file": "apps/api/src/vertical-service.mjs",
         "contains": "ticketNumber=useTicket?",
@@ -1239,7 +1239,7 @@
       "dependsOn": [
         "checkout-016"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1248,13 +1248,13 @@
       },
       "testedContractRefs": [],
       "acceptance": "optional market bakery weighted items and orders: Comprovar precisão por peso e unidade, preço total, etiquetas por dados simulados, idempotência e checkout/estoque canônicos. Balança física não integra o gate de código.",
-      "reviewNote": "Padaria por peso, preço exato e checkout único comprovados; falta emulação de leitura de balança/etiqueta e casos de rejeição/reconexão, sem hardware real.",
+      "reviewNote": "Etiqueta EAN13 com checksum e PLU/gramas validada, produto KG e preço canônico por filial, rejeição de rótulo falso/peso nulo, isolamento por empresa, formulário web com entrada manual ou bipagem, sem criar venda no cálculo.",
       "independentEvidence": {
         "file": "apps/api/src/r4-extended-service.mjs",
-        "contains": "async quoteWeight(",
+        "contains": "async quoteWeightLabel(",
         "testFile": "apps/api/test/vertical-parity.test.mjs",
-        "testContains": "test('R4 cap-039: bakery weighted order",
-        "testAssertionContains": "assert.equal(sale.body.sale.totalCents,quote.totalCents);",
+        "testContains": "test('cap-039 EAN13 weighted bakery label",
+        "testAssertionContains": "assert.equal(quote.body.quote.totalCents,4988);",
         "testRunner": "node-test"
       },
       "softwareAssessment": {
