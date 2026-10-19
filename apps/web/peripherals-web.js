@@ -189,6 +189,16 @@
     const fmt=n=>(Number(n||0)/100).toFixed(2);
     return [branding.name,...(branding.address?[branding.address]:[]),...(branding.phone?['Telefone: '+branding.phone]:[]),'CUPOM NAO FISCAL','Venda '+String(sale.saleNumber||sale.id),String(sale.completedAt||''),...((sale.items||[]).map(i=>String(i.productName||i.sku||i.productId||'Produto')+'  '+String(i.quantity)+' x '+fmt(i.unitPriceCents)+' = '+fmt(i.totalCents??Math.round(i.quantity*i.unitPriceCents)))),'TOTAL: '+fmt(sale.totalCents),...((sale.payments||[]).map(p=>String(p.method)+': '+fmt(p.amountCents))),'Troco: '+fmt(sale.changeCents),'Obrigado pela preferencia.','',''].join('\n');
   }
+  function printTextDocument(document,{popup}={}){
+    if(!document||document.fiscal!==false||!['KITCHEN_TICKET','CASH_CLOSE','TABLE_PREBILL'].includes(document.documentType)
+      ||typeof document.text!=='string'||document.text.length>14000)
+      throw new Error('Documento não fiscal canônico e limitado obrigatório.');
+    const paperMm=settings().paperMm;
+    const html='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Documento não fiscal</title>'
+      +'<style>@page{size:'+paperMm+'mm auto;margin:3mm}body{margin:0;color:#000}pre{font:11px monospace;white-space:pre-wrap;overflow-wrap:anywhere}</style>'
+      +'</head><body><pre>'+escapeHtml(document.text)+'</pre></body></html>';
+    return openPrintDocument(html,popup);
+  }
   function printPrebill(document,{popup}={}) {
     if(document?.documentType!=='PREBILL'||!document.sale||!document.branding)
       throw new Error('Pré-conta canônica exigida.');
@@ -315,7 +325,7 @@
   function printTest(){
     return printSale({id:('TESTE-'+(root.crypto?.randomUUID?.()||String(Date.now())+'-'+Math.random().toString(36).slice(2))),status:'COMPLETED',saleNumber:'TESTE',completedAt:new Date().toISOString(),items:[],payments:[],totalCents:0,changeCents:0});
   }
-  root.PdvWebHardware=Object.freeze({settings,saveSettings,readWeight,connect,openDrawer,printSale,printPrebill,printTest,showSettings});
+  root.PdvWebHardware=Object.freeze({settings,saveSettings,readWeight,connect,openDrawer,printSale,printPrebill,printTextDocument,printTest,showSettings});
   root.PdvWebHardwareUtils=Object.freeze({parseWeight,parseUranoWeight,normalizeSettings,receiptHtml,receiptText,escpos,escapeHtml});
   root.document?.addEventListener('click',e=>{
     if(e.target?.closest?.('#peripherals-settings'))showSettings();
