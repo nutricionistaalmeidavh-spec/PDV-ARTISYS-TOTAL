@@ -28,3 +28,31 @@ CREATE TABLE IF NOT EXISTS r4_pizza_addons(
  PRIMARY KEY(tenant_id,branch_id,product_id,code),
  FOREIGN KEY(tenant_id,branch_id,product_id) REFERENCES r4_pizza_profiles(tenant_id,branch_id,product_id)
 );
+
+-- Immutable per-option recipe versions. Checkout freezes quantities in the single stock ledger.
+CREATE TABLE IF NOT EXISTS r4_recipe_option_versions (
+ tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,product_id TEXT NOT NULL,
+ option_kind TEXT NOT NULL CHECK(option_kind IN('SIZE','FLAVOR','CRUST','ADDON')),
+ option_code TEXT NOT NULL,version INTEGER NOT NULL CHECK(version>0),
+ created_at TEXT NOT NULL,
+ PRIMARY KEY(tenant_id,branch_id,product_id,option_kind,option_code,version),
+ FOREIGN KEY(tenant_id,branch_id) REFERENCES branches(tenant_id,id),
+ FOREIGN KEY(tenant_id,product_id) REFERENCES products(tenant_id,id)
+);
+CREATE TABLE IF NOT EXISTS r4_recipe_option_ingredients (
+ tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,product_id TEXT NOT NULL,
+ option_kind TEXT NOT NULL,option_code TEXT NOT NULL,version INTEGER NOT NULL,
+ ingredient_id TEXT NOT NULL,quantity_milli INTEGER NOT NULL CHECK(quantity_milli>0),
+ PRIMARY KEY(tenant_id,branch_id,product_id,option_kind,option_code,version,ingredient_id),
+ FOREIGN KEY(tenant_id,branch_id,product_id,option_kind,option_code,version)
+  REFERENCES r4_recipe_option_versions(tenant_id,branch_id,product_id,option_kind,option_code,version),
+ FOREIGN KEY(tenant_id,ingredient_id) REFERENCES products(tenant_id,id)
+);
+CREATE TRIGGER IF NOT EXISTS r4_option_recipe_version_immutable BEFORE UPDATE ON r4_recipe_option_versions
+BEGIN SELECT RAISE(ABORT,'OPTION_RECIPE_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS r4_option_recipe_ingredients_immutable BEFORE UPDATE ON r4_recipe_option_ingredients
+BEGIN SELECT RAISE(ABORT,'OPTION_RECIPE_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS r4_option_recipe_version_no_delete BEFORE DELETE ON r4_recipe_option_versions
+BEGIN SELECT RAISE(ABORT,'OPTION_RECIPE_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS r4_option_recipe_ingredients_no_delete BEFORE DELETE ON r4_recipe_option_ingredients
+BEGIN SELECT RAISE(ABORT,'OPTION_RECIPE_IMMUTABLE'); END;
