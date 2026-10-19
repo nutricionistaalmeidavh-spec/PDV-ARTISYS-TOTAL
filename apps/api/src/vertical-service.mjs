@@ -474,20 +474,26 @@ export function createVerticalService(db){
      const a=dateValue(from),z=dateValue(to);
      if(z<a||z-a>366*86400000)throw err(400,'Período inválido ou maior que 366 dias.');
      const start=new Date(a).toISOString(),end=new Date(z+86400000).toISOString();
-     const rows=await all('SELECT id,fulfillment,status,total_cents AS totalCents,created_at AS createdAt FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND created_at>=? AND created_at<? ORDER BY created_at,id LIMIT 3001',t,b,start,end);
-     if(rows.length>3000)throw err(413,'Mais de 3000 pedidos. Reduza o período para exportar sem truncamento.');
      if(csv){
+       const rows=await all('SELECT id,fulfillment,status,total_cents AS totalCents,created_at AS createdAt FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND created_at>=? AND created_at<? ORDER BY created_at,id LIMIT 3001',t,b,start,end);
+       if(rows.length>3000)throw err(413,'Mais de 3000 pedidos para CSV. Reduza o período; o resumo continua completo.');
        const cell=value=>'"'+String(value??'').replace(/"/g,'""').replace(/^[=+@-]/,"'")+'"';
        return '\uFEFFPedido;Criado em UTC;Canal;Estado;Valor operacional (R$)\r\n'+rows.map(x=>
          [x.id,x.createdAt,x.fulfillment,x.status,(x.totalCents/100).toFixed(2).replace('.',',')].map(cell).join(';')).join('\r\n');
      }
-     const active=rows.filter(r=>r.status!=='CANCELLED');
-     const totals={ordersCount:rows.length,cancelledCount:rows.length-active.length,
-       orderedCents:active.reduce((sum,r)=>sum+r.totalCents,0),
-       deliveredCount:active.filter(r=>r.status==='DELIVERED').length,
-       deliveredCents:active.filter(r=>r.status==='DELIVERED').reduce((sum,r)=>sum+r.totalCents,0)};
-     return {branchId:b,from,to,timezone:'UTC',...totals,
-       channels:Object.fromEntries(['TABLE','DELIVERY','PICKUP'].map(channel=>[channel,active.filter(r=>r.fulfillment===channel).length])),
+     const totals=await first('SELECT COUNT(*) AS ordersCount,'+
+       "COALESCE(SUM(CASE WHEN status='CANCELLED' THEN 1 ELSE 0 END),0) AS cancelledCount,"+
+       "COALESCE(SUM(CASE WHEN status<>'CANCELLED' THEN total_cents ELSE 0 END),0) AS orderedCents,"+
+       "COALESCE(SUM(CASE WHEN status='DELIVERED' THEN 1 ELSE 0 END),0) AS deliveredCount,"+
+       "COALESCE(SUM(CASE WHEN status='DELIVERED' THEN total_cents ELSE 0 END),0) AS deliveredCents,"+
+       "COALESCE(SUM(CASE WHEN status<>'CANCELLED' AND COALESCE(service_channel,fulfillment)='TABLE' THEN 1 ELSE 0 END),0) AS tableCount,"+
+       "COALESCE(SUM(CASE WHEN status<>'CANCELLED' AND COALESCE(service_channel,fulfillment)='DELIVERY' THEN 1 ELSE 0 END),0) AS deliveryCount,"+
+       "COALESCE(SUM(CASE WHEN status<>'CANCELLED' AND COALESCE(service_channel,fulfillment)='PICKUP' THEN 1 ELSE 0 END),0) AS pickupCount,"+
+       "COALESCE(SUM(CASE WHEN status<>'CANCELLED' AND service_channel='COUNTER' THEN 1 ELSE 0 END),0) AS counterCount "+
+       'FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND created_at>=? AND created_at<?',t,b,start,end);
+     const {tableCount,deliveryCount,pickupCount,counterCount,...summary}=totals;
+     return {branchId:b,from,to,timezone:'UTC',...summary,
+       channels:{TABLE:tableCount,DELIVERY:deliveryCount,PICKUP:pickupCount,COUNTER:counterCount},
        note:'Indicadores operacionais: pedido entregue não equivale a venda recebida. Faturamento, caixa e estoque pertencem ao checkout canônico.'};
    },
    async wholesaleCustomerPolicy(t,b,customerId){
