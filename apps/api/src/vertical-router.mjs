@@ -50,6 +50,16 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
        return json({choice:await ext.selectSegment(tenantId,branch,body,key)});
      }
    }
+   if(feature==='recipes'&&parts.length===5&&parts[2]==='options'){
+     if(method==='GET'){
+       permission(member,user,'products.view');
+       return json({recipe:await ext.optionRecipe(tenantId,branch,parts[1],parts[3],parts[4])});
+     }
+     if(method==='PUT'){
+       permission(member,user,'products.manage');
+       return json({recipe:await ext.saveOptionRecipe(tenantId,branch,parts[1],{...body,kind:parts[3],code:parts[4]},key)});
+     }
+   }
    if(feature==='recipes'&&parts[1]){
      if(parts.length===2&&method==='GET'){
        permission(member,user,'products.view');
