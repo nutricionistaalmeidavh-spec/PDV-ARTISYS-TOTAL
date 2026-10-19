@@ -189,49 +189,44 @@ test('new tenant creation is owner-only, capped and cannot renew an expired subs
  }finally{x.close();}
 });
 
-test('platform admin reviews and approves pending registration only, with a real trial and audit',async()=>{
- const x=await fixture({PLATFORM_ADMIN_TOKEN:'ci-platform-supersecret-2026-test-123'});
+test('public signup stays pending until private platform approval; approval is single-use and grants trial without client payment flags',async()=>{
+ const db=openLocalDatabase();
+ const adminToken='platform-approval-secret-with-32-plus-characters';
  try{
-  const h={authorization:'Bearer ci-platform-supersecret-2026-test-123'};
-  await x.db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
-    .bind('pending-u','pending@example.test','Pendente',await hashPassword('PasswordForPending2026!'),stamp).run();
-  await x.db.prepare('INSERT INTO tenants(id,slug,name,active,created_at) VALUES(?,?,?,?,?)')
-    .bind('pending-t','pending-t','Restaurante Pendente',0,stamp).run();
-  await x.db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,active,created_at) VALUES(?,?,?,?,?)')
-    .bind('pending-t','pending-u','OWNER',0,stamp).run();
-  await x.db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)')
-    .bind('pending-b','pending-t','MAIN','Matriz',stamp).run();
-
-  const denied=await x.request('/api/v1/platform/tenants','GET');
-  assert.equal(denied.status,403,'merchant user cannot use platform endpoint without independent secret');
-  const list=await x.request('/api/v1/platform/tenants','GET',null,'',h);
-  assert.equal(list.status,200);
-  assert.ok((await list.json()).tenants.some(t=>t.id==='pending-t'&&t.status==='PENDING'));
-  const alice=await x.login('alice@example.test');
-  assert.equal((await x.request('/api/v1/platform/tenants/pending-t/approve','POST',{},alice)).status,403);
-  const approved=await x.request('/api/v1/platform/tenants/pending-t/approve','POST',{},'',h);
+  for(const filename of ['0001_identity.sql','0030_public_registration.sql','0031_saas_access.sql'])
+   db.exec(readFileSync(new URL('../migrations/'+filename,import.meta.url),'utf8'));
+  const api=createApi({
+    DB:db,AUTH_ENABLED:'true',REGISTRATION_ENABLED:'true',SAAS_ENTITLEMENTS_ENABLED:'true',
+    PLATFORM_ADMIN_TOKEN:adminToken,TRUST_CF_CONNECTING_IP:'true'
+  },{now:()=>NOW});
+  const request=(path,method='GET',body=null,headers={})=>api.fetch(new Request(origin+path,{
+   method,headers:{...headers,...(!['GET','HEAD'].includes(method)?{origin}:{}),
+    ...(body!==null?{'content-type':'application/json'}:{})},
+   ...(body!==null?{body:JSON.stringify(body)}:{})
+  }));
+  const data={displayName:'Ana Silva',businessName:'Mercado da Ana',email:'ana.saas@example.test',password:'StrongPassForSignup2026!'};
+  const registered=await request('/api/v1/auth/register','POST',data,{'cf-connecting-ip':'198.51.100.23'});
+  assert.equal(registered.status,202,await registered.clone().text());
+  assert.equal((await request('/api/v1/platform/tenants')).status,403);
+  const auth={authorization:'Bearer '+adminToken};
+  const pending=await request('/api/v1/platform/tenants','GET',null,auth);
+  assert.equal(pending.status,200);
+  const list=(await pending.json()).pendingTenants;
+  assert.equal(list.length,1);assert.equal(list[0].ownerEmail,data.email);
+  const tenantId=list[0].id;
+  assert.equal((await request('/api/v1/auth/login','POST',{email:data.email,password:data.password})).status,403);
+  assert.equal((await request('/api/v1/platform/tenants/'+tenantId+'/approve','POST',{},{})).status,403);
+  const approved=await request('/api/v1/platform/tenants/'+tenantId+'/approve','POST',{},auth);
   assert.equal(approved.status,200,await approved.clone().text());
-  assert.equal((await x.request('/api/v1/platform/tenants/pending-t/approve','POST',{},'',h)).status,409);
-  const t=await x.db.prepare('SELECT active FROM tenants WHERE id=?').bind('pending-t').first();
-  const m=await x.db.prepare('SELECT active FROM tenant_memberships WHERE tenant_id=? AND user_id=?').bind('pending-t','pending-u').first();
-  const sub=await x.db.prepare('SELECT status,ends_at AS endsAt FROM saas_subscriptions WHERE tenant_id=?').bind('pending-t').first();
-  assert.equal(t.active,1);assert.equal(m.active,1);
-  assert.equal(sub.status,'TRIAL');assert.ok(Date.parse(sub.endsAt)>NOW);
-  const audit=await x.db.prepare("SELECT COUNT(*) AS n FROM saas_audit_events WHERE tenant_id=? AND kind='TENANT_APPROVED'").bind('pending-t').first();
-  assert.equal(audit.n,1);
-  const firstLogin=await x.request('/api/v1/auth/login','POST',{email:'pending@example.test',password:'PasswordForPending2026!'});
-  assert.equal(firstLogin.status,200,'newly-approved owner can now log in');
- }finally{x.close();}
-});
-
-test('platform approval requires a pending owner, no foreign tenant activations',async()=>{
- const x=await fixture({PLATFORM_ADMIN_TOKEN:'ci-platform-supersecret-2026-test-123'});
- try{
-  const h={authorization:'Bearer ci-platform-supersecret-2026-test-123'};
-  assert.equal((await x.request('/api/v1/platform/tenants/a/approve','POST',{},'',h)).status,409);
-  assert.equal((await x.request('/api/v1/platform/tenants/missing/approve','POST',{},'',h)).status,404);
-  const list=await x.request('/api/v1/platform/tenants','GET',null,'',h);
-  assert.ok((await list.json()).tenants.every(t=>t.id!=='pending-z'));
-  assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM saas_subscriptions').bind().first()).n,0);
- }finally{x.close();}
+  assert.equal((await request('/api/v1/platform/tenants/'+tenantId+'/approve','POST',{},auth)).status,409);
+  const sub=await db.prepare('SELECT status,plan_key AS plan FROM saas_subscriptions WHERE tenant_id=?').bind(tenantId).first();
+  assert.equal(sub.status,'TRIAL');assert.equal(sub.plan,'trial');
+  const login=await request('/api/v1/auth/login','POST',{email:data.email,password:data.password});
+  assert.equal(login.status,200,await login.clone().text());
+  const cookie=login.headers.get('set-cookie').split(';')[0];
+  const created=await request('/api/v1/tenants/'+tenantId+'/branches','POST',{code:'NORTH',name:'Filial Norte'},{cookie});
+  assert.equal(created.status,201,await created.clone().text());
+  const foreign=await request('/api/v1/tenants/some-other-company/branches','POST',{code:'XX',name:'Other'},{cookie});
+  assert.equal(foreign.status,404);
+ }finally{db.close();}
 });

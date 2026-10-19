@@ -60,7 +60,7 @@ async function run(){
  requireSecret();
  if(command==='pending'){
   const {data}=await call(base,'/api/v1/platform/tenants');
-  const list=(data.tenants||[]).map(t=>({id:t.id,name:t.name,ownerEmail:t.ownerEmail,status:t.status,planKey:t.planKey}));
+  const list=(data.pendingTenants||[]).map(t=>({id:t.id,name:t.name,ownerEmail:t.ownerEmail,status:t.status,planKey:t.planKey}));
   console.log(JSON.stringify(list,null,2));return;
  }
  if(command==='approve'){

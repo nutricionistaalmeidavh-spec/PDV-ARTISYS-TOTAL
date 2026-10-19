@@ -9,12 +9,12 @@ const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:
 const normalize=value=>typeof value==='string'?value.trim():'';
 function validName(name){return name.length>=3&&name.length<=100&&!TEXT_CONTROL.test(name);}
 function validEmail(email){return email.length<=254&&EMAIL.test(email);}
-async function countAttempt(db,request,now){
+async function countAttempt(db,request,env,now){
   // Trust only the edge-supplied IP. Self-hosted requests without an edge
   // share a conservative bucket; client-provided X-Forwarded-For is ignored.
-  const reported=request.headers.get('cf-connecting-ip')||'unattributed';
+  const reported=env.TRUST_CF_CONNECTING_IP==='true'?(request.headers.get('cf-connecting-ip')||'unattributed'):'unattributed';
   const ip=/^[a-fA-F0-9:.]{3,50}$/.test(reported)?reported:'unattributed';
-  const key=await sha256('signup:'+ip);
+  const key=await sha256('signup:'+(env.AUTH_IP_SALT||'')+':'+ip);
   const sql='INSERT INTO public_signup_throttles(ip_hash,attempts,window_started) VALUES(?,1,?) '
     +'ON CONFLICT(ip_hash) DO UPDATE SET '
     +'attempts=CASE WHEN ?>=window_started+? THEN 1 ELSE attempts+1 END, '
@@ -43,7 +43,7 @@ export async function registerPublicAccount(request,env,db,now){
     ||typeof password!=='string'||password.length<12||password.length>256
     ||TEXT_CONTROL.test(password)||!/\p{L}/u.test(password)||!/\d/.test(password))
     return json({error:'Confira nome, estabelecimento, e-mail e senha (mínimo de 12 caracteres com letras e números).'},400);
-  if(!await countAttempt(db,request,now))
+  if(!await countAttempt(db,request,env,now))
     return json({error:'Muitas solicitações. Tente novamente mais tarde.'},429);
   const current=await db.prepare('SELECT id FROM users WHERE email_norm=?').bind(email).first();
   if(current)return json({message:successText},202);
