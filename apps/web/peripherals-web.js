@@ -35,7 +35,7 @@
   }
   function parseWeight(raw) {
     const clean = String(raw??'').trim();
-    const match = /^([+]?\d{1,5}(?:[,.]\d{1,3})?)\s*(kg|g)?$/i.exec(clean);
+    const match = /^(?:(?:ST|S),\s*(?:GS|NT),\s*)?[+]?\s*(\d{1,5}(?:[,.]\d{1,3})?)\s*(kg|g)?$/i.exec(clean);
     if (!match) throw new Error('Resposta da balança inválida ou incompleta. Confira o protocolo.');
     const number = Number(match[1].replace(',','.'));
     const weight = match[2]?.toLowerCase()==='g' ? number/1000 : number;
