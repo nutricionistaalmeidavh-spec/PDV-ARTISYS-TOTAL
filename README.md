@@ -95,3 +95,15 @@ A interface web pode usar a mesma API autoritativa em **Node.js + SQLite local**
 
 
 **Atualização da matriz (19/10/2026):** 53/53 capacidades da referência desktop aplicáveis ao SaaS web cobertas por aceites de software; R3: 8/8 e R4: 13/13. Restam três itens de instalação/LAN opcionais da referência histórica desktop e os gates de lançamento (segurança, ambiente hospedado, backup, QA e publicação). A divisão deve anteceder recebimentos vinculados a pagadores; estornos antes do checkout são imutáveis, e após o checkout seguem a reversão da venda canônica. **Não houve aplicação de migration em D1 remoto nem homologação de equipamento físico**, e nenhuma integração paga é obrigatória. Ver [aceite das sete frentes](docs/parity/R3-R4-SEVEN-SOFTWARE-ACCEPTANCE-20261019.md).
+
+## SaaS multiempresa e segurança (P0 / 19-10-2026)
+
+- Segurança de tenant, filiais e usuários verificada no backend, com testes de acesso por IDs alterados, perfis e sessões revogadas.
+- Onboarding autenticado de novas empresas, filiais, convites de 48 horas com token único, usuário por convite e alterações de perfis com auditoria.
+- Assinaturas e suspensão verificadas no Worker antes de mutações quando SAAS_ENTITLEMENTS_ENABLED=true, não por sinais da interface. Leitura ainda disponível para empresa suspensa.
+- Plataforma possui bootstrap inicial único e concessões auditadas somente com PLATFORM_ADMIN_TOKEN privado, não enviado à PWA.
+- Defesa adicional contra tentativas de login por IP verificado na borda Cloudflare. Nenhum X-Forwarded-For enviado pelo cliente é aceito.
+- A Cloudflare inicializa também o schema 0031 antes do deploy. AUTH_ENABLED=false permanece até existir proprietário provisionado e testes em produção.
+- Não há integração de cobrança online; os planos são inicialmente administrados pela ArtiSys.
+
+Consulte docs/SAAS-SECURITY-OPERATIONS.md.

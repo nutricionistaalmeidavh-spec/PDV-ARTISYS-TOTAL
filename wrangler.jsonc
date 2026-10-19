@@ -11,7 +11,13 @@
     "run_worker_first": ["/api/*"]
   },
   // API remains read-only / locked while the SaaS is not provisioned for customers.
-  "vars": { "AUTH_ENABLED": "false", "REGISTRATION_ENABLED": "false" },
+  "vars": {
+    "AUTH_ENABLED": "false",
+    "REGISTRATION_ENABLED": "false",
+    "SAAS_ENTITLEMENTS_ENABLED": "true",
+    "TENANT_SELF_SIGNUP_ENABLED": "false",
+    "TRUST_CF_CONNECTING_IP": "true"
+  },
   // Wrangler 4 auto-provisions missing resource IDs; do not invent UUIDs.
   // Do not ever bind the desktop licensing D1 database here.
   "d1_databases": [
