@@ -1,11 +1,11 @@
 (()=>{
 'use strict';
-const $=id=>document.getElementById(id),state={token:'',tenants:[],selected:null};
+const $=id=>document.getElementById(id),state={tenants:[],selected:null};
 function message(text){$('feedback').textContent=text;}
 function el(tag,value,css){const e=document.createElement(tag);if(value!=null)e.textContent=String(value);if(css)e.className=css;return e;}
 async function api(path,method='GET',body){
- const result=await fetch('/api/v1/platform/'+path,{method,credentials:'same-origin',
-  headers:{authorization:'Bearer '+state.token,...(body?{'content-type':'application/json'}:{})},
+ const result=await fetch('/api/v1/platform/ui/'+path,{method,credentials:'same-origin',
+  headers:{...(body?{'content-type':'application/json'}:{})},
   ...(body?{body:JSON.stringify(body)}:{})});
  const data=await result.json().catch(()=>({}));
  if(!result.ok)throw Error(data.error||'Erro HTTP '+result.status);
@@ -42,14 +42,30 @@ async function load(){
  }
  $('dashboard').hidden=false;message('');
 }
-function disconnect(){state.token='';state.tenants=[];$('admin-secret').value='';$('dashboard').hidden=true;$('disconnect').hidden=true;$('connect').hidden=false;message('Acesso encerrado.');}
+async function disconnect(){
+ try{await fetch('/api/v1/platform/auth/logout',{method:'POST',credentials:'same-origin'});}catch{}
+ state.tenants=[];$('admin-ticket').value='';$('dashboard').hidden=true;
+ $('disconnect').hidden=true;$('connect').hidden=false;message('Acesso encerrado.');
+}
+async function exchangeTicket(ticket){
+ if(typeof ticket!=='string'||!/^[a-f0-9]{64}$/.test(ticket))throw Error('Código temporário inválido.');
+ const response=await fetch('/api/v1/platform/auth/exchange',{method:'POST',credentials:'same-origin',
+  headers:{'content-type':'application/json'},body:JSON.stringify({ticket})});
+ const payload=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(payload.error||'Convite expirado ou já utilizado.');
+ await load();$('connect').hidden=true;$('disconnect').hidden=false;
+}
 $('connect').addEventListener('click',async()=>{
- const token=$('admin-secret').value.trim();if(token.length<32){message('Informe um token administrativo válido.');return;}
- state.token=token;$('admin-secret').value='';$('connect').disabled=true;message('Validando acesso…');
- try{await load();$('connect').hidden=true;$('disconnect').hidden=false;}catch(e){state.token='';message(e.message);}
+ const token=$('admin-ticket').value.trim();$('admin-ticket').value='';
+ $('connect').disabled=true;message('Validando acesso temporário…');
+ try{await exchangeTicket(token);}catch(e){message(e.message);}
  finally{$('connect').disabled=false;}
 });
 $('disconnect').addEventListener('click',disconnect);
+const fragment=new URLSearchParams(location.hash.slice(1)),ticket=fragment.get('ticket');
+if(location.hash)history.replaceState(null,'',location.pathname);
+if(ticket){exchangeTicket(ticket).catch(e=>message(e.message));}
+else api('me').then(()=>load()).then(()=>{$('connect').hidden=true;$('disconnect').hidden=false;}).catch(()=>{});
 $('refresh').addEventListener('click',()=>load().catch(e=>message(e.message)));
 $('status-filter').addEventListener('change',filter);
 async function approve(t){
