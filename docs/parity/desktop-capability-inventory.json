@@ -1206,7 +1206,7 @@
       "owner": "restaurant",
       "dependsOn": [
         "checkout-017",
-        "history-034"
+        "history-033"
       ],
       "status": "covered",
       "sourceEvidence": {
@@ -1217,7 +1217,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "food unified orders with optional daily ticket and legacy history: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Histórico paginado por cursor estável criado_em+id, relatório diário completo e senhas por fuso IANA com unicidade por tenant/filial/dia. Testes com 113 pedidos e limite explícito.",
+      "reviewNote": "Histórico paginado por cursor estável criado_em+id, relatório diário completo e senhas por fuso IANA com unicidade por tenant/filial/dia. Testes com 113 pedidos e limite explícito. Dependências revistas: Histórico de pedidos operacionais usa a listagem por filial; não depende do contrato parcial history-034 (detalhe de venda/pagamentos).",
       "independentEvidence": {
         "file": "apps/api/src/vertical-service.mjs",
         "contains": "ticketNumber=useTicket?",
@@ -1516,8 +1516,8 @@
       "capability": "restaurant-operational-reports-and-csv-export",
       "owner": "reports",
       "dependsOn": [
-        "reports-062",
-        "reports-068"
+        "reports-058",
+        "reports-061"
       ],
       "status": "covered",
       "sourceEvidence": {
@@ -1528,7 +1528,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "restaurant operational reports and csv export: Conciliar dados de base com CSV e resultados por filial/período sem estimar lucro indevidamente.",
-      "reviewNote": "Totais de pedidos por SQL agregado sem limite artificial, linhas paginadas por tenant/filial/data, CSV limitado a 3.000 com erro explícito e sem confundir receita contabilizada.",
+      "reviewNote": "Totais de pedidos por SQL agregado sem limite artificial, linhas paginadas por tenant/filial/data, CSV limitado a 3.000 com erro explícito e sem confundir receita contabilizada. Dependências revistas: Relatório operacional e CSV de pedidos não prometem filtros avançados de vendas por cliente/vendedor (reports-062) nem formatos desktop adicionais (reports-068).",
       "independentEvidence": {
         "file": "apps/api/src/vertical-service.mjs",
         "contains": "async restaurantReport(",
@@ -1548,7 +1548,6 @@
       "capability": "barcode-scale-drawer-adapters",
       "owner": "hardware",
       "dependsOn": [
-        "checkout-015",
         "checkout-016",
         "checkout-018"
       ],
@@ -1561,7 +1560,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "barcode-scale-drawer-adapters: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Scanner HID keyboard-wedge, balança serial numérica/Urano e gaveta ESC/POS com permissão explícita, portas segregadas, peso estável e testes determinísticos. Teste físico por modelo continua fora do aceite de software.",
+      "reviewNote": "Scanner HID keyboard-wedge, balança serial numérica/Urano e gaveta ESC/POS com permissão explícita, portas segregadas, peso estável e testes determinísticos. Teste físico por modelo continua fora do aceite de software. Dependências revistas: Adaptadores físicos/WebSerial e HID emulado são um contrato de transporte independente da equivalência integral da UX de bipagem checkout-015, que continua parcial.",
       "implementationEvidence": {
         "file": "apps/web/peripherals-web.js",
         "contains": "function parseUranoWeight",
