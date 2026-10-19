@@ -77,7 +77,14 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
            {...body,fulfillment:'COUNTER',tableSessionId:null,useTicket:body.useTicket!==false},key)},201);
        }
      }
-     if(parts[1]==='weight'&&parts[2]==='quote'&&parts.length===3&&method==='POST'){
+     if(parts[1]==='tickets'&&parts[2]==='time-zone'&&parts.length===3){
+      if(method==='GET'){permission(member,user,'restaurant.orders.view');return json(await svc.ticketClock(tenantId,branch));}
+      if(method==='PUT'){permission(member,user,'settings.manage');return json({clock:await svc.saveTicketClock(tenantId,branch,body,key)});}
+    }
+    if(parts[1]==='weight'&&parts[2]==='label'&&parts.length===3&&method==='POST'){
+      permission(member,user,'products.view');return json({quote:await ext.quoteWeightLabel(tenantId,branch,body)});
+    }
+    if(parts[1]==='weight'&&parts[2]==='quote'&&parts.length===3&&method==='POST'){
        permission(member,user,'products.view');return json({quote:await ext.quoteWeight(tenantId,branch,body)});
      }
      if(parts[1]==='pizzeria'){
