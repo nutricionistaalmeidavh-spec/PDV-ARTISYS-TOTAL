@@ -231,7 +231,7 @@
         ${sessions.filter(row=>row.status==='CLOSED').map(row=>`<tr>
           <td>${when(row.openedAt)}</td><td>${when(row.closedAt)}</td>
           <td>${money(row.expectedCashCents)}</td><td>${money(row.countedCashCents)}</td>
-          <td>${money(row.divergenceCents)}</td><td>${escapeHtml(row.terminalId||'DEFAULT')}</td></tr>`).join('')||
+          <td>${money(row.divergenceCents)}</td><td>${escapeHtml(row.terminalId||'DEFAULT')}</td><td><button class="ops-secondary" type="button" data-cash-close-print="${escapeHtml(row.id)}">Imprimir fechamento</button></td></tr>`).join('')||
             `<tr><td colspan="6">${empty('Nenhum fechamento anterior.')}</td></tr>`}
         </tbody></table></div></section>
       <section class="ops-card"><details id="web-cash-history-search"><summary>Consultar histórico completo do caixa</summary>
@@ -247,6 +247,15 @@
           </div><button type="submit" class="ops-secondary">Pesquisar sessões</button>
         </form><div id="web-cash-history-result" role="status"></div></details></section>`;
     content.innerHTML=page('Caixa','Abertura, suprimento, sangria e conferência real por filial.',overview);
+    content.querySelectorAll('[data-cash-close-print]').forEach(button=>button.addEventListener('click',()=>{
+      const popup=root.open('','_blank');
+      if(!popup){showToast('Habilite a abertura de janelas para imprimir.','error');return;}
+      button.disabled=true;
+      void api.request('/api/v1/cash/sessions/'+encodeURIComponent(button.dataset.cashClosePrint)+'/closing-document')
+        .then(document=>root.PdvWebHardware.printTextDocument(document,{popup}))
+        .catch(error=>{try{popup.close();}catch{}showToast(error?.message||'Falha ao preparar fechamento.','error');})
+        .finally(()=>{button.disabled=false;});
+    }));
     content.querySelector('#web-cash-search-form')?.addEventListener('submit',async event=>{
       event.preventDefault();
       const form=event.currentTarget,result=content.querySelector('#web-cash-history-result');
