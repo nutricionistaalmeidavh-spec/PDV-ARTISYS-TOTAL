@@ -117,8 +117,9 @@
   function weight(){
     return '<section class="data-card"><h2>Padaria e venda por peso</h2><p>Informe a quantidade em gramas. O preço será calculado no servidor.</p>'+
       '<form data-r4-advanced="weight" class="vertical-form"><label class="field"><span>Produto em quilos</span>'+
-      select('productId',model.products.filter(p=>String(p.unit).toUpperCase()==='KG'))+'</label>'+
-      field('grams','Peso (gramas)','number','min="1" max="100000000" step="1" required')+
+      select('productId',model.products.filter(p=>String(p.unit).toUpperCase()==='KG'),p=>p.name,'Produto selecionado manualmente',false)+'</label>'+
+      field('grams','Peso (gramas, se não tiver etiqueta)','number','min="1" max="100000000" step="1"')+
+      field('barcode','Etiqueta EAN-13 (bipagem opcional)','text','maxlength="13" inputmode="numeric" placeholder="20..."')+
       '<button class="primary-button">Calcular preço</button></form><output data-r4-result></output></section>';
   }
   function recipe(){
@@ -127,7 +128,13 @@
       select('productId',model.products.filter(p=>p.trackStock===false))+'</label>'+
       '<label class="field"><span>Ingredientes e quantidade (por unidade preparada)</span><textarea name="ingredients" required rows="4" placeholder="SKU-FARINHA=0,250"></textarea></label>'+
       '<p>Uma linha por ingrediente: SKU=quantidade, até três casas decimais.</p>'+
-      '<button class="primary-button">Salvar nova versão</button></form>':'')+'<output data-r4-result></output></section>';
+      '<button class="primary-button">Salvar nova versão</button></form>'+
+      '<form data-r4-advanced="option-recipe" class="vertical-form"><h3>Insumos de sabor, tamanho, borda ou adicional</h3>'+
+      '<label class="field"><span>Produto de pizza</span>'+select('productId',model.profiles.map(p=>({id:p.productId,name:model.products.find(x=>x.id===p.productId)?.name||p.productId})))+'</label>'+
+      '<label class="field"><span>Tipo da opção</span><select name="kind"><option>FLAVOR</option><option>SIZE</option><option>CRUST</option><option>ADDON</option></select></label>'+
+      field('code','Código exato da opção','text','required maxlength="32"')+
+      '<label class="field"><span>Insumos por unidade (SKU=quantidade)</span><textarea name="ingredients" required rows="3" placeholder="QUEIJO=0,150"></textarea></label>'+
+      '<button class="primary-button">Salvar ficha da opção</button></form>':'')+'<output data-r4-result></output></section>';
   }
   function segments(){
     const data=model.onboard,items=data.segments||[];
@@ -183,17 +190,29 @@
         return;
       }
       if(kind==='weight'){
-        const quote=await r4('/weight/quote','POST',{productId:v.productId,grams:Number(v.grams)});
+        if(!v.barcode&&!v.productId)throw Error('Selecione um produto ou leia uma etiqueta EAN-13.');
+        const quote=v.barcode?await r4('/weight/label','POST',{barcode:String(v.barcode).trim()}):
+          await r4('/weight/quote','POST',{productId:v.productId,grams:Number(v.grams)});
         const output=node.querySelector('[data-r4-result]');
         if(output){
           output.innerHTML='<p>Preço calculado: '+money(quote.quote.totalCents)+'</p><button type="button" class="primary-button" data-r4-bakery-order>Gerar pedido de balcão</button>';
           output.querySelector('[data-r4-bakery-order]')?.addEventListener('click',async()=>{
-            try{const order=await r4('/bakery/orders','POST',{items:[{productId:v.productId,quantity:quote.quote.quantity}]});
+            try{const order=await r4('/bakery/orders','POST',{items:[{productId:quote.quote.productId,quantity:quote.quote.quantity}]});
               toast('Pedido de balcão registrado. Senha '+order.order.ticketNumber+'.');
               await show({sessionId,preserve:true});
             }catch(error){toast(error.message,true);}
           });
         }return;
+      }
+      if(kind==='option-recipe'){
+        const ingredients=String(v.ingredients).split(/\r?\n/).filter(line=>line.trim()).map(line=>{
+          const [sku,qty]=line.split('='),product=model.products.find(p=>p.sku===sku?.trim());
+          if(!product||!qty||!/^\d+(?:[.,]\d{1,3})?$/.test(qty.trim()))throw Error('Informe SKU=quantidade com até três casas.');
+          return {ingredientId:product.id,quantity:Number(qty.replace(',','.'))};
+        });
+        const out=await api.request('/api/v1/recipes/'+uid(v.productId)+'/options/'+uid(v.kind)+'/'+uid(v.code.trim()),{
+          method:'PUT',body:{ingredients}});
+        toast('Ficha da opção salva, versão '+out.recipe.version+'.');
       }
       if(kind==='recipe'){
         const ingredients=String(v.ingredients).split(/\r?\n/).filter(s=>s.trim()).map(line=>{
