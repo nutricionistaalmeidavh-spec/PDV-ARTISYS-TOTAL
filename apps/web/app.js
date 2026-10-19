@@ -2279,7 +2279,7 @@ function openCategoryForm() {
           <p id="web-invite-feedback" role="status" aria-live="polite"></p>
         </form>
       </details>
-      <small>O acesso depende da liberação do estabelecimento pela ArtiSys.</small><p class="web-login-links"><a href="/">Conhecer o produto</a> · <a href="/#cadastro">Criar conta</a></p></section>`;
+      <small>O acesso depende da liberação do estabelecimento pela ArtiSys.</small><p class="web-login-links"><a href="/">Conhecer o produto</a> · <a href="/#cadastro">Criar conta</a> · <a href="/conta/">Segurança e assinatura</a></p></section>`;
     const form=authOverlay.querySelector('#web-login-form');
     const inviteForm=authOverlay.querySelector('#web-invite-form');
     inviteForm?.addEventListener('submit',async e=>{
@@ -2309,6 +2309,8 @@ function openCategoryForm() {
       form.dataset.pending='true';button.disabled=true;button.textContent='Entrando…';
       try{
         const session=await api.login({email,password});
+        if(session.mfaRequired){showWebMfaLogin(session.challengeToken,email);return;}
+        if(session.emailVerificationRequired){showWebEmailVerification();return;}
         await activateWebSession(session);
       }catch(error){
         feedback.textContent=error.status===503?'O acesso online ainda não foi liberado. Seus dados estão preservados.':error.message;
@@ -2316,6 +2318,50 @@ function openCategoryForm() {
       }finally{form.dataset.pending='false';button.disabled=false;button.textContent='Entrar no PDV';}
     });
     window.PdvUiLifecycle?.emit('auth:rendered',{surface:'login'});
+  }
+
+  function showWebMfaLogin(challengeToken,email){
+    authOverlay.classList.remove('hidden');
+    authOverlay.innerHTML=`<section class="auth-card web-login-card"><div class="auth-logo">A</div>
+      <h1>Confirme seu acesso</h1><p>Abra seu aplicativo autenticador e digite o código de 6 dígitos, ou use um código de recuperação.</p>
+      <form id="web-mfa-form"><div class="field"><label for="web-mfa-code">Código de autenticação</label>
+      <input id="web-mfa-code" name="code" inputmode="text" autocomplete="one-time-code" maxlength="32" required autofocus></div>
+      <p class="web-login-feedback" id="web-mfa-feedback" role="status" aria-live="polite"></p>
+      <button class="primary-button" type="submit">Validar código</button></form>
+      <p class="web-login-links"><a href="/conta/">Segurança da conta</a> · <a href="/app/" id="web-mfa-back">Voltar ao login</a></p></section>`;
+    const form=authOverlay.querySelector('#web-mfa-form');
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      if(form.dataset.pending==='true')return;
+      form.dataset.pending='true';const button=form.querySelector('button');button.disabled=true;
+      try{
+        const session=await api.mfaLogin({challengeToken,code:form.elements.code.value.trim()});
+        if(session.emailVerificationRequired){showWebEmailVerification();return;}
+        await activateWebSession(session);
+      }catch(error){form.querySelector('#web-mfa-feedback').textContent=error.message;}
+      finally{form.dataset.pending='false';button.disabled=false;}
+    });
+  }
+  function showWebEmailVerification(){
+    authOverlay.classList.remove('hidden');
+    authOverlay.innerHTML=`<section class="auth-card web-login-card"><div class="auth-logo">A</div>
+     <h1>Confirme seu e-mail</h1><p>Para proteger a loja, confirme o endereço cadastrado antes de operar.</p>
+     <p id="email-feedback" class="web-login-feedback" role="status" aria-live="polite"></p>
+     <button class="primary-button" type="button" id="email-send">Enviar confirmação</button>
+     <button class="primary-button" type="button" id="email-recheck">Já confirmei, continuar</button>
+     <p class="web-login-links"><a href="/conta/">Configurações da conta</a> · <a href="/app/">Voltar ao login</a></p></section>`;
+    const feedback=authOverlay.querySelector('#email-feedback');
+    authOverlay.querySelector('#email-send').addEventListener('click',async()=>{
+      try{await api.emailVerificationRequest();feedback.textContent='E-mail enviado. Acesse o link recebido.';}
+      catch(error){feedback.textContent=error.message;}
+    });
+    authOverlay.querySelector('#email-recheck').addEventListener('click',async()=>{
+      try{
+        const session=await api.currentSession();
+        if(!session.user?.emailVerified)throw Error('A confirmação ainda não foi recebida.');
+        await activateWebSession(session);
+      }catch(error){feedback.textContent=error.message;}
+    });
   }
 
   async function activateWebSession(session){
