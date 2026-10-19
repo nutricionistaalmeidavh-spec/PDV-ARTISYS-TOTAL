@@ -105,3 +105,33 @@ AND (
      AND s.table_session_id=NEW.table_session_id),0)
 )
 BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_PAYER_EXCEEDED'); END;
+
+-- Corrections are immutable refunds, not deletes/updates to advance receipts.
+CREATE TABLE IF NOT EXISTS r4_table_prepayment_refunds (
+ id TEXT NOT NULL,tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,prepayment_id TEXT NOT NULL,
+ table_session_id TEXT NOT NULL,cash_session_id TEXT NOT NULL,method TEXT NOT NULL
+ CHECK(method IN('CASH','PIX','DEBIT_CARD','CREDIT_CARD')),
+ amount_cents INTEGER NOT NULL CHECK(amount_cents>0),reason TEXT NOT NULL,
+ refunded_by TEXT NOT NULL,refunded_at TEXT NOT NULL,mutation_id TEXT NOT NULL,
+ PRIMARY KEY(tenant_id,branch_id,id),UNIQUE(tenant_id,branch_id,prepayment_id,mutation_id),
+ FOREIGN KEY(tenant_id,branch_id,prepayment_id) REFERENCES r4_table_prepayments(tenant_id,branch_id,id),
+ FOREIGN KEY(tenant_id,branch_id,table_session_id) REFERENCES restaurant_table_sessions(tenant_id,branch_id,id),
+ FOREIGN KEY(tenant_id,branch_id,cash_session_id) REFERENCES cash_sessions(tenant_id,branch_id,id),
+ FOREIGN KEY(refunded_by) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_r4_prepayment_refunds ON r4_table_prepayment_refunds(tenant_id,branch_id,prepayment_id);
+CREATE TRIGGER IF NOT EXISTS r4_prepayment_refund_no_update BEFORE UPDATE ON r4_table_prepayment_refunds
+BEGIN SELECT RAISE(ABORT,'PREPAYMENT_REFUND_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS r4_prepayment_refund_no_delete BEFORE DELETE ON r4_table_prepayment_refunds
+BEGIN SELECT RAISE(ABORT,'PREPAYMENT_REFUND_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS r4_prepayment_refund_limit BEFORE INSERT ON r4_table_prepayment_refunds
+WHEN NEW.amount_cents + (SELECT COALESCE(SUM(r.amount_cents),0) FROM r4_table_prepayment_refunds r
+ WHERE r.tenant_id=NEW.tenant_id AND r.branch_id=NEW.branch_id AND r.prepayment_id=NEW.prepayment_id)
+ > COALESCE((SELECT p.amount_cents FROM r4_table_prepayments p WHERE p.tenant_id=NEW.tenant_id
+ AND p.branch_id=NEW.branch_id AND p.id=NEW.prepayment_id AND p.table_session_id=NEW.table_session_id
+ AND p.method=NEW.method),0)
+ OR EXISTS(SELECT 1 FROM restaurant_sale_links l WHERE l.tenant_id=NEW.tenant_id
+ AND l.branch_id=NEW.branch_id AND l.table_session_id=NEW.table_session_id)
+ OR NOT EXISTS(SELECT 1 FROM cash_sessions s WHERE s.tenant_id=NEW.tenant_id
+ AND s.branch_id=NEW.branch_id AND s.id=NEW.cash_session_id AND s.status='OPEN')
+BEGIN SELECT RAISE(ABORT,'PREPAYMENT_REFUND_CONFLICT'); END;
