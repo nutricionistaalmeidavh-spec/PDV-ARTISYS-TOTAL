@@ -427,7 +427,7 @@ export function createVerticalService(db){
 
    async prepayments(t,b,sessionId){
      await branchExists(t,b);await checkSession(t,b,sessionId);
-     const payments=await all(`SELECT id,table_session_id AS tableSessionId,method,amount_cents AS amountCents,
+     const payments=await all(`SELECT id,table_session_id AS tableSessionId,method,amount_cents AS amountCents,payer_index AS payerIndex,
        received_at AS receivedAt,received_by AS receivedBy FROM r4_table_prepayments
        WHERE tenant_id=? AND branch_id=? AND table_session_id=? ORDER BY received_at,id`,t,b,sessionId);
      return {tableSessionId:sessionId,payments,totalCents:payments.reduce((sum,p)=>sum+p.amountCents,0)};
@@ -444,8 +444,15 @@ export function createVerticalService(db){
      if(!['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(method))throw err(400,'Forma de recebimento inválida.');
      const amount=cents(body.amountCents,'Recebimento');
      if(amount<=0)throw err(400,'Informe valor positivo.');
-     if(await first('SELECT 1 FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId))
-       throw err(409,'Finalize a divisão de conta sem antecipação ou reverta o plano.');
+     const plan=await first('SELECT parts,shares_json AS sharesJson FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId);
+     const payerIndex=body.payerIndex??null;
+     if(plan){
+       if(!Number.isSafeInteger(payerIndex)||payerIndex<1||payerIndex>plan.parts)throw err(400,'Identifique o pagador da antecipação.');
+       const shares=plan.sharesJson?JSON.parse(plan.sharesJson):null;
+       if(!shares||shares.length!==plan.parts)throw err(409,'Atualize a divisão antes de receber.');
+       const existingPayer=await first('SELECT COALESCE(SUM(amount_cents),0) AS amount FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? AND table_session_id=? AND payer_index=?',t,b,sessionId,payerIndex);
+       if(existingPayer.amount+amount>shares[payerIndex-1])throw err(409,'A antecipação supera a parte deste pagador.');
+     }else if(payerIndex!==null)throw err(400,'Configure a divisão antes de atribuir antecipação a um pagador.');
      const cash=await first(`SELECT id FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND terminal_id=?
        AND status='OPEN' ORDER BY opened_at DESC LIMIT 1`,t,b,clean(body.terminalId||'DEFAULT',80));
      if(!cash)throw err(409,'Abra o caixa do terminal para receber.');
@@ -456,10 +463,10 @@ export function createVerticalService(db){
      const existing=await this.prepayments(t,b,sessionId);
      if(amount>available.total-existing.totalCents)throw err(409,'Recebimento maior que os itens já entregues da comanda.');
      return mutate(t,scope,key,async()=>{
-       const payment={id:uuid(),tableSessionId:sessionId,method,amountCents:amount,receivedBy:user,receivedAt:now()};
+       const payment={id:uuid(),tableSessionId:sessionId,method,amountCents:amount,payerIndex,receivedBy:user,receivedAt:now()};
        return {result:payment,statements:[q(`INSERT INTO r4_table_prepayments
-         (id,tenant_id,branch_id,table_session_id,cash_session_id,method,amount_cents,mutation_id,received_by,received_at)
-         VALUES(?,?,?,?,?,?,?,?,?,?)`,payment.id,t,b,sessionId,cash.id,method,amount,key,user,payment.receivedAt)]};
+         (id,tenant_id,branch_id,table_session_id,cash_session_id,method,amount_cents,payer_index,mutation_id,received_by,received_at)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,payment.id,t,b,sessionId,cash.id,method,amount,payerIndex,key,user,payment.receivedAt)]};
      });
    },
    async serviceRequests(t,b){
