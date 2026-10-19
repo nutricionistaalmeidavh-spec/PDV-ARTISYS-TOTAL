@@ -209,7 +209,15 @@
     if(settings().printerMode==='bridge' && !opts.forceBrowser){const job=await root.PdvLocalBridge.print(sale,receiptText(sale,{branding:opts.branding}),{reprint:opts.reprint===true});return {queued:true,job};}
     if(settings().printerMode==='serial' && !opts.forceBrowser) {
       // On-demand serial transport; never send an automatic second copy through browser.
-      await writeSerial('printer',escpos(receiptText(sale,{branding:opts.branding}),{cut:settings().cut}),settings().printerBaud);
+      const branding=opts.branding||root.PdvReceiptBranding?.read?.();
+      const bytes=escpos(receiptText(sale,{branding}),{cut:settings().cut});
+      if(branding?.logoDataUrl){
+        // Rasterize first; a decode error must NOT send a misleading text-only cupom.
+        if(!root.PdvEscposLogo?.encode)throw Error('Driver de logotipo ESC/POS indisponível.');
+        const raster=await root.PdvEscposLogo.encode(branding.logoDataUrl,{paperMm:settings().paperMm});
+        bytes.splice(2,0,...raster); // ESC @ then bounded GS v 0 bitmap then text
+      }
+      await writeSerial('printer',bytes,settings().printerBaud);
       return {sentToSerial:true};
     }
     return openPrintDocument(receiptHtml(sale,{...settings(),branding:opts.branding}),opts.popup);
