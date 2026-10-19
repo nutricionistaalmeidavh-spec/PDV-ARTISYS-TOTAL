@@ -14,7 +14,7 @@ test('cap-026 R3 canonical renderer parity uses original shared kitchen layout, 
   items:[{quantity:2,productName:'Pizza Margherita',configuration:job.payload.items[0].configuration,note:'Sem cebola'}]
  }});
  assert.equal(text,expected);
- assert.match(text,/PEDIDO - COZINHA/);
+ assert.match(text,/PEDIDO - Cozinha 1/);
  assert.match(text,/Catupiry/);
  assert.ok(text.split('\n').every(l=>l.length<=32));
  assert.throws(()=>renderKitchenPrintJob({...job,payload:{jobFormat:'UNKNOWN'}}),/formato|inválido/i);
