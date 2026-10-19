@@ -150,9 +150,22 @@
       busy=false;
     }
   }
+  // ESC/POS codepage 2 (CP850) preserves Portuguese accents in thermal receipts.
+  // Unsupported glyphs degrade to '?' rather than emitting arbitrary device commands.
+  const CP850_PT=Object.freeze({
+    'á':160,'à':133,'â':131,'ã':198,'é':130,'ê':136,'í':161,
+    'ó':162,'ô':147,'õ':228,'ú':163,'ü':129,'ç':135,
+    'Á':181,'À':183,'Â':182,'Ã':199,'É':144,'Ê':210,'Í':214,
+    'Ó':224,'Ô':226,'Õ':229,'Ú':233,'Ü':154,'Ç':128,
+    'º':167,'ª':166,'°':248
+  });
   function escpos(text,{cut=false,drawer=false}={}) {
-    const ascii=String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x0A\x0D\x20-\x7E]/g,'?').slice(0,16000);
-    const bytes=[27,64,...new TextEncoder().encode(ascii)];
+    const bytes=[27,64,27,116,2]; // Initialize, select CP850.
+    for(const char of String(text??'').slice(0,16000)){
+      const n=char.charCodeAt(0);
+      if(n===10||n===13||(n>=32&&n<=126))bytes.push(n);
+      else bytes.push(CP850_PT[char]??63);
+    }
     if(drawer)bytes.push(27,112,0,25,250);
     if(cut)bytes.push(29,86,0);
     return bytes;
