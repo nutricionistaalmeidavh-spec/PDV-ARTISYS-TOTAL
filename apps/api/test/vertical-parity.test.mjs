@@ -955,3 +955,28 @@ test('cap-038/049: mais de cem pedidos são pagináveis sem cortes, relatórios 
   assert.equal((await x.request('a','restaurant/orders?branchId=filial-a&limit=5000')).status,400);
  }finally{x.close();}
 });
+
+
+test('cap-048: duas pessoas não confirmam o mesmo chamado nem abrem dois chamados ativos iguais',async()=>{
+ const x=await setup();try{
+  const table=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Mesa chamada simultânea'})).body.table;
+  const session=(await x.request('a',`restaurant/tables/${table.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+  const url=`restaurant/sessions/${session.id}/requests`;
+  const opens=await Promise.all([
+    x.request('a',url,'POST',{branchId:'filial-a',type:'BILL'}),
+    x.request('a',url,'POST',{branchId:'filial-a',type:'BILL'})
+  ]);
+  assert.equal(opens.filter(x=>x.status===201).length,1,JSON.stringify(opens));
+  assert.equal(opens.filter(x=>x.status===409).length,1,JSON.stringify(opens));
+  const id=opens.find(x=>x.status===201).body.request.id;
+  const path='restaurant/requests/'+id;
+  const results=await Promise.all([
+    x.request('a',path,'PATCH',{branchId:'filial-a',status:'ACKNOWLEDGED',expectedStatus:'OPEN'}),
+    x.request('a',path,'PATCH',{branchId:'filial-a',status:'ACKNOWLEDGED',expectedStatus:'OPEN'})
+  ]);
+  assert.equal(results.filter(x=>x.status===200).length,1,JSON.stringify(results));
+  assert.equal(results.filter(x=>x.status===409).length,1,JSON.stringify(results));
+  assert.equal((await x.request('a','restaurant/requests?branchId=filial-a')).body.requests.find(x=>x.id===id).status,'ACKNOWLEDGED');
+  assert.equal((await x.request('b','restaurant/requests?branchId=filial-b','GET',undefined,{as:'b'})).body.requests.length,0);
+ }finally{x.close();}
+});
