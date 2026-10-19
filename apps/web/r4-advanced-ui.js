@@ -129,6 +129,9 @@
       select('productId',model.products.filter(p=>String(p.unit).toUpperCase()==='KG'),p=>p.name,'Produto selecionado manualmente',false)+'</label>'+
       field('grams','Peso (gramas, se não tiver etiqueta)','number','min="1" max="100000000" step="1"')+
       field('barcode','Etiqueta EAN-13 (bipagem opcional)','text','maxlength="13" inputmode="numeric" placeholder="20..."')+
+      '<div class="restaurant-actions"><button class="secondary-button" type="button" data-r4-connect-scale>Conectar balança</button>'+
+      '<button class="secondary-button" type="button" data-r4-read-scale>Ler peso estável</button></div>'+
+      '<small>Leitura opcional por WebSerial HTTPS; não solicita dispositivo sem ação sua.</small>'+
       '<button class="primary-button">Calcular preço</button></form><output data-r4-result></output></section>';
   }
   function recipe(){
@@ -177,6 +180,24 @@
     node.querySelector('[data-r4-back]')?.addEventListener('click',()=>void root.PdvRestaurantWebUi?.show?.());
     node.querySelectorAll('[data-r4-section]').forEach(b=>b.addEventListener('click',()=>{section=b.dataset.r4Section;render();}));
     node.querySelectorAll('[data-r4-advanced]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();void submit(f);}));
+    node.querySelector('[data-r4-connect-scale]')?.addEventListener('click',async()=>{
+      try{
+        if(!root.PdvWebHardware?.connect)throw Error('Este navegador não suporta balança serial.');
+        await root.PdvWebHardware.connect('scale');
+        toast('Balança autorizada somente neste navegador.');
+      }catch(e){toast(e.message,true);}
+    });
+    node.querySelector('[data-r4-read-scale]')?.addEventListener('click',async()=>{
+      try{
+        if(!root.PdvWebHardware?.readWeight)throw Error('Leitura serial indisponível.');
+        const result=await root.PdvWebHardware.readWeight();
+        const grams=Math.round(result.weight*1000);
+        if(!Number.isSafeInteger(grams)||grams<=0)throw Error('Peso recebido inválido.');
+        const gramsField=node.querySelector('[data-r4-advanced="weight"] [name="grams"]');
+        if(gramsField){gramsField.value=String(grams);gramsField.focus();}
+        toast('Peso confirmado: '+grams+' g. Confira e calcule o preço no servidor.');
+      }catch(e){toast(e.message,true);}
+    });
     node.querySelectorAll('[data-r4-kds]').forEach(b=>b.addEventListener('click',async()=>{
       try{await r4('/kitchen/station-tickets/'+uid(b.dataset.r4Kds),'PATCH',{status:b.dataset.next});await show({sessionId,preserve:true});}
       catch(e){toast(e.message,true);}
