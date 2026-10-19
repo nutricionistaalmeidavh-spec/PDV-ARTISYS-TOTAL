@@ -951,6 +951,17 @@ test('cap-038/049: mais de cem pedidos são pagináveis sem cortes, relatórios 
   const report=await x.request('a','restaurant/reports/summary?branchId=filial-a&from=2026-10-17&to=2026-10-17');
   assert.equal(report.body.report.ordersCount,113);
   assert.equal(report.body.report.orderedCents,113*100+(112*113/2));
+  let reportCursor=null;const reportSeen=new Set();
+  do{
+   const url='restaurant/reports/orders?branchId=filial-a&from=2026-10-17&to=2026-10-17&limit=30'+
+     (reportCursor?'&cursor='+encodeURIComponent(reportCursor):'');
+   const page=await x.request('a',url);
+   assert.equal(page.status,200,JSON.stringify(page.body));
+   for(const row of page.body.orders){assert.ok(!reportSeen.has(row.id));reportSeen.add(row.id);}
+   reportCursor=page.body.nextCursor;
+  }while(reportCursor);
+  assert.equal(reportSeen.size,113);
+  assert.equal((await x.request('a','restaurant/reports/orders?branchId=filial-a&from=2026-10-17&to=2026-10-17&limit=400')).status,400);
   assert.equal((await x.request('b','restaurant/orders?branchId=filial-b&limit=40','GET',undefined,{as:'b'})).body.orders.length,0);
   assert.equal((await x.request('a','restaurant/orders?branchId=filial-a&limit=5000')).status,400);
  }finally{x.close();}
