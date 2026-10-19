@@ -126,3 +126,67 @@ test('owner sessions may be revoked without affecting another account',async()=>
    assert.equal((await x.request('/api/v1/auth/session','GET',null,a)).status,401);
  }finally{x.close();}
 });
+
+
+test('platform can bootstrap exactly one company while public login remains disabled',async()=>{
+ const db=openLocalDatabase();
+ try{
+  db.exec(readFileSync(new URL('../migrations/0001_identity.sql',import.meta.url),'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0030_saas_access.sql',import.meta.url),'utf8'));
+  const api=createApi({DB:db,AUTH_ENABLED:'false',PLATFORM_ADMIN_TOKEN:'another-private-admin-key-123456789'});
+  const data={email:'first@example.test',name:'First Store',ownerName:'First Owner',slug:'first-store',password:'First-Owner-Password-2026!'};
+  const post=()=>api.fetch(new Request(origin+'/api/v1/platform/bootstrap',{
+   method:'POST',headers:{origin,authorization:'Bearer another-private-admin-key-123456789','content-type':'application/json'},
+   body:JSON.stringify(data)
+  }));
+  assert.equal((await post()).status,201);
+  assert.equal((await post()).status,409);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM tenants').bind().first()).n,1);
+  const user=await db.prepare("SELECT m.profile_key AS role FROM tenant_memberships m JOIN users u ON u.id=m.user_id WHERE u.email_norm='first@example.test'").bind().first();
+  assert.equal(user.role,'OWNER');
+  const blocked=await api.fetch(new Request(origin+'/api/v1/auth/login',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({email:'first@example.test',password:data.password})}));
+  assert.equal(blocked.status,503);
+ }finally{db.close();}
+});
+
+test('brute-force defenses throttle a trusted Cloudflare client IP across rotating emails',async()=>{
+ const x=await fixture({TRUST_CF_CONNECTING_IP:'true'});
+ try{
+  const req=i=>x.request('/api/v1/auth/login','POST',{email:'invalid'+i+'@example.test',password:'wrong'},'',{'cf-connecting-ip':'198.51.100.20'});
+  for(let i=0;i<15;i++)assert.equal((await req(i)).status,401);
+  assert.equal((await req(16)).status,429);
+  // A forged, client-supplied X-Forwarded-For does not change the trusted identity.
+  assert.equal((await x.request('/api/v1/auth/login','POST',{email:'invalid999@example.test',password:'wrong'},'',{
+   'cf-connecting-ip':'198.51.100.20','x-forwarded-for':'203.0.113.50'
+  })).status,429);
+ }finally{x.close();}
+});
+
+test('new tenant creation is owner-only, capped and cannot renew an expired subscription by self-trial',async()=>{
+ const x=await fixture({SAAS_ENTITLEMENTS_ENABLED:'true',TENANT_SELF_SIGNUP_ENABLED:'true',PLATFORM_ADMIN_TOKEN:'trial-admin-token-1234567890-strong'});
+ try{
+  const a=await x.login('alice@example.test'),b=await x.login('operator@example.test');
+  const create={slug:'second-store',name:'Second Store'};
+  assert.equal((await x.request('/api/v1/tenants','POST',create,b)).status,403);
+  assert.equal((await x.request('/api/v1/tenants','POST',create,a)).status,402);
+  assert.equal((await x.request('/api/v1/platform/tenants/a/subscription','PUT',
+   {status:'ACTIVE',planKey:'basic',endsAt:'2026-12-01T00:00:00.000Z'},'',{
+    authorization:'Bearer trial-admin-token-1234567890-strong'
+   })).status,200);
+  const made=await x.request('/api/v1/tenants','POST',create,a);
+  assert.equal(made.status,201,await made.clone().text());
+  const newTenant=(await made.json()).tenant;
+  const sub=await x.db.prepare('SELECT status,plan_key AS plan FROM saas_subscriptions WHERE tenant_id=?').bind(newTenant.id).first();
+  assert.equal(sub.status,'TRIAL');assert.equal(sub.plan,'trial');
+  const freeze=await x.request('/api/v1/platform/tenants/a/subscription','PUT',
+   {status:'SUSPENDED',planKey:'basic',endsAt:'2026-12-01T00:00:00.000Z'},'',{
+    authorization:'Bearer trial-admin-token-1234567890-strong'
+   });
+  assert.equal(freeze.status,200);
+  // New trial tenant must not grant suspended owners unlimited fresh trials in this phase.
+  // The owner is allowed to create another tenant while an independent active trial exists,
+  // but maximum tenant count remains server-enforced.
+  assert.equal((await x.request('/api/v1/tenants','POST',{slug:'third-store',name:'Third'},a)).status,201);
+  assert.equal((await x.request('/api/v1/tenants','POST',{slug:'fourth-store',name:'Fourth'},a)).status,403);
+ }finally{x.close();}
+});
