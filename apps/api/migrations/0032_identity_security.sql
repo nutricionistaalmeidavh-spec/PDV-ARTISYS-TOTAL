@@ -19,3 +19,9 @@ CREATE TABLE platform_totp_replay (
  counter INTEGER PRIMARY KEY,
  consumed_at INTEGER NOT NULL
 );
+
+-- Durable unique consumption proof: concurrent requests cannot replay a challenge.
+CREATE TABLE saas_identity_consumptions (
+ token_hash TEXT PRIMARY KEY REFERENCES saas_identity_challenges(token_hash) ON DELETE RESTRICT,
+ consumed_at INTEGER NOT NULL
+);

@@ -45,7 +45,7 @@ test('temporary config retains original worker settings and applies only to dedi
   assert.throws(()=>configForRemoteSchema({...cfg,d1_databases:[{binding:'DB',database_name:'desktop-license'}]},'12345678-1234-1234-1234-123456789abc'),/dedicated/i);
 });
 test('healthy new D1 database has schema even when there are no users',()=>{
-  assert.equal(hasCompleteSchema([{name:'tenants'},{name:'users'},{name:'r4_table_prepayments'},{name:'d1_migrations'},{name:'public_signup_throttles'},{name:'saas_subscriptions'},{name:'saas_invitations'},{name:'saas_identity_challenges'},{name:'platform_totp_replay'}]),true);
+  assert.equal(hasCompleteSchema([{name:'tenants'},{name:'users'},{name:'r4_table_prepayments'},{name:'d1_migrations'},{name:'public_signup_throttles'},{name:'saas_subscriptions'},{name:'saas_invitations'},{name:'saas_identity_challenges'},{name:'platform_totp_replay'},{name:'saas_identity_consumptions'}]),true);
   assert.equal(hasCompleteSchema([{name:'tenants'},{name:'users'},{name:'d1_migrations'}]),false);
 });
 

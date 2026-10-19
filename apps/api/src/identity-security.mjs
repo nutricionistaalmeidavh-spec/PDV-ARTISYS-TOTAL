@@ -79,16 +79,19 @@ export async function publicIdentityRoute(request,db,path,now){
  const item=await q(db,'SELECT c.user_id AS userId,m.tenant_id AS tenantId FROM saas_identity_challenges c JOIN tenant_memberships m ON m.user_id=c.user_id WHERE c.token_hash=? AND c.purpose=? AND c.consumed_at IS NULL AND c.expires_at>? ORDER BY m.tenant_id LIMIT 1',hash,purpose,now).first();
  if(!item)return fail(409,'Código expirado ou já utilizado.');
  const when=new Date(now).toISOString();
- const statements=[q(db,'UPDATE saas_identity_challenges SET consumed_at=? WHERE token_hash=? AND purpose=? AND consumed_at IS NULL AND expires_at>?',now,hash,purpose,now)];
- if(verify)statements.push(q(db,'UPDATE users SET email_verified_at=? WHERE id=?',when,item.userId));
+ const statements=[
+  q(db,'INSERT INTO saas_identity_consumptions(token_hash,consumed_at) SELECT token_hash,? FROM saas_identity_challenges WHERE token_hash=? AND purpose=? AND consumed_at IS NULL AND expires_at>?',now,hash,purpose,now),
+  q(db,'UPDATE saas_identity_challenges SET consumed_at=? WHERE token_hash=? AND purpose=? AND consumed_at IS NULL AND expires_at>?',now,hash,purpose,now)
+ ];
+ if(verify)statements.push(q(db,'UPDATE users SET email_verified_at=? WHERE id=? AND EXISTS(SELECT 1 FROM saas_identity_consumptions WHERE token_hash=? AND consumed_at=?)',when,item.userId,hash,now));
  else{
   const passwordHash=await hashPassword(input.password);
-  statements.push(q(db,'UPDATE users SET password_hash=? WHERE id=?',passwordHash,item.userId));
-  statements.push(q(db,'DELETE FROM auth_sessions WHERE user_id=?',item.userId));
+  statements.push(q(db,'UPDATE users SET password_hash=? WHERE id=? AND EXISTS(SELECT 1 FROM saas_identity_consumptions WHERE token_hash=? AND consumed_at=?)',passwordHash,item.userId,hash,now));
+  statements.push(q(db,'DELETE FROM auth_sessions WHERE user_id=? AND EXISTS(SELECT 1 FROM saas_identity_consumptions WHERE token_hash=? AND consumed_at=?)',item.userId,hash,now));
  }
- statements.push(q(db,'INSERT INTO saas_audit_events(id,tenant_id,actor_id,kind,subject_id,created_at,detail_json) VALUES(?,?,?,?,?,?,?)',
-  crypto.randomUUID(),item.tenantId,item.userId,verify?'EMAIL_VERIFIED':'PASSWORD_RESET',item.userId,when,'{}'));
- const results=await db.batch(statements);
+ statements.push(q(db,'INSERT INTO saas_audit_events(id,tenant_id,actor_id,kind,subject_id,created_at,detail_json) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM saas_identity_consumptions WHERE token_hash=? AND consumed_at=?)',
+  crypto.randomUUID(),item.tenantId,item.userId,verify?'EMAIL_VERIFIED':'PASSWORD_RESET',item.userId,when,'{}',hash,now));
+ let results;try{results=await db.batch(statements);}catch{return fail(409,'Código expirado ou já utilizado.');}
  if(results[0]?.meta?.changes!==1)return fail(409,'Código expirado ou já utilizado.');
  return json(verify?{verified:true}:{reset:true,sessionsRevoked:true});
 }

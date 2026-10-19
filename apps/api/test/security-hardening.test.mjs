@@ -48,6 +48,7 @@ test('public email verification must precede platform approval and cannot be rep
   assert.equal((await x.request('/api/v1/auth/verify-email','POST',{token:'0'.repeat(64)})).status,409);
   assert.equal((await x.request('/api/v1/auth/verify-email','POST',{token:proof})).status,200);
   assert.equal((await x.request('/api/v1/auth/verify-email','POST',{token:proof})).status,409);
+  assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM saas_identity_consumptions WHERE token_hash IS NOT NULL').bind().first()).n,1);
   assert.equal((await x.request('/api/v1/platform/tenants/'+pending.id+'/approve','POST',{},adminHeaders)).status,200);
   const after=await x.request('/api/v1/platform/tenants','GET',null,adminHeaders);
   assert.equal((await after.json()).pendingTenants.length,0);
@@ -120,5 +121,28 @@ test('tenant paths, membership roles and foreign branch identifiers do not grant
   assert.equal((await x.request('/api/v1/tenants/a/finance-advanced/accounts?branchId=branch-b','GET',null,{cookie:alice})).status,404);
   assert.equal((await x.request('/api/v1/tenants/a/branches','POST',{code:'WEST',name:'West'},{cookie:cash})).status,403);
   assert.equal((await x.request('/api/v1/tenants/a/branches','POST',{code:'WEST',name:'West'},{cookie:alice})).status,201);
+ }finally{x.close();}
+});
+
+test('concurrent recovery requests cannot apply the same credential twice',async()=>{
+ const x=fixture();
+ try{
+  const pending=await register(x,'concurrent@example.test');
+  const auth={authorization:'Bearer '+admin};
+  const verified=await x.request('/api/v1/platform/users/'+pending.ownerUserId+'/email-verification','POST',{},auth);
+  assert.equal((await x.request('/api/v1/auth/verify-email','POST',{token:(await verified.json()).token})).status,200);
+  assert.equal((await x.request('/api/v1/platform/tenants/'+pending.id+'/approve','POST',{},auth)).status,200);
+  const issued=await x.request('/api/v1/platform/users/'+pending.ownerUserId+'/password-recovery','POST',{},auth);
+  const token=(await issued.json()).token;
+  const results=await Promise.all([
+   x.request('/api/v1/auth/reset-password','POST',{token,password:'ParallelPasswordFirst2026!'}),
+   x.request('/api/v1/auth/reset-password','POST',{token,password:'ParallelPasswordSecond2026!'})
+  ]);
+  assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+  const row=await x.db.prepare('SELECT COUNT(*) AS n FROM saas_identity_consumptions WHERE token_hash=?').bind(await (await import('../src/password.mjs')).sha256(token)).first();
+  assert.equal(row.n,1);
+  const first=await x.request('/api/v1/auth/login','POST',{email:'concurrent@example.test',password:'ParallelPasswordFirst2026!'});
+  const second=await x.request('/api/v1/auth/login','POST',{email:'concurrent@example.test',password:'ParallelPasswordSecond2026!'});
+  assert.deepEqual([first.status,second.status].sort(),[200,401]);
  }finally{x.close();}
 });
