@@ -1,4 +1,5 @@
 // R4 additive tenant+branch facade. Operational records are never a second cash/stock ledger.
+import {planShares} from './r4-saas-rules.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const stamp=()=>new Date().toISOString();
 const id=()=>crypto.randomUUID();
@@ -199,14 +200,14 @@ export function createR4ExtendedService(db){
    },
    async split(t,b,sessionId){
      const position=await this.sessionPosition(t,b,sessionId);
-     const plan=await first('SELECT parts,service_charge_bps AS serviceChargeBps,service_charge_product_id AS serviceChargeProductId FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId);
+     const plan=await first('SELECT parts,service_charge_bps AS serviceChargeBps,service_charge_product_id AS serviceChargeProductId,shares_json AS sharesJson FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId);
      if(!plan)return null;
      const serviceChargeCents=Math.round(position.baseCents*plan.serviceChargeBps/10000);
      const totalCents=position.baseCents+serviceChargeCents;
-     const per=Math.floor(totalCents/plan.parts),extra=totalCents%plan.parts;
+     const shares=planShares(totalCents,plan.parts,plan.sharesJson?JSON.parse(plan.sharesJson):null);
      return {sessionId,parts:plan.parts,baseCents:position.baseCents,serviceChargeBps:plan.serviceChargeBps,
        serviceChargeProductId:plan.serviceChargeProductId,serviceChargeCents,totalCents,
-       shares:Array.from({length:plan.parts},(_,index)=>per+(index<extra?1:0))};
+       shares};
    },
    async saveSplit(t,b,sessionId,body,key){
      const position=await this.sessionPosition(t,b,sessionId);
@@ -220,14 +221,16 @@ export function createR4ExtendedService(db){
      }
      return mutation(t,'r4.split:'+b+':'+sessionId,key,async()=>{
        const serviceChargeCents=Math.round(position.baseCents*bps/10000);
-       const totalCents=position.baseCents+serviceChargeCents,per=Math.floor(totalCents/parts),extra=totalCents%parts;
+       const totalCents=position.baseCents+serviceChargeCents;
+       let shares;
+       try{shares=planShares(totalCents,parts,body.shares??null);}catch(e){throw fail(400,e.message);}
        return {result:{sessionId,parts,baseCents:position.baseCents,serviceChargeBps:bps,serviceChargeProductId:feeId,
-         serviceChargeCents,totalCents,shares:Array.from({length:parts},(_,i)=>per+(i<extra?1:0))},
-         statements:[q(`INSERT INTO r4_split_plans(tenant_id,branch_id,table_session_id,parts,service_charge_bps,service_charge_product_id,updated_at)
-           VALUES(?,?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,table_session_id) DO UPDATE SET
+         serviceChargeCents,totalCents,shares},
+         statements:[q(`INSERT INTO r4_split_plans(tenant_id,branch_id,table_session_id,parts,service_charge_bps,service_charge_product_id,shares_json,updated_at)
+           VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,table_session_id) DO UPDATE SET
            parts=excluded.parts,service_charge_bps=excluded.service_charge_bps,
-           service_charge_product_id=excluded.service_charge_product_id,updated_at=excluded.updated_at`,
-           t,b,sessionId,parts,bps,feeId,stamp())]};
+           service_charge_product_id=excluded.service_charge_product_id,shares_json=excluded.shares_json,updated_at=excluded.updated_at`,
+           t,b,sessionId,parts,bps,feeId,body.shares?JSON.stringify(shares):null,stamp())]};
      });
    },
 
