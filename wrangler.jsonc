@@ -13,6 +13,7 @@
   // API remains read-only / locked while the SaaS is not provisioned for customers.
   "vars": {
     "AUTH_ENABLED": "false",
+    "REGISTRATION_ENABLED": "false",
     "SAAS_ENTITLEMENTS_ENABLED": "true",
     "TENANT_SELF_SIGNUP_ENABLED": "false",
     "TRUST_CF_CONNECTING_IP": "true"

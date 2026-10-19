@@ -12,6 +12,8 @@ on:
       - 'scripts/verify-cloudflare-build.mjs'
       - 'packages/core/**'
       - 'apps/web/**'
+      - 'apps/landing/**'
+      - 'scripts/public-landing.test.mjs'
       - 'docs/parity/**'
       - 'scripts/selfhost-backup.mjs'
       - 'scripts/selfhost-backup.test.mjs'
@@ -83,6 +85,8 @@ jobs:
         run: npm run test:core
       - name: Validate original renderer web syntax (no second app)
         run: npm run check:web
+      - name: Verify public landing and account-entry contracts
+        run: npm run check:landing
       - name: Validate entrypoints
         working-directory: apps/api
         run: npm run check
@@ -163,8 +167,10 @@ jobs:
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0028_r4_web_order_workflows.sql
       - name: Verify R4 concurrent transfer guard in local D1
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0029_r4_saas_concurrency.sql
-      - name: Verify SaaS tenant security and subscriptions migration in local D1
-        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0030_saas_access.sql
+      - name: Test public signup throttle schema in local D1
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0030_public_registration.sql
+      - name: Test SaaS tenant security and subscription schema in local D1
+        run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0031_saas_access.sql
       - name: Install one Chromium for all browser regression gates
         run: |
           npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0

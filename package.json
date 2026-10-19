@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "node scripts/verify-cloudflare-build.mjs && node scripts/build-web.mjs && node scripts/cloudflare-d1-bootstrap.mjs",
-    "test": "npm run test:core && npm run test:api && npm run check:web && npm run test:selfhost && npm run test:parity",
+    "test": "npm run test:core && npm run test:api && npm run check:web && npm run check:landing && npm run test:selfhost && npm run test:parity",
     "deploy": "wrangler deploy",
     "preview": "wrangler preview",
     "test:api": "cd apps/api && npm test",
@@ -20,7 +20,8 @@
     "report:parity": "node scripts/p6-capability-report.mjs",
     "report:saas": "node scripts/p6-capability-report.mjs --saas",
     "serve:lan": "npm run build && node --experimental-sqlite apps/api/src/https-lan-server.mjs",
-    "audit:r0-r1": "node scripts/r0-r1-audit.mjs"
+    "audit:r0-r1": "node scripts/r0-r1-audit.mjs",
+    "check:landing": "node --check apps/landing/landing.js && node --test scripts/public-landing.test.mjs"
   },
   "devDependencies": {
     "wrangler": "4.137.0"

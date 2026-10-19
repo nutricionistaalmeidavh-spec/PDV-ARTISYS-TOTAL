@@ -26,7 +26,8 @@ must(existsSync(resolve(root,'apps/api/migrations/0012_sale_item_notes.sql')),'P
 must(existsSync(resolve(root,'apps/api/migrations/0013_cash_terminals.sql')),'P3 terminal cash schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0014_checkout_configurations.sql')),'P3 configured checkout schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0015_seller_sales_targets.sql')),'P4 seller target schema missing');
-must(existsSync(resolve(root,'apps/api/migrations/0030_saas_access.sql')),'SaaS tenant and billing guard schema missing');
+must(existsSync(resolve(root,'apps/api/migrations/0030_public_registration.sql')),'Public registration migration missing');
+must(existsSync(resolve(root,'apps/api/migrations/0031_saas_access.sql')),'SaaS tenant and billing guard schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0017_inventory_minimum_levels.sql')),'P5 stock minimum schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0002_commerce.sql')),'commerce schema missing');
 must(existsSync(resolve(root,'packages/core/js/domains/sales/sale-service.js')),'canonical sales core missing');

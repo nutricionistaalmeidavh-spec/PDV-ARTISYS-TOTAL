@@ -188,14 +188,14 @@ export async function platformManagementRoute(request,db,env,path,now){
    if(!email||!name||!ownerName||!slug||!/^[a-z0-9][a-z0-9-]{2,63}$/.test(slug)||
      typeof data.password!=='string'||data.password.length<12||data.password.length>256)
     throw fail(400,'Dados do primeiro proprietário inválidos.');
-   const exists=await q(db,'SELECT id FROM tenants LIMIT 1').first();
+   const exists=await q(db,'SELECT id FROM tenants WHERE active=1 LIMIT 1').first();
    if(exists)throw fail(409,'Bootstrap bloqueado: já existe empresa no banco.');
    const id=newId(),userId=newId(),branchId=newId(),when=stamp(now),endsAt=stamp(now+14*86400000);
    const hashed=await hashPassword(data.password);
    // Atomic one-time bootstrap. Concurrent requests cannot create another tenant:
    // a no-op tenant INSERT makes later FK-bound inserts fail and roll back.
    await db.batch([
-    q(db,'INSERT INTO tenants(id,slug,name,created_at) SELECT ?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM tenants)',id,slug,name,when),
+    q(db,'INSERT INTO tenants(id,slug,name,created_at) SELECT ?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM tenants WHERE active=1)',id,slug,name,when),
     q(db,'INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)',userId,email,ownerName,hashed,when),
     q(db,'INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)',id,userId,'OWNER',when),
     q(db,'INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)',branchId,id,'MAIN','Matriz',when),

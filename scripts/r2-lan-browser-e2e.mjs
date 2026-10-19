@@ -53,7 +53,7 @@ try{
   const context=await browser.newContext({viewport:{width:390,height:844},
     ignoreHTTPSErrors:true,deviceScaleFactor:1});
   const page=await context.newPage();
-  const response=await page.goto(origin,{waitUntil:'domcontentloaded'});
+  const response=await page.goto(origin+'/app/',{waitUntil:'domcontentloaded'});
   assert.equal(response.status(),200,'cap-047 HTTPS local PWA must load on a mobile viewport');
   await page.locator('#web-login-form').waitFor({timeout:15000});
   await page.locator('#web-email').fill('r2-owner@integration.test');

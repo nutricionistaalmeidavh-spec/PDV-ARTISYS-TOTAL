@@ -24,7 +24,7 @@ O sistema mantém a única API canônica Cloudflare Workers/D1 e o motor existen
 
 ## Implantação segura
 
-1. O build de produção da main aplica a migration 0030 no D1 isolado do PDV TOTAL.
+1. O build de produção da main aplica a migration 0031 no D1 isolado do PDV TOTAL.
 2. Criar secret PLATFORM_ADMIN_TOKEN aleatório e com 32 ou mais caracteres nas Settings/Secrets do Worker. Nunca versionar ou expor esse valor no navegador.
 3. Com AUTH_ENABLED=false, executar POST /api/v1/platform/bootstrap, de ambiente administrativo, com Origin igual ao Worker e Authorization Bearer com esse segredo. JSON: email, ownerName, password (12–256 caracteres), slug e name. Aceita apenas o primeiro tenant, atomicamente.
 4. Um plano pode ser concedido por PUT /api/v1/platform/tenants/:id/subscription, com corpo contendo status, planKey e endsAt (ISO UTC). Exemplo: status ACTIVE, planKey basic, endsAt 2027-10-19T00:00:00.000Z.

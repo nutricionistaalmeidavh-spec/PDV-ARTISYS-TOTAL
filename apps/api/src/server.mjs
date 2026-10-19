@@ -17,7 +17,7 @@ const webDir=resolve(here,'../../../dist/web');
 if(!existsSync(resolve(webDir,'index.html')))
   throw new Error('PWA não compilada: execute npm run build na raiz antes de iniciar o servidor local.');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('PORT inválida.');
-const api=createApi({DB:db,COOKIE_SECURE:'false',AUTH_ENABLED:process.env.AUTH_ENABLED||'false',LOCAL_MEDIA_ENABLED:'true'});
+const api=createApi({DB:db,COOKIE_SECURE:'false',AUTH_ENABLED:process.env.AUTH_ENABLED||'false',REGISTRATION_ENABLED:process.env.REGISTRATION_ENABLED||'false',LOCAL_MEDIA_ENABLED:'true'});
 const server=createServer(async(req,res)=>{
   try{
     const origin=`http://${req.headers.host||'127.0.0.1:'+port}`;

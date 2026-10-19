@@ -29,7 +29,15 @@ html=html.replace('</head>',`  <meta name="theme-color" content="#081a35" />
 </head>`);
 html=html.replace('<body class="theme-home">','<body class="theme-home"><div id="web-offline-alert" role="status" aria-live="polite">Sem conexão com o servidor. Consultas e vendas precisam do servidor disponível na rede; nenhuma operação será enviada automaticamente.</div>');
 html=html.replace('</body>','  <script defer src="./pwa-register.js"></script>\n</body>');
-writeFileSync(filename,html,'utf8');
+// The operating system remains the only app shell at /app/.
+// / serves the public landing; both share the same origin, API and cookie.
+const appEntry=resolve(output,'app/index.html');
+mkdirSync(dirname(appEntry),{recursive:true});
+writeFileSync(appEntry,html.replace('<head>','<head>\n  <base href="/" />'),'utf8');
+copyFileSync(resolve(root,'apps/landing/index.html'),filename);
+copyFileSync(resolve(root,'apps/landing/landing.css'),resolve(output,'landing.css'));
+copyFileSync(resolve(root,'apps/landing/landing.js'),resolve(output,'landing.js'));
+
 copyFileSync(resolve(root,'packages/core/shared/order-composer.js'),resolve(output,'order-composer.js'));
 copyFileSync(resolve(root,'packages/core/js/core/mobile-access/qr-code.js'),resolve(output,'local-access-qr.js'));
 buildPwaIcons(output);

@@ -13,7 +13,7 @@ const stamp=new Date(NOW).toISOString();
 async function fixture(options={}){
  const db=openLocalDatabase();
  db.exec(readFileSync(new URL('../migrations/0001_identity.sql',import.meta.url),'utf8'));
- db.exec(readFileSync(new URL('../migrations/0030_saas_access.sql',import.meta.url),'utf8'));
+ db.exec(readFileSync(new URL('../migrations/0031_saas_access.sql',import.meta.url),'utf8'));
  const pwd=await hashPassword(password);
  for(const [id,email] of [['alice','alice@example.test'],['bob','bob@example.test'],['operator','operator@example.test']])
    await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)').bind(id,email,id,pwd,stamp).run();
@@ -132,7 +132,7 @@ test('platform can bootstrap exactly one company while public login remains disa
  const db=openLocalDatabase();
  try{
   db.exec(readFileSync(new URL('../migrations/0001_identity.sql',import.meta.url),'utf8'));
-  db.exec(readFileSync(new URL('../migrations/0030_saas_access.sql',import.meta.url),'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0031_saas_access.sql',import.meta.url),'utf8'));
   const api=createApi({DB:db,AUTH_ENABLED:'false',PLATFORM_ADMIN_TOKEN:'another-private-admin-key-123456789'});
   const data={email:'first@example.test',name:'First Store',ownerName:'First Owner',slug:'first-store',password:'First-Owner-Password-2026!'};
   const post=()=>api.fetch(new Request(origin+'/api/v1/platform/bootstrap',{

@@ -40,7 +40,7 @@ try {
   const branch=await fetch(origin+'/api/v1/tenants/'+tenantId+'/branches',{headers:{cookie},signal:AbortSignal.timeout(5000)});
   assert.equal(branch.status,200,'Canonical branch read failed');
   assert.equal((await branch.json()).branches.length,1);
-  const home=await fetch(origin+'/',{signal:AbortSignal.timeout(5000)});
+  const home=await fetch(origin+'/app/',{signal:AbortSignal.timeout(5000)});
   assert.equal(home.status,200,'Original PDV renderer static assets not served');
   assert.match(await home.text(),/PDV Total|ArtiSys PDV/);
   const branchId=(await (await fetch(origin+'/api/v1/tenants/'+tenantId+'/branches',{headers:{cookie}})).json()).branches[0].id;
@@ -85,7 +85,7 @@ try {
       const page=await browser.newPage({viewport:{width:1280,height:800},locale:'pt-BR'});
       const jsErrors=[];
       page.on('pageerror',error=>jsErrors.push(error.message));
-      await page.goto(origin+'/',{waitUntil:'domcontentloaded'});
+      await page.goto(origin+'/app/',{waitUntil:'domcontentloaded'});
       await page.getByRole('heading',{name:'Entre na sua loja'}).waitFor({timeout:12000});
       await page.getByLabel('E-mail').fill('owner@example.test');
       await page.getByLabel('Senha').fill('SenhaIncorreta_2026');

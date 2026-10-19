@@ -1,5 +1,15 @@
 # PDV Artisys Total — evolução SaaS do PDV ArtiSys
 
+## Landing pública e entrada do produto
+
+- `/`: apresentação do PDV Total com destaques para cardápio, mesas e cozinha, recursos de gestão e formulário de solicitação de conta.
+- `/app/`: **renderer operacional existente**, login por e-mail e senha com sessão HttpOnly, tenant e filial canônicos. O app não foi duplicado.
+- `/#cadastro`: abre o formulário público. `POST /api/v1/auth/register` cria, atomicamente, usuário, empresa e filial **pendentes**, sem acesso a vendas antes de uma aprovação explícita de empresa e vínculo.
+- **Produção continua fechada por padrão**: `AUTH_ENABLED=false` e `REGISTRATION_ENABLED=false` no Wrangler. Publicar a landing não libera login ou cadastros. A ativação de login e cadastro é deliberada depois de validar proteção de abuso, moderação, termos, notificações e os gates comerciais.
+- Sem provedores pagos e sem APIs externas obrigatórias; teste local: `npm run check:landing`. A identidade da marca e as prévias da landing não substituem telas operacionais reais.
+
+
+
 **Produto principal: SaaS web/PWA por HTTPS**, acessível pelo navegador em PC, tablet e celular. **Não exige instalar executável, hospedar servidor no estabelecimento ou conectar terminais a uma LAN.** A API autoritativa fica no backend hospedado (Cloudflare Workers + D1 como opção da faixa gratuita), com autenticação, empresas/filiais e isolamento de dados. O modo Node/SQLite e HTTPS LAN é uma **alternativa self-hosted opcional**, não uma etapa para lançar o SaaS.
 
 Este é o **único repositório ativo do produto PDV Total**. O repositório [PDV-ARTISYS](https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS) permanece **intocado** e não é upstream de builds, deploys, licenças ou atualizações deste projeto.
@@ -93,7 +103,7 @@ A interface web pode usar a mesma API autoritativa em **Node.js + SQLite local**
 - Assinaturas e suspensão verificadas no Worker antes de mutações quando SAAS_ENTITLEMENTS_ENABLED=true, não por sinais da interface. Leitura ainda disponível para empresa suspensa.
 - Plataforma possui bootstrap inicial único e concessões auditadas somente com PLATFORM_ADMIN_TOKEN privado, não enviado à PWA.
 - Defesa adicional contra tentativas de login por IP verificado na borda Cloudflare. Nenhum X-Forwarded-For enviado pelo cliente é aceito.
-- A Cloudflare inicializa também o schema 0030 antes do deploy. AUTH_ENABLED=false permanece até existir proprietário provisionado e testes em produção.
+- A Cloudflare inicializa também o schema 0031 antes do deploy. AUTH_ENABLED=false permanece até existir proprietário provisionado e testes em produção.
 - Não há integração de cobrança online; os planos são inicialmente administrados pela ArtiSys.
 
 Consulte docs/SAAS-SECURITY-OPERATIONS.md.
