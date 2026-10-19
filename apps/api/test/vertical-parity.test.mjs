@@ -1073,7 +1073,7 @@ test('cap-032: adiantamento por pagador somado ao rateio usa uma venda única e 
   assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,200);
   const splitUrl=`restaurant/sessions/${session.id}/split`;
   assert.equal((await x.request('a',splitUrl,'POST',{branchId:'filial-a',parts:2})).status,200);
-  assert.equal((await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0})).status,200);
+  assert.equal((await x.request('a','cash/open','POST',{branchId:'filial-a',openingCents:0})).status,201);
   const pre=await x.request('a',`restaurant/sessions/${session.id}/prepayments`,'POST',
     {branchId:'filial-a',method:'CASH',amountCents:900,payerIndex:1});
   assert.equal(pre.status,201,JSON.stringify(pre.body));
