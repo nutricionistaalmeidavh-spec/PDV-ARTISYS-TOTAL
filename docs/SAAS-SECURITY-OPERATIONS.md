@@ -46,3 +46,7 @@ Não foram implantados MFA, recuperação de senha, verificação externa de e-m
 ## Aprovação de inscrições da landing
 
 O cadastro público em `/api/v1/auth/register` deixa empresa e OWNER com `active=0`, sem assinatura. A credencial privada de plataforma permite `GET /api/v1/platform/tenants` para revisar solicitações pendentes e `POST /api/v1/platform/tenants/:tenantId/approve` para ativar uma empresa uma única vez com avaliação de 14 dias, tudo de forma atômica e auditada. Login anterior à aprovação é bloqueado. Nenhum sinalizador enviado pelo navegador pode aprovar empresas.
+
+## Acesso do proprietário e operações privadas
+
+O OWNER possui painel **Minha empresa** na PWA; as ações administrativas da plataforma permanecem fora do browser. Para revisão/aprovação de contas e smoke com login real, consulte [Primeiro acesso](SAAS-FIRST-ACCESS.md).
