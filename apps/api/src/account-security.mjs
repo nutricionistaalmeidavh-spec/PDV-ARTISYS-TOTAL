@@ -58,10 +58,22 @@ async function parse(request){
  const data=JSON.parse(raw);if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Invalid JSON');
  return data;
 }
+function mfaBucket(userId,now){return sha256('pdv-mfa:'+userId+':'+Math.floor(now/900000));}
+async function mfaFailures(db,userId,now){
+ const key=await mfaBucket(userId,now);
+ return {key,row:await q(db,'SELECT failures FROM saas_auth_rate_limits WHERE bucket_hash=? AND expires_at>?',key,now).first()};
+}
+async function mfaFailed(db,userId,now){
+ const key=await mfaBucket(userId,now);
+ await q(db,'INSERT INTO saas_auth_rate_limits(bucket_hash,failures,expires_at) VALUES(?,1,?) ON CONFLICT(bucket_hash) DO UPDATE SET failures=saas_auth_rate_limits.failures+1,expires_at=excluded.expires_at',key,(Math.floor(now/900000)+1)*900000).run();
+}
 export async function beginMfaLogin(db,env,userId,now){
  if(env.MFA_ENABLED!=='true')return null;
  const enrolled=await q(db,'SELECT 1 AS ok FROM saas_mfa_totp WHERE user_id=? AND enrolled_at IS NOT NULL',userId).first();
  if(!enrolled)return null;
+ const rate=await mfaFailures(db,userId,now);
+ const active=await q(db,'SELECT COUNT(*) AS count FROM saas_mfa_login_challenges WHERE user_id=? AND expires_at>?',userId,now).first();
+ if((rate.row?.failures||0)>=10||active.count>=5)throw Object.assign(new Error('Muitas tentativas MFA; tente novamente mais tarde.'),{status:429});
  await keyFor(env); // Missing key must FAIL CLOSED, not bypass MFA.
  const token=newSessionToken();
  await q(db,'INSERT INTO saas_mfa_login_challenges(token_hash,user_id,expires_at,attempts) VALUES(?,?,?,0)',await sha256(token),userId,now+300000).run();
@@ -77,7 +89,10 @@ export async function finishMfaLogin(request,db,env,now){
  if(!row||row.expiresAt<=now||row.attempts>=5)return null;
  const attempt=await q(db,'UPDATE saas_mfa_login_challenges SET attempts=attempts+1 WHERE token_hash=? AND expires_at>? AND attempts<5',hash,now).run();
  if(!attempt.meta.changes)return null;
- if(!await verifyFactor(db,env,row.userId,body.code,now))return null;
+ if((await mfaFailures(db,row.userId,now)).row?.failures>=10)return null;
+ if(!await verifyFactor(db,env,row.userId,body.code,now)){
+  await mfaFailed(db,row.userId,now);return null;
+ }
  const deleteResult=await q(db,'DELETE FROM saas_mfa_login_challenges WHERE token_hash=?',hash).run();
  if(!deleteResult.meta.changes)return null;
  return q(db,'SELECT id,email_norm AS email,display_name AS displayName FROM users WHERE id=? AND active=1',row.userId).first();
@@ -119,7 +134,9 @@ export async function accountSecurityRoute(request,db,env,session,now,path,optio
  const method=request.method;
  try{
   if(path==='/api/v1/auth/security'&&method==='GET'){
-   const user=env.EMAIL_VERIFICATION_REQUIRED==='true'?await q(db,'SELECT email_verified_at AS verified FROM users WHERE id=?',session.userId).first():null;
+   const user=await q(db,'SELECT email_verified_at AS verified FROM users WHERE id=?',session.userId).first().catch(error=>{
+    if(env.EMAIL_VERIFICATION_REQUIRED==='true')throw error;return null;
+   });
    const mfa=env.MFA_ENABLED==='true'?await q(db,'SELECT enrolled_at AS enrolledAt FROM saas_mfa_totp WHERE user_id=?',session.userId).first():null;
    return out({emailVerified:!!user?.verified,mfaEnabled:!!mfa?.enrolledAt,emailDeliveryConfigured:!!(env.EMAIL_DELIVERY_URL&&env.EMAIL_DELIVERY_TOKEN)});
   }
