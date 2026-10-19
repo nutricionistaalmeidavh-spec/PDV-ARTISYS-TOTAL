@@ -861,3 +861,50 @@ test('cap-009/036 configured pizza freezes selected addon recipe and debits ingr
   assert.equal((await x.request('b',`recipes/${pizza.id}/options/ADDON/CHEESE?branchId=filial-b`,'GET',undefined,{as:'b'})).status,404);
  }finally{x.close();}
 });
+
+test('cap-034: KDS claim is single-owner across competing sessions and wrong lease cannot acknowledge',async()=>{
+ const x=await setup();try{
+  const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Frigideira',sku:'KDS-RACE-1',salePriceCents:1200,trackStock:false})).body.product;
+  const station=(await x.request('a','restaurant/kitchen/stations','POST',{branchId:'filial-a',name:'Fritura',printerName:'fila-fritura',printEnabled:true})).body.station;
+  await x.request('a','restaurant/kitchen/routes','POST',{branchId:'filial-a',productId:p.id,mode:'PRODUCTION',stationId:station.id});
+  const order=await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:p.id,quantity:1}]});
+  assert.equal(order.status,201,JSON.stringify(order.body));
+  const list=await x.request('a','restaurant/kitchen/print-jobs?branchId=filial-a');
+  assert.equal(list.status,200,JSON.stringify(list.body));
+  assert.equal(list.body.jobs.length,1);
+  const job=list.body.jobs[0],path=`restaurant/kitchen/print-jobs/${job.id}`;
+  const [a,b]=await Promise.all([
+    x.request('a',path+'/claim','POST',{branchId:'filial-a'}),
+    x.request('a',path+'/claim','POST',{branchId:'filial-a'})
+  ]);
+  assert.equal([a.status,b.status].filter(s=>s===200).length,1);
+  const winner=[a,b].find(v=>v.status===200).body.job;
+  assert.equal((await x.request('a',path+'/ack','POST',{branchId:'filial-a',leaseToken:crypto.randomUUID(),status:'PRINTED'})).status,409);
+  const ack=await x.request('a',path+'/ack','POST',{branchId:'filial-a',leaseToken:winner.leaseToken,status:'PRINTED'});
+  assert.equal(ack.status,200,JSON.stringify(ack.body));
+  assert.equal((await x.request('a',path+'/claim','POST',{branchId:'filial-a'})).status,409);
+  assert.equal((await x.request('b',path+'/claim','POST',{branchId:'filial-b'},{as:'b'})).status,404);
+ }finally{x.close();}
+});
+
+test('cap-035: concurrent kitchen status requests cannot create duplicate order, tickets or stock events',async()=>{
+ const x=await setup();try{
+  const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Prato concorrente',sku:'KDS-RACE-2',salePriceCents:1600,trackStock:false})).body.product;
+  const station=(await x.request('a','restaurant/kitchen/stations','POST',{branchId:'filial-a',name:'Grelha 2',printEnabled:false})).body.station;
+  await x.request('a','restaurant/kitchen/routes','POST',{branchId:'filial-a',productId:p.id,mode:'PRODUCTION',stationId:station.id});
+  const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'PICKUP',items:[{productId:p.id,quantity:1}]})).body.order;
+  const ticket=(await x.request('a','restaurant/kitchen/station-tickets?branchId=filial-a')).body.tickets[0];
+  const path=`restaurant/kitchen/station-tickets/${ticket.id}`;
+  const changes=await Promise.all([
+    x.request('a',path,'PATCH',{branchId:'filial-a',status:'PREPARING'}),
+    x.request('a',path,'PATCH',{branchId:'filial-a',status:'PREPARING'})
+  ]);
+  assert.equal(changes.filter(x=>x.status===200).length,1,'exactly one operator wins transition');
+  assert.equal((await x.request('a',path,'PATCH',{branchId:'filial-a',status:'READY'})).status,200);
+  assert.equal((await x.request('a',path,'PATCH',{branchId:'filial-a',status:'READY'})).status,409);
+  const status=await x.db.prepare('SELECT status FROM r4_station_tickets WHERE id=?').bind(ticket.id).first();
+  assert.equal(status.status,'READY');
+  assert.equal((await x.db.prepare('SELECT COUNT(*) n FROM restaurant_orders WHERE id=?').bind(order.id).first()).n,1);
+  assert.equal((await x.db.prepare('SELECT COUNT(*) n FROM r4_station_tickets WHERE order_id=?').bind(order.id).first()).n,1);
+ }finally{x.close();}
+});
