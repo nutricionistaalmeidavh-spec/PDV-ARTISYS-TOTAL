@@ -171,6 +171,10 @@ jobs:
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0030_public_registration.sql
       - name: Test SaaS tenant security and subscription schema in local D1
         run: npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0031_saas_access.sql
+      - name: Test billing checkout and P2 security tables in local D1
+        run: |
+          npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0032_artisys_billing.sql
+          npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0033_p2_account_security.sql
       - name: Install one Chromium for all browser regression gates
         run: |
           npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0
