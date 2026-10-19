@@ -197,6 +197,11 @@ export async function verticalRoute(request,db,session,member,tenantId,path){
        permission(member,user,'reports.view');
        const from=url.searchParams.get('from'),to=url.searchParams.get('to');
        if(parts[2]==='summary')return json({report:await svc.restaurantReport(tenantId,branch,from,to)});
+       if(parts[2]==='orders'){
+         const raw=url.searchParams.get('limit');
+         const limit=raw===null?50:Number(raw);
+         return json(await svc.restaurantReportRows(tenantId,branch,from,to,{limit,cursor:url.searchParams.get('cursor')}));
+       }
        if(parts[2]==='csv')return new Response(await svc.restaurantReport(tenantId,branch,from,to,{csv:true}),{
          status:200,headers:{'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename="restaurant-operations.csv"','cache-control':'no-store','x-content-type-options':'nosniff'}
        });
