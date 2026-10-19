@@ -2656,6 +2656,6 @@ test('checkout-016 R3 stable scale and manual weighted sale share exactly one ca
     assert.equal((await x.get('a','inventory?branchId=branch-a')).body.stock[0].quantity,7.5);
     const one=await x.db.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE type='sale' AND tenant_id='a'").bind().first();
     assert.equal(one.n,2);
-    assert.equal((await x.get('b','inventory?branchId=branch-b')).body.stock.length,0);
+    assert.equal((await x.db.prepare("SELECT COUNT(*) AS n FROM inventory_movements WHERE tenant_id='b'").bind().first()).n,0);
   }finally{x.close();}
 });
