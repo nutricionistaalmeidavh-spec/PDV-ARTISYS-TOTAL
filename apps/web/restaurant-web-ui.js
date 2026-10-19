@@ -81,7 +81,7 @@
        const orders=state.orders.filter(o=>o.table_session_id===state.selected);
        const total=orders.filter(o=>o.status!=='CANCELLED').reduce((sum,o)=>sum+Number(o.total_cents||0),0);
        return '<div class="restaurant-card"><h3>'+esc(s.label)+' · Comanda '+esc(state.selected.slice(0,8))+'</h3>'+
-         '<p>Pedidos operacionais: '+money(total)+'. A cobrança é feita no caixa canônico.</p>'+
+         '<p>Pedidos operacionais: '+money(total)+'. A cobrança é feita no caixa canônico.</p>'+btn('Imprimir pré-conta','prebill-table',state.selected)+
          orders.map(o=>'<div class="restaurant-row">'+esc(orderLines(o))+' · '+esc(title(o.status))+'</div>').join('')+
          (can('restaurant.service.manage')?btn('Chamar garçom','service-waiter',state.selected)+btn('Solicitar conta','service-bill',state.selected):'')+
          (can('restaurant.orders.transfer')&&free.length?'<form class="vertical-form" data-r4-form="transfer"><input type="hidden" name="sessionId" value="'+esc(state.selected)+'"><label class="field"><span>Mudar para mesa livre</span><select name="targetTableId">'+free.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.label)+'</option>').join('')+'</select></label><button class="secondary-button">Transferir mesa</button></form>':'')+
@@ -128,7 +128,9 @@
          '<div class="restaurant-row"><strong>'+esc(j.printerName)+' · '+esc(j.id.slice(0,8))+'</strong>'+
          '<small>'+esc(({PENDING:'Aguardando agente',LEASED:'Em envio',FAILED:'Aguardando nova tentativa',
            PRINTED:'Enviado à fila local',CANCELLED:'Cancelado'})[j.status]||j.status)+
-         ' · tentativa '+esc(j.attempts)+'/8</small></div>').join('')+'</div>'+
+         ' · tentativa '+esc(j.attempts)+'/8</small>'+
+         (can('kitchen.update_status')&&['PENDING','FAILED'].includes(j.status)?btn('Enviar ao conector','dispatch-kds',j.id):'')+
+         btn('Ver documento','preview-kds',j.id)+'</div>').join('')+'</div>'+
        '<p>O agente local precisa estar conectado à impressora. Enviado à fila não garante papel impresso.</p></details></section>';
  }
  function serviceSection(){
@@ -195,6 +197,31 @@
    if(what==='select'){state.selected=id;return render();}
    if(what==='refresh')return reload();
    if(what==='advanced')return root.PdvR4AdvancedUi?.show?.({sessionId:id||state.selected});
+   if(what==='dispatch-kds'){
+     if(!can('kitchen.update_status'))return notice('Sem permissão para enviar à impressora.',true);
+     const job=state.printJobs.find(j=>j.id===id);
+     if(!job)return notice('Atualize a fila para localizar o ticket.',true);
+     el.disabled=true;
+     try{
+       const result=await root.PdvR3KitchenDispatch.dispatch({api,bridge:root.PdvLocalBridge,job});
+       notice(result.spoolSubmitted?'Ticket enviado à fila local. Confirme a saída no equipamento.':'Envio não confirmado.');
+       await reload();
+     }catch(error){notice(error?.message||'Falha ao enviar ticket.',true);await reload();}
+     finally{el.disabled=false;}
+     return;
+   }
+   if(['preview-kds','prebill-table'].includes(what)){
+     const popup=root.open('','_blank');
+     if(!popup)return notice('Libere pop-ups para imprimir documentos não fiscais.',true);
+     try{
+       const endpoint=what==='prebill-table'
+         ?'/api/v1/restaurant/sessions/'+encodeURIComponent(id)+'/prebill'
+         :'/api/v1/restaurant/kitchen/print-jobs/'+encodeURIComponent(id)+'/document';
+       const doc=await api.request(endpoint);
+       root.PdvWebHardware.printTextDocument(doc,{popup});
+     }catch(error){try{popup.close();}catch{}notice(error?.message||'Falha ao preparar documento.',true);}
+     return;
+   }
    if(what==='add-line'){
      const formEl=el.closest('form'),rows=formEl?.querySelector('[data-r4-lines]');
      if(!rows)return;

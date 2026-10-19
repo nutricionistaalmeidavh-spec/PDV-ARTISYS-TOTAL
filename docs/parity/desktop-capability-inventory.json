@@ -776,21 +776,31 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 24
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-018"
+      ],
       "acceptance": "thermal-print-queue-and-retry: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Bridge SQLite idempotente com recuperação FAILED/UNCERTAIN e reimpressão manual de ID separado; testes simulados. Ainda falta comparar integralmente fila e reimpressão com driver do desktop, formatos específicos e tentativas canônicas em D1. Nenhuma alegação de impressão física.",
+      "reviewNote": "A fila de impressão tem identidade imutável, replay idempotente no conector SQLite e lease/ACK canônico KDS com teste de UNCERTAIN, falha e reenvio sob gesto explícito do operador. Não declara impressão física.",
       "implementationEvidence": {
         "file": "tools/local-hardware-bridge/bridge.mjs",
         "contains": "createSpoolQueue",
         "testFile": "apps/api/test/local-bridge.test.mjs",
         "testContains": "test('failed spool job is retryable"
+      },
+      "independentEvidence": {
+        "file": "apps/web/r3-kitchen-dispatch.js",
+        "contains": "async function dispatch(",
+        "testFile": "apps/api/test/r3-kitchen-dispatch.test.mjs",
+        "testContains": "test('cap-025 R3 kitchen dispatch uses immutable job id",
+        "testAssertionContains": "assert.equal(result.status,'PRINTED');",
+        "testRunner": "node-test"
       }
     },
     {
@@ -800,21 +810,31 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 25
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-018"
+      ],
       "acceptance": "shared-artisys-printing-renderer-and-drivers: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Comprovante HTML/PDF e texto ESC/POS/bridge recebem identidade congelada canônica por venda. Renderizações de cozinha/caixa, rasterização de logo na térmica e equivalência integral de drivers permanecem sob revisão; equipamento físico é opcional.",
+      "reviewNote": "Renderização reutiliza o módulo canônico de cozinha, mesa e caixa do desktop; comprovantes de venda têm saída autoritativa do mesmo renderer, serial ESC/POS CP850 e PNG raster limitado com testes de bytes. Modal/PDF sem assumir spooler físico.",
       "implementationEvidence": {
         "file": "tools/local-hardware-bridge/main.mjs",
         "contains": "const printer=",
         "testFile": "apps/api/test/local-bridge.test.mjs",
         "testContains": "test('local SQLite queue keeps idempotent receipt"
+      },
+      "independentEvidence": {
+        "file": "apps/api/src/r3-print-documents.mjs",
+        "contains": "renderKitchenPrintJob",
+        "testFile": "apps/api/test/r3-print-documents.test.mjs",
+        "testContains": "test('cap-026 R3 canonical renderer parity uses original shared kitchen layout",
+        "testAssertionContains": "assert.equal(text,expected);",
+        "testRunner": "node-test"
       }
     },
     {
@@ -824,21 +844,31 @@
       "dependsOn": [
         "checkout-016"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 26
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-016"
+      ],
       "acceptance": "shared-artisys-serialport-peripheral-runtime: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "WebSerial requer gesto explícito, invalida porta desconectada/errada e exige reconexão manual; teste injeta EIO e recuperação. Ainda faltam todas as variantes de protocolo/timeout do desktop e o contrato checkout-016.",
+      "reviewNote": "WebSerial em navegador HTTPS exige permissão explícita e limpa handles após desconexão EIO. Simulações de 250 ciclos, fragmentação estável da balança, frame Urano, serial ESC/POS, gaveta e reconexão passam na CI. Nenhum protocolo proprietário não documentado é afirmado.",
       "implementationEvidence": {
         "file": "apps/web/peripherals-web.js",
         "contains": "function serialApi",
         "testFile": "apps/api/test/peripherals-web.test.mjs",
         "testContains": "test('sem permissão explícita"
+      },
+      "independentEvidence": {
+        "file": "apps/web/peripherals-web.js",
+        "contains": "async function writeSerial(",
+        "testFile": "apps/api/test/peripherals-web.test.mjs",
+        "testContains": "test('cap-027 serial printer disconnect invalidates handle",
+        "testAssertionContains": "assert.equal(opened,2);",
+        "testRunner": "node-test"
       }
     },
     {
@@ -849,21 +879,32 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 27
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-016",
+        "checkout-018"
+      ],
       "acceptance": "hardware-protocol-simulation-ci-and-recovery-tests: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Simulações cobrem fila persistente, falha, retry, restart incerto, isolamento do bridge e porta WebSerial EIO/reconnect. Testes de estresse por perfil, framing e os demais protocolos da referência desktop ainda sem cobertura integral certificada.",
+      "reviewNote": "CI cobre fila SQLite após reinício, FAILED/UNCERTAIN, reconexão WebSerial, 250 ciclos, limites de payload, raster térmico, D1 emulado e bloqueio de operações não autorizadas. Hardware real é homologação opcional posterior.",
       "implementationEvidence": {
         "file": "tools/local-hardware-bridge/bridge.mjs",
         "contains": "createSpoolQueue",
         "testFile": "apps/api/test/local-bridge.test.mjs",
         "testContains": "test('in-progress spool job recovered"
+      },
+      "independentEvidence": {
+        "file": "apps/web/r3-kitchen-dispatch.js",
+        "contains": "async function dispatch(",
+        "testFile": "apps/api/test/r3-kitchen-dispatch.test.mjs",
+        "testContains": "test('cap-028 R3 uncertain and disconnected spool",
+        "testAssertionContains": "assert.equal(client.actions.filter(a=>a.kind==='bridge').length,1);",
+        "testRunner": "node-test"
       }
     },
     {
@@ -873,21 +914,31 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 28
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-018"
+      ],
       "acceptance": "non-fiscal-sale-prebill-kitchen-and-cash-printing: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Venda concluída imprime comprovante com snapshot servidor; checkout web permite pré-conta não fiscal sem finalizar. KDS já tem outbox imutável R4 de impressão; prova integral de tickets por cozinha e caixa em todos os perfis ainda pendente.",
+      "reviewNote": "Documentos não fiscais de venda, pré-conta, comanda/mesa, cozinha por estação e fechamento de caixa saem dos dados canônicos sob RBAC/tenant/filial. Tests conferem renderer original e nenhum efeito em caixa/estoque ao imprimir.",
       "implementationEvidence": {
         "file": "apps/web/peripherals-web.js",
         "contains": "function receiptHtml",
         "testFile": "apps/api/test/peripherals-web.test.mjs",
         "testContains": "test('comprovante web só aceita"
+      },
+      "independentEvidence": {
+        "file": "apps/api/src/r3-document-route.mjs",
+        "contains": "async function r3DocumentRoute",
+        "testFile": "apps/api/test/r3-saas-receipts.test.mjs",
+        "testContains": "test('cap-029 R3 hosted SaaS serves tenant-isolated canonical",
+        "testAssertionContains": "assert.equal(v.body.documentType,'TABLE_PREBILL');",
+        "testRunner": "node-test"
       }
     },
     {
@@ -897,21 +948,31 @@
       "dependsOn": [
         "checkout-018"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 29
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-018"
+      ],
       "acceptance": "configurable-non-fiscal-receipt-branding-name-address-phone-logo: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Identificação de cupom (nome, endereço, telefone e PNG limitado) sincronizada pela API e persistida no banco por tenant/filial. Trigger na conclusão da venda congela a marca em snapshot imutável e reimpressão usa o histórico; teste isola empresas, RBAC e invalidade do PNG. Ainda falta certificação integral dos drivers específicos do desktop para logo raster no ESC/POS/thermal.",
+      "reviewNote": "Marca por tenant/filial validada e armazenada no D1, com PNG bounded e snapshot imutável na mesma transação que conclui venda; reimpressões de pós-venda e histórico usam snapshot. Browser/PDF inclui PNG, serial ESC/POS inclui raster, bridge do sistema operacional segue textual onde não há suporte a gráficos.",
       "implementationEvidence": {
         "file": "apps/web/peripherals-web.js",
         "contains": "function receiptHtml",
         "testFile": "apps/api/test/r3-receipt-branding.test.mjs",
         "testContains": "test('cap-030 R3: store name, address, phone"
+      },
+      "independentEvidence": {
+        "file": "apps/api/src/receipt-route.mjs",
+        "contains": "normalizeReceiptBranding",
+        "testFile": "apps/api/test/r3-saas-receipts.test.mjs",
+        "testContains": "test('cap-030 immutable SaaS sale receipt keeps branding snapshot",
+        "testAssertionContains": "assert.equal(q.body.branding.name,'Loja Original');",
+        "testRunner": "node-test"
       }
     },
     {
@@ -1299,21 +1360,32 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
         "file": "release/capabilities.json",
         "manifestIndex": 42
       },
-      "testedContractRefs": [],
+      "testedContractRefs": [
+        "checkout-016",
+        "checkout-018"
+      ],
       "acceptance": "versioned-hardware-compatibility-evidence: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Matriz de protocolo versionada com tipos PRINTER/SCALE/DRAWER/SCANNER e evidência emulada. Reforçados testes de EIO/repareamento e comprovantes canônicos; checkout-016 segue parcial e a equivalência de todos os protocolos do desktop não está certificada. FIELD_VERIFIED não alegado.",
+      "reviewNote": "Matriz de compatibilidade versionada verifica protocolos emulados de impressora, balança, gaveta, leitor HID e dependência checkout-016; distingue PROTOCOL_VERIFIED de FIELD_VERIFIED. Não alega homologação física de modelos não testados.",
       "implementationEvidence": {
         "file": "docs/parity/hardware-compatibility.json",
         "contains": "r3-hardware-contracts-2026-10-18",
         "testFile": "apps/api/test/r3-hardware-compatibility.test.mjs",
         "testContains": "test('cap-043 versioned R3 compatibility matrix"
+      },
+      "independentEvidence": {
+        "file": "docs/parity/hardware-compatibility.json",
+        "contains": "r3-hardware-contracts-2026-10-18",
+        "testFile": "apps/api/test/r3-hardware-compatibility.test.mjs",
+        "testContains": "test('cap-043 versioned R3 compatibility matrix",
+        "testAssertionContains": "assert.deepEqual([...verified].sort(),['DRAWER','PRINTER','SCALE','SCANNER']);",
+        "testRunner": "node-test"
       }
     },
     {

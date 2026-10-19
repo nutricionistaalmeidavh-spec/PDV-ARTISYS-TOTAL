@@ -35,7 +35,7 @@
   }
   function parseWeight(raw) {
     const clean = String(raw??'').trim();
-    const match = /^([+]?\d{1,5}(?:[,.]\d{1,3})?)\s*(kg|g)?$/i.exec(clean);
+    const match = /^(?:(?:ST|S),\s*(?:GS|NT),\s*)?[+]?\s*(\d{1,5}(?:[,.]\d{1,3})?)\s*(kg|g)?$/i.exec(clean);
     if (!match) throw new Error('Resposta da balança inválida ou incompleta. Confira o protocolo.');
     const number = Number(match[1].replace(',','.'));
     const weight = match[2]?.toLowerCase()==='g' ? number/1000 : number;
@@ -150,9 +150,22 @@
       busy=false;
     }
   }
+  // ESC/POS codepage 2 (CP850) preserves Portuguese accents in thermal receipts.
+  // Unsupported glyphs degrade to '?' rather than emitting arbitrary device commands.
+  const CP850_PT=Object.freeze({
+    'á':160,'à':133,'â':131,'ã':198,'é':130,'ê':136,'í':161,
+    'ó':162,'ô':147,'õ':228,'ú':163,'ü':129,'ç':135,
+    'Á':181,'À':183,'Â':182,'Ã':199,'É':144,'Ê':210,'Í':214,
+    'Ó':224,'Ô':226,'Õ':229,'Ú':233,'Ü':154,'Ç':128,
+    'º':167,'ª':166,'°':248
+  });
   function escpos(text,{cut=false,drawer=false}={}) {
-    const ascii=String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x0A\x0D\x20-\x7E]/g,'?').slice(0,16000);
-    const bytes=[27,64,...new TextEncoder().encode(ascii)];
+    const bytes=[27,64,27,116,2]; // Initialize, select CP850.
+    for(const char of String(text??'').slice(0,16000)){
+      const n=char.charCodeAt(0);
+      if(n===10||n===13||(n>=32&&n<=126))bytes.push(n);
+      else bytes.push(CP850_PT[char]??63);
+    }
     if(drawer)bytes.push(27,112,0,25,250);
     if(cut)bytes.push(29,86,0);
     return bytes;
@@ -189,6 +202,16 @@
     const fmt=n=>(Number(n||0)/100).toFixed(2);
     return [branding.name,...(branding.address?[branding.address]:[]),...(branding.phone?['Telefone: '+branding.phone]:[]),'CUPOM NAO FISCAL','Venda '+String(sale.saleNumber||sale.id),String(sale.completedAt||''),...((sale.items||[]).map(i=>String(i.productName||i.sku||i.productId||'Produto')+'  '+String(i.quantity)+' x '+fmt(i.unitPriceCents)+' = '+fmt(i.totalCents??Math.round(i.quantity*i.unitPriceCents)))),'TOTAL: '+fmt(sale.totalCents),...((sale.payments||[]).map(p=>String(p.method)+': '+fmt(p.amountCents))),'Troco: '+fmt(sale.changeCents),'Obrigado pela preferencia.','',''].join('\n');
   }
+  function printTextDocument(document,{popup}={}){
+    if(!document||document.fiscal!==false||!['KITCHEN_TICKET','CASH_CLOSE','TABLE_PREBILL'].includes(document.documentType)
+      ||typeof document.text!=='string'||document.text.length>14000)
+      throw new Error('Documento não fiscal canônico e limitado obrigatório.');
+    const paperMm=settings().paperMm;
+    const html='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Documento não fiscal</title>'
+      +'<style>@page{size:'+paperMm+'mm auto;margin:3mm}body{margin:0;color:#000}pre{font:11px monospace;white-space:pre-wrap;overflow-wrap:anywhere}</style>'
+      +'</head><body><pre>'+escapeHtml(document.text)+'</pre></body></html>';
+    return openPrintDocument(html,popup);
+  }
   function printPrebill(document,{popup}={}) {
     if(document?.documentType!=='PREBILL'||!document.sale||!document.branding)
       throw new Error('Pré-conta canônica exigida.');
@@ -196,10 +219,18 @@
   }
   async function printSale(sale,opts={}) {
     if(!sale||sale.status!=='COMPLETED'||!sale.id)throw new Error('Venda concluída obrigatória.');
-    if(settings().printerMode==='bridge' && !opts.forceBrowser){const job=await root.PdvLocalBridge.print(sale,receiptText(sale,{branding:opts.branding}),{reprint:opts.reprint===true});return {queued:true,job};}
+    if(settings().printerMode==='bridge' && !opts.forceBrowser){const job=await root.PdvLocalBridge.print(sale,opts.text||receiptText(sale,{branding:opts.branding}),{reprint:opts.reprint===true});return {queued:true,job};}
     if(settings().printerMode==='serial' && !opts.forceBrowser) {
       // On-demand serial transport; never send an automatic second copy through browser.
-      await writeSerial('printer',escpos(receiptText(sale,{branding:opts.branding}),{cut:settings().cut}),settings().printerBaud);
+      const branding=opts.branding||root.PdvReceiptBranding?.read?.();
+      const bytes=escpos(opts.text||receiptText(sale,{branding}),{cut:settings().cut});
+      if(branding?.logoDataUrl){
+        // Rasterize first; a decode error must NOT send a misleading text-only cupom.
+        if(!root.PdvEscposLogo?.encode)throw Error('Driver de logotipo ESC/POS indisponível.');
+        const raster=await root.PdvEscposLogo.encode(branding.logoDataUrl,{paperMm:settings().paperMm});
+        bytes.splice(2,0,...raster); // ESC @ then bounded GS v 0 bitmap then text
+      }
+      await writeSerial('printer',bytes,settings().printerBaud);
       return {sentToSerial:true};
     }
     return openPrintDocument(receiptHtml(sale,{...settings(),branding:opts.branding}),opts.popup);
@@ -315,7 +346,7 @@
   function printTest(){
     return printSale({id:('TESTE-'+(root.crypto?.randomUUID?.()||String(Date.now())+'-'+Math.random().toString(36).slice(2))),status:'COMPLETED',saleNumber:'TESTE',completedAt:new Date().toISOString(),items:[],payments:[],totalCents:0,changeCents:0});
   }
-  root.PdvWebHardware=Object.freeze({settings,saveSettings,readWeight,connect,openDrawer,printSale,printPrebill,printTest,showSettings});
+  root.PdvWebHardware=Object.freeze({settings,saveSettings,readWeight,connect,openDrawer,printSale,printPrebill,printTextDocument,printTest,showSettings});
   root.PdvWebHardwareUtils=Object.freeze({parseWeight,parseUranoWeight,normalizeSettings,receiptHtml,receiptText,escpos,escapeHtml});
   root.document?.addEventListener('click',e=>{
     if(e.target?.closest?.('#peripherals-settings'))showSettings();

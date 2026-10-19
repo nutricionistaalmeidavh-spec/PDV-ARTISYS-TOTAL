@@ -15,7 +15,7 @@ Nenhum comando de periférico é emitido por alteração de banco ou job em back
 
 ## Personalização de comprovante (cap-030)
 
-Em **Balcão → Dispositivos locais** há campos de nome da loja, endereço e telefone e importação de **PNG de até 512 KB**, com assinatura de arquivo validada. A identidade é persistida na **API autoritativa por empresa/filial** com `settings.manage`. A migração `0027_r3_receipt_branding.sql` congela a marca no mesmo commit da conclusão da venda; a reimpressão recebe a identidade original mesmo após editar o cadastro. O HTML/PDF inclui logo PNG; WebSerial e conector local continuam textuais e não rasterizam logotipos. O checkout web também oferece **Pré-conta não fiscal**, sem concluir a venda. A migração deve ser aplicada no D1 remoto antes de habilitar esse fluxo no ambiente.
+Em **Balcão → Dispositivos locais** há campos de nome da loja, endereço e telefone e importação de **PNG de até 512 KB**, com assinatura de arquivo validada. A identidade é persistida na **API autoritativa por empresa/filial** com `settings.manage`. A migração `0027_r3_receipt_branding.sql` congela a marca no mesmo commit da conclusão da venda; a reimpressão recebe a identidade original mesmo após editar o cadastro. O HTML/PDF inclui logo PNG. O caminho WebSerial **ESC/POS GS v 0** rasteriza PNG limitado a 384px (papel 58mm) ou 576px (80mm), com altura de até 192px, e usa CP850 para acentos. O conector local/driver de texto do spooler continua sem rasterização e deve ser tratado explicitamente como limitação específica de transporte, sem exigir instalação no SaaS. O checkout web também oferece **Pré-conta não fiscal**, sem concluir a venda. A migração deve ser aplicada no D1 remoto antes de habilitar esse fluxo no ambiente.
 
 ## Compatibilidade
 
@@ -35,7 +35,7 @@ A fonte versionada de status, ambientes e provas automatizadas é [`docs/parity/
 
 ## Próxima etapa de paridade total
 
-- **Aprimorar e certificar** o conector local open source/self-hosted já existente em `tools/local-hardware-bridge/`: autenticação por terminal, bind loopback, fila SQLite e estados `PENDING`, `SUBMITTING`, `SUBMITTED`, `FAILED` e `UNCERTAIN` já estão documentados. A identidade canônica e o snapshot imutável estão implementados; ainda é preciso adicionar rasterização do PNG aos drivers locais que suportarem imagem e auditar os demais protocolos. Não assumir impressão física ao obter aceitação do spooler.
+- **Aprimorar e certificar** o conector local open source/self-hosted já existente em `tools/local-hardware-bridge/`: autenticação por terminal, bind loopback, fila SQLite e estados `PENDING`, `SUBMITTING`, `SUBMITTED`, `FAILED` e `UNCERTAIN` já estão documentados. A identidade canônica, snapshot imutável e rasterização ESC/POS WebSerial foram implementados e testados. Avaliar futuramente rasterização do PNG no driver de texto do spooler do sistema operacional, somente com uma interface que a suporte e sem falsificar confirmação de impressão física. Não assumir impressão física ao obter aceitação do spooler.
 - Validar leitura em equipamento Urano físico; o parser foi portado com reconhecimento de frames e testes automatizados, mas compatibilidade física permanece não homologada.
 - Projetar job canônico tenant/filial/terminal com idempotência e tentativas auditáveis no D1; impedir impressão duplicada ao repetir a venda, sem inventar impressão enviada.
 - Homologar equipamento físico com fabricante/modelo/firmware, 58/80 mm, corte, gaveta, desconexão, replug, falha de driver, retomada e impressão concorrente.

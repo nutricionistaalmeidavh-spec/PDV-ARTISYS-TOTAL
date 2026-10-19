@@ -169,6 +169,7 @@
       if(operation==='cash/open')return {session:value.session};
       if(operation==='cash/sessions')return value.sessions;
       if(operation==='cash/sessions/search')return value.history;
+      if(/^cash\/sessions\/[^/]+\/closing-document$/.test(operation))return value;
       if(operation.startsWith('cash/sessions/'))return operation.endsWith('/movements')?value.movements:value.result;
       if(/^sales\/[^/]+\/(customer|seller)$/.test(operation))return value.sale;
       if(/^sales\/[^/]+\/items\/configured$/.test(operation))return value.sale;

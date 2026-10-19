@@ -49,6 +49,8 @@ test('cap-030 immutable SaaS sale receipt keeps branding snapshot after store se
   await x.db.prepare("UPDATE sales SET status='COMPLETED',completed_at=? WHERE id='sale-a'").bind(x.stamp).run();
   q=await x.call(apiPath('a','branch-a','sales/sale-a/receipt'),{cookie:x.owner});
   assert.equal(q.status,200);assert.equal(q.body.branding.name,'Loja Original');
+  assert.match(q.body.text,/Loja Original/);
+  assert.match(q.body.text,/CUPOM NAO FISCAL/);
   assert.equal(q.body.sale.status,'COMPLETED');
   assert.equal(q.body.fiscal,false);
   await x.call(path,{cookie:x.owner,method:'PUT',body:{branchId:'branch-a',name:'Loja Nova',address:'Nova rua',phone:'999',logoDataUrl:null}});
@@ -84,5 +86,38 @@ test('cap-029 prebill uses current canonical identity, while final receipt requi
   assert.equal((await x.call(apiPath('a','branch-a','sales/sale-open/receipt'),{cookie:x.owner})).status,409);
   assert.equal((await x.call(apiPath('b','branch-b','sales/sale-open/prebill'),{cookie:x.other})).status,404);
   assert.equal((await x.call(apiPath('a','branch-a','sales/sale-open/prebill'),{cookie:x.other})).status,404);
+ }finally{x.close();}
+});
+
+test('cap-029 R3 hosted SaaS serves tenant-isolated canonical table, kitchen and cash non-fiscal documents',async()=>{
+ const x=await setup();try{
+  const q=(sql,...v)=>x.db.prepare(sql).bind(...v).run();
+  await q('INSERT INTO restaurant_tables(id,tenant_id,branch_id,label,seats,created_at,updated_at) VALUES(?,?,?,?,?,?,?)','mesa-1','a','branch-a','Mesa 01',4,x.stamp,x.stamp);
+  await q('INSERT INTO restaurant_table_sessions(id,tenant_id,branch_id,table_id,status,party_size,opened_by,opened_at) VALUES(?,?,?,?,?,?,?,?)','session-1','a','branch-a','mesa-1','OPEN',2,'owner',x.stamp);
+  await q('INSERT INTO products(id,tenant_id,sku,name,sale_price_cents,created_at,updated_at) VALUES(?,?,?,?,?,?,?)','pizza-1','a','P-1','Pizza',1500,x.stamp,x.stamp);
+  await q('INSERT INTO restaurant_orders(id,tenant_id,branch_id,table_session_id,fulfillment,status,total_cents,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)','order-1','a','branch-a','session-1','TABLE','OPEN',1500,'owner',x.stamp,x.stamp);
+  await q('INSERT INTO restaurant_order_items(id,tenant_id,branch_id,order_id,product_id,product_name,quantity_milli,unit_price_cents,configuration_json) VALUES(?,?,?,?,?,?,?,?,?)','item-1','a','branch-a','order-1','pizza-1','Pizza',1000,1500,JSON.stringify({pizza:{crust:{name:'Requeijao'}}}));
+  await q('INSERT INTO r4_kitchen_stations(id,tenant_id,branch_id,name,printer_name,print_enabled,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)','station-1','a','branch-a','Cozinha','Printer1',1,x.stamp,x.stamp);
+  await q('INSERT INTO r4_station_tickets(id,tenant_id,branch_id,order_id,station_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?)','ticket-1','a','branch-a','order-1','station-1',x.stamp,x.stamp);
+  const payload={jobFormat:'R4_KITCHEN_V1',stationTicketId:'ticket-1',orderId:'order-1',items:[{name:'Pizza',quantity:1,configuration:{pizza:{crust:{name:'Requeijao'}}}}],orderedAt:x.stamp};
+  await q('INSERT INTO r4_kitchen_print_jobs(id,tenant_id,branch_id,station_ticket_id,printer_name,payload_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)','job-1','a','branch-a','ticket-1','Printer1',JSON.stringify(payload),x.stamp,x.stamp);
+  await q('INSERT INTO cash_sessions(id,tenant_id,branch_id,operator_id,status,opening_cents,opened_at,closed_at,expected_cash_cents,counted_cash_cents,divergence_cents) VALUES(?,?,?,?,?,?,?,?,?,?,?)','cash-1','a','branch-a','owner','CLOSED',1000,x.stamp,x.stamp,2500,2500,0);
+  const p=(section)=>apiPath('a','branch-a',section);
+  let v=await x.call(p('restaurant/sessions/session-1/prebill'),{cookie:x.owner});
+  assert.equal(v.status,200,JSON.stringify(v.body));
+  assert.equal(v.body.documentType,'TABLE_PREBILL');
+  assert.match(v.body.text,/Requeijao/);
+  v=await x.call(p('restaurant/kitchen/print-jobs/job-1/document'),{cookie:x.owner});
+  assert.equal(v.status,200,JSON.stringify(v.body));
+  assert.equal(v.body.documentType,'KITCHEN_TICKET');
+  assert.match(v.body.text,/PEDIDO/);
+  v=await x.call(p('cash/sessions/cash-1/closing-document'),{cookie:x.owner});
+  assert.equal(v.status,200,JSON.stringify(v.body));
+  assert.match(v.body.text,/FECHAMENTO DE CAIXA/);
+  assert.equal((await x.call(apiPath('b','branch-b','cash/sessions/cash-1/closing-document'),{cookie:x.other})).status,404);
+  assert.equal((await x.call(p('cash/sessions/cash-1/closing-document'),{cookie:x.other})).status,404);
+  // Read-only document operations must not touch financial or stock ledgers.
+  assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM inventory_movements').bind().first()).n,0);
+  assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM cash_movements').bind().first()).n,0);
  }finally{x.close();}
 });

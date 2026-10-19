@@ -4,6 +4,7 @@ import {productMediaRoute} from './product-media.mjs';
 import {advancedFinanceRoute} from './advanced-finance-router.mjs';
 import {verticalRoute} from './vertical-router.mjs';
 import {receiptRoute} from './receipt-route.mjs';
+import {r3DocumentRoute} from './r3-document-route.mjs';
 import {r2LanRoute,authorizeLanBusinessRequest,authorizeLanModule} from './r2-lan-router.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import legacyProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
@@ -186,6 +187,8 @@ export function createApi(env,{now=()=>Date.now()}={}){
         if(media)return media;
         const advanced=await advancedFinanceRoute(request,db,session,membership,tenantId,commerceMatch[2]);
         if(advanced)return advanced;
+        const documents=await r3DocumentRoute(request,db,session,membership,tenantId,commerceMatch[2]);
+        if(documents)return documents;
         const receipts=await receiptRoute(request,db,session,membership,tenantId,commerceMatch[2]);
         if(receipts)return receipts;
         const commerce=await commerceRoute(request,db,session,membership,tenantId,commerceMatch[2],{

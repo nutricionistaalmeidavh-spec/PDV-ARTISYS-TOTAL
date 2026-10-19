@@ -43,7 +43,7 @@
       const receipt=await api.request('/api/v1/sales/'+encodeURIComponent(currentSale.id)+'/receipt');
       if(receipt?.sale?.status!=='COMPLETED')throw new Error('Venda não concluída ou indisponível.');
       const result=await root.PdvWebHardware.printSale(receipt.sale,{popup,forceBrowser:pdf,
-        branding:receipt.branding,reprint:receiptSubmitted&&!pdf});
+        branding:receipt.branding,text:receipt.text,reprint:receiptSubmitted&&!pdf});
       if(!pdf)receiptSubmitted=true;
       notice(pdf?'No diálogo, escolha Salvar como PDF.':result?.queued?'Enviado ao spooler local. Confira a impressão no equipamento.':'Diálogo aberto ou comando enviado; confirme a impressão.');
     }catch(error){

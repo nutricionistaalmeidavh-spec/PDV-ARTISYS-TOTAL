@@ -1,5 +1,6 @@
 // R3 hosted-web receipt identity: authoritative branch state; transaction-time sale snapshot.
 import {createCommerceService} from './commerce.mjs';
+import canonicalReceipt from '../../../packages/core/js/domains/printing/receipt-renderer.js';
 import canonicalAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import canonicalProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
 const {createAuthorizationService}=canonicalAuthorization;
@@ -82,7 +83,9 @@ export async function receiptRoute(request,db,session,member,t,path){
     if(!freeze)return fail(409,'Comprovante sem snapshot na conclusão. Não imprimir com marca alterada.');
     identity=JSON.parse(freeze.branding_json);
    }else identity=await configured(db,t,b);
-   return json({sale,branding:identity,documentType:receipt?'SALE_RECEIPT':'PREBILL',fiscal:false});
+   const text=canonicalReceipt.renderSaleReceipt({sale,branding:identity,width:42,
+     documentLabel:receipt?'CUPOM NAO FISCAL':'PRE-CONTA - NAO FISCAL'});
+   return json({sale,branding:identity,documentType:receipt?'SALE_RECEIPT':'PREBILL',fiscal:false,text});
   }
   return fail(405,'Método não permitido.');
  }catch(e){return fail(e?.status||500,e?.status?e.message:'Falha ao processar comprovante.');}
