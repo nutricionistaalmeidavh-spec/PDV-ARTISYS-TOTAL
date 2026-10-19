@@ -982,7 +982,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -991,7 +991,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "restaurant tables tabs orders and table transfer: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Restrição única parcial garante somente uma comanda OPEN/CHECKOUT por mesa no mesmo banco; teste de duas aberturas concorrentes passa. A transferência CAS e disputa simultânea entre duas mesas ainda requer cenário de corrida determinístico para certificação.",
+      "reviewNote": "Teste concorrente confirma uma transferência por sessão quando operadores enviam estado original; atualização de mesa exige expectedTableId e guarda transacional contra resultado obsoleto.",
       "independentEvidence": {
         "file": "apps/api/src/vertical-service.mjs",
         "contains": "async transferTable(",
@@ -1001,8 +1001,8 @@
         "testRunner": "node-test"
       },
       "softwareAssessment": {
-        "reviewedAt": "2026-10-18",
-        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "reviewedAt": "2026-10-19",
+        "basis": "CI SaaS branch https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39269330637 ; regressão unitária SQLite/D1 e E2E Chromium; escopo de software, sem certificação física",
         "missingSoftwareWork": ""
       }
     },
@@ -1025,7 +1025,7 @@
         "checkout-008"
       ],
       "acceptance": "restaurant advanced split settlement service charge and item transfer: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Divisão desigual por pagador aceita parcelas em centavos validadas e é efetivamente recebida no checkout de venda única, com recibos imutáveis. Ainda requer abatimentos parciais ao longo do atendimento e rateio individual por item sem fechamento antecipado.",
+      "reviewNote": "Rateio individual por item/pagador em centavos e recebimentos antecipados imutáveis reconciliados uma vez com a venda e o caixa canônicos possuem regressão. A combinação de adiantamento e divisão na MESMA comanda ainda está bloqueada; não classificar como integral até conciliar parcelas por pagador em cenários mistos.",
       "independentEvidence": {
         "file": "apps/api/src/r4-extended-service.mjs",
         "contains": "async split(",
@@ -1035,9 +1035,9 @@
         "testRunner": "node-test"
       },
       "softwareAssessment": {
-        "reviewedAt": "2026-10-18",
-        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
-        "missingSoftwareWork": ""
+        "reviewedAt": "2026-10-19",
+        "basis": "CI SaaS branch https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39269330637",
+        "missingSoftwareWork": "Conciliação de antecipações por pagador com plano de divisão na mesma comanda sem duplicidade e testes de reembolso/conflitos."
       }
     },
     {
@@ -1208,7 +1208,7 @@
         "checkout-017",
         "history-034"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1217,7 +1217,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "food unified orders with optional daily ticket and legacy history: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Senha diária agora usa fuso IANA configurável da filial, com cálculo em virada de dia e índice único por empresa/filial/dia; registros de pedido continuam canônicos e idempotentes. Falta histórico paginado além das últimas 100 ordens e regressão de concorrência cruzando meia-noite local.",
+      "reviewNote": "Histórico paginado por cursor estável criado_em+id, relatório diário completo e senhas por fuso IANA com unicidade por tenant/filial/dia. Testes com 113 pedidos e limite explícito.",
       "independentEvidence": {
         "file": "apps/api/src/vertical-service.mjs",
         "contains": "ticketNumber=useTicket?",
@@ -1227,9 +1227,9 @@
         "testRunner": "node-test"
       },
       "softwareAssessment": {
-        "reviewedAt": "2026-10-18",
-        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
-        "missingSoftwareWork": "a testar dia local/histórico, sem exigir migração fictícia de usuários inexistentes."
+        "reviewedAt": "2026-10-19",
+        "basis": "CI SaaS branch https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39269330637 ; regressão unitária SQLite/D1 e E2E Chromium; escopo de software, sem certificação física",
+        "missingSoftwareWork": ""
       }
     },
     {
@@ -1300,7 +1300,7 @@
       "dependsOn": [
         "home-002"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1309,7 +1309,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "first run segment onboarding and editable module recommendations: Comprovar recomendações e escolha de módulos independentes de licença desktop.",
-      "reviewNote": "Seleção/sugestões por segmento e wizard PWA implementados e testados; ainda faltam aceites de edição individual de módulos e persistência por perfil.",
+      "reviewNote": "Wizard de segmento e seleção individual de áreas opcionais integrados ao registro único de módulos e permissão settings.manage. Estado persistido por estabelecimento; controle de acesso permanece por perfil.",
       "independentEvidence": {
         "file": "apps/api/src/r4-extended-service.mjs",
         "contains": "async segments(",
@@ -1319,8 +1319,8 @@
         "testRunner": "node-test"
       },
       "softwareAssessment": {
-        "reviewedAt": "2026-10-18",
-        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "reviewedAt": "2026-10-19",
+        "basis": "CI SaaS branch https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39269330637 ; regressão unitária SQLite/D1 e E2E Chromium; escopo de software, sem certificação física",
         "missingSoftwareWork": ""
       }
     },
@@ -1487,7 +1487,7 @@
       "dependsOn": [
         "checkout-017"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1496,7 +1496,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "restaurant service requests waiter and bill: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Chamados garçom/conta com estados, autenticação e isolamento testados; faltam jornada PWA e concorrência por múltiplos papéis.",
+      "reviewNote": "PWA permite chamadas garçom/conta e ACK/CLOSED; um chamado ativo por tipo/comanda, CAS esperado e teste de concorrência + isolamento entre empresas.",
       "independentEvidence": {
         "file": "apps/api/src/vertical-service.mjs",
         "contains": "async createServiceRequest(",
@@ -1506,8 +1506,8 @@
         "testRunner": "node-test"
       },
       "softwareAssessment": {
-        "reviewedAt": "2026-10-18",
-        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
+        "reviewedAt": "2026-10-19",
+        "basis": "CI SaaS branch https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39269330637 ; regressão unitária SQLite/D1 e E2E Chromium; escopo de software, sem certificação física",
         "missingSoftwareWork": ""
       }
     },
@@ -1519,7 +1519,7 @@
         "reports-062",
         "reports-068"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1528,7 +1528,7 @@
       },
       "testedContractRefs": [],
       "acceptance": "restaurant operational reports and csv export: Conciliar dados de base com CSV e resultados por filial/período sem estimar lucro indevidamente.",
-      "reviewNote": "Relatório por filial e CSV concilia pedidos, cancelamentos e valores sem confundir faturamento. Faltam comparação abrangente com desktop e limites/paginação.",
+      "reviewNote": "Totais de pedidos por SQL agregado sem limite artificial, linhas paginadas por tenant/filial/data, CSV limitado a 3.000 com erro explícito e sem confundir receita contabilizada.",
       "independentEvidence": {
         "file": "apps/api/src/vertical-service.mjs",
         "contains": "async restaurantReport(",
@@ -1538,9 +1538,9 @@
         "testRunner": "node-test"
       },
       "softwareAssessment": {
-        "reviewedAt": "2026-10-18",
-        "basis": "R4 SQLite/D1 API regression and Chromium journey, CI https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39145314472",
-        "missingSoftwareWork": "am comparação abrangente com desktop e limites/paginação."
+        "reviewedAt": "2026-10-19",
+        "basis": "CI SaaS branch https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39269330637 ; regressão unitária SQLite/D1 e E2E Chromium; escopo de software, sem certificação física",
+        "missingSoftwareWork": ""
       }
     },
     {
@@ -1552,7 +1552,7 @@
         "checkout-016",
         "checkout-018"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1561,12 +1561,17 @@
       },
       "testedContractRefs": [],
       "acceptance": "barcode-scale-drawer-adapters: Comprovar o driver/bridge e protocolo em simulação determinística, fila, erros, reimpressão/reconexão, isolamento de credenciais e compatibilidade de código por SO. Equipamento real e instalação em campo não são critérios de cobertura do código.",
-      "reviewNote": "Fluxo parcial de software confirmado por código de adaptador/bridge e cenário de teste executável. Ainda não há equivalência funcional integral certificada do desktop original. Dispositivo físico não é gate de conclusão de código.",
+      "reviewNote": "Scanner HID keyboard-wedge, balança serial numérica/Urano e gaveta ESC/POS com permissão explícita, portas segregadas, peso estável e testes determinísticos. Teste físico por modelo continua fora do aceite de software.",
       "implementationEvidence": {
         "file": "apps/web/peripherals-web.js",
         "contains": "function parseUranoWeight",
         "testFile": "apps/api/test/peripherals-web.test.mjs",
         "testContains": "test('Urano POP-S lê os frames binários"
+      },
+      "softwareAssessment": {
+        "reviewedAt": "2026-10-19",
+        "basis": "CI SaaS branch https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39269330637 ; regressão unitária SQLite/D1 e E2E Chromium; escopo de software, sem certificação física",
+        "missingSoftwareWork": ""
       }
     },
     {
