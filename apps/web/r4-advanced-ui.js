@@ -45,15 +45,16 @@
     });
   }
   async function load(){
-    const [products,stations,routes,tickets,profiles,onboard,orders,tables]=await Promise.all([
+    const [products,stations,routes,tickets,profiles,onboard,orders,tables,ticketClock]=await Promise.all([
       safe(()=>api.products(false)),safe(()=>r4('/kitchen/stations').then(x=>x.stations)),
       safe(()=>r4('/kitchen/routes').then(x=>x.routes)),safe(()=>r4('/kitchen/station-tickets').then(x=>x.tickets)),
       safe(()=>r4('/pizzeria/profiles').then(x=>x.profiles)),
       safe(()=>api.request('/api/v1/onboarding/segments')),
-      safe(()=>r4('/orders').then(x=>x.orders)),safe(()=>r4('/tables').then(x=>x.tables))
+      safe(()=>r4('/orders').then(x=>x.orders)),safe(()=>r4('/tables').then(x=>x.tables)),
+      safe(()=>r4('/tickets/time-zone'))
     ]);
     model={products:products||[],stations:stations||[],routes:routes||[],tickets:tickets||[],
-      profiles:profiles||[],onboard:onboard||{},orders:orders||[],tables:tables||[]};
+      profiles:profiles||[],onboard:onboard||{},orders:orders||[],tables:tables||[],ticketClock:ticketClock||{timeZone:'America/Sao_Paulo'}};
     model.sessionOrders=model.orders.filter(o=>o.table_session_id===sessionId);
     model.orderItems=model.sessionOrders.filter(o=>o.status==='DELIVERED')
       .flatMap(o=>(o.items||[]).map(i=>({...i,orderId:o.id})));
@@ -141,7 +142,12 @@
     return '<section class="data-card"><h2>Perfil da loja</h2><p>O segmento sugere recursos. Nenhum módulo será ativado automaticamente e não altera a licença.</p>'+
       (can('settings.manage')?'<form data-r4-advanced="segment" class="vertical-form"><label class="field"><span>Segmento</span>'+
         '<select name="segmentId">'+items.map(s=>'<option value="'+esc(s.id)+'" '+(data.selectedId===s.id?'selected':'')+'>'+esc(s.label)+'</option>').join('')+
-        '</select></label><button class="primary-button">Salvar preferência</button></form>':'')+
+        '</select></label><button class="primary-button">Salvar preferência</button></form>'+
+      '<form data-r4-advanced="ticket-clock" class="vertical-form"><h3>Data local da senha diária</h3>'+
+      '<label class="field"><span>Fuso horário da filial</span><select name="timeZone">'+
+      ['America/Sao_Paulo','America/Manaus','America/Cuiaba','America/Belem','America/Recife','UTC'].map(z=>
+      '<option value="'+esc(z)+'" '+(model.ticketClock?.timeZone===z?'selected':'')+'>'+esc(z)+'</option>').join('')+
+      '</select></label><button class="primary-button">Salvar fuso</button></form>':'')+
       '<div class="restaurant-list">'+items.map(s=>'<div class="restaurant-row"><strong>'+esc(s.label)+'</strong><small>'+
       (s.recommended.length?'Recomendado: '+esc(s.recommended.join(', ')):'Núcleo padrão')+'</small></div>').join('')+'</div></section>';
   }
@@ -230,6 +236,10 @@
       if(kind==='transfer-items'){
         await r4('/sessions/'+uid(sessionId)+'/transfer-items','POST',{targetSessionId:v.targetSessionId,
           items:[{orderItemId:v.orderItemId,quantity:Number(v.quantity)}]});
+      }
+      if(kind==='ticket-clock'){
+        await r4('/tickets/time-zone','PUT',{timeZone:String(v.timeZone)});
+        toast('Data local das senhas atualizada para '+v.timeZone+'.');
       }
       if(kind==='split'){
         const bps=Math.round(Number(v.bps||0)*100);
