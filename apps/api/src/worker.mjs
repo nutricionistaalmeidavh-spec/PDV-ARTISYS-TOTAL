@@ -49,6 +49,13 @@ function authzFor(profileKey){
   const permissions=DEFAULT_PROFILE_PERMISSIONS[profile]||[];
   return createAuthorizationService({resolvePermissions:()=>permissions});
 }
+async function verifiedEmailFor(db,userId,env){
+  try{return await db.prepare('SELECT email_verified_at AS at FROM users WHERE id=?').bind(userId).first();}
+  catch(error){
+    if(env.EMAIL_VERIFICATION_REQUIRED==='true')throw error;
+    return null; // Older schema fixtures remain usable when the feature is explicitly off.
+  }
+}
 async function sessionFor(request,db,now,env){
   const raw=findCookie(request,env);
   if(!raw||!/^[a-f0-9]{64}$/.test(raw))return null;
@@ -58,7 +65,7 @@ async function sessionFor(request,db,now,env){
     FROM auth_sessions s JOIN users u ON u.id=s.user_id
     WHERE s.token_hash=? AND s.expires_at>? AND u.active=1`).bind(tokenHash,now).first();
   if(!entry)return null;
-  const verified=await db.prepare('SELECT email_verified_at AS at FROM users WHERE id=?').bind(entry.userId).first().catch(e=>{if(env.EMAIL_VERIFICATION_REQUIRED==='true')throw e;return null;});
+  const verified=await verifiedEmailFor(db,entry.userId,env);
   return {userId:entry.userId,email:entry.email,displayName:entry.displayName,emailVerified:!!verified?.at,tokenHash,expiresAt:entry.expiresAt};
 }
 async function membershipsFor(db,userId) {
@@ -123,7 +130,7 @@ async function issueLoginSession(user,request,env,db,now){
  if(!memberships.length)return failure(403,'Usuário sem estabelecimento ativo.');
  const token=newSessionToken(),tokenHash=await sha256(token);
  await db.prepare('INSERT INTO auth_sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)').bind(tokenHash,user.id,now,now+MAX_SESSION_MS).run();
- const verified=await db.prepare('SELECT email_verified_at AS at FROM users WHERE id=?').bind(user.id).first().catch(e=>{if(env.EMAIL_VERIFICATION_REQUIRED==='true')throw e;return null;});
+ const verified=await verifiedEmailFor(db,user.id,env);
  return response({sessionId:tokenHash.slice(0,12),
   user:{id:user.id,email:user.email,displayName:user.displayName,emailVerified:!!verified?.at},
   emailVerificationRequired:env.EMAIL_VERIFICATION_REQUIRED==='true'&&!verified?.at,
