@@ -395,6 +395,43 @@ export function createR4ExtendedService(db){
         VALUES(?,?,?,?) ON CONFLICT(tenant_id,branch_id) DO UPDATE SET segment_id=excluded.segment_id,updated_at=excluded.updated_at`,t,b,code,stamp())
      ]}));
    },
+   async optionRecipe(t,b,productId,kind,code){
+     await branch(t,b);await product(t,productId);
+     const k=label(kind).toUpperCase(),c=label(code,32);
+     if(!['SIZE','FLAVOR','CRUST','ADDON'].includes(k)||!c)throw fail(400,'Opção da ficha inválida.');
+     const row=await first('SELECT MAX(version) AS version FROM r4_recipe_option_versions WHERE tenant_id=? AND branch_id=? AND product_id=? AND option_kind=? AND option_code=?',t,b,productId,k,c);
+     if(!row?.version)return null;
+     const ingredients=await all('SELECT ingredient_id AS ingredientId,quantity_milli / 1000.0 AS quantity FROM r4_recipe_option_ingredients WHERE tenant_id=? AND branch_id=? AND product_id=? AND option_kind=? AND option_code=? AND version=?',t,b,productId,k,c,row.version);
+     return {productId,kind:k,code:c,version:row.version,ingredients};
+   },
+   async saveOptionRecipe(t,b,productId,body,key){
+     await branch(t,b);
+     const p=await product(t,productId);
+     if(p.track_stock)throw fail(409,'Pizza composta precisa ter estoque próprio desativado.');
+     const kind=label(body.kind).toUpperCase(),code=label(body.code,32);
+     const profile=await this.pizzaProfile(t,b,productId);
+     const options={SIZE:profile?.sizes,FLAVOR:profile?.flavors,CRUST:profile?.crusts,ADDON:profile?.addons};
+     if(!Object.hasOwn(options,kind)||!options[kind]?.some(x=>x.code===code))
+       throw fail(400,'Selecione uma opção cadastrada no cardápio.');
+     if(!Array.isArray(body.ingredients)||!body.ingredients.length||body.ingredients.length>40)
+       throw fail(400,'Informe ingredientes da opção.');
+     const ingredients=[],seen=new Set();
+     for(const row of body.ingredients){
+       const ingredient=await product(t,row.ingredientId);
+       if(ingredient.id===productId||!ingredient.track_stock||seen.has(ingredient.id))throw fail(400,'Ingrediente repetido ou sem controle de estoque.');
+       const milli=integer(Math.round(Number(row.quantity)*1000),1,100000000,'Quantidade de ingrediente');
+       if(Math.abs(Number(row.quantity)*1000-milli)>0.000001)throw fail(400,'Quantidade de insumo deve ter até três casas.');
+       seen.add(ingredient.id);ingredients.push({ingredientId:ingredient.id,quantity:milli/1000,milli});
+     }
+     return mutation(t,'r4.recipe.option:'+b+':'+productId+':'+kind+':'+code,key,async()=>{
+       const current=await first('SELECT MAX(version) AS version FROM r4_recipe_option_versions WHERE tenant_id=? AND branch_id=? AND product_id=? AND option_kind=? AND option_code=?',t,b,productId,kind,code);
+       const version=(current?.version||0)+1;
+       return {result:{productId,kind,code,version,ingredients:ingredients.map(({milli,...x})=>x)},statements:[
+         q('INSERT INTO r4_recipe_option_versions(tenant_id,branch_id,product_id,option_kind,option_code,version,created_at) VALUES(?,?,?,?,?,?,?)',t,b,productId,kind,code,version,stamp()),
+         ...ingredients.map(x=>q('INSERT INTO r4_recipe_option_ingredients(tenant_id,branch_id,product_id,option_kind,option_code,version,ingredient_id,quantity_milli) VALUES(?,?,?,?,?,?,?,?)',t,b,productId,kind,code,version,x.ingredientId,x.milli))
+       ]};
+     });
+   },
    async recipe(t,b,productId){
      await branch(t,b);await product(t,productId);
      const row=await first('SELECT MAX(version) AS version FROM r4_recipe_versions WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,productId);
