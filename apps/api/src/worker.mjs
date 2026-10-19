@@ -2,6 +2,7 @@ import { sha256, verifyPassword, newSessionToken } from './password.mjs';
 import {registerPublicAccount} from './public-registration.mjs';
 import {billingConnectorRoute,billingCustomerRoute} from './artisys-billing.mjs';
 import {beginMfaLogin,finishMfaLogin,emailVerifyPublic,accountSecurityRoute} from './account-security.mjs';
+import {platformSessionRoute} from './platform-session.mjs';
 import {commerceRoute} from './commerce-router.mjs';
 import {tenantWriteAllowed,loginIpThrottled,recordLoginIpFailure,
  identityManagementRoute,invitationRegistrationRoute,acceptInvitationRoute,
@@ -160,6 +161,8 @@ export function createApi(env,{now=()=>Date.now()}={}){
        if(path.startsWith('/api/v1/platform/')){
         if(!['GET','HEAD'].includes(method)&&!originAllowed(request))
           return failure(403,'Origem da solicitação inválida.');
+        const ui=await platformSessionRoute(request,db,env,now(),path);
+        if(ui)return ui;
         return await platformManagementRoute(request,db,env,path,now());
       }
       if(env.AUTH_ENABLED==='false')return failure(503,'Acesso ainda não habilitado para clientes.');
