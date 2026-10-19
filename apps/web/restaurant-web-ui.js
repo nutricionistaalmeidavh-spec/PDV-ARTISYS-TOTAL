@@ -106,8 +106,12 @@
        '<button class="primary-button" type="submit">Enviar pedido para cozinha</button></form></details>':'')+
      '<div class="restaurant-list">'+state.orders.map(o=>
        '<div class="restaurant-row"><div><strong>'+esc(title(o.service_channel||o.fulfillment))+' · '+esc(o.ticket_number?'Senha '+o.ticket_number:o.id.slice(0,8))+'</strong><small>'+esc(title(o.status))+' · '+esc(orderLines(o))+'</small></div><div class="restaurant-actions">'+
-       (o.status==='READY'&&o.fulfillment==='DELIVERY'?btn('Despachar','dispatch',o.id):'')+
-        (o.status==='READY'?btn('Entregue / retirado','deliver',o.id):'')+
+       (o.status==='READY'&&o.fulfillment==='DELIVERY'&&!o.deliveryStage?btn('Despachar','dispatch',o.id):'')+
+       (o.status==='READY'&&o.fulfillment==='DELIVERY'&&['DISPATCHED','REDISPATCHED'].includes(o.deliveryStage)?
+         btn('Chegou ao destino','delivery-arrived',o.id)+btn('Retornou','delivery-return',o.id):'')+
+       (o.status==='READY'&&o.fulfillment==='DELIVERY'&&o.deliveryStage==='ARRIVED'?btn('Retornou','delivery-return',o.id):'')+
+       (o.status==='READY'&&o.fulfillment==='DELIVERY'&&o.deliveryStage==='RETURNED'?btn('Novo despacho','delivery-redispatch',o.id):'')+
+       (o.status==='READY'&&(o.fulfillment!=='DELIVERY'||o.deliveryStage!=='RETURNED')?btn('Entregue / retirado','deliver',o.id):'')+
        (o.status==='OPEN'?btn('Cancelar','cancel',o.id):'')+
        (o.status==='DELIVERED'&&o.fulfillment!=='TABLE'?btn('Cobrar','checkout-order',o.id):'')+
        '</div></div>').join('')+'</div></section>';
@@ -242,6 +246,17 @@
        if(!courier)return;
        await form('/orders/'+encodeURIComponent(id)+'/dispatch',{courierName:courier.trim()});
      }
+     if(what==='delivery-return'){
+       const reason=window.prompt('Motivo do retorno (obrigatório):');
+       if(!reason?.trim())return;
+       await form('/orders/'+encodeURIComponent(id)+'/delivery-events',{kind:'RETURNED',reason:reason.trim()});
+     }
+     if(what==='delivery-redispatch'){
+       const courier=window.prompt('Novo entregador:');
+       if(!courier?.trim())return;
+       await form('/orders/'+encodeURIComponent(id)+'/delivery-events',{kind:'REDISPATCHED',courierName:courier.trim()});
+     }
+     if(what==='delivery-arrived')await form('/orders/'+encodeURIComponent(id)+'/delivery-events',{kind:'ARRIVED'});
      if(what==='deliver')await form('/orders/'+encodeURIComponent(id)+'/deliver',{});
      if(what==='preparing'||what==='ready')await action('/kitchen/'+encodeURIComponent(id),'PATCH',{status:what==='preparing'?'PREPARING':'READY'});
      if(what==='preparing-station'||what==='ready-station')await action('/kitchen/station-tickets/'+encodeURIComponent(id),'PATCH',{status:what==='preparing-station'?'PREPARING':'READY'});
