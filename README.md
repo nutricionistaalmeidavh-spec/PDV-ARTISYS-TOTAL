@@ -107,3 +107,11 @@ A interface web pode usar a mesma API autoritativa em **Node.js + SQLite local**
 - Não há integração de cobrança online; os planos são inicialmente administrados pela ArtiSys.
 
 Consulte docs/SAAS-SECURITY-OPERATIONS.md.
+
+## Administração SaaS e primeiro acesso
+
+A PWA em /app/ oferece **Minha empresa** para OWNER com gerenciamento de filiais, funcionários, convites, perfis, sessões e informações de assinatura. A tela de login também ativa convites de funcionários novos, sem transmitir tokens em URL.
+
+A administração da plataforma — aprovação de cadastros pendentes, planos e primeiro bootstrap — usa **CLI Node privado** (`scripts/saas-admin-cli.mjs`) com PLATFORM_ADMIN_TOKEN fornecido apenas pelo ambiente de administração. A configuração de produção mantém AUTH_ENABLED=false até a autorização do primeiro acesso; o deploy sozinho não cria senha ou secret.
+
+Passos e critérios de homologação: [Primeiro acesso SaaS](docs/SAAS-FIRST-ACCESS.md).

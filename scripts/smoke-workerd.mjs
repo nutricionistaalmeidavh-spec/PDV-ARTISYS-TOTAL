@@ -87,12 +87,12 @@ try {
       page.on('pageerror',error=>jsErrors.push(error.message));
       await page.goto(origin+'/app/',{waitUntil:'domcontentloaded'});
       await page.getByRole('heading',{name:'Entre na sua loja'}).waitFor({timeout:12000});
-      await page.getByLabel('E-mail').fill('owner@example.test');
-      await page.getByLabel('Senha').fill('SenhaIncorreta_2026');
+      await page.getByLabel('E-mail',{exact:true}).fill('owner@example.test');
+      await page.getByLabel('Senha',{exact:true}).fill('SenhaIncorreta_2026');
       await page.getByRole('button',{name:'Entrar no PDV'}).click();
       await page.getByText('Credenciais inválidas.').waitFor();
-      assert.equal(await page.getByLabel('E-mail').inputValue(),'owner@example.test','failed login must preserve entered e-mail');
-      await page.getByLabel('Senha').fill('DummyStrongPassOnlyForCI2026');
+      assert.equal(await page.getByLabel('E-mail',{exact:true}).inputValue(),'owner@example.test','failed login must preserve entered e-mail');
+      await page.getByLabel('Senha',{exact:true}).fill('DummyStrongPassOnlyForCI2026');
       await page.getByRole('button',{name:'Entrar no PDV'}).click();
       await page.getByRole('heading',{name:'Balcão'}).waitFor({timeout:12000});
       // First-run R4 segment preference is a real modal: choose a segment

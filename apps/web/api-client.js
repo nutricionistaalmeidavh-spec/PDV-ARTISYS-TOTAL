@@ -61,8 +61,8 @@
       const apiRoot='/api/v1/';
       if(!original.startsWith(apiRoot))throw new Error('Rota não autorizada.');
       let operation='',targetPath=original;
-      const direct=['/api/v1/health','/api/v1/auth/login','/api/v1/auth/session','/api/v1/tenants'];
-      if(!direct.includes(original)&&!original.startsWith('/api/v1/tenants/')){
+      const direct=['/api/v1/health','/api/v1/auth/login','/api/v1/auth/session','/api/v1/tenants','/api/v1/auth/register-invite','/api/v1/invitations/accept','/api/v1/auth/sessions'];
+      if(!direct.includes(original)&&!/^\/api\/v1\/auth\/sessions\/[a-f0-9]{24}$/.test(original)&&!original.startsWith('/api/v1/tenants/')){
         if(!this.tenantId||!this.branchId)throw new Error('Escolha o estabelecimento e a filial antes de continuar.');
         if(original==='/api/v1/products')operation='products';
         else if(original.startsWith('/api/v1/products/'))operation=original.slice(apiRoot.length);
@@ -205,9 +205,13 @@
         this.webRequest('/api/v1/tenants/'+encodeURIComponent(tenantId)+'/context')
       ]);
       if(!branches.branches?.length)throw new Error('Este estabelecimento não possui filial ativa.');
+      // A newly created filial may sort before Matriz by name. Never
+      // silently change a fresh browser's checkout to a different branch.
+      // Explicit branch switching remains a separate authenticated action.
+      const defaultBranch=branches.branches.find(item=>String(item.code||'').toUpperCase()==='MAIN')||branches.branches[0];
       this.tenantId=tenantId;
-      this.branchId=branches.branches[0].id;
-      return {branch:branches.branches[0],context};
+      this.branchId=defaultBranch.id;
+      return {branch:defaultBranch,context};
     }
 
     params(values = {}) {

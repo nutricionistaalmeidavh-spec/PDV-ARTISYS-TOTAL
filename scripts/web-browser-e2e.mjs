@@ -76,6 +76,50 @@ try{
   assert.equal(await page.locator('#auth-overlay').isVisible(),false,
     'persisted segment must not intercept cashier pointer events');
 
+  // SaaS owner administration: live Workerd/D1, real cookie, browser and server checks.
+  await page.locator('#app-sidebar [data-route=saas-admin]').click();
+  await page.locator('#saas-admin #saas-branch-form').waitFor({timeout:12000});
+  assert.match(await page.locator('#saas-admin').innerText(),/Seu estabelecimento/);
+  await page.screenshot({path:'qa-artifacts/pdv-saas-admin-desktop.png',fullPage:true});
+  await page.locator('#saas-branch-form [name=code]').fill('WEBQA02');
+  await page.locator('#saas-branch-form [name=name]').fill('Filial browser QA');
+  await page.locator('#saas-branch-form button[type=submit]').click();
+  await page.locator('#saas-admin .saas-list').filter({hasText:'Filial browser QA'}).first().waitFor({timeout:12000});
+  await page.locator('#saas-invite-form [name=email]').fill('web-employee-qa@example.test');
+  await page.locator('#saas-invite-form [name=profileKey]').selectOption('CASHIER');
+  await page.locator('#saas-invite-form button[type=submit]').click();
+  await page.locator('#saas-invite-secret:not([hidden])').waitFor({timeout:12000});
+  const code=await page.locator('#saas-invite-code').inputValue();
+  assert.match(code,/^[a-f0-9]{64}$/,'browser gets exactly one private invitation code');
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:'qa-artifacts/pdv-saas-admin-mobile.png',fullPage:true});
+  await page.setViewportSize({width:1366,height:860});
+
+  // An invited employee creates a distinct identity without inheriting OWNER permissions.
+  const staffContext=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1});
+  const staffPage=await staffContext.newPage();
+  try{
+    await staffPage.goto(origin+'/app/',{waitUntil:'domcontentloaded'});
+    await staffPage.locator('.web-invite-activation summary').click();
+    await staffPage.locator('#web-invite-form').waitFor({timeout:12000});
+    await staffPage.locator('#web-invite-form [name=token]').fill(code);
+    await staffPage.locator('#web-invite-form [name=email]').fill('web-employee-qa@example.test');
+    await staffPage.locator('#web-invite-form [name=displayName]').fill('Funcionario QA');
+    await staffPage.locator('#web-invite-form [name=password]').fill('Employee-Strong-2026-Pass!');
+    await staffPage.locator('#web-invite-form button[type=submit]').click();
+    await staffPage.getByText('Conta ativada. Entre com seu e-mail e senha.').waitFor({timeout:12000});
+    await staffPage.locator('#web-login-form').waitFor({timeout:12000});
+    await staffPage.locator('#web-email').fill('web-employee-qa@example.test');
+    await staffPage.locator('#web-password').fill('Employee-Strong-2026-Pass!');
+    await staffPage.locator('#web-login-form button[type=submit]').click();
+    await staffPage.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
+    assert.equal(await staffPage.locator('#app-sidebar [data-route=saas-admin]').count(),0,
+      'merchant SaaS administrator must not appear for a cashier');
+  }finally{await staffContext.close();}
+  await page.locator('#app-sidebar [data-route=checkout]').click();
+  await page.locator('body[data-active-route=checkout]').waitFor();
+  await page.locator('#product-search').waitFor({state:'visible',timeout:12000});
+
   assert.equal(await page.locator('#product-search').count(),1,'only the canonical checkout renderer should exist');
   await page.locator('#app-sidebar [data-route=products]').click();
   await page.locator('#web-new-product').click();
@@ -302,9 +346,14 @@ try{
   await secondPage.locator('#web-password').fill('DummyStrongPassOnlyForCI2026');
   await secondPage.locator('#web-login-form button[type=submit]').click();
   await secondPage.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
+  await secondPage.locator('#auth-overlay').waitFor({state:'hidden',timeout:12000});
   const secondTerminal=await secondPage.evaluate(()=>localStorage.getItem('artisys.pdv.webTerminalId.v1'));
   assert.ok(secondTerminal?.startsWith('WEB-'));
   assert.notEqual(secondTerminal,expectedTerminalId,'two independent browser profiles must have different terminals');
+  const firstBranchId=await page.evaluate(()=>new window.PdvApiClient.ApiClient().branchId);
+  const secondBranchId=await secondPage.evaluate(()=>new window.PdvApiClient.ApiClient().branchId);
+  assert.equal(secondBranchId,firstBranchId,
+    'two terminals must not silently switch filial merely because a new branch sorts first by name');
   await secondPage.locator('#app-sidebar [data-route=cash]').click();
   await secondPage.locator('#web-cash-open').waitFor({timeout:12000});
   await secondPage.locator('#web-cash-open button[type=submit]').click();
