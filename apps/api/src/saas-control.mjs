@@ -205,6 +205,35 @@ export async function platformManagementRoute(request,db,env,path,now){
    return output({created:true,tenantId:id,branchId,subscription:{status:'TRIAL',endsAt}},201);
   }catch(e){return e.status?err(e):output({error:'Bootstrap já executado ou conflito de dados.'},409);}
  }
+ if(path==='/api/v1/platform/tenants'&&request.method==='GET'){
+  try{
+   const pending=await q(db,`SELECT t.id,t.slug,t.name,t.created_at AS createdAt,u.email_norm AS ownerEmail
+     FROM tenants t JOIN tenant_memberships m ON m.tenant_id=t.id AND m.profile_key='OWNER'
+     JOIN users u ON u.id=m.user_id
+     WHERE t.active=0 AND m.active=0 ORDER BY t.created_at DESC,t.id LIMIT 100`).all();
+   return output({pendingTenants:pending.results});
+  }catch(e){return err(e);}
+ }
+ const approve=path.match(/^\/api\/v1\/platform\/tenants\/([^/]{1,128})\/approve$/);
+ if(approve&&request.method==='POST'){
+  try{
+   const tenantId=decodeURIComponent(approve[1]);
+   const tenant=await q(db,'SELECT active FROM tenants WHERE id=?',tenantId).first();
+   if(!tenant)throw fail(404,'Empresa não encontrada.');
+   if(tenant.active!==0)throw fail(409,'Empresa já avaliada.');
+   const membership=await q(db,"SELECT user_id AS ownerId FROM tenant_memberships WHERE tenant_id=? AND profile_key='OWNER' AND active=0",tenantId).first();
+   if(!membership)throw fail(409,'Cadastro incompleto: proprietário não encontrado.');
+   const approvedAt=stamp(now),endsAt=stamp(now+14*86400000);
+   await db.batch([
+    q(db,"INSERT INTO saas_subscriptions(tenant_id,plan_key,status,ends_at,updated_at,updated_by) VALUES(?,?,'TRIAL',?,?,?)",
+     tenantId,'trial',endsAt,approvedAt,'PLATFORM'),
+    q(db,'UPDATE tenants SET active=1 WHERE id=? AND active=0',tenantId),
+    q(db,"UPDATE tenant_memberships SET active=1 WHERE tenant_id=? AND user_id=? AND profile_key='OWNER' AND active=0",tenantId,membership.ownerId),
+    audit(db,tenantId,'PLATFORM','PUBLIC_TENANT_APPROVED',membership.ownerId,now)
+   ]);
+   return output({approved:true,tenantId,trialEndsAt:endsAt});
+  }catch(e){return e.status?err(e):output({error:'Cadastro já aprovado ou inconsistência na ativação.'},409);}
+ }
  const match=path.match(/^\/api\/v1\/platform\/tenants\/([^/]{1,128})\/subscription$/);
  if(!match||request.method!=='PUT')return output({error:'Rota administrativa indisponível.'},404);
  try{

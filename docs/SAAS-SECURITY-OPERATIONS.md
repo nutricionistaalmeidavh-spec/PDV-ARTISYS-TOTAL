@@ -42,3 +42,7 @@ O sistema mantém a única API canônica Cloudflare Workers/D1 e o motor existen
 
 ## Pendências futuras
 Não foram implantados MFA, recuperação de senha, verificação externa de e-mail, envio transacional de convites, checkout Asaas, antifraude de webhooks, painel visual de superadmin ou certificação pentest independente. A API de planos é administrativa, não um comprovante de pagamento.
+
+## Aprovação de inscrições da landing
+
+O cadastro público em `/api/v1/auth/register` deixa empresa e OWNER com `active=0`, sem assinatura. A credencial privada de plataforma permite `GET /api/v1/platform/tenants` para revisar solicitações pendentes e `POST /api/v1/platform/tenants/:tenantId/approve` para ativar uma empresa uma única vez com avaliação de 14 dias, tudo de forma atômica e auditada. Login anterior à aprovação é bloqueado. Nenhum sinalizador enviado pelo navegador pode aprovar empresas.
