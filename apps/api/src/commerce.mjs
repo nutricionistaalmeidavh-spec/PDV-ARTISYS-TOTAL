@@ -171,8 +171,15 @@ export function createCommerceService(db,{now=nowISO}={}){
       // Real SaaS provisioning applies the full schema before enabling restaurant routes.
       if(!/no such table: r4_table_prepayments/i.test(String(e?.message)))throw e;
     }
+    let prepaymentRefunds=[];
+    try{
+      prepaymentRefunds=await all(`SELECT id,method AS paymentMethod,amount_cents AS amountCents,
+        refunded_at AS createdAt,'REVERSAL' AS type,NULL AS saleId,
+        table_session_id AS tableSessionId FROM r4_table_prepayment_refunds
+        WHERE tenant_id=? AND branch_id=? AND cash_session_id=?`,tenant,branch,id);
+    }catch(e){if(!/no such table: r4_table_prepayment_refunds/i.test(String(e?.message)))throw e;}
     const refunds=await all("SELECT id,'CASH' AS paymentMethod,amount_cents AS amountCents,created_at AS createdAt,'REVERSAL' AS type,sale_id AS saleId FROM sale_refund_movements WHERE tenant_id=? AND branch_id=? AND cash_session_id=? AND method='CASH'",tenant,branch,id);
-    return [...sales,...adjustments,...credits,...prepayments,...refunds].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id)));
+    return [...sales,...adjustments,...credits,...prepayments,...prepaymentRefunds,...refunds].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id)));
   };
   const cashClosing=async(tenant,branch,session,countedCashCents=0)=>{
     const lines=await cashLines(tenant,branch,session.id);
@@ -1741,7 +1748,10 @@ export function createCommerceService(db,{now=nowISO}={}){
       catch(e){if(!/no such table: restaurant_sale_links/i.test(String(e?.message)))throw e;}
       const plan=link?.sessionId?await first('SELECT parts,service_charge_bps AS bps,shares_json AS sharesJson FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,link.sessionId):null;
       const prepayments=link?.sessionId?await all(
-        'SELECT method,amount_cents AS amountCents,payer_index AS payerIndex FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? AND table_session_id=?',
+        `SELECT p.method,p.payer_index AS payerIndex,
+         p.amount_cents-COALESCE((SELECT SUM(r.amount_cents) FROM r4_table_prepayment_refunds r
+           WHERE r.tenant_id=p.tenant_id AND r.branch_id=p.branch_id AND r.prepayment_id=p.id),0) AS amountCents
+         FROM r4_table_prepayments p WHERE p.tenant_id=? AND p.branch_id=? AND p.table_session_id=?`,
         tenant,branch,link.sessionId):[];
       let splitShares=null;
       if(plan){
@@ -1796,7 +1806,7 @@ export function createCommerceService(db,{now=nowISO}={}){
       const newlyCollected=new Map();
       for(const p of normalized)newlyCollected.set(p.method,(newlyCollected.get(p.method)||0)+p.amountCents);
       const grouped=new Map(newlyCollected);
-      for(const p of prepayments)grouped.set(p.method,(grouped.get(p.method)||0)+p.amountCents);
+      for(const p of prepayments)if(p.amountCents>0)grouped.set(p.method,(grouped.get(p.method)||0)+p.amountCents);
       const groupedPayments=[...grouped].map(([method,amountCents])=>({method,amountCents}));
       const creditCents=grouped.get('STORE_CREDIT')||0;
        let customer=null,usedCreditCents=0;
