@@ -8,7 +8,7 @@ import {hashPassword} from '../src/password.mjs';
 const origin='https://pdvtotal.test';
 async function setup(){
   const db=openLocalDatabase();
-  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0021_r4_restaurant_operations.sql','0022_r4_restaurant_checkout.sql','0023_r4_extended_verticals.sql','0024_r4_print_outbox.sql','0025_r2_lan_devices.sql','0026_r4_kds_ticket_snapshots.sql'])
+  for(const file of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0021_r4_restaurant_operations.sql','0022_r4_restaurant_checkout.sql','0023_r4_extended_verticals.sql','0024_r4_print_outbox.sql','0025_r2_lan_devices.sql','0026_r4_kds_ticket_snapshots.sql','0028_r4_web_order_workflows.sql'])
     db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
   const stamp='2026-10-17T12:00:00.000Z';
   const h=await hashPassword('Senha-de-teste-123!');
@@ -712,5 +712,65 @@ test('R4 cap-034/035: rerouting product never changes the items of already issue
    assert.equal(newTicket.items.length,1);
    assert.equal(newTicket.items[0].quantity,1);
    assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM restaurant_orders WHERE tenant_id=?').bind('a').first()).n,2);
+ }finally{x.close();}
+});
+
+test('cap-032 customized restaurant account split keeps precise person shares and rejects drift',async()=>{
+ const x=await setup();try{
+  const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Refeição',sku:'SPLIT-X',salePriceCents:10001,trackStock:false})).body.product;
+  const table=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Mesa divisão personalizada'})).body.table;
+  const session=(await x.request('a',`restaurant/tables/${table.id}/open`,'POST',{branchId:'filial-a'})).body.session;
+  const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',tableSessionId:session.id,items:[{productId:p.id,quantity:1}]})).body.order;
+  const k=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0].id;
+  await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'PREPARING'});
+  await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'READY'});
+  await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'});
+  const url=`restaurant/sessions/${session.id}/split`;
+  const body={branchId:'filial-a',parts:3,shares:[3333,3334,3334]};
+  let res=await x.request('a',url,'POST',body);
+  assert.equal(res.status,200,JSON.stringify(res.body));
+  assert.deepEqual(res.body.plan.shares,[3333,3334,3334]);
+  const saved=await x.request('a',url+'?branchId=filial-a');
+  assert.deepEqual(saved.body.plan.shares,[3333,3334,3334]);
+  assert.equal((await x.request('a',url,'POST',{...body,shares:[3333,3333,3333]})).status,400);
+  assert.equal((await x.request('b',url+'?branchId=filial-b','GET',undefined,{as:'b'})).status,404);
+ }finally{x.close();}
+});
+
+test('cap-038 ticket numbering persists branch timezone and stays scoped across different stores',async()=>{
+ const x=await setup();try{
+  const url='restaurant/tickets/time-zone';
+  assert.equal((await x.request('a',url+'?branchId=filial-a')).body.timeZone,'America/Sao_Paulo');
+  const saved=await x.request('a',url,'PUT',{branchId:'filial-a',timeZone:'America/Manaus'});
+  assert.equal(saved.status,200,JSON.stringify(saved.body));
+  assert.equal((await x.request('a',url+'?branchId=filial-a')).body.timeZone,'America/Manaus');
+  assert.equal((await x.request('b',url+'?branchId=filial-b','GET',undefined,{as:'b'})).body.timeZone,'America/Sao_Paulo');
+  assert.equal((await x.request('a',url,'PUT',{branchId:'filial-a',timeZone:'Invalid/Zone'})).status,400);
+ }finally{x.close();}
+});
+
+test('cap-039 EAN13 weighted bakery label checks digit/tenant, prices by KG and never creates sale',async()=>{
+ const x=await setup();try{
+  const p=(await x.request('a','products','POST',{branchId:'filial-a',sku:'00042',name:'Queijo por peso',salePriceCents:3990,unit:'KG',trackStock:true})).body.product;
+  const raw='200004201250',sum=raw.split('').reduce((s,d,i)=>s+Number(d)*(i%2?3:1),0);
+  const barcode=raw+String((10-sum%10)%10),url='restaurant/weight/label';
+  const quote=await x.request('a',url,'POST',{branchId:'filial-a',barcode});
+  assert.equal(quote.status,200,JSON.stringify(quote.body));
+  assert.equal(quote.body.quote.productId,p.id);
+  assert.equal(quote.body.quote.totalCents,4988);
+  assert.equal(quote.body.quote.grams,1250);
+  assert.equal((await x.request('a',url,'POST',{branchId:'filial-a',barcode:barcode.slice(0,12)+'9'})).status,400);
+  assert.equal((await x.request('b',url,'POST',{branchId:'filial-b',barcode},{as:'b'})).status,404);
+  assert.equal((await x.db.prepare("SELECT COUNT(*) n FROM sales WHERE tenant_id='a'").bind().first()).n,0);
+ }finally{x.close();}
+});
+
+test('cap-031 two concurrent operators cannot hold two OPEN sessions on same physical mesa',async()=>{
+ const x=await setup();try{
+  const table=(await x.request('a','restaurant/tables','POST',{branchId:'filial-a',label:'Mesa disputada'})).body.table;
+  const path=`restaurant/tables/${table.id}/open`;
+  const responses=await Promise.allSettled([x.request('a',path,'POST',{branchId:'filial-a'}),x.request('a',path,'POST',{branchId:'filial-a'})]);
+  assert.equal(responses.filter(z=>z.status==='fulfilled'&&z.value.status===201).length,1);
+  assert.equal((await x.db.prepare("SELECT COUNT(*) n FROM restaurant_table_sessions WHERE tenant_id='a' AND table_id=? AND status='OPEN'").bind(table.id).first()).n,1);
  }finally{x.close();}
 });
