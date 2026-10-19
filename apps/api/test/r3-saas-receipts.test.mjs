@@ -49,6 +49,8 @@ test('cap-030 immutable SaaS sale receipt keeps branding snapshot after store se
   await x.db.prepare("UPDATE sales SET status='COMPLETED',completed_at=? WHERE id='sale-a'").bind(x.stamp).run();
   q=await x.call(apiPath('a','branch-a','sales/sale-a/receipt'),{cookie:x.owner});
   assert.equal(q.status,200);assert.equal(q.body.branding.name,'Loja Original');
+  assert.match(q.body.text,/Loja Original/);
+  assert.match(q.body.text,/CUPOM NAO FISCAL/);
   assert.equal(q.body.sale.status,'COMPLETED');
   assert.equal(q.body.fiscal,false);
   await x.call(path,{cookie:x.owner,method:'PUT',body:{branchId:'branch-a',name:'Loja Nova',address:'Nova rua',phone:'999',logoDataUrl:null}});
