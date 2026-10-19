@@ -205,6 +205,43 @@ export async function platformManagementRoute(request,db,env,path,now){
    return output({created:true,tenantId:id,branchId,subscription:{status:'TRIAL',endsAt}},201);
   }catch(e){return e.status?err(e):output({error:'Bootstrap já executado ou conflito de dados.'},409);}
  }
+ if(path==='/api/v1/platform/tenants'&&request.method==='GET'){
+  const rows=await q(db,`SELECT t.id,t.slug,t.name,t.active,u.email_norm AS ownerEmail,
+    u.display_name AS ownerName,s.status AS subscriptionStatus,s.plan_key AS planKey,
+    s.ends_at AS endsAt,t.created_at AS createdAt
+    FROM tenants t JOIN tenant_memberships m ON m.tenant_id=t.id AND m.profile_key='OWNER'
+    JOIN users u ON u.id=m.user_id
+    LEFT JOIN saas_subscriptions s ON s.tenant_id=t.id
+    ORDER BY t.created_at DESC,t.id DESC LIMIT 100`).all();
+  return output({tenants:rows.results.map(t=>({...t,
+   status:t.active===0?'PENDING':t.subscriptionStatus||'UNSUBSCRIBED',
+   ownerEmail:t.ownerEmail,ownerName:t.ownerName}))});
+ }
+ const approve=path.match(/^\/api\/v1\/platform\/tenants\/([^/]{1,128})\/approve$/);
+ if(approve&&request.method==='POST'){
+  try{
+   const tenantId=decodeURIComponent(approve[1]);
+   const pending=await q(db,`SELECT t.id,u.id AS ownerId FROM tenants t
+    JOIN tenant_memberships m ON m.tenant_id=t.id AND m.profile_key='OWNER' AND m.active=0
+    JOIN users u ON u.id=m.user_id AND u.active=1
+    WHERE t.id=? AND t.active=0`,tenantId).first();
+   if(!pending){
+    const exists=await q(db,'SELECT id FROM tenants WHERE id=?',tenantId).first();
+    throw fail(exists?409:404,exists?'Empresa não está aguardando aprovação.':'Empresa não encontrada.');
+   }
+   const owners=await q(db,`SELECT COUNT(*) AS n FROM tenant_memberships
+     WHERE tenant_id=? AND profile_key='OWNER'`,tenantId).first();
+   if(owners.n!==1)throw fail(409,'Empresa sem proprietário único.');
+   const trialEnds=stamp(now+14*86400000),when=stamp(now);
+   await db.batch([
+    q(db,"UPDATE tenants SET active=1 WHERE id=? AND active=0",tenantId),
+    q(db,"UPDATE tenant_memberships SET active=1 WHERE tenant_id=? AND user_id=? AND profile_key='OWNER' AND active=0",tenantId,pending.ownerId),
+    q(db,"INSERT INTO saas_subscriptions(tenant_id,plan_key,status,ends_at,updated_at,updated_by) VALUES(?,'trial','TRIAL',?,?,'PLATFORM')",tenantId,trialEnds,when),
+    audit(db,tenantId,'PLATFORM','TENANT_APPROVED',pending.ownerId,now)
+   ]);
+   return output({approved:true,tenantId,subscription:{status:'TRIAL',endsAt:trialEnds}});
+  }catch(e){return e.status?err(e):output({error:'Aprovação já concluída ou incongruência de cadastro.'},409);}
+ }
  const match=path.match(/^\/api\/v1\/platform\/tenants\/([^/]{1,128})\/subscription$/);
  if(!match||request.method!=='PUT')return output({error:'Rota administrativa indisponível.'},404);
  try{
