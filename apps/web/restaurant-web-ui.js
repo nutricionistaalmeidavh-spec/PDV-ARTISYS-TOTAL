@@ -91,7 +91,7 @@
          '<p>Recebimentos antecipados: '+money(state.prepayments?.totalCents||0)+'. O saldo é acertado no caixa canônico.</p>'+
          (can('restaurant.orders.transfer')?'<details><summary>Registrar recebimento parcial</summary><form data-r4-form="prepay" class="vertical-form">'+
            '<input type="hidden" name="sessionId" value="'+esc(state.selected)+'">'+
-           field('Valor recebido em centavos','amountCents','number','min="1" step="1" required')+
+           field('Valor recebido (R$)','amountReais','number','min="0.01" max="10000000" step="0.01" required')+
            '<label class="field"><span>Forma</span><select name="method"><option value="CASH">Dinheiro</option><option value="PIX">PIX</option><option value="DEBIT_CARD">Débito</option><option value="CREDIT_CARD">Crédito</option></select></label>'+
            '<p>Registre apenas valores recebidos. O caixa do terminal deve estar aberto.</p><button class="secondary-button">Confirmar antecipação</button></form></details>':'')+
          (can('restaurant.orders.transfer')&&free.length?'<form class="vertical-form" data-r4-form="transfer"><input type="hidden" name="sessionId" value="'+esc(state.selected)+'"><input type="hidden" name="expectedTableId" value="'+esc(s.id)+'"><label class="field"><span>Mudar para mesa livre</span><select name="targetTableId">'+free.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.label)+'</option>').join('')+'</select></label><button class="secondary-button">Transferir mesa</button></form>':'')+
@@ -322,7 +322,12 @@
    const what=formEl.dataset.r4Form,v=Object.fromEntries(new FormData(formEl));
    try{
      if(what==='table')await form('/tables',{label:String(v.label).trim(),seats:Number(v.seats)});
-     if(what==='prepay')await form('/sessions/'+encodeURIComponent(v.sessionId)+'/prepayments',{amountCents:Number(v.amountCents),method:v.method});
+     if(what==='prepay'){
+       const reais=Number(v.amountReais),amountCents=Math.round(reais*100);
+       if(!Number.isFinite(reais)||!Number.isSafeInteger(amountCents)||amountCents<1||
+          Math.abs(reais*100-amountCents)>1e-6)throw Error('Informe o valor recebido em reais, com até duas casas decimais.');
+       await form('/sessions/'+encodeURIComponent(v.sessionId)+'/prepayments',{amountCents,method:v.method});
+     }
      if(what==='transfer')await form('/sessions/'+encodeURIComponent(v.sessionId)+'/transfer',{targetTableId:v.targetTableId,expectedTableId:v.expectedTableId});
      if(what==='order'){
        const fulfillment=v.fulfillment;
