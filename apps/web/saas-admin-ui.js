@@ -67,7 +67,7 @@
    '<section class="saas-panel"><h2>Dispositivos e sessões</h2><p>Revogar sessões encerra o acesso daquele navegador.</p>'+
    '<ul class="saas-list">'+data.sessions.map(s=>'<li><div><strong>'+(s.current?'Esta sessão':'Outra sessão')+'</strong><small>Iniciada em '+esc(date(s.createdAt))+'</small></div>'+
     '<button type="button" data-revoke-session="'+esc(s.id)+'">'+(s.current?'Sair deste dispositivo':'Encerrar')+'</button></li>').join('')+'</ul></section></div>'+
-   '<p class="saas-admin-footnote">Assinaturas são gerenciadas pela ArtiSys. O estabelecimento não pode alterar o plano pelo navegador.</p>'+
+   '<p class="saas-admin-footnote">Assinaturas são gerenciadas pela ArtiSys. Pague ou renove mensal/anualmente na central; o acesso só muda após pagamento confirmado. <a href="/conta/">Ver assinatura e segurança da conta ↗</a></p>'+
    '</section>';
  }
  async function render(host,ctx){

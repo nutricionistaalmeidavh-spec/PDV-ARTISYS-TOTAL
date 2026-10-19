@@ -61,7 +61,7 @@
       const apiRoot='/api/v1/';
       if(!original.startsWith(apiRoot))throw new Error('Rota não autorizada.');
       let operation='',targetPath=original;
-      const direct=['/api/v1/health','/api/v1/auth/login','/api/v1/auth/session','/api/v1/tenants','/api/v1/auth/register-invite','/api/v1/invitations/accept','/api/v1/auth/sessions'];
+      const direct=['/api/v1/health','/api/v1/auth/login','/api/v1/auth/mfa/login','/api/v1/auth/email/verify','/api/v1/auth/email/request','/api/v1/auth/security','/api/v1/auth/mfa/enroll','/api/v1/auth/mfa/confirm','/api/v1/auth/mfa/disable','/api/v1/auth/session','/api/v1/tenants','/api/v1/auth/register-invite','/api/v1/invitations/accept','/api/v1/auth/sessions'];
       if(!direct.includes(original)&&!/^\/api\/v1\/auth\/sessions\/[a-f0-9]{24}$/.test(original)&&!original.startsWith('/api/v1/tenants/')){
         if(!this.tenantId||!this.branchId)throw new Error('Escolha o estabelecimento e a filial antes de continuar.');
         if(original==='/api/v1/products')operation='products';
@@ -234,6 +234,8 @@
       root.sessionStorage?.setItem('artisys.sessionToken', this.sessionToken);
       return result;
     }
+    mfaLogin(body){return this.request('/api/v1/auth/mfa/login',{method:'POST',body});}
+    emailVerificationRequest(){return this.request('/api/v1/auth/email/request',{method:'POST',body:{}});}
     async logout() { if(this.webMode){ const result=await this.webRequest('/api/v1/auth/session',{method:'DELETE'});this.completionKeys.clear();this.tenantId=null;this.branchId=null;return result; } this.sessionToken = ''; root.sessionStorage?.removeItem('artisys.sessionToken'); }
     currentSession() { return this.request('/api/v1/auth/session'); }
     authorizeReturn(body) { return this.request('/api/v1/auth/authorize', { method:'POST', body }); }

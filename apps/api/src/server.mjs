@@ -17,7 +17,7 @@ const webDir=resolve(here,'../../../dist/web');
 if(!existsSync(resolve(webDir,'index.html')))
   throw new Error('PWA não compilada: execute npm run build na raiz antes de iniciar o servidor local.');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('PORT inválida.');
-const api=createApi({DB:db,COOKIE_SECURE:'false',AUTH_ENABLED:process.env.AUTH_ENABLED||'false',REGISTRATION_ENABLED:process.env.REGISTRATION_ENABLED||'false',LOCAL_MEDIA_ENABLED:'true'});
+const api=createApi({DB:db,COOKIE_SECURE:'false',AUTH_ENABLED:process.env.AUTH_ENABLED||'false',REGISTRATION_ENABLED:process.env.REGISTRATION_ENABLED||'false',LOCAL_MEDIA_ENABLED:'true',MFA_ENABLED:process.env.MFA_ENABLED||'false',MFA_ENCRYPTION_KEY:process.env.MFA_ENCRYPTION_KEY,EMAIL_VERIFICATION_REQUIRED:process.env.EMAIL_VERIFICATION_REQUIRED||'false',EMAIL_DELIVERY_URL:process.env.EMAIL_DELIVERY_URL,EMAIL_DELIVERY_TOKEN:process.env.EMAIL_DELIVERY_TOKEN,ARTISYS_BILLING_ENABLED:process.env.ARTISYS_BILLING_ENABLED||'false',ARTISYS_BILLING_SECRET:process.env.ARTISYS_BILLING_SECRET,ARTISYS_BINDING_SECRET:process.env.ARTISYS_BINDING_SECRET,ARTISYS_PAYMENTS_URL:process.env.ARTISYS_PAYMENTS_URL,ARTISYS_PDV_MONTHLY_OFFER_ID:process.env.ARTISYS_PDV_MONTHLY_OFFER_ID,ARTISYS_PDV_YEARLY_OFFER_ID:process.env.ARTISYS_PDV_YEARLY_OFFER_ID,SAAS_ENTITLEMENTS_ENABLED:process.env.SAAS_ENTITLEMENTS_ENABLED||'false',PLATFORM_ADMIN_TOKEN:process.env.PLATFORM_ADMIN_TOKEN});
 const server=createServer(async(req,res)=>{
   try{
     const origin=`http://${req.headers.host||'127.0.0.1:'+port}`;

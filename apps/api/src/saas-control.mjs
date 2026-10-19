@@ -205,13 +205,39 @@ export async function platformManagementRoute(request,db,env,path,now){
    return output({created:true,tenantId:id,branchId,subscription:{status:'TRIAL',endsAt}},201);
   }catch(e){return e.status?err(e):output({error:'Bootstrap já executado ou conflito de dados.'},409);}
  }
+ if(path==='/api/v1/platform/summary'&&request.method==='GET'){
+  try{
+   const summary=await q(db,`SELECT
+      COUNT(*) AS totalTenants,
+      SUM(CASE WHEN active=0 THEN 1 ELSE 0 END) AS pendingTenants,
+      SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) AS approvedTenants
+     FROM tenants`).first();
+   const subs=await q(db,`SELECT status,COUNT(*) AS total FROM saas_subscriptions GROUP BY status ORDER BY status`).all();
+   return output({summary:{totalTenants:summary.totalTenants,pendingTenants:summary.pendingTenants||0,
+    approvedTenants:summary.approvedTenants||0,subscriptions:subs.results}});
+  }catch(e){return err(e);}
+ }
+ if(path==='/api/v1/platform/audit'&&request.method==='GET'){
+  try{
+   const data=await q(db,`SELECT kind,tenant_id AS tenantId,actor_id AS actorId,subject_id AS subjectId,
+     created_at AS createdAt FROM saas_audit_events ORDER BY created_at DESC LIMIT 100`).all();
+   return output({events:data.results});
+  }catch(e){return err(e);}
+ }
  if(path==='/api/v1/platform/tenants'&&request.method==='GET'){
   try{
    const pending=await q(db,`SELECT t.id,t.slug,t.name,t.created_at AS createdAt,u.email_norm AS ownerEmail
      FROM tenants t JOIN tenant_memberships m ON m.tenant_id=t.id AND m.profile_key='OWNER'
      JOIN users u ON u.id=m.user_id
      WHERE t.active=0 AND m.active=0 ORDER BY t.created_at DESC,t.id LIMIT 100`).all();
-   return output({pendingTenants:pending.results});
+   const all=await q(db,`SELECT t.id,t.slug,t.name,t.active,t.created_at AS createdAt,
+    s.status AS subscriptionStatus,s.plan_key AS planKey,s.ends_at AS endsAt,
+    u.email_norm AS ownerEmail
+    FROM tenants t LEFT JOIN saas_subscriptions s ON s.tenant_id=t.id
+    LEFT JOIN tenant_memberships m ON m.tenant_id=t.id AND m.profile_key='OWNER'
+    LEFT JOIN users u ON u.id=m.user_id
+    ORDER BY t.created_at DESC,t.id LIMIT 250`).all();
+   return output({pendingTenants:pending.results,tenants:all.results});
   }catch(e){return err(e);}
  }
  const approve=path.match(/^\/api\/v1\/platform\/tenants\/([^/]{1,128})\/approve$/);

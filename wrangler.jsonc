@@ -16,7 +16,13 @@
     "REGISTRATION_ENABLED": "false",
     "SAAS_ENTITLEMENTS_ENABLED": "true",
     "TENANT_SELF_SIGNUP_ENABLED": "false",
-    "TRUST_CF_CONNECTING_IP": "true"
+    "TRUST_CF_CONNECTING_IP": "true",
+    "MFA_ENABLED": "false",
+    "EMAIL_VERIFICATION_REQUIRED": "false",
+    "ARTISYS_BILLING_ENABLED": "false",
+    "ARTISYS_PAYMENTS_URL": "https://pagamentos-artisys-central.nutricionistaalmeidavh.workers.dev",
+    "ARTISYS_PDV_MONTHLY_OFFER_ID": "pdv-total-saas-mensal",
+    "ARTISYS_PDV_YEARLY_OFFER_ID": "pdv-total-saas-anual"
   },
   // Wrangler 4 auto-provisions missing resource IDs; do not invent UUIDs.
   // Do not ever bind the desktop licensing D1 database here.

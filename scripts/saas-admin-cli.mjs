@@ -37,8 +37,8 @@ function requireSecret(){
 }
 async function run(){
  const base=getBase();
- if(!['pending','approve','subscription','bootstrap','smoke'].includes(command))
-  throw Error('Uso: saas-admin-cli.mjs pending | approve ID | subscription ID ESTADO PLANO EXPIRACAO_ISO | bootstrap | smoke');
+ if(!['pending','approve','subscription','bootstrap','smoke','painel'].includes(command))
+  throw Error('Uso: saas-admin-cli.mjs pending | approve ID | subscription ID ESTADO PLANO EXPIRACAO_ISO | bootstrap | smoke | painel');
  if(command==='smoke'){
   const email=process.env.PDV_OWNER_EMAIL,password=process.env.PDV_OWNER_PASSWORD;
   if(!email||!password)throw Error('Informe PDV_OWNER_EMAIL e PDV_OWNER_PASSWORD no ambiente para o smoke.');
@@ -58,6 +58,14 @@ async function run(){
   return;
  }
  requireSecret();
+ if(command==='painel'){
+  const {data}=await call(base,'/api/v1/platform/ticket','POST',{});
+  if(!/^[a-f0-9]{64}$/.test(data.ticket||''))throw Error('A API não emitiu convite válido.');
+  console.log('Convite do painel (uso único, validade 5 minutos):');
+  console.log(base+'/admin/#ticket='+data.ticket);
+  console.log('Nunca encaminhe o link para usuários ou registre o token em logs compartilhados.');
+  return;
+ }
  if(command==='pending'){
   const {data}=await call(base,'/api/v1/platform/tenants');
   const list=(data.pendingTenants||[]).map(t=>({id:t.id,name:t.name,ownerEmail:t.ownerEmail,status:t.status,planKey:t.planKey}));
