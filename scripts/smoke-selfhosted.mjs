@@ -32,7 +32,10 @@ try{
   assert.equal(shell.status,200);
   const html=await shell.text();
   assert.match(html,/PDV Total|PDV TOTAL/i);
-  assert.match(html,/report-xlsx\.js/);
+  assert.match(html,/id="hero-title"/);
+  const app=await fetch(base+'/app/');
+  assert.equal(app.status,200);
+  assert.match(await app.text(),/report-xlsx\.js/);
   assert.match(shell.headers.get('content-type'),/text\/html/);
   const js=await fetch(base+'/report-xlsx.js');
   assert.equal(js.status,200);
