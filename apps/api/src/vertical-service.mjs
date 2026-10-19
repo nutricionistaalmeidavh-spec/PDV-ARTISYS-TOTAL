@@ -498,6 +498,31 @@ export function createVerticalService(db){
        channels:{TABLE:tableCount,DELIVERY:deliveryCount,PICKUP:pickupCount,COUNTER:counterCount},
        note:'Indicadores operacionais: pedido entregue não equivale a venda recebida. Faturamento, caixa e estoque pertencem ao checkout canônico.'};
    },
+   async restaurantReportRows(t,b,from,to,{limit=50,cursor=null}={}){
+     await branchExists(t,b);
+     if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw err(400,'Limite inválido para relatório.');
+     const checkDate=value=>{
+       if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T00:00:00Z'))||
+         new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)throw err(400,'Data do relatório inválida.');
+       return Date.parse(value+'T00:00:00Z');
+     };
+     const a=checkDate(from),z=checkDate(to);
+     if(z<a||z-a>366*86400000)throw err(400,'Período inválido ou acima de 366 dias.');
+     let before='',beforeId='';
+     if(cursor!==null){
+       if(typeof cursor!=='string'||cursor.length>240||!/^\d{4}-\d{2}-\d{2}T.*\|[a-zA-Z0-9_-]{1,100}$/.test(cursor))
+         throw err(400,'Cursor inválido.');
+       [before,beforeId]=cursor.split('|');
+       if(!Number.isFinite(Date.parse(before))||new Date(before).toISOString()!==before)throw err(400,'Cursor inválido.');
+     }
+     const start=new Date(a).toISOString(),end=new Date(z+86400000).toISOString();
+     const results=await all('SELECT id,created_at AS createdAt,fulfillment,service_channel AS serviceChannel,status,'+
+       'total_cents AS totalCents FROM restaurant_orders WHERE tenant_id=? AND branch_id=? '+
+       "AND created_at>=? AND created_at<? AND (?='' OR created_at<? OR (created_at=? AND id<?)) "+
+       'ORDER BY created_at DESC,id DESC LIMIT ?',t,b,start,end,before,before,before,beforeId,limit+1);
+     const rows=results.slice(0,limit),last=rows.at(-1);
+     return {orders:rows,nextCursor:results.length>limit&&last?last.createdAt+'|'+last.id:null};
+   },
    async wholesaleCustomerPolicy(t,b,customerId){
      await branchExists(t,b);
      const c=await customer(t,customerId);
