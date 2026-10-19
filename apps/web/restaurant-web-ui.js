@@ -48,7 +48,9 @@
        '<fieldset><legend>Sabores (até '+esc(profile.maxFlavors)+')</legend>'+profile.flavors.map(x=>
          '<label><input type="checkbox" name="flavorCodes" value="'+esc(x.code)+'"> '+esc(x.name)+'</label>').join('')+'</fieldset>'+
        '<label class="field"><span>Borda</span><select name="crustCode"><option value="">Sem borda</option>'+
-       profile.crusts.map(x=>'<option value="'+esc(x.code)+'">'+esc(x.name)+'</option>').join('')+'</select></label></fieldset>';
+       profile.crusts.map(x=>'<option value="'+esc(x.code)+'">'+esc(x.name)+'</option>').join('')+'</select></label>'+
+       '<fieldset><legend>Adicionais</legend>'+(profile.addons||[]).map(x=>
+         '<label><input type="checkbox" name="addonCodes" value="'+esc(x.code)+'"> '+esc(x.name)+' · '+money(x.priceCents)+'</label>').join('')+'</fieldset></fieldset>';
    }catch(e){if(select.value!==id)return;row.dataset.r4PizzaState='error';output.textContent='Não foi possível carregar opções de pizza. Atualize ou selecione outro produto.';}
  }
  function bindOrderRow(row){
@@ -286,7 +288,8 @@
            const selected=[...row.querySelectorAll('[name="flavorCodes"]:checked')].map(input=>input.value);
            if(!selected.length||selected.length>Number(row.dataset.r4MaxFlavors))throw new Error('Escolha os sabores da pizza.');
            item.pizza={sizeCode:row.querySelector('[name="sizeCode"]').value,
-             flavorCodes:selected,crustCode:row.querySelector('[name="crustCode"]').value||null};
+             flavorCodes:selected,crustCode:row.querySelector('[name="crustCode"]').value||null,
+             addonCodes:[...row.querySelectorAll('[name="addonCodes"]:checked')].map(input=>input.value)};
          }
          return item;
        });
