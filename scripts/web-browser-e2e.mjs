@@ -350,6 +350,10 @@ try{
   const secondTerminal=await secondPage.evaluate(()=>localStorage.getItem('artisys.pdv.webTerminalId.v1'));
   assert.ok(secondTerminal?.startsWith('WEB-'));
   assert.notEqual(secondTerminal,expectedTerminalId,'two independent browser profiles must have different terminals');
+  const firstBranchId=await page.evaluate(()=>new window.PdvApiClient.ApiClient().branchId);
+  const secondBranchId=await secondPage.evaluate(()=>new window.PdvApiClient.ApiClient().branchId);
+  assert.equal(secondBranchId,firstBranchId,
+    'two terminals must not silently switch filial merely because a new branch sorts first by name');
   await secondPage.locator('#app-sidebar [data-route=cash]').click();
   await secondPage.locator('#web-cash-open').waitFor({timeout:12000});
   await secondPage.locator('#web-cash-open button[type=submit]').click();
