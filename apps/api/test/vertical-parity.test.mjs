@@ -774,3 +774,44 @@ test('cap-031 two concurrent operators cannot hold two OPEN sessions on same phy
   assert.equal((await x.db.prepare("SELECT COUNT(*) n FROM restaurant_table_sessions WHERE tenant_id='a' AND table_id=? AND status='OPEN'").bind(table.id).first()).n,1);
  }finally{x.close();}
 });
+
+test('cap-037 delivery checkpoint returns to courier, refuses final delivery until redispatch and keeps order immutable',async()=>{
+ const x=await setup();try{
+  const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Marmita',sku:'DEL-COUR',salePriceCents:1900,trackStock:false})).body.product;
+  const order=(await x.request('a','restaurant/orders','POST',{branchId:'filial-a',fulfillment:'DELIVERY',address:'Rua das Flores 44',items:[{productId:p.id,quantity:1}]})).body.order;
+  const k=(await x.request('a','restaurant/kitchen?branchId=filial-a')).body.tickets[0].id;
+  await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'PREPARING'});
+  await x.request('a',`restaurant/kitchen/${k}`,'PATCH',{branchId:'filial-a',status:'READY'});
+  assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,409);
+  assert.equal((await x.request('a',`restaurant/orders/${order.id}/dispatch`,'POST',{branchId:'filial-a',courierName:'José'})).status,200);
+  const path=`restaurant/orders/${order.id}/delivery-events`;
+  const returned=await x.request('a',path,'POST',{branchId:'filial-a',kind:'RETURNED',reason:'Cliente ausente'});
+  assert.equal(returned.status,200,JSON.stringify(returned.body));
+  assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,409);
+  assert.equal((await x.request('a',path,'POST',{branchId:'filial-a',kind:'ARRIVED'})).status,409);
+  const again=await x.request('a',path,'POST',{branchId:'filial-a',kind:'REDISPATCHED',courierName:'Maria'});
+  assert.equal(again.status,200,JSON.stringify(again.body));
+  assert.equal((await x.request('a',`restaurant/orders/${order.id}/deliver`,'POST',{branchId:'filial-a'})).status,200);
+  const history=await x.request('a',path+'?branchId=filial-a');
+  assert.equal(history.body.events.length,2);
+  assert.equal(history.body.events[0].kind,'RETURNED');
+  assert.equal((await x.request('b',path+'?branchId=filial-b','GET',undefined,{as:'b'})).status,404);
+  assert.equal((await x.db.prepare("SELECT COUNT(*) n FROM sales WHERE tenant_id='a'").bind().first()).n,0);
+ }finally{x.close();}
+});
+
+test('cap-036 pizza addons have catalog-owned immutable prices and cannot accept injected monetary values',async()=>{
+ const x=await setup();try{
+   const p=(await x.request('a','products','POST',{branchId:'filial-a',name:'Pizza adicional',sku:'PIZZA-ADD',salePriceCents:1500,trackStock:false})).body.product;
+   const profile=await x.request('a','restaurant/pizzeria/profiles','POST',{branchId:'filial-a',productId:p.id,policy:'HIGHEST_FLAVOR',
+     sizes:[{code:'G',name:'Grande',priceCents:4000}],flavors:[{code:'CAL',name:'Calabresa',priceCents:4500}],
+     crusts:[],addons:[{code:'CHEESE',name:'Queijo extra',priceCents:500}]});
+   assert.equal(profile.status,201,JSON.stringify(profile.body));
+   const quote=await x.request('a','restaurant/pizzeria/quote','POST',{branchId:'filial-a',productId:p.id,sizeCode:'G',flavorCodes:['CAL'],addonCodes:['CHEESE']});
+   assert.equal(quote.status,200,JSON.stringify(quote.body));
+   assert.equal(quote.body.quote.unitPriceCents,5000);
+   assert.deepEqual(quote.body.quote.configuration.addons.map(a=>a.code),['CHEESE']);
+   assert.equal((await x.request('a','restaurant/pizzeria/quote','POST',{branchId:'filial-a',productId:p.id,sizeCode:'G',flavorCodes:['CAL'],addonCodes:['CHEESE','CHEESE']})).status,400);
+   assert.equal((await x.request('a','restaurant/pizzeria/quote','POST',{branchId:'filial-a',productId:p.id,sizeCode:'G',flavorCodes:['CAL'],addonCodes:['HACK'],priceCents:1})).status,400);
+ }finally{x.close();}
+});
