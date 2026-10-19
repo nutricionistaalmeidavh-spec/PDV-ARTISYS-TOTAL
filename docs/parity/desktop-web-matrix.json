@@ -311,14 +311,16 @@
         {
           "id": "checkout-016",
           "name": "Produtos por peso com balança/inserção manual",
-          "status": "partial",
+          "status": "covered",
           "webEvidence": {
             "file": "apps/api/src/commerce.mjs",
             "contains": "async addWeightedItem(",
             "testFile": "apps/api/test/commerce.test.mjs",
-            "testContains": "P6 weighted product"
+            "testContains": "test('checkout-016 R3 stable scale and manual weighted sale",
+            "testAssertionContains": "assert.deepEqual(prices,[4988,4988]);",
+            "testRunner": "node-test"
           },
-          "reviewNote": "Venda por peso e protocolo web implementados. Aceite de código: cálculo e eventos de balança simulados, rejeição de valores inválidos e comparação com desktop. Dispositivo real não bloqueia.",
+          "reviewNote": "Conferida a venda por peso em API/SQLite com leitura serial fragmentada estável e origem manual, preço em centavos idêntico, idempotência por operação, isolamento de empresa, duas vendas independentes e dois movimentos de estoque canônico. Requisição WebSerial exige HTTPS e permissão explícita. Homologação de modelos físicos fica opcional e não faz parte do aceite de software.",
           "owner": "sales",
           "dependsOn": [
             "products-020"
