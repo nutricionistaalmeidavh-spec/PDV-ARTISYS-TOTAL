@@ -6,7 +6,7 @@
   const { ApiClient } = window.PdvApiClient;
   const api = new ApiClient();
   const routeRegistry = window.PdvRouteRegistry;
-  const WEB_ROUTES=new Set(['home','checkout','products','inventory','sales','cash','finance','finance-banks','finance-recurrences','management','reports','settings','customers','suppliers','sellers','FOOD','WHOLESALE','credit','commissions']);
+  const WEB_ROUTES=new Set(['home','checkout','products','inventory','sales','cash','finance','finance-banks','finance-recurrences','management','reports','settings','customers','suppliers','sellers','FOOD','WHOLESALE','credit','commissions','saas-admin']);
   if (!routeRegistry) throw new Error('PdvRouteRegistry must load before app.js.');
 
   const ROUTES = {
@@ -27,6 +27,7 @@
     reports: { label: 'Relatórios', icon: 'document', phase: 'E17' },
     sellers: { label: 'Equipe comercial', icon: 'users' },
     management: { label: 'Gestão', icon: 'management' },
+    'saas-admin': { label:'Administração da empresa', shortLabel:'Minha empresa', icon:'management' },
     cash: { label: 'Caixa', shortLabel:'Caixa', icon: 'cash', phase: 'E14' },
     sales: { label: 'Últimas vendas', icon: 'history', phase: 'E15' },
     returns: { label: 'Devolução', icon: 'return', phase: 'E15' },
@@ -197,6 +198,7 @@
 
   function canAccessRoute(route) {
     if(route==='settings'&&api.webMode)return Boolean(state.user);
+    if(route==='saas-admin'&&api.webMode)return state.user?.profileKey==='OWNER';
     if(api.webMode){
       if(!WEB_ROUTES.has(route))return false;
       const permission={suppliers:'suppliers.view',credit:'customers.view',commissions:'finance.view',FOOD:'restaurant.access',WHOLESALE:'wholesale.access'}[route];
@@ -208,7 +210,7 @@
   function renderSidebar() {
     const nav = document.getElementById('sidebar-nav');
     const accessPolicy = window.PdvAccessPolicy;
-    const items = api.webMode ? ['home','checkout','customers','suppliers','sellers','FOOD','WHOLESALE','credit','commissions','products','inventory','sales','cash','finance','finance-banks','finance-recurrences','management','reports'].filter(route=>canAccessRoute(route))
+    const items = api.webMode ? ['home','checkout','customers','suppliers','sellers','FOOD','WHOLESALE','credit','commissions','products','inventory','sales','cash','finance','finance-banks','finance-recurrences','management','reports','saas-admin'].filter(route=>canAccessRoute(route))
       : (accessPolicy?.routesForUser(state.user, moduleAccessOptions()) || ['home']).filter(route=>route!=='settings');
     const parentRoute = {
       finance:'financial-management',
@@ -327,6 +329,17 @@
   }
 
   async function renderRoute() {
+    if(api.webMode&&state.route==='saas-admin')
+      return window.PdvSaasAdmin.render(content,{
+        api,user:state.user,memberships:state.sessionMemberships,
+        toast:showToast,
+        switchTenant:async tenantId=>{
+          const session=await api.currentSession();
+          const target=session.memberships?.find(m=>m.tenantId===tenantId&&m.profileKey==='OWNER');
+          if(!target)throw new Error('Empresa não encontrada.');
+          await activateWebSession({...session,memberships:[target,...session.memberships.filter(m=>m.tenantId!==tenantId)]});
+        }
+      });
     if (routeRegistry.has(state.route)) return routeRegistry.render(state.route, { state,
       navigationScope:String(api.tenantId||'')+'|'+String(api.branchId||'')+'|'+String(state.user?.id||'') });
     return renderPlaceholder(state.route);
@@ -2255,8 +2268,38 @@ function openCategoryForm() {
         <div class="field"><label for="web-password">Senha</label><input id="web-password" name="password" type="password" autocomplete="current-password" required></div>
         <p class="web-login-feedback" id="web-login-feedback" role="status" aria-live="polite">${escapeHtml(message)}</p>
         <button class="primary-button" type="submit">Entrar no PDV</button>
-      </form><small>O acesso depende da liberação do estabelecimento pela ArtiSys.</small><p class="web-login-links"><a href="/">Conhecer o produto</a> · <a href="/#cadastro">Criar conta</a></p></section>`;
+      </form>
+      <details class="web-invite-activation"><summary>Recebi um convite para trabalhar em uma empresa</summary>
+        <form id="web-invite-form">
+          <div class="field"><label>Código do convite<textarea name="token" maxlength="64" minlength="64" rows="2" required autocomplete="off"></textarea></label></div>
+          <div class="field"><label>E-mail convidado<input name="email" type="email" required autocomplete="email"></label></div>
+          <div class="field"><label>Nome completo<input name="displayName" maxlength="100" required></label></div>
+          <div class="field"><label>Criar senha<input name="password" type="password" minlength="12" autocomplete="new-password" required></label></div>
+          <button class="primary-button" type="submit">Ativar meu convite</button>
+          <p id="web-invite-feedback" role="status" aria-live="polite"></p>
+        </form>
+      </details>
+      <small>O acesso depende da liberação do estabelecimento pela ArtiSys.</small><p class="web-login-links"><a href="/">Conhecer o produto</a> · <a href="/#cadastro">Criar conta</a></p></section>`;
     const form=authOverlay.querySelector('#web-login-form');
+    const inviteForm=authOverlay.querySelector('#web-invite-form');
+    inviteForm?.addEventListener('submit',async e=>{
+      e.preventDefault();if(inviteForm.dataset.pending==='true')return;
+      inviteForm.dataset.pending='true';
+      const button=inviteForm.querySelector('button[type=submit]');
+      button.disabled=true;
+      try{
+        await api.request('/api/v1/auth/register-invite',{method:'POST',body:{
+          token:inviteForm.elements.token.value.trim(),
+          email:inviteForm.elements.email.value.trim(),
+          displayName:inviteForm.elements.displayName.value.trim(),
+          password:inviteForm.elements.password.value
+        }});
+        showWebLogin('Conta ativada. Entre com seu e-mail e senha.');
+      }catch(error){
+        const feedback=inviteForm.querySelector('#web-invite-feedback');
+        if(feedback)feedback.textContent=error.message;
+      }finally{inviteForm.dataset.pending='false';button.disabled=false;}
+    });
     form.addEventListener('submit',async event=>{
       event.preventDefault();
       if(form.dataset.pending==='true')return;
@@ -2276,6 +2319,7 @@ function openCategoryForm() {
   }
 
   async function activateWebSession(session){
+    state.sessionMemberships=session?.memberships||[];
     const membership=session?.memberships?.[0];
     if(!membership)throw new Error('Você não possui estabelecimento ativo.');
     const {branch,context}=await api.chooseWebTenant(membership);
@@ -2288,7 +2332,7 @@ function openCategoryForm() {
       dataServer:{mode:'cloud',selected:true}
     };
     state.user={
-      id:session.user.id,name:session.user.displayName,
+      id:session.user.id,name:session.user.displayName,profileKey:context.profileKey,
       permissions:context.capabilities||[],profileId:'profile-'+String(context.profileKey||'operator').toLowerCase(),
       profile:{name:String(context.profileKey||'Equipe'),permissions:context.capabilities||[]}
     };
