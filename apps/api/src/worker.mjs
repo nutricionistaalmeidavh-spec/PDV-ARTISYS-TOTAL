@@ -185,6 +185,8 @@ export function createApi(env,{now=()=>Date.now()}={}){
       if(!session)return failure(401,'Sessão inválida ou expirada.');
       const security=await accountSecurityRoute(request,db,env,session,now(),path);
       if(security)return security;
+      if(env.EMAIL_VERIFICATION_REQUIRED==='true'&&!session.emailVerified&&path!=='/api/v1/auth/session')
+        return failure(403,'Confirme o endereço de e-mail antes de acessar a loja.');
       const sessions=await identityManagementRoute(request,db,session,now(),path);
       if(sessions)return sessions;
       if(method==='POST'&&path==='/api/v1/invitations/accept')
@@ -197,8 +199,6 @@ export function createApi(env,{now=()=>Date.now()}={}){
       }
       if(method==='GET'&&path==='/api/v1/auth/session')
         return response(identity(session,await membershipsFor(db,session.userId)));
-      if(env.EMAIL_VERIFICATION_REQUIRED==='true'&&!session.emailVerified)
-        return failure(403,'Confirme o endereço de e-mail antes de acessar a loja.');
       if(method==='GET'&&path==='/api/v1/tenants')
         return response({tenants:await membershipsFor(db,session.userId)});
       const match=path.match(/^\/api\/v1\/tenants\/([^/]+)\/(context|branches|members)$/);
