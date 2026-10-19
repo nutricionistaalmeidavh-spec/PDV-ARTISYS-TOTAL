@@ -346,6 +346,7 @@ try{
   await secondPage.locator('#web-password').fill('DummyStrongPassOnlyForCI2026');
   await secondPage.locator('#web-login-form button[type=submit]').click();
   await secondPage.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
+  await secondPage.locator('#auth-overlay').waitFor({state:'hidden',timeout:12000});
   const secondTerminal=await secondPage.evaluate(()=>localStorage.getItem('artisys.pdv.webTerminalId.v1'));
   assert.ok(secondTerminal?.startsWith('WEB-'));
   assert.notEqual(secondTerminal,expectedTerminalId,'two independent browser profiles must have different terminals');
