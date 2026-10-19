@@ -98,9 +98,7 @@
      }});
      // Sensitive code is not written to localStorage, URL or console.
      const value=r.invitationToken||'';
-     const fresh=await load(ctx.api);
-     host.innerHTML=markup(fresh,ctx);
-     attach(host,ctx);
+     await render(host,ctx);
      const secret=host.querySelector('#saas-invite-secret');
      secret.hidden=false;secret.querySelector('textarea').value=value;
      message(host,'Convite criado. Copie o código agora.','success');
