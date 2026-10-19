@@ -917,8 +917,8 @@ test('cap-031: duas transferências concorrentes da mesma comanda não podem amb
   const session=(await x.request('a',`restaurant/tables/${origin.id}/open`,'POST',{branchId:'filial-a'})).body.session;
   const path=`restaurant/sessions/${session.id}/transfer`;
   const results=await Promise.all([
-   x.request('a',path,'POST',{branchId:'filial-a',targetTableId:a.id}),
-   x.request('a',path,'POST',{branchId:'filial-a',targetTableId:b.id})
+   x.request('a',path,'POST',{branchId:'filial-a',targetTableId:a.id,expectedTableId:origin.id}),
+   x.request('a',path,'POST',{branchId:'filial-a',targetTableId:b.id,expectedTableId:origin.id})
   ]);
   assert.equal(results.filter(x=>x.status===200).length,1,JSON.stringify(results));
   assert.equal(results.filter(x=>x.status===409).length,1,JSON.stringify(results));
