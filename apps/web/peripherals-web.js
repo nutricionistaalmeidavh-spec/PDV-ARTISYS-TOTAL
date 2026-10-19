@@ -219,11 +219,11 @@
   }
   async function printSale(sale,opts={}) {
     if(!sale||sale.status!=='COMPLETED'||!sale.id)throw new Error('Venda concluída obrigatória.');
-    if(settings().printerMode==='bridge' && !opts.forceBrowser){const job=await root.PdvLocalBridge.print(sale,receiptText(sale,{branding:opts.branding}),{reprint:opts.reprint===true});return {queued:true,job};}
+    if(settings().printerMode==='bridge' && !opts.forceBrowser){const job=await root.PdvLocalBridge.print(sale,opts.text||receiptText(sale,{branding:opts.branding}),{reprint:opts.reprint===true});return {queued:true,job};}
     if(settings().printerMode==='serial' && !opts.forceBrowser) {
       // On-demand serial transport; never send an automatic second copy through browser.
       const branding=opts.branding||root.PdvReceiptBranding?.read?.();
-      const bytes=escpos(receiptText(sale,{branding}),{cut:settings().cut});
+      const bytes=escpos(opts.text||receiptText(sale,{branding}),{cut:settings().cut});
       if(branding?.logoDataUrl){
         // Rasterize first; a decode error must NOT send a misleading text-only cupom.
         if(!root.PdvEscposLogo?.encode)throw Error('Driver de logotipo ESC/POS indisponível.');
