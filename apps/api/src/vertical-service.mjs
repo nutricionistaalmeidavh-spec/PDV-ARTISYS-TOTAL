@@ -38,7 +38,7 @@ export function createVerticalService(db){
    const batch=[...statements,q('INSERT INTO commerce_mutations(tenant_id,scope,mutation_id,result_json,occurred_at) VALUES(?,?,?,?,?)',
      t,scope,key,JSON.stringify(result),now())];
    try{await db.batch(batch);}catch(e){
-     if(/constraint|UNIQUE|FOREIGN KEY|CASH|CREDIT|IMMUTABLE|STALE/i.test(String(e?.message)))throw err(409,'Conflito com dados atuais. Atualize e tente novamente.');
+     if(/constraint|UNIQUE|FOREIGN KEY|CASH|CREDIT|IMMUTABLE|STALE|TABLE_PREPAYMENT/i.test(String(e?.message)))throw err(409,'Conflito com dados atuais. Atualize e tente novamente.');
      throw e;
    }
    return result;
@@ -422,6 +422,44 @@ export function createVerticalService(db){
             (SELECT st.id FROM r4_station_tickets st WHERE st.tenant_id=? AND st.branch_id=? AND st.order_id=?)
            AND status IN('PENDING','FAILED','LEASED')`,stamp,t,b,t,b,id)
        ]};
+     });
+   },
+
+   async prepayments(t,b,sessionId){
+     await branchExists(t,b);await checkSession(t,b,sessionId);
+     const payments=await all(`SELECT id,table_session_id AS tableSessionId,method,amount_cents AS amountCents,
+       received_at AS receivedAt,received_by AS receivedBy FROM r4_table_prepayments
+       WHERE tenant_id=? AND branch_id=? AND table_session_id=? ORDER BY received_at,id`,t,b,sessionId);
+     return {tableSessionId:sessionId,payments,totalCents:payments.reduce((sum,p)=>sum+p.amountCents,0)};
+   },
+   async receivePrepayment(t,b,user,sessionId,body,key){
+     await branchExists(t,b);
+     if(!keyOK(key))throw err(400,'Identificador da operação obrigatório.');
+     const scope='restaurant.prepay:'+sessionId;
+     const previous=await first('SELECT result_json FROM commerce_mutations WHERE tenant_id=? AND scope=? AND mutation_id=?',t,scope,key);
+     if(previous)return JSON.parse(previous.result_json);
+     const session=await checkSession(t,b,sessionId);
+     if(session.status!=='OPEN')throw err(409,'Somente comandas abertas recebem antecipações.');
+     const method=String(body.method||'').toUpperCase();
+     if(!['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(method))throw err(400,'Forma de recebimento inválida.');
+     const amount=cents(body.amountCents,'Recebimento');
+     if(amount<=0)throw err(400,'Informe valor positivo.');
+     if(await first('SELECT 1 FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',t,b,sessionId))
+       throw err(409,'Finalize a divisão de conta sem antecipação ou reverta o plano.');
+     const cash=await first(`SELECT id FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND terminal_id=?
+       AND status='OPEN' ORDER BY opened_at DESC LIMIT 1`,t,b,clean(body.terminalId||'DEFAULT',80));
+     if(!cash)throw err(409,'Abra o caixa do terminal para receber.');
+     const available=await first(`SELECT COALESCE(SUM(ROUND(oi.quantity_milli*oi.unit_price_cents/1000.0)),0) AS total
+       FROM restaurant_order_items oi JOIN restaurant_orders o ON o.tenant_id=oi.tenant_id
+       AND o.branch_id=oi.branch_id AND o.id=oi.order_id
+       WHERE o.tenant_id=? AND o.branch_id=? AND o.table_session_id=? AND o.status='DELIVERED'`,t,b,sessionId);
+     const existing=await this.prepayments(t,b,sessionId);
+     if(amount>available.total-existing.totalCents)throw err(409,'Recebimento maior que os itens já entregues da comanda.');
+     return mutate(t,scope,key,async()=>{
+       const payment={id:uuid(),tableSessionId:sessionId,method,amountCents:amount,receivedBy:user,receivedAt:now()};
+       return {result:payment,statements:[q(`INSERT INTO r4_table_prepayments
+         (id,tenant_id,branch_id,table_session_id,cash_session_id,method,amount_cents,mutation_id,received_by,received_at)
+         VALUES(?,?,?,?,?,?,?,?,?,?)`,payment.id,t,b,sessionId,cash.id,method,amount,key,user,payment.receivedAt)]};
      });
    },
    async serviceRequests(t,b){
