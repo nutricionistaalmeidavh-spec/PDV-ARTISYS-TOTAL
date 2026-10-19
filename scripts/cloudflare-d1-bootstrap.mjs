@@ -58,8 +58,10 @@ function wrangler(args){
   return result.stdout;
 }
 
-export function provisionProductionD1(){
-  if(!isProductionWorkersBuild(process.env)){
+export function provisionProductionD1({explicit=false}={}){
+  if(explicit && process.env.WORKERS_CI && (process.env.WORKERS_CI!=='1' || process.env.WORKERS_CI_BRANCH!=='main'))
+    throw Error('Refusing production D1 migrations from a non-main Workers build.');
+  if(!explicit && !isProductionWorkersBuild(process.env)){
     console.log('PDV Total D1: remote provisioning skipped (not production Cloudflare Workers Build).');
     return;
   }
@@ -86,4 +88,5 @@ export function provisionProductionD1(){
   }
 }
 
-if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url))provisionProductionD1();
+if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url))
+  provisionProductionD1({explicit:process.argv.includes('--production')});

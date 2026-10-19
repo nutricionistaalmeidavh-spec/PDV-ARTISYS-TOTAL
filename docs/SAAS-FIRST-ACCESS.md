@@ -30,3 +30,16 @@
 Sucesso no GitHub Actions e no Cloudflare Builds prova código, regressão automatizada e publicação, **não** que o usuário real conseguiu entrar no D1 de produção. Isso exige credencial e secret administrativos, os quais não devem ser criados nem expostos pelo build. Não considerar concluído o primeiro login real enquanto o teste autenticado não tiver sido executado no ambiente publicado.
 
 Antes do lançamento comercial amplo, ainda faltam verificação de e-mail, recuperação de senha, MFA, políticas WAF de produção, checkout automático, observabilidade e ensaio independente de resposta a incidentes.
+
+## Publicação Cloudflare (falha confirmada de 19/10/2026)
+
+O build de produção configurado no painel não pode executar \`npx wrangler preview\`. Em **Workers & Pages → pdv-artisys-total → Settings → Builds**, use:
+
+- **Build command:** \`npm run build\` (sem mutações remotas).
+- **Deploy command da branch main:** \`npm run deploy:production\` (aplica migrations pendentes *somente* no D1 chamado \`pdv-artisys-total\`, verifica o schema remoto e publica com \`wrangler deploy\`).
+- **Preview builds:** mantenha desabilitados até existir configuração segregada de preview com recursos próprios; jamais aponte preview para o D1 de produção.
+- **Production branch:** \`main\`; **root directory:** \`/\`.
+
+O comando de deploy deve ser configurado **no painel Cloudflare**, pois Workers Builds não adota automaticamente a propriedade \`scripts.deploy\` do \`package.json\`. Não adicione credenciais ao repositório. \`npm run build\` nunca toca em D1 remoto, inclusive em builds de PR. O deploy deve falhar antes de publicar se migração, descoberta do banco dedicado ou verificação de schema falhar. Aplicação de migrations pode criar snapshots internos do D1; não é migração de dados do PDV desktop.
+
+Ao validar produção, confira o commit exato no painel e rode \`GET /api/v1/health\`. O sucesso do GitHub Actions não comprova que o Worker foi publicado.
