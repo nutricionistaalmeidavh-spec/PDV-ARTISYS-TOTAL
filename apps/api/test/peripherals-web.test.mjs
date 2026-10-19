@@ -210,3 +210,22 @@ test('cap-026 R3 ESC/POS CP850 preserves Brazilian accents and never prints untr
  assert.equal(bytes.slice(5,-3).includes(27),false,'ESC control bytes must be replaced');
  assert.deepEqual(Array.from(bytes.slice(-3)),[29,86,0]);
 });
+
+test('cap-028 R3 serial harness completes 250 explicit open/write/close cycles without stale handles',async()=>{
+ const {window:w}=browser();
+ let opened=0,closed=0,writes=0;
+ w.navigator.serial={requestPort:async()=>({
+  open:async()=>{opened++;},close:async()=>{closed++;},
+  writable:{getWriter:()=>({write:async bytes=>{writes++;assert.ok(bytes.length>5);},releaseLock(){}})}
+ })};
+ w.PdvWebHardware.saveSettings({printerMode:'serial'});
+ const sale={id:'stress-r3',saleNumber:'STRESS',status:'COMPLETED',items:[],payments:[],totalCents:0,changeCents:0};
+ for(let i=0;i<250;i++){
+   await w.PdvWebHardware.connect('printer');
+   const out=await w.PdvWebHardware.printSale(sale);
+   assert.equal(out.sentToSerial,true);
+ }
+ assert.equal(opened,250);
+ assert.equal(writes,250);
+ assert.equal(closed,250);
+});
