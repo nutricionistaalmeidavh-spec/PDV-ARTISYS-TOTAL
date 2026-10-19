@@ -1741,25 +1741,33 @@ export function createCommerceService(db,{now=nowISO}={}){
       catch(e){if(!/no such table: restaurant_sale_links/i.test(String(e?.message)))throw e;}
       const plan=link?.sessionId?await first('SELECT parts,service_charge_bps AS bps,shares_json AS sharesJson FROM r4_split_plans WHERE tenant_id=? AND branch_id=? AND table_session_id=?',tenant,branch,link.sessionId):null;
       const prepayments=link?.sessionId?await all(
-        'SELECT method,amount_cents AS amountCents FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? AND table_session_id=?',
+        'SELECT method,amount_cents AS amountCents,payer_index AS payerIndex FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? AND table_session_id=?',
         tenant,branch,link.sessionId):[];
-      if(plan&&prepayments.length)throw error(409,'Não é possível dividir novamente uma conta com valores antecipados; concilie a comanda antes de cobrar.');
       let splitShares=null;
       if(plan){
         if(sale.discount_cents)throw error(409,'Divisão exige remoção de desconto manual antes de cobrar.');
-        if(!Array.isArray(body?.shares)||body.shares.length!==plan.parts)throw error(409,'Informe pagamento correspondente a cada parte da comanda.');
         let expectedShares;
         try{expectedShares=planShares(totals.totalCents,plan.parts,plan.sharesJson?JSON.parse(plan.sharesJson):null);}
         catch(e){throw error(409,'O valor da comanda mudou: recalcule a divisão antes de cobrar.');}
+        if(prepayments.some(p=>!Number.isSafeInteger(p.payerIndex)||p.payerIndex<1||p.payerIndex>plan.parts))
+          throw error(409,'Antecipações anteriores precisam ter pagador atribuído antes da divisão.');
+        const paidPerPayer=Array(plan.parts).fill(0);
+        for(const pay of prepayments)paidPerPayer[pay.payerIndex-1]+=pay.amountCents;
+        const due=expectedShares.map((sum,i)=>sum-paidPerPayer[i]);
+        if(due.some(n=>n<0))throw error(409,'Antecipação superior à parte combinada da conta.');
+        const expectedCount=due.filter(n=>n>0).length;
+        if(!Array.isArray(body?.shares)||body.shares.length!==expectedCount)
+          throw error(409,'Informe o saldo devido por cada pagador, abatidas as antecipações.');
         const seen=new Set();
         splitShares=body.shares.map(share=>{
           const index=share?.index,amountCents=share?.amountCents;
           if(!Number.isInteger(index)||index<1||index>plan.parts||seen.has(index)||
-             amountCents!==expectedShares[index-1]||!['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(share?.method))
-            throw error(409,'Parcela divergente ou repetida. Confira a divisão antes de receber.');
+             amountCents!==due[index-1]||amountCents<=0||
+             !['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].includes(share?.method))
+            throw error(409,'Saldo por pessoa divergente ou repetido. Confira as antecipações antes de receber.');
           seen.add(index);return {index,amountCents,method:share.method};
         });
-      }else if(body?.shares)throw error(400,'Esta venda não possui divisão de conta configurada.');
+            }else if(body?.shares)throw error(400,'Esta venda não possui divisão de conta configurada.');
       const payments=splitShares||body?.payments||[];
       if(!Array.isArray(payments)||(!payments.length&&!prepayments.length)||payments.length>(splitShares?50:6))throw error(400,'Informe a forma de pagamento.');
       const normalized=payments.map(p=>{
