@@ -1159,8 +1159,8 @@
         "file": "apps/api/src/r4-extended-service.mjs",
         "contains": "async quotePizza(",
         "testFile": "apps/api/test/vertical-parity.test.mjs",
-        "testContains": "test('cap-009/036 configured pizza freezes selected addon recipe",
-        "testAssertionContains": "assert.equal(receipts.results.length,2",
+        "testContains": "test('cap-036 pizza addons have catalog-owned",
+        "testAssertionContains": "assert.equal(quote.body.quote.unitPriceCents,5000);",
         "testRunner": "node-test"
       },
       "softwareAssessment": {
