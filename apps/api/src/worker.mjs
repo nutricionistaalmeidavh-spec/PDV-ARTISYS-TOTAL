@@ -1,6 +1,9 @@
 import { sha256, verifyPassword, newSessionToken } from './password.mjs';
 import {registerPublicAccount} from './public-registration.mjs';
 import {commerceRoute} from './commerce-router.mjs';
+import {tenantWriteAllowed,loginIpThrottled,recordLoginIpFailure,
+ identityManagementRoute,invitationRegistrationRoute,acceptInvitationRoute,
+ tenantManagementRoute,platformManagementRoute,createAdditionalTenant} from './saas-control.mjs';
 import {productMediaRoute} from './product-media.mjs';
 import {advancedFinanceRoute} from './advanced-finance-router.mjs';
 import {verticalRoute} from './vertical-router.mjs';
@@ -87,12 +90,14 @@ async function parseCredentials(request) {
 async function login(request,env,db,now){
   const data=await parseCredentials(request);
   if(!data)return failure(400,'Informe e-mail e senha válidos.');
+  if(await loginIpThrottled(request,db,env,now))return failure(429,'Muitas tentativas. Tente novamente mais tarde.');
   const key=await sha256(data.email);
   const locked=await db.prepare('SELECT failed_count AS failedCount,locked_until AS lockedUntil FROM login_throttles WHERE email_hash=?').bind(key).first();
   if(locked&&locked.lockedUntil>now)return failure(429,'Muitas tentativas. Tente novamente mais tarde.');
   const user=await db.prepare('SELECT id,email_norm AS email,display_name AS displayName,password_hash AS passwordHash FROM users WHERE email_norm=? AND active=1').bind(data.email).first();
   const valid=user?await verifyPassword(data.password,user.passwordHash):false;
   if(!valid){
+    await recordLoginIpFailure(request,db,env,now);
     // Contagem persistente; se não existir conta a resposta continua genérica.
     await db.prepare(`INSERT INTO login_throttles(email_hash,failed_count,locked_until,updated_at)
       VALUES(?,1,0,?) ON CONFLICT(email_hash) DO UPDATE SET
@@ -137,13 +142,28 @@ export function createApi(env,{now=()=>Date.now()}={}){
       }
       // A new Cloudflare Git deployment must not accept credentials or write D1
       // before schema, anti-abuse protections and customer onboarding are ready.
+      // An explicitly authenticated platform bootstrap may run while client logins
+      // remain disabled. Browser origins cannot perform cross-site admin mutations.
+      if(path.startsWith('/api/v1/platform/')){
+        if(!['GET','HEAD'].includes(method)&&!originAllowed(request))
+          return failure(403,'Origem da solicitação inválida.');
+        return await platformManagementRoute(request,db,env,path,now());
+      }
       if(env.AUTH_ENABLED==='false')return failure(503,'Acesso ainda não habilitado para clientes.');
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
       if(!['GET','HEAD'].includes(method)&&!originAllowed(request))return failure(403,'Origem da solicitação inválida.');
       if(method==='POST'&&path==='/api/v1/auth/register')return await registerPublicAccount(request,env,db,now());
+      if(method==='POST'&&path==='/api/v1/auth/register-invite')
+        return await invitationRegistrationRoute(request,db,now());
       if(method==='POST'&&path==='/api/v1/auth/login')return await login(request,env,db,now());
       const session=await sessionFor(request,db,now(),env);
       if(!session)return failure(401,'Sessão inválida ou expirada.');
+      const sessions=await identityManagementRoute(request,db,session,now(),path);
+      if(sessions)return sessions;
+      if(method==='POST'&&path==='/api/v1/invitations/accept')
+        return await acceptInvitationRoute(request,db,session,now());
+      if(method==='POST'&&path==='/api/v1/tenants')
+        return await createAdditionalTenant(request,db,env,session,now());
       if(method==='DELETE'&&path==='/api/v1/auth/session'){
         await db.prepare('DELETE FROM auth_sessions WHERE token_hash=? AND user_id=?').bind(session.tokenHash,session.userId).run();
         return response({revoked:true},200,{'set-cookie':cookieHeader('',request,env,0)});
@@ -171,12 +191,26 @@ export function createApi(env,{now=()=>Date.now()}={}){
           WHERE m.tenant_id=? AND m.active=1 AND u.active=1 ORDER BY u.display_name,u.id`).bind(membership.tenantId).all();
         return response({tenantId:membership.tenantId,members:results});
       }
+      // Company administration still checks current membership, owner permission,
+      // and tenant entitlement on the server (never UI flags or client tenant claims).
+      const adminMatch=path.match(/^\/api\/v1\/tenants\/([^/]+)\/(branches|invitations(?:\/[^/]+\/revoke)?|members\/[^/]+\/(?:role|revoke)|subscription)$/);
+      if(adminMatch){
+        const tenantId=decodeURIComponent(adminMatch[1]);
+        const member=await requireMembership(db,session.userId,tenantId);
+        if(!member)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
+        if(!['GET','HEAD'].includes(method)&&!await tenantWriteAllowed(db,tenantId,env,now()))
+          return failure(402,'Assinatura inativa ou vencida. Operações de escrita suspensas.');
+        const managed=await tenantManagementRoute(request,db,env,session,member,tenantId,adminMatch[2],now());
+        if(managed)return managed;
+      }
       // Commerce belongs to the only canonical PDV core and its D1 transaction adapter.
       const commerceMatch=path.match(/^\/api\/v1\/tenants\/([^/]+)\/(.+)$/);
       if(commerceMatch){
         const tenantId=decodeURIComponent(commerceMatch[1]);
         const membership=await requireMembership(db,session.userId,tenantId);
         if(!membership)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
+        if(!['GET','HEAD'].includes(method)&&!await tenantWriteAllowed(db,tenantId,env,now()))
+          return failure(402,'Assinatura inativa ou vencida. Operações de escrita suspensas.');
         if(env.LAN_MODE==='true'){
           const lan=await r2LanRoute(request,db,session,membership,tenantId,commerceMatch[2],{now});
           if(lan)return lan;
