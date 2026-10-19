@@ -80,3 +80,9 @@ WHEN NOT EXISTS(SELECT 1 FROM restaurant_table_sessions s WHERE s.tenant_id=NEW.
  OR NOT EXISTS(SELECT 1 FROM cash_sessions c WHERE c.tenant_id=NEW.tenant_id AND c.branch_id=NEW.branch_id
   AND c.id=NEW.cash_session_id AND c.status='OPEN')
 BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_SESSION_CONFLICT'); END;
+
+-- A paid table cannot move delivered line value to another session without refund.
+CREATE TRIGGER IF NOT EXISTS r4_prepaid_item_transfer_guard BEFORE INSERT ON r4_item_transfers
+WHEN EXISTS(SELECT 1 FROM r4_table_prepayments p WHERE p.tenant_id=NEW.tenant_id AND p.branch_id=NEW.branch_id
+ AND p.table_session_id IN(NEW.source_session_id,NEW.target_session_id))
+BEGIN SELECT RAISE(ABORT,'TABLE_PREPAYMENT_TRANSFER_CONFLICT'); END;
