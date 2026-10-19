@@ -1014,7 +1014,7 @@
         "checkout-017",
         "checkout-008"
       ],
-      "status": "partial",
+      "status": "covered",
       "sourceEvidence": {
         "repo": "nutricionistaalmeidavh-spec/PDV-ARTISYS",
         "commit": "7efea9c61f75be1536a1e516e917218f2b8bf2bf",
@@ -1025,19 +1025,19 @@
         "checkout-008"
       ],
       "acceptance": "restaurant advanced split settlement service charge and item transfer: Comprovar mesa, comanda, cozinha, estados, divisão, transferência e checkout único.",
-      "reviewNote": "Rateio individual por item/pagador em centavos e recebimentos antecipados imutáveis reconciliados uma vez com a venda e o caixa canônicos possuem regressão. A combinação de adiantamento e divisão na MESMA comanda ainda está bloqueada; não classificar como integral até conciliar parcelas por pagador em cenários mistos.",
+      "reviewNote": "Rateio igual, personalizado e por item/pagador usa um checkout canônico. Adiantamentos parciais são atribuídos ao pagador após salvar a divisão, permitem estorno imutável antes do checkout e conciliação em caixa de turno distinto; após vincular venda, reversão segue o fluxo canônico da venda. Dados e estoque não são duplicados. O fluxo orienta dividir antes de antecipar por pessoa.",
       "independentEvidence": {
-        "file": "apps/api/src/r4-extended-service.mjs",
-        "contains": "async split(",
+        "file": "apps/api/src/commerce.mjs",
+        "contains": "const prepayments=link?.sessionId?await all(",
         "testFile": "apps/api/test/vertical-parity.test.mjs",
-        "testContains": "test('R4 cap-032: equal split",
-        "testAssertionContains": "assert.equal((await x.db.prepare('SELECT count(*) AS n FROM r4_split_tenders WHERE sale_id=?').bind(saleId).first()).n,2);",
+        "testContains": "test('cap-032: adiantamento por pagador",
+        "testAssertionContains": "assert.equal(settled.body.sale.totalCents,2500);",
         "testRunner": "node-test"
       },
       "softwareAssessment": {
         "reviewedAt": "2026-10-19",
-        "basis": "CI SaaS branch https://github.com/nutricionistaalmeidavh-spec/PDV-ARTISYS-TOTAL/actions/runs/39269330637",
-        "missingSoftwareWork": "Conciliação de antecipações por pagador com plano de divisão na mesma comanda sem duplicidade e testes de reembolso/conflitos."
+        "basis": "Regressão de API SQLite e D1 local para split, antecipações, estornos e troca de turno. CI de revisão obrigatória antes do merge.",
+        "missingSoftwareWork": ""
       }
     },
     {
