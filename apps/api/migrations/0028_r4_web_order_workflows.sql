@@ -12,9 +12,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_r4_one_active_session_per_table
 -- Never mutate the original order or sale when recording courier checkpoints.
 CREATE TABLE IF NOT EXISTS r4_delivery_events(
  tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,order_id TEXT NOT NULL,
- id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN('ARRIVED','RETURNED','REDISPATCHED')),
+ id TEXT NOT NULL,sequence INTEGER NOT NULL CHECK(sequence>0),kind TEXT NOT NULL CHECK(kind IN('ARRIVED','RETURNED','REDISPATCHED')),
  courier_name TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',recorded_by TEXT NOT NULL,recorded_at TEXT NOT NULL,
- PRIMARY KEY(tenant_id,branch_id,id),
+ PRIMARY KEY(tenant_id,branch_id,id),UNIQUE(tenant_id,branch_id,order_id,sequence),
  FOREIGN KEY(tenant_id,branch_id,order_id) REFERENCES restaurant_orders(tenant_id,branch_id,id),
  FOREIGN KEY(recorded_by) REFERENCES users(id)
 );
