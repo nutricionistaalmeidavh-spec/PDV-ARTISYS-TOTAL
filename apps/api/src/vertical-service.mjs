@@ -185,9 +185,23 @@ export function createVerticalService(db){
          DO UPDATE SET time_zone=excluded.time_zone,updated_at=excluded.updated_at`,t,b,timeZone,now())]
      }));
    },
-   async foodOrders(t,b,fulfillment=''){await branchExists(t,b);
-     const rows=await all(`SELECT * FROM restaurant_orders WHERE tenant_id=? AND branch_id=? AND (?='' OR fulfillment=?) ORDER BY created_at DESC LIMIT 100`,t,b,fulfillment,fulfillment);
-     return Promise.all(rows.map(async row=>{
+   async foodOrders(t,b,fulfillment='',{limit=100,cursor=null,paged=false}={}){await branchExists(t,b);
+     if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw err(400,'Tamanho de página inválido (1 a 100).');
+     let before='',beforeId='';
+     if(cursor!==null){
+       if(typeof cursor!=='string'||cursor.length>240||!/^\\d{4}-\\d{2}-\\d{2}T.*\\|[a-zA-Z0-9_-]{1,100}$/.test(cursor))
+         throw err(400,'Cursor do histórico inválido.');
+       [before,beforeId]=cursor.split('|');
+       if(!Number.isFinite(Date.parse(before))||new Date(before).toISOString()!==before)
+         throw err(400,'Data do cursor inválida.');
+     }
+     const allRows=await all(`SELECT * FROM restaurant_orders WHERE tenant_id=? AND branch_id=?
+       AND (?='' OR fulfillment=?) AND (?='' OR created_at<? OR (created_at=? AND id<?))
+       ORDER BY created_at DESC,id DESC LIMIT ?`,t,b,fulfillment,fulfillment,before,before,before,beforeId,limit+1);
+     const hasMore=allRows.length>limit,rows=allRows.slice(0,limit);
+     const last=rows.at(-1);
+     const nextCursor=hasMore&&last?last.created_at+'|'+last.id:null;
+     const orders=await Promise.all(rows.map(async row=>{
        const items=await all('SELECT id,product_id AS productId,product_name AS name,quantity_milli / 1000.0 AS quantity,unit_price_cents AS unitPriceCents,configuration_json AS configurationJson FROM restaurant_order_items WHERE tenant_id=? AND branch_id=? AND order_id=?',t,b,row.id);
        let deliveryStage=null,courierName=null;
        if(row.fulfillment==='DELIVERY'){
@@ -198,6 +212,7 @@ export function createVerticalService(db){
        }
        return {...row,deliveryStage,courierName,items:items.map(({configurationJson,...item})=>({...item,configuration:configurationJson?JSON.parse(configurationJson):null}))};
      }));
+     return paged?{orders,nextCursor}:orders;
    },
    async createFoodOrder(t,b,user,body,key){
      await branchExists(t,b);
