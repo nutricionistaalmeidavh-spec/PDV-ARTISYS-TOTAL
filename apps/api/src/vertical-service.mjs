@@ -189,7 +189,7 @@ export function createVerticalService(db){
      if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw err(400,'Tamanho de página inválido (1 a 100).');
      let before='',beforeId='';
      if(cursor!==null){
-       if(typeof cursor!=='string'||cursor.length>240||!/^\\d{4}-\\d{2}-\\d{2}T.*\\|[a-zA-Z0-9_-]{1,100}$/.test(cursor))
+       if(typeof cursor!=='string'||cursor.length>240||!/^\d{4}-\d{2}-\d{2}T.*\|[a-zA-Z0-9_-]{1,100}$/.test(cursor))
          throw err(400,'Cursor do histórico inválido.');
        [before,beforeId]=cursor.split('|');
        if(!Number.isFinite(Date.parse(before))||new Date(before).toISOString()!==before)
