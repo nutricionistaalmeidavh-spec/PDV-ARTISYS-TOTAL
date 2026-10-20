@@ -63,7 +63,7 @@ function validCheckout(url){
 }
 async function offers(env,fetchImpl){
  const base=serviceUrl(env);if(!base)return null;
- const resp=await fetchImpl(base+'/v1/catalog',{headers:{accept:'application/json'},redirect:'error'});
+ const resp=await fetchImpl(base+'/v1/catalog',{headers:{accept:'application/json'},redirect:'manual'});
  if(!resp.ok)throw Error('catalog_unavailable');
  const data=await resp.json();
  const all=Array.isArray(data.offers)?data.offers:[];
@@ -94,12 +94,12 @@ export async function billingCustomerRoute(request,db,env,session,member,tenantI
   const owner=await sql(db,'SELECT email_norm AS email,display_name AS name FROM users WHERE id=? AND active=1',session.userId).first();
   if(!owner)return out({error:'Proprietário não encontrado.'},403);
   const ticket=await createBinding(cfg.bindingSecret,{tenantId,userId:session.userId,expiresAt:now+3*86400000});
-  const base=serviceUrl(env),order=await fetchImpl(base+'/v1/orders',{method:'POST',redirect:'error',
+  const base=serviceUrl(env),order=await fetchImpl(base+'/v1/orders',{method:'POST',redirect:'manual',
    headers:{'content-type':'application/json','idempotency-key':idem},body:JSON.stringify({offerId:offer.offerId,email:owner.email,name:owner.name,couponCode:coupon||undefined,buyerBinding:ticket})});
   if(!order.ok)return out({error:order.status===400?'Cupom inválido ou compra rejeitada.':'Não foi possível criar a compra.',gatewayStatus:order.status},502);
   const created=await order.json(),id=created.order?.id,access=created.orderAccessToken;
   if(typeof id!=='string'||!/^[a-f0-9-]{36}$/.test(id)||typeof access!=='string'||!Number.isInteger(created.order?.amountCents)||created.order.amountCents<1)return out({error:'Resposta de compra inválida.'},502);
-  const checkout=await fetchImpl(base+'/v1/orders/'+id+'/checkout',{method:'POST',redirect:'error',
+  const checkout=await fetchImpl(base+'/v1/orders/'+id+'/checkout',{method:'POST',redirect:'manual',
    headers:{'content-type':'application/json',authorization:'Bearer '+access},body:JSON.stringify({provider:'asaas'})});
   if(!checkout.ok)return out({error:'Checkout não confirmado. Verifique a conciliação na central de pagamentos antes de repetir.',gatewayStatus:checkout.status},502);
   const result=await checkout.json(),checkoutUrl=result.checkoutUrl;
