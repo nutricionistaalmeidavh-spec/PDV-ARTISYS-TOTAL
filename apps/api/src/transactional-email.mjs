@@ -1,7 +1,7 @@
 // Optional transactional email transport. Native Cloudflare Email Service takes
 // priority on Workers; self-hosted installations remain independent of it.
 const email=/^[^\s@<>\r\n]+@[^\s@<>\r\n]+\.[^\s@<>\r\n]+$/;
-export const emailTransportPresent=env=>Boolean(env?.EMAIL?.send||env?.EMAIL_DELIVERY_URL||env?.EMAIL_DELIVERY_TOKEN);
+export const emailTransportPresent=env=>emailTransportReady(env);
 export const emailTransportReady=env=>Boolean(
  (typeof env?.EMAIL?.send==='function'&&email.test(String(env?.EMAIL_FROM||'')))||
  (typeof env?.EMAIL_DELIVERY_URL==='string'&&typeof env?.EMAIL_DELIVERY_TOKEN==='string'&&env.EMAIL_DELIVERY_TOKEN.length>=32)
