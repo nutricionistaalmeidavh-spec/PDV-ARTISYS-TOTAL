@@ -194,13 +194,15 @@ export async function tenantManagementRoute(request,db,env,session,member,tenant
   return null;
  }catch(e){return err(e);}
 }
-export async function platformManagementRoute(request,db,env,path,now){
+export async function platformManagementRoute(request,db,env,path,now,{centralVerified=false}={}){
  if(!path.startsWith('/api/v1/platform/'))return null;
- const secret=env.PLATFORM_ADMIN_TOKEN,header=request.headers.get('authorization')||'';
- if(typeof secret!=='string'||secret.length<32||!header.startsWith('Bearer ')||header.length!==secret.length+7)
-  return output({error:'Acesso administrativo negado.'},403);
- let diff=0;for(let i=0;i<secret.length;i++)diff|=secret.charCodeAt(i)^header.charCodeAt(i+7);
- if(diff)return output({error:'Acesso administrativo negado.'},403);
+ if(!centralVerified){
+  const secret=env.PLATFORM_ADMIN_TOKEN,header=request.headers.get('authorization')||'';
+  if(typeof secret!=='string'||secret.length<32||!header.startsWith('Bearer ')||header.length!==secret.length+7)
+   return output({error:'Acesso administrativo negado.'},403);
+  let diff=0;for(let i=0;i<secret.length;i++)diff|=secret.charCodeAt(i)^header.charCodeAt(i+7);
+  if(diff)return output({error:'Acesso administrativo negado.'},403);
+ }
  if(path==='/api/v1/platform/bootstrap'&&request.method==='POST'){
   try{
    const data=await bodyOf(request);

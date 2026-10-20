@@ -1,5 +1,6 @@
 import { sha256, verifyPassword, newSessionToken } from './password.mjs';
 import {registerPublicAccount} from './public-registration.mjs';
+import {platformBridgeRoute} from './platform-bridge.mjs';
 import {billingConnectorRoute,billingCustomerRoute} from './artisys-billing.mjs';
 import {beginMfaLogin,finishMfaLogin,emailVerifyPublic,accountSecurityRoute} from './account-security.mjs';
 import {passwordResetRoute} from './password-reset.mjs';
@@ -168,7 +169,10 @@ export function createApi(env,{now=()=>Date.now()}={}){
       // remain disabled. Browser origins cannot perform cross-site admin mutations.
       if(path==='/api/v1/integrations/artisys/billing')
          return await billingConnectorRoute(request,db,env,now());
+       if(path==='/api/v1/integrations/artisys/platform')
+         return await platformBridgeRoute(request,db,env,now());
        if(path.startsWith('/api/v1/platform/')){
+         if(env.ARTISYS_PLATFORM_CENTRAL_ENABLED==='true')return failure(404,'Administração centralizada no ArtiSys Pagamentos.');
         if(!['GET','HEAD'].includes(method)&&!originAllowed(request))
           return failure(403,'Origem da solicitação inválida.');
         const ui=await platformSessionRoute(request,db,env,now(),path);
