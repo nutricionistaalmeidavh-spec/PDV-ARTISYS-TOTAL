@@ -7,6 +7,9 @@ const config=JSON.parse(readFileSync(resolve(root,'wrangler.jsonc'),'utf8').repl
 const must=(condition,message)=>{if(!condition)throw new Error('Cloudflare build: '+message);};
 must(config.name==='pdv-artisys-total','Worker name does not match Cloudflare project');
 must(config.main==='apps/api/src/worker.mjs','only the canonical API entrypoint may deploy');
+must(config.observability?.enabled===true&&config.observability.logs?.enabled===true&&config.observability.logs?.invocation_logs===true,'Worker invocation/error logs must be enabled');
+must(config.observability?.redact_query_string===true,'Cloudflare logs must redact request query strings');
+must(config.observability.logs.head_sampling_rate>0&&config.observability.logs.head_sampling_rate<=1,'Worker log sampling must be enabled and valid');
 must(existsSync(resolve(root,config.main)),'Worker entrypoint not found');
 must(config.d1_databases?.length===1&&config.d1_databases[0].binding==='DB','one distinct D1 DB binding required');
 must(config.d1_databases[0].database_name==='pdv-artisys-total','cannot share desktop D1');
