@@ -35,10 +35,18 @@ export function configForRemoteSchema(config,id){
   return {...config,d1_databases:[{...config.d1_databases[0],database_id:id}]};
 }
 
+const REQUIRED_REMOTE_TABLES=Object.freeze([
+  'tenants','users','d1_migrations','r4_table_prepayments',
+  'public_signup_throttles','saas_subscriptions','saas_invitations',
+  'saas_billing_orders','saas_email_verifications',
+  'saas_platform_sessions','saas_password_resets',
+  'saas_password_reset_throttles'
+]);
+
 export function hasCompleteSchema(rows){
   if(!Array.isArray(rows))return false;
   const names=new Set(rows.map(row=>row?.name));
-  return ['tenants','users','d1_migrations','r4_table_prepayments','public_signup_throttles','saas_subscriptions','saas_invitations'].every(name=>names.has(name));
+  return REQUIRED_REMOTE_TABLES.every(name=>names.has(name));
 }
 
 function jsonFromWrangler(stdout){
@@ -76,11 +84,12 @@ export function provisionProductionD1(){
     console.log('PDV Total D1: applying pending remote schema migrations before production deployment.');
     wrangler(['d1','migrations','apply',DB_NAME,'--remote','--config',temporary]);
     const verify=jsonFromWrangler(wrangler(['d1','execute',DB_NAME,'--remote','--json',
-      '--command',"SELECT name FROM sqlite_master WHERE type='table' AND name IN ('tenants','users','d1_migrations','r4_table_prepayments','public_signup_throttles','saas_subscriptions','saas_invitations')",
+      '--command',"SELECT name FROM sqlite_master WHERE type='table' AND name IN ("+
+        REQUIRED_REMOTE_TABLES.map(name=>"'"+name+"'").join(',')+")",
       '--config',temporary]));
     const rows=Array.isArray(verify)?verify[0]?.results:verify?.results;
     if(!hasCompleteSchema(rows))throw Error('Remote D1 schema verification failed; deployment aborted');
-    console.log('PDV Total D1: remote schema ready (0001–0031); next step is secure owner provisioning.');
+    console.log('PDV Total D1: verified latest billing and security tables (through 0035); next step is secure owner provisioning.');
   }finally{
     unlinkSync(temporary);
   }
