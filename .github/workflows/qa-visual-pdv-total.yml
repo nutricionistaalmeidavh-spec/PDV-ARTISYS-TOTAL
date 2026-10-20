@@ -1,0 +1,90 @@
+name: QA visual completo - PDV TOTAL
+
+on:
+  push:
+    branches:
+      - main
+      - 'qa/visual-*'
+    paths:
+      - '.github/workflows/qa-visual-pdv-total.yml'
+      - 'scripts/qa-visual-capture.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots-and-pdf:
+    name: Chromium screenshots desktop/mobile + PDF
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Instalar somente ferramentas gratuitas e open source
+        run: |
+          npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Verificar script e contrato publico
+        run: |
+          node --check scripts/qa-visual-capture.mjs
+          npm run check:landing
+
+      - name: Gerar PWA e app web reais
+        run: npm run build
+
+      - name: Criar banco D1 local descartavel (sem tocar na producao)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in apps/api/migrations/*.sql; do
+            echo "Aplicando $(basename "$file")"
+            npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file "$file"
+          done
+
+      - name: Provisionar tenant isolado com conta ficticia
+        env:
+          PDV_OWNER_EMAIL: owner@example.test
+          PDV_OWNER_NAME: Proprietario QA
+          PDV_TENANT_SLUG: visual-qa-restaurant
+          PDV_TENANT_NAME: Restaurante QA ArtiSys
+          PDV_OWNER_PASSWORD: DummyStrongPassOnlyForCI2026
+        run: |
+          node --experimental-sqlite apps/api/src/provision.mjs
+          npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/.local/provision.seed.sql
+          rm -f apps/api/.local/provision.seed.sql
+
+      - name: Navegar e capturar telas reais, testar rotas e gerar PDF
+        env:
+          CI: 'true'
+        run: node scripts/qa-visual-capture.mjs
+
+      - name: Publicar PDF isoladamente
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdv-total-relatorio-visual-pdf
+          path: qa-artifacts/pdv-total-qa-visual.pdf
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publicar screenshots reais e inventario de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdv-total-screenshots-reais-desktop-mobile
+          path: |
+            qa-artifacts/visual/
+            qa-artifacts/pdv-total-inventario-visual.json
+            qa-artifacts/pdv-total-erros-visual.json
+          if-no-files-found: warn
+          retention-days: 30
