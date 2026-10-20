@@ -53,7 +53,7 @@ O OWNER possui painel **Minha empresa** na PWA; as ações administrativas da pl
 
 ## E-mails automáticos com Cloudflare Email Service
 
-- O Worker `pdv-artisys-total` declara binding `EMAIL` (`send_email`) e a identidade do remetente `EMAIL_FROM=notificacoes@artisys.com.br`. Apenas o backend invoca `env.EMAIL.send()`; nenhuma chave de envio aparece na landing, PWA ou Git.
+- O Worker `pdv-artisys-total` declara binding `EMAIL` (`send_email`) e a identidade do remetente `EMAIL_FROM=welcome@artisys.dev`. Apenas o backend invoca `env.EMAIL.send()`; nenhuma chave de envio aparece na landing, PWA ou Git.
 - Para produção, o domínio `artisys.com.br` precisa estar habilitado em Cloudflare **Email Service → Email Sending** com remetente autorizado, SPF/DKIM/DMARC verificados. A assinatura Cloudflare do proprietário é integração explicitamente opt-in; não é dependência do core Node + SQLite.
 - Com envio configurado, novos convites chegam automaticamente por e-mail e a API não retorna o código ao navegador. Solicitações de verificação enviam link único por e-mail com validade de 24 horas; recuperação de senha é solicitada em `/recuperar-senha/`, gera link de 20 minutos, bloqueia repetição excessiva, consome o token uma vez e revoga todas as sessões do usuário. MFA inscrito permanece ativo.
 - Sem serviço de e-mail, instalações self-hosted preservam convites com código manual e não simulam recuperação por e-mail: a API informa claramente que o transporte não foi configurado. Integrações privadas de e-mail HTTP continuam opcionais via `EMAIL_DELIVERY_URL` e `EMAIL_DELIVERY_TOKEN`; não exigem Cloudflare nem plano pago.
