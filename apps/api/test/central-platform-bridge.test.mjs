@@ -63,7 +63,7 @@ test('central bridge rejects requests without signature, tampering, stale time, 
  }finally{x.close();}
 });
 test('bridge flag and secret fail closed without breaking the preexisting admin before migration',async()=>{
- const x=await fixture({ARTISYS_PLATFORM_CENTRAL_ENABLED:'false'});
+ const x=await fixture({ARTISYS_PLATFORM_CENTRAL_ENABLED:'false',ARTISYS_PLATFORM_BRIDGE_ENABLED:'false'});
  try{
   const s=await x.sign(JSON.stringify({action:'summary'}));
   assert.equal((await x.api.fetch(new Request(origin+'/api/v1/integrations/artisys/platform',{method:'POST',...s}))).status,404);

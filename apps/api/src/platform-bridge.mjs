@@ -9,7 +9,7 @@ const bytes=hex=>new Uint8Array(hex.match(/../g).map(x=>parseInt(x,16)));
 const keyFor=secret=>crypto.subtle.importKey('raw',text.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['verify']);
 
 export async function platformBridgeRoute(request,db,env,now){
- if(env.ARTISYS_PLATFORM_CENTRAL_ENABLED!=='true')return reply('not_found',404);
+ if(env.ARTISYS_PLATFORM_BRIDGE_ENABLED!=='true' && env.ARTISYS_PLATFORM_CENTRAL_ENABLED!=='true')return reply('not_found',404);
  const secret=env.ARTISYS_PLATFORM_BRIDGE_SECRET;
  if(typeof secret!=='string'||secret.length<32)return reply('platform_bridge_not_configured',503);
  if(request.method!=='POST'||request.headers.has('origin'))return reply('platform_bridge_forbidden',403);
