@@ -2279,7 +2279,7 @@ function openCategoryForm() {
           <p id="web-invite-feedback" role="status" aria-live="polite"></p>
         </form>
       </details>
-      <small>O acesso depende da liberação do estabelecimento pela ArtiSys.</small><p class="web-login-links"><a href="/">Conhecer o produto</a> · <a href="/#cadastro">Criar conta</a> · <a href="/conta/">Segurança e assinatura</a></p></section>`;
+      <small>O acesso depende da liberação do estabelecimento pela ArtiSys.</small><p class="web-login-links"><a href="/">Conhecer o produto</a> · <a href="/#cadastro">Criar conta</a> · <a href="/recuperar-senha/">Esqueci minha senha</a> · <a href="/conta/">Segurança e assinatura</a></p></section>`;
     const form=authOverlay.querySelector('#web-login-form');
     const inviteForm=authOverlay.querySelector('#web-invite-form');
     inviteForm?.addEventListener('submit',async e=>{
