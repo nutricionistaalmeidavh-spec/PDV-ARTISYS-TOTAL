@@ -115,3 +115,16 @@ O `wrangler.jsonc` do PDV já define `ARTISYS_PAYMENTS_URL` e os dois IDs de ofe
 - Os logs de Worker **não** substituem os logs de build. Não publicar tokens de sessão, Admin, API Asaas ou dados pessoais em capturas de tela ou logs compartilhados.
 
 **Fonte:** `docs/BILLING-P2-ASAAS-SETUP.md`, `docs/SAAS-FIRST-ACCESS.md`, `docs/SAAS-SECURITY-OPERATIONS.md` e `pagamentos-artisys/docs/CLOUDFLARE.md`. A ativação externa exige acesso autorizado à Cloudflare e à conta Asaas, que não é fornecido por este repositório.
+
+## Administração centralizada no ArtiSys Pagamentos
+
+A interface operacional única fica em \`https://pagamentos-artisys-central.nutricionistaalmeidavh.workers.dev/admin\`.
+A central autentica o operador pelo \`ADMIN_TOKEN\` **que já existe nela**; não compartilhe esse token com o PDV. No backend, ela envia solicitações HMAC com um segredo **novo e exclusivo**, \`ARTISYS_PLATFORM_BRIDGE_SECRET\`, configurado como Secret com o **mesmo valor** nos dois Workers. Não é o token Asaas, nem o segredo de cobrança \`ARTISYS_BILLING_SECRET\`. A assinatura associa timestamp, nonce e corpo da solicitação; o D1 do PDV registra cada nonce para negar replay.
+
+No Worker \`pagamentos-artisys-central\`, configure a variável (texto) \`PDV_TOTAL_PLATFORM_URL=https://pdv-artisys-total.nutricionistaalmeidavh.workers.dev\`, e o Secret \`ARTISYS_PLATFORM_BRIDGE_SECRET\`. No Worker \`pdv-artisys-total\`, adicione somente o mesmo Secret \`ARTISYS_PLATFORM_BRIDGE_SECRET\`. Nenhuma chave ou JSON dos demais produtos deve ser alterado.
+
+**Ordem de ativação sem bloqueio:** (1) publique o PDV com a migration \`0036_central_platform_bridge.sql\`; (2) publique o painel da central com o proxy backend; (3) confirme ambos os Workers e cadastre as variáveis/segredos; (4) coloque no PDV \`ARTISYS_PLATFORM_CENTRAL_ENABLED=true\` **somente após** a central exibir empresas reais e conseguir realizar as operações autorizadas. Antes desse último passo, a administração antiga permanece funcional. Após o corte, \`/api/v1/platform/*\` (token permanente, ticket e /admin legado) é recusado; a única interface funcional é a central.
+
+**Escopo da central:** ler resumo, empresas e auditoria; aprovar empresa (trial); inicializar a primeira loja num banco realmente novo. **Sem alterar assinaturas pagas manualmente:** o estado \`ACTIVE\` pago só deve ser atualizado pela entrega de pagamento validado HMAC da central. Os direitos de acesso continuam armazenados no D1 do PDV; a central continua dona dos pedidos, preços, cupons e confirmação do Asaas.
+
+**Segurança operacional:** não apagar o Secret antigo \`PLATFORM_ADMIN_TOKEN\` durante a transição. Após validar o corte, ele não autentica nenhuma rota de plataforma; pode ser removido numa etapa posterior. Nenhum segredo deve ser enviado para a interface pública, Git ou logs. Não habilitar o corte se o build Cloudflare do PDV ainda falhar.

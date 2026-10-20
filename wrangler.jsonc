@@ -31,6 +31,7 @@
     "MFA_ENABLED": "false",
     "EMAIL_VERIFICATION_REQUIRED": "false",
     "ARTISYS_BILLING_ENABLED": "false",
+    "ARTISYS_PLATFORM_CENTRAL_ENABLED": "false",
     "ARTISYS_PAYMENTS_URL": "https://pagamentos-artisys-central.nutricionistaalmeidavh.workers.dev",
     "ARTISYS_PDV_MONTHLY_OFFER_ID": "pdv-total-saas-mensal",
     "ARTISYS_PDV_YEARLY_OFFER_ID": "pdv-total-saas-anual"
