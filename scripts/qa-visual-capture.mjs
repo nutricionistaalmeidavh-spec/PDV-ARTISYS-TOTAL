@@ -22,7 +22,7 @@ async function record(page,area,label,device,status='ok',note=''){
   const name=String(captures.length+1).padStart(3,'0')+'-'+clean(area)+'-'+clean(label)+'-'+device+'.jpg';
   const path=join(output,name);
   try {
-    await page.screenshot({path,type:'jpeg',quality:79,fullPage:true,animations:'disabled',timeout:18000});
+    await page.screenshot({path,type:'jpeg',quality:79,fullPage:area==='publico',animations:'disabled',timeout:9500});
     captures.push({area,label,device,status,note,path});
     console.log('PRINT '+status.toUpperCase()+' '+area+' / '+label+' / '+device);
   } catch(error){
@@ -93,23 +93,23 @@ async function applicationScreens(page,device){
     if(!preferredRoutes.includes(route))continue;
     try {
       const button=page.locator('#app-sidebar [data-route="'+route+'"]').first();
-      await button.waitFor({state:'visible',timeout:10000});
+      await button.waitFor({state:'visible',timeout:4500});
       await button.click();
-      await page.locator('body[data-active-route="'+route+'"]').waitFor({timeout:14000});
-      await page.waitForTimeout(750);
+      await page.locator('body[data-active-route="'+route+'"]').waitFor({timeout:7500});
+      await page.waitForTimeout(300);
       const text=(await page.locator('#route-content').innerText().catch(()=>'' )).trim();
       const good=text.length>=12 && !(await maybeVisible(page.locator('#auth-overlay #web-login-form')));
       if(!good)problems.push('Rota '+route+' sem conteúdo visível ou bloqueada: '+device);
       await record(page,'rota',route,device,good?'ok':'erro',
         'Rota do sistema autenticamente navegada; caracteres visíveis='+text.length);
       const tabs=page.locator('#route-content [role="tab"]:visible');
-      const count=Math.min(await tabs.count(),12);
+      const count=Math.min(await tabs.count(),6);
       for(let i=0;i<count;i++){
         const tab=page.locator('#route-content [role="tab"]:visible').nth(i);
         const name=(await tab.innerText().catch(()=>'' )).trim()||'aba-'+(i+1);
         try {
           if(await tab.isEnabled()){
-            await tab.click({timeout:4500});
+            await tab.click({timeout:2500});
             await page.waitForTimeout(300);
             await record(page,'aba-'+route,name,device);
           }
