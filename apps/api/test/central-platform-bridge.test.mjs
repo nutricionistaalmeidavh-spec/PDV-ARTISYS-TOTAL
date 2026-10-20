@@ -45,6 +45,38 @@ test('central admin uses signed bridge and only PDV retains tenant records',asyn
   assert.equal((await x.api.fetch(new Request(origin+'/api/v1/platform/ticket',{method:'POST',headers:{origin,authorization:'Bearer '+OLD}}))).status,404);
  }finally{x.close();}
 });
+test('first company generates its internal identifier from an accented business name',async()=>{
+ const x=await fixture();
+ try{
+  const signed=await x.sign(JSON.stringify({action:'bootstrap',data:{email:'owner@example.test',ownerName:'Pessoa Proprietaria',password:'TestingStrongPassword2026!',name:'Burguerzão'}}));
+  const response=await x.api.fetch(new Request(origin+'/api/v1/integrations/artisys/platform',{method:'POST',...signed}));
+  assert.equal(response.status,201,await response.clone().text());
+  const {tenantId}=await response.json();
+  const company=await x.db.prepare('SELECT slug,name FROM tenants WHERE id=?').bind(tenantId).first();
+  assert.equal(company.slug,'burguerzao');
+  assert.equal(company.name,'Burguerzão');
+ }finally{x.close();}
+});
+
+test('first company reports the specific invalid field without creating records',async()=>{
+ const x=await fixture();
+ try{
+  const valid={email:'owner@example.test',ownerName:'Pessoa Proprietaria',password:'TestingStrongPassword2026!',name:'Burguerzão'};
+  for(const [patch,message] of [
+   [{email:'owner@gmail'},'Informe um e-mail completo, como nome@gmail.com.'],
+   [{ownerName:''},'Informe o nome do proprietário (até 100 caracteres).'],
+   [{name:''},'Informe o nome do estabelecimento (até 100 caracteres).'],
+   [{password:'short'},'A senha inicial deve ter entre 12 e 256 caracteres.']
+  ]){
+   const signed=await x.sign(JSON.stringify({action:'bootstrap',data:{...valid,...patch}}));
+   const response=await x.api.fetch(new Request(origin+'/api/v1/integrations/artisys/platform',{method:'POST',...signed}));
+   assert.equal(response.status,400);
+   assert.equal((await response.json()).error,message);
+  }
+  assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM tenants').bind().first()).n,0);
+ }finally{x.close();}
+});
+
 test('central bridge rejects requests without signature, tampering, stale time, replay, browser origin and unknown actions',async()=>{
  const x=await fixture();
  try{
