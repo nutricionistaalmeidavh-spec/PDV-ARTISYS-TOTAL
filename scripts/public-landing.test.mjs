@@ -35,7 +35,7 @@ test('self-hosted static server resolves only exact landing and app entrypoints'
   const dir=mkdtempSync(join(tmpdir(),'pdv-public-'));
   try{
     mkdirSync(join(dir,'app'));
-    for(const name of ['admin','conta','verificar-email']){
+    for(const name of ['admin','conta','verificar-email','recuperar-senha']){
       mkdirSync(join(dir,name));
       writeFileSync(join(dir,name,'index.html'),'Área '+name);
     }

@@ -48,7 +48,7 @@
    '<form id="saas-branch-form" class="saas-inline-form"><label>Código<input name="code" maxlength="24" placeholder="FILIAL02" pattern="[A-Za-z0-9](?:[A-Za-z0-9_]|-){1,23}" required '+(!canWrite?'disabled':'')+'></label>'+
    '<label>Nome da filial<input name="name" maxlength="100" placeholder="Unidade Centro" required '+(!canWrite?'disabled':'')+'></label>'+
    '<button type="submit" '+(!canWrite?'disabled':'')+'>Adicionar filial</button></form></section>'+
-   '<section class="saas-panel"><h2>Convidar funcionário</h2><p>O convite dura 48 horas. Envie o código diretamente ao funcionário.</p>'+
+   '<section class="saas-panel"><h2>Convidar funcionário</h2><p>O convite dura 48 horas e é enviado automaticamente por e-mail quando disponível.</p>'+
    '<form id="saas-invite-form" class="saas-inline-form"><label>E-mail<input name="email" type="email" autocomplete="off" required '+(!canWrite?'disabled':'')+'></label>'+
    '<label>Perfil<select name="profileKey" '+(!canWrite?'disabled':'')+'>'+roles.map(k=>option(k,'CASHIER')).join('')+'</select></label>'+
    '<button type="submit" '+(!canWrite?'disabled':'')+'>Criar convite</button></form>'+
@@ -96,12 +96,14 @@
      const r=await ctx.api.request(path+'/invitations',{method:'POST',body:{
        email:form.elements.email.value,profileKey:form.elements.profileKey.value
      }});
-     // Sensitive code is not written to persistent browser storage, URL or console.
+     // Do not reveal an emailed invitation's bearer code in the browser.
      const value=r.invitationToken||'';
      await render(host,ctx);
+     if(r.emailSent){message(host,'Convite enviado automaticamente para o e-mail informado.','success');return;}
+     if(!value)throw new Error('Convite não confirmado. Consulte o suporte.');
      const secret=host.querySelector('#saas-invite-secret');
      secret.hidden=false;secret.querySelector('textarea').value=value;
-     message(host,'Convite criado. Copie o código agora.','success');
+     message(host,'Convite criado. Copie o código para envio privado.','success');
     }catch(e){message(host,e.message,'error');}
    });
    attach(host,ctx);

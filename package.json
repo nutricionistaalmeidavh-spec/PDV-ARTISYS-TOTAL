@@ -21,7 +21,7 @@
     "report:saas": "node scripts/p6-capability-report.mjs --saas",
     "serve:lan": "npm run build && node --experimental-sqlite apps/api/src/https-lan-server.mjs",
     "audit:r0-r1": "node scripts/r0-r1-audit.mjs",
-    "check:landing": "node --check apps/landing/landing.js && node --test scripts/public-landing.test.mjs"
+    "check:landing": "node --check apps/landing/landing.js && node --check apps/landing/recuperar-senha.js && node --test scripts/public-landing.test.mjs"
   },
   "devDependencies": {
     "wrangler": "4.137.0"

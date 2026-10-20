@@ -1,4 +1,5 @@
 import {hashPassword,verifyPassword,sha256,newSessionToken} from './password.mjs';
+import {emailTransportReady,sendTransactionalEmail} from './transactional-email.mjs';
 const q=(db,sql,...v)=>db.prepare(sql).bind(...v);
 const out=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
 const dataBytes=value=>new TextEncoder().encode(value);
@@ -111,24 +112,25 @@ export async function emailVerifyPublic(request,db,now){
   return out({verified:true});
  }catch{return out({error:'Não foi possível verificar o e-mail.'},400);}
 }
-async function sendEmailToken(request,db,env,session,now,{fetchImpl=fetch}={}){
- const url=env.EMAIL_DELIVERY_URL,apiToken=env.EMAIL_DELIVERY_TOKEN;
- if(typeof url!=='string'||typeof apiToken!=='string'||apiToken.length<32)return out({error:'Entrega de e-mails não configurada.'},503);
- let uri;try{uri=new URL(url);}catch{return out({error:'Configuração de e-mail inválida.'},503);}
- if(uri.protocol!=='https:'||uri.username||uri.password||uri.hash)return out({error:'Configuração de e-mail inválida.'},503);
+async function sendEmailToken(request,db,env,session,now,options={}){
+ if(!emailTransportReady(env))return out({error:'Entrega de e-mails não configurada.'},503);
  const person=await q(db,'SELECT email_norm AS email,email_verified_at AS verified FROM users WHERE id=?',session.userId).first();
  if(person?.verified)return out({alreadyVerified:true});
  if(!person)return out({error:'Conta indisponível.'},404);
  const token=newSessionToken(),tokenHash=await sha256(token),expires=now+24*3600000;
- await q(db,'INSERT INTO saas_email_verifications(user_id,token_hash,created_at,expires_at) VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET token_hash=excluded.token_hash,created_at=excluded.created_at,expires_at=excluded.expires_at',
-  session.userId,tokenHash,now,expires).run();
+ await q(db,`INSERT INTO saas_email_verifications(user_id,token_hash,created_at,expires_at)
+   VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET
+   token_hash=excluded.token_hash,created_at=excluded.created_at,expires_at=excluded.expires_at`,
+   session.userId,tokenHash,now,expires).run();
  const link=new URL('/verificar-email/',new URL(request.url).origin);link.hash='token='+token;
  try{
-  const sent=await fetchImpl(uri.href,{method:'POST',headers:{authorization:'Bearer '+apiToken,'content-type':'application/json'},
-   body:JSON.stringify({to:person.email,subject:'Confirme seu e-mail no PDV Total',text:'Confirme seu e-mail no PDV Total: '+link.href,link:link.href}),redirect:'error'});
-  if(!sent.ok)return out({error:'Serviço de e-mail indisponível.'},503);
+  await sendTransactionalEmail(env,{to:person.email,subject:'Confirme seu e-mail no PDV Total',
+   text:'Confirme seu e-mail no PDV Total: '+link.href,link:link.href},options);
   return out({sent:true,expiresAt:new Date(expires).toISOString()});
- }catch{return out({error:'Não foi possível enviar o e-mail.'},503);}
+ }catch{
+  await q(db,'DELETE FROM saas_email_verifications WHERE user_id=? AND token_hash=?',session.userId,tokenHash).run();
+  return out({error:'Não foi possível enviar o e-mail.'},503);
+ }
 }
 export async function accountSecurityRoute(request,db,env,session,now,path,options={}){
  const method=request.method;
@@ -138,7 +140,7 @@ export async function accountSecurityRoute(request,db,env,session,now,path,optio
     if(env.EMAIL_VERIFICATION_REQUIRED==='true')throw error;return null;
    });
    const mfa=env.MFA_ENABLED==='true'?await q(db,'SELECT enrolled_at AS enrolledAt FROM saas_mfa_totp WHERE user_id=?',session.userId).first():null;
-   return out({emailVerified:!!user?.verified,mfaEnabled:!!mfa?.enrolledAt,emailDeliveryConfigured:!!(env.EMAIL_DELIVERY_URL&&env.EMAIL_DELIVERY_TOKEN)});
+   return out({emailVerified:!!user?.verified,mfaEnabled:!!mfa?.enrolledAt,emailDeliveryConfigured:emailTransportReady(env)});
   }
   if(path==='/api/v1/auth/email/request'&&method==='POST')return sendEmailToken(request,db,env,session,now,options);
   if(path==='/api/v1/auth/mfa/enroll'&&method==='POST'){

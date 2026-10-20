@@ -44,6 +44,9 @@ for(const name of ['html','css','js'])copyFileSync(resolve(root,'apps/landing/co
 const verificationDir=resolve(output,'verificar-email');mkdirSync(verificationDir,{recursive:true});
 copyFileSync(resolve(root,'apps/landing/verificar-email.html'),resolve(verificationDir,'index.html'));
 copyFileSync(resolve(root,'apps/landing/verificar-email.js'),resolve(verificationDir,'verificar.js'));
+const recoveryDir=resolve(output,'recuperar-senha');mkdirSync(recoveryDir,{recursive:true});
+copyFileSync(resolve(root,'apps/landing/recuperar-senha.html'),resolve(recoveryDir,'index.html'));
+copyFileSync(resolve(root,'apps/landing/recuperar-senha.js'),resolve(recoveryDir,'recuperar.js'));
 
 copyFileSync(resolve(root,'packages/core/shared/order-composer.js'),resolve(output,'order-composer.js'));
 copyFileSync(resolve(root,'packages/core/js/core/mobile-access/qr-code.js'),resolve(output,'local-access-qr.js'));

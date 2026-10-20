@@ -1,5 +1,6 @@
 // SaaS control plane. Never duplicates sales, inventory or cash ledgers.
 import {sha256,hashPassword,newSessionToken} from './password.mjs';
+import {emailTransportPresent,sendTransactionalEmail} from './transactional-email.mjs';
 const fail=(status,msg)=>Object.assign(new Error(msg),{status});
 const output=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'private, no-store','x-content-type-options':'nosniff'}});
 const err=e=>output({error:e.status?e.message:'Falha na operação.'},e.status||500);
@@ -125,7 +126,26 @@ export async function tenantManagementRoute(request,db,env,session,member,tenant
     q(db,'INSERT INTO saas_invitations(id,tenant_id,token_hash,email_norm,profile_key,invited_by,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)',id,tenantId,await sha256(token),email,role,session.userId,now,expiresAt),
     audit(db,tenantId,session.userId,'INVITE_ISSUED',id,now,{role})
    ]);
-   return output({invitationId:id,invitationToken:token,expiresAt},201);
+   // With Email Service, deliver the one-time code privately to the invited
+   // mailbox and do not expose the bearer token to the requesting browser.
+   // On a free self-hosted install without email, manual code delivery survives.
+   if(emailTransportPresent(env)){
+    try{
+     const shop=await q(db,'SELECT name FROM tenants WHERE id=?',tenantId).first();
+     await sendTransactionalEmail(env,{
+      to:email,subject:'Convite para '+(shop?.name||'sua empresa')+' | PDV Total',
+      text:'Você foi convidado para acessar '+(shop?.name||'uma empresa')+
+       ' no PDV Total da ArtiSys.\n\nAcesse '+new URL('/app/',new URL(request.url).origin).href+
+       ' e selecione "Recebi um convite".\n\nCódigo individual (válido por 48 horas):\n'+
+       token+'\n\nSe você não reconhece o convite, ignore esta mensagem.'
+     });
+     return output({invitationId:id,emailSent:true,expiresAt},201);
+    }catch{
+     await q(db,'UPDATE saas_invitations SET revoked_at=? WHERE id=? AND tenant_id=? AND accepted_at IS NULL',now,id,tenantId).run();
+     return output({error:'Não foi possível enviar o convite por e-mail. Nenhum convite ativo foi criado.'},503);
+    }
+   }
+   return output({invitationId:id,emailSent:false,invitationToken:token,expiresAt},201);
   }
   if(path==='invitations'&&method==='GET'){
    ownerOnly(member);

@@ -5,7 +5,7 @@ import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 
 const origin='http://127.0.0.1:8789';
-const worker=spawn('npx',['--yes','wrangler@4.137.0','dev','--local','--ip','127.0.0.1','--port','8789','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false'],{
+const worker=spawn('npx',['--yes','wrangler@4.137.0','dev','--local','--ip','127.0.0.1','--port','8789','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false','--var','EMAIL_FROM:disabled-in-local-e2e'],{
   stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32',
   env:{...process.env,CI:'true'}
 });
