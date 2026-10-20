@@ -135,9 +135,9 @@ export async function tenantManagementRoute(request,db,env,session,member,tenant
      await sendTransactionalEmail(env,{
       to:email,subject:'Convite para '+(shop?.name||'sua empresa')+' | PDV Total',
       text:'Você foi convidado para acessar '+(shop?.name||'uma empresa')+
-       ' no PDV Total da ArtiSys.\\n\\nAcesse '+new URL('/app/',new URL(request.url).origin).href+
-       ' e selecione \\"Recebi um convite\\".\\n\\nCódigo individual (válido por 48 horas):\\n'+
-       token+'\\n\\nSe você não reconhece o convite, ignore esta mensagem.'
+       ' no PDV Total da ArtiSys.\n\nAcesse '+new URL('/app/',new URL(request.url).origin).href+
+       ' e selecione "Recebi um convite".\n\nCódigo individual (válido por 48 horas):\n'+
+       token+'\n\nSe você não reconhece o convite, ignore esta mensagem.'
      });
      return output({invitationId:id,emailSent:true,expiresAt},201);
     }catch{
