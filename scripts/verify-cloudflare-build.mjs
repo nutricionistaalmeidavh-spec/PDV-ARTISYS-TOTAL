@@ -34,6 +34,7 @@ must(existsSync(resolve(root,'apps/api/migrations/0031_saas_access.sql')),'SaaS 
 must(existsSync(resolve(root,'apps/api/migrations/0032_artisys_billing.sql')),'Optional Asaas billing schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0033_p2_account_security.sql')),'MFA and email proof schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0034_platform_ui_sessions.sql')),'Private platform UI session schema missing');
+must(existsSync(resolve(root,'apps/api/migrations/0035_password_resets.sql')),'Recovery hash/throttle schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0017_inventory_minimum_levels.sql')),'P5 stock minimum schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0002_commerce.sql')),'commerce schema missing');
 must(existsSync(resolve(root,'packages/core/js/domains/sales/sale-service.js')),'canonical sales core missing');
