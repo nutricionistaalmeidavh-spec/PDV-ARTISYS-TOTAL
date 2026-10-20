@@ -8,7 +8,7 @@ import {sendTransactionalEmail} from '../src/transactional-email.mjs';
 
 const origin='https://pdv.example.test',now=Date.parse('2026-10-20T12:00:00Z');
 const stamp=new Date(now).toISOString();
-const from='notificacoes@artisys.com.br';
+const from='welcome@artisys.dev';
 const pwd='Password-Old-Secure-2026';
 function mailer(){
  const sent=[];
