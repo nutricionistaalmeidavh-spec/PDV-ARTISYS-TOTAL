@@ -5,6 +5,16 @@
   "main": "apps/api/src/worker.mjs",
   "compatibility_date": "2026-09-28",
   "workers_dev": true,
+  // Workers Logs persist invocation metadata/errors; never emit passwords, tokens or customer payloads.
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    }
+  },
   "assets": {
     "directory": "./dist/web",
     "binding": "ASSETS",
