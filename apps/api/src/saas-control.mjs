@@ -206,10 +206,15 @@ export async function platformManagementRoute(request,db,env,path,now,{centralVe
  if(path==='/api/v1/platform/bootstrap'&&request.method==='POST'){
   try{
    const data=await bodyOf(request);
-   const email=validEmail(data.email),name=validText(data.name,100),ownerName=validText(data.ownerName,100),slug=validText(data.slug,64)?.toLowerCase();
-   if(!email||!name||!ownerName||!slug||!/^[a-z0-9][a-z0-9-]{2,63}$/.test(slug)||
-     typeof data.password!=='string'||data.password.length<12||data.password.length>256)
-    throw fail(400,'Dados do primeiro proprietário inválidos.');
+   const email=validEmail(data.email),name=validText(data.name,100),ownerName=validText(data.ownerName,100);
+   if(!name)throw fail(400,'Informe o nome do estabelecimento (até 100 caracteres).');
+   if(!ownerName)throw fail(400,'Informe o nome do proprietário (até 100 caracteres).');
+   if(!email)throw fail(400,'Informe um e-mail completo, como nome@gmail.com.');
+   if(typeof data.password!=='string'||data.password.length<12||data.password.length>256)
+    throw fail(400,'A senha inicial deve ter entre 12 e 256 caracteres.');
+   const generated=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,64).replace(/-+$/g,'');
+   const slug=data.slug===undefined?(generated.length>=3?generated:'empresa-'+newId().slice(0,8)):validText(data.slug,64)?.toLowerCase();
+   if(!slug||!/^[a-z0-9][a-z0-9-]{2,63}$/.test(slug))throw fail(400,'O identificador da empresa deve ter de 3 a 64 letras minúsculas, números ou hífens.');
    const exists=await q(db,'SELECT id FROM tenants WHERE active=1 LIMIT 1').first();
    if(exists)throw fail(409,'Bootstrap bloqueado: já existe empresa no banco.');
    const id=newId(),userId=newId(),branchId=newId(),when=stamp(now),endsAt=stamp(now+14*86400000);
