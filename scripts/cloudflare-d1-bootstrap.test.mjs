@@ -43,7 +43,18 @@ test('temporary config retains original worker settings and applies only to dedi
   assert.equal(cfg.d1_databases[0].database_id,undefined);
   assert.throws(()=>configForRemoteSchema({...cfg,d1_databases:[{binding:'DB',database_name:'desktop-license'}]},'12345678-1234-1234-1234-123456789abc'),/dedicated/i);
 });
-test('healthy new D1 database has schema even when there are no users',()=>{
-  assert.equal(hasCompleteSchema([{name:'tenants'},{name:'users'},{name:'r4_table_prepayments'},{name:'d1_migrations'},{name:'public_signup_throttles'},{name:'saas_subscriptions'},{name:'saas_invitations'}]),true);
+test('complete remote schema must include latest billing, MFA, platform sessions and recovery tables',()=>{
+  const required=[
+    'tenants','users','d1_migrations','r4_table_prepayments','public_signup_throttles',
+    'saas_subscriptions','saas_invitations','saas_billing_orders',
+    'saas_email_verifications','saas_platform_sessions','saas_password_resets',
+    'saas_password_reset_throttles'
+  ];
+  const rows=required.map(name=>({name}));
+  assert.equal(hasCompleteSchema(rows),true);
+  for(const name of ['saas_billing_orders','saas_email_verifications','saas_platform_sessions','saas_password_resets']){
+    assert.equal(hasCompleteSchema(rows.filter(row=>row.name!==name)),false,
+      'must refuse falsely-ready D1 without '+name);
+  }
   assert.equal(hasCompleteSchema([{name:'tenants'},{name:'users'},{name:'d1_migrations'}]),false);
 });
