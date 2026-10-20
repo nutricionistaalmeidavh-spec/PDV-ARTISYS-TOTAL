@@ -22,7 +22,7 @@
   },
   // API remains read-only / locked while the SaaS is not provisioned for customers.
   "vars": {
-    "AUTH_ENABLED": "false",
+    "AUTH_ENABLED": "true",
     "EMAIL_FROM": "welcome@artisys.dev",
     "REGISTRATION_ENABLED": "false",
     "SAAS_ENTITLEMENTS_ENABLED": "true",
@@ -30,9 +30,9 @@
     "TRUST_CF_CONNECTING_IP": "true",
     "MFA_ENABLED": "false",
     "EMAIL_VERIFICATION_REQUIRED": "false",
-    "ARTISYS_BILLING_ENABLED": "false",
+    "ARTISYS_BILLING_ENABLED": "true",
     "ARTISYS_PLATFORM_CENTRAL_ENABLED": "false",
-    "ARTISYS_PLATFORM_BRIDGE_ENABLED": "false",
+    "ARTISYS_PLATFORM_BRIDGE_ENABLED": "true",
     "ARTISYS_PAYMENTS_URL": "https://pagamentos-artisys-central.nutricionistaalmeidavh.workers.dev",
     "ARTISYS_PDV_MONTHLY_OFFER_ID": "pdv-total-saas-mensal",
     "ARTISYS_PDV_YEARLY_OFFER_ID": "pdv-total-saas-anual"
