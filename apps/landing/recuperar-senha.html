@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self';script-src 'self';style-src 'self';connect-src 'self';form-action 'self';base-uri 'none';frame-ancestors 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Recuperar senha | PDV Total ArtiSys</title>
+<link rel="stylesheet" href="/conta/conta.css">
+<script defer src="/recuperar-senha/recuperar.js"></script>
+</head><body><header><a href="/" class="logo"><b>A</b><span><strong>artisys</strong><small>PDV TOTAL</small></span></a></header>
+<main><div class="panel" style="max-width:610px;margin:45px auto">
+<p class="eyebrow">SEGURANÇA DA CONTA</p><h1>Recuperar senha</h1>
+<p id="status" role="status" aria-live="polite">Receba um link válido por 20 minutos para definir uma nova senha.</p>
+<section id="request-section"><form id="request-form">
+<label for="recovery-email">E-mail cadastrado</label><input id="recovery-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+<button class="button" type="submit">Enviar link de recuperação</button>
+</form></section>
+<section id="confirm-section" hidden><form id="confirm-form">
+<p>Defina sua nova senha. Ela deve ter no mínimo 12 caracteres, incluindo letras e números.</p>
+<label for="new-password">Nova senha</label><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required>
+<label for="confirm-password">Confirmar nova senha</label><input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="256" required>
+<button class="button" type="submit">Redefinir senha</button>
+</form></section>
+<p><a href="/app/">Voltar ao login</a></p>
+</div></main></body></html>
