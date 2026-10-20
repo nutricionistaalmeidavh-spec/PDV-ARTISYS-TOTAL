@@ -13,7 +13,7 @@
   // API remains read-only / locked while the SaaS is not provisioned for customers.
   "vars": {
     "AUTH_ENABLED": "false",
-    "EMAIL_FROM": "notificacoes@artisys.com.br",
+    "EMAIL_FROM": "welcome@artisys.dev",
     "REGISTRATION_ENABLED": "false",
     "SAAS_ENTITLEMENTS_ENABLED": "true",
     "TENANT_SELF_SIGNUP_ENABLED": "false",
