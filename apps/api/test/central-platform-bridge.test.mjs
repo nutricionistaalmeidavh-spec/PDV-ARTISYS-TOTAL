@@ -76,3 +76,15 @@ test('bridge flag and secret fail closed without breaking the preexisting admin 
   assert.equal((await y.api.fetch(new Request(origin+'/api/v1/platform/summary',{headers:{authorization:'Bearer '+OLD}}))).status,404);
  }finally{y.close();}
 });
+
+test('production flags persist through Wrangler deploy while legacy admin cutover remains gated',()=>{
+ const raw=readFileSync(new URL('../../../wrangler.jsonc',import.meta.url),'utf8');
+ const config=JSON.parse(raw.replace(/^\s*\/\/.*$/gm,''));
+ assert.equal(config.vars.AUTH_ENABLED,'true');
+ assert.equal(config.vars.ARTISYS_BILLING_ENABLED,'true');
+ assert.equal(config.vars.ARTISYS_PLATFORM_BRIDGE_ENABLED,'true');
+ assert.equal(config.vars.ARTISYS_PLATFORM_CENTRAL_ENABLED,'false');
+ assert.equal(config.vars.REGISTRATION_ENABLED,'false');
+ assert.equal(config.vars.EMAIL_VERIFICATION_REQUIRED,'false');
+ assert.equal(config.d1_databases[0].database_name,'pdv-artisys-total');
+});
