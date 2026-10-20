@@ -22,7 +22,7 @@ async function fixture(extras={}){
   .bind('owner','owner@example.test','Owner',await hashPassword(pwd),stamp).run();
  await db.prepare('INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)').bind('tenant','tenant-one','Restaurante Teste',stamp).run();
  await db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)').bind('branch','tenant','MAIN','Matriz',stamp).run();
- await db.prepare("INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?,?)").bind('tenant','owner','OWNER',stamp).run();
+ await db.prepare("INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)").bind('tenant','owner','OWNER',stamp).run();
  const env={DB:db,AUTH_ENABLED:'true',...extras};
  const api=createApi(env,{now:()=>now});
  const req=async(path,body,cookie='')=>{
