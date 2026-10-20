@@ -33,7 +33,7 @@ O sistema mantém a única API canônica Cloudflare Workers/D1 e o motor existen
 ## Isolamento, assinaturas e antiabuso
 
 - TRIAL e ACTIVE com vencimento futuro autorizam escritas. PAST_DUE, SUSPENDED, CANCELLED e sem assinatura recusam mutações com HTTP 402. Consultas de um membro autorizado continuam disponíveis para exportação.
-- Convites são aleatórios de 256 bits; apenas o hash SHA-256 entra no banco. O token é retornado uma vez ao proprietário. Ainda não existe envio automático por e-mail. Distribuir token por canal privado e nunca colocar em URL/log/analytics.
+- Convites são aleatórios de 256 bits; apenas o hash SHA-256 entra no banco. O token é retornado uma vez ao proprietário. No Worker com Cloudflare Email Sending e remetente verificado, o convite é enviado automaticamente por e-mail e o token NÃO é retornado no navegador. No core self-hosted sem provedor de envio, a entrega privada manual continua disponível, sem custos. Nunca colocar tokens em URL/log/analytics.
 - E-mails de convites devem corresponder à conta autenticada. Contas inexistentes são criadas via cadastro por convite. Credenciais de contas existentes não podem ser substituídas por convite.
 - Alterar tenantId, userId, URL, payload, status do plano ou botões do navegador não altera as permissões do servidor.
 - Limite de falhas por e-mail e por IP de borda (15 por janela de 15 minutos). Em Cloudflare o CF-Connecting-IP é confiável na borda. Em self-hosted não habilitar TRUST_CF_CONNECTING_IP sem proxy que sobrescreva o header.
@@ -41,7 +41,7 @@ O sistema mantém a única API canônica Cloudflare Workers/D1 e o motor existen
 - Usar sempre HTTPS, política WAF Cloudflare e monitoramento antes de convidar clientes. Segredo administrativo não equivale a assinatura cliente.
 
 ## Pendências futuras
-Não foram implantados MFA, recuperação de senha, verificação externa de e-mail, envio transacional de convites, checkout Asaas, antifraude de webhooks, painel visual de superadmin ou certificação pentest independente. A API de planos é administrativa, não um comprovante de pagamento.
+A API já oferece MFA TOTP, confirmação de e-mail, recuperação de senha de uso único e superadmin em sessão privada. O Cloudflare Email Sending é uma integração opcional para operação hospedada; a entrega efetiva exige domínio remetente autorizado e `EMAIL_FROM` correto no Worker. Ainda requerem homologação independente a entrega real, DNS de autenticação de e-mail (SPF/DKIM/DMARC), monitoramento, WAF e pentest. A API de planos é administrativa, não um comprovante de pagamento.
 
 ## Aprovação de inscrições da landing
 
@@ -50,3 +50,11 @@ O cadastro público em `/api/v1/auth/register` deixa empresa e OWNER com `active
 ## Acesso do proprietário e operações privadas
 
 O OWNER possui painel **Minha empresa** na PWA; as ações administrativas da plataforma permanecem fora do browser. Para revisão/aprovação de contas e smoke com login real, consulte [Primeiro acesso](SAAS-FIRST-ACCESS.md).
+
+## E-mails automáticos com Cloudflare Email Service
+
+- O Worker `pdv-artisys-total` declara binding `EMAIL` (`send_email`) e a identidade do remetente `EMAIL_FROM=notificacoes@artisys.com.br`. Apenas o backend invoca `env.EMAIL.send()`; nenhuma chave de envio aparece na landing, PWA ou Git.
+- Para produção, o domínio `artisys.com.br` precisa estar habilitado em Cloudflare **Email Service → Email Sending** com remetente autorizado, SPF/DKIM/DMARC verificados. A assinatura Cloudflare do proprietário é integração explicitamente opt-in; não é dependência do core Node + SQLite.
+- Com envio configurado, novos convites chegam automaticamente por e-mail e a API não retorna o código ao navegador. Solicitações de verificação enviam link único por e-mail com validade de 24 horas; recuperação de senha é solicitada em `/recuperar-senha/`, gera link de 20 minutos, bloqueia repetição excessiva, consome o token uma vez e revoga todas as sessões do usuário. MFA inscrito permanece ativo.
+- Sem serviço de e-mail, instalações self-hosted preservam convites com código manual e não simulam recuperação por e-mail: a API informa claramente que o transporte não foi configurado. Integrações privadas de e-mail HTTP continuam opcionais via `EMAIL_DELIVERY_URL` e `EMAIL_DELIVERY_TOKEN`; não exigem Cloudflare nem plano pago.
+- O CI usa `EMAIL_FROM=disabled-in-local-e2e` para validar o fluxo manual sem despachar mensagens externas. Unit tests verificam envio com `EMAIL.send` simulado. **Build verde não comprova entrega externa**: antes de abrir autenticação, executar um envio controlado a uma caixa real e conferir o recebimento e a mensagem no painel de observabilidade do Email Service.
