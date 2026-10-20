@@ -2,6 +2,7 @@ import { sha256, verifyPassword, newSessionToken } from './password.mjs';
 import {registerPublicAccount} from './public-registration.mjs';
 import {billingConnectorRoute,billingCustomerRoute} from './artisys-billing.mjs';
 import {beginMfaLogin,finishMfaLogin,emailVerifyPublic,accountSecurityRoute} from './account-security.mjs';
+import {passwordResetRoute} from './password-reset.mjs';
 import {platformSessionRoute} from './platform-session.mjs';
 import {commerceRoute} from './commerce-router.mjs';
 import {tenantWriteAllowed,loginIpThrottled,recordLoginIpFailure,
@@ -188,6 +189,10 @@ export function createApi(env,{now=()=>Date.now()}={}){
       }
       if(method==='POST'&&path==='/api/v1/auth/email/verify')
         return emailVerifyPublic(request,db,now());
+      if(method==='POST'&&path.startsWith('/api/v1/auth/password/reset/')){
+        const reset=await passwordResetRoute(request,db,env,now());
+        if(reset)return reset;
+      }
       const session=await sessionFor(request,db,now(),env);
       if(!session)return failure(401,'Sessão inválida ou expirada.');
       const security=await accountSecurityRoute(request,db,env,session,now(),path);
