@@ -167,12 +167,17 @@ try{
   await page.locator('#cloud-bank-create [name=name]').fill('Carteira B P4 QA');
   await page.locator('#cloud-bank-create [name=walletKind]').selectOption('OTHER');
   await page.locator('#cloud-bank-create button[type=submit]').click();
+  await page.getByText('Carteira B P4 QA',{exact:true}).waitFor({timeout:12000});
   await page.locator('#cloud-wallet-ops').waitFor({timeout:12000});
   await page.locator('#cloud-wallet-adjust [name=accountId]').selectOption({label:'Carteira P4 QA'});
   await page.locator('#cloud-wallet-adjust [name=kind]').selectOption('OPENING');
   await page.locator('#cloud-wallet-adjust [name=amount]').fill('25,00');
   await page.locator('#cloud-wallet-adjust [name=reason]').fill('Fundo operacional contado');
+  const openedWallet=page.waitForResponse(response=>response.request().method()==='POST'&&
+    new URL(response.url()).pathname.endsWith('/finance-advanced/wallets/movement'),{timeout:12000});
   await page.locator('#cloud-wallet-adjust button[type=submit]').click();
+  const openingResponse=await openedWallet;
+  assert.equal(openingResponse.status(),201,await openingResponse.text());
   await page.waitForFunction(()=>document.querySelector('#route-content')?.innerText.includes('R$ 25,00'),
     null,{timeout:12000});
   await page.locator('#cloud-wallet-transfer [name=fromAccountId]').selectOption({label:'Carteira P4 QA'});
