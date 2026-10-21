@@ -30,6 +30,29 @@
   const CASH_PAYMENT_LABELS=Object.freeze({CASH:'Dinheiro',PIX:'PIX',DEBIT_CARD:'Cartão de débito',CREDIT_CARD:'Cartão de crédito',STORE_CREDIT:'Crediário / crédito da loja',OTHER:'Outros'});
   function cashMovementLabel(value){const code=String(value||'').toUpperCase();return CASH_MOVEMENT_LABELS[code]||value||'—';}
   function cashPaymentLabel(value){const code=String(value||'').toUpperCase();return CASH_PAYMENT_LABELS[code]||value||'—';}
+
+  function bindHistoricalNameLookups(selector){
+    content.querySelectorAll(selector).forEach(input=>{
+      let last=0,task=null;
+      input.addEventListener('input',()=>{
+        if(task)clearTimeout(task);
+        const requestId=++last,field=input.dataset.historyLookup;
+        const type=input.dataset.historyType;
+        const query=input.value.trim();
+        task=setTimeout(async()=>{
+          const select=input.closest('label')?.querySelector('select');
+          if(!select||!input.isConnected)return;
+          try{
+            const result=type==='cash'
+              ?await api.cashFilterOptions({field,query}):await api.salesFilterOptions({field,query});
+            if(requestId!==last||!select.isConnected)return;
+            select.innerHTML=namedOptions(result[field]||[],select.value);
+          }catch(error){if(input.isConnected)showToast(error.message,'error');}
+        },250);
+      });
+    });
+  }
+
   function namedOptions(rows,selected='',allLabel='Todos'){
     const available=Array.isArray(rows)?rows:[];const chosen=String(selected||'');
     const exists=available.some(row=>String(row.id)===chosen);
@@ -244,8 +267,8 @@
       <section class="ops-card"><details id="web-cash-history-search"><summary>Consultar histórico completo do caixa</summary>
         <form id="web-cash-search-form" class="ops-form">
           <div class="ops-grid two">
-            <label>Operador<select name="operatorId" class="ops-input">${namedOptions(cashFilters.operators)}</select></label>
-            <label>Terminal<select name="terminalId" class="ops-input">${namedOptions(cashFilters.terminals,'','Todos os terminais')}</select></label>
+            <label>Operador<input type="search" class="ops-input" data-history-type="cash" data-history-lookup="operators" placeholder="Buscar nome no histórico"><select name="operatorId" class="ops-input">${namedOptions(cashFilters.operators)}</select></label>
+            <label>Terminal<input type="search" class="ops-input" data-history-type="cash" data-history-lookup="terminals" placeholder="Buscar terminal no histórico"><select name="terminalId" class="ops-input">${namedOptions(cashFilters.terminals,'','Todos os terminais')}</select></label>
             <label>Situação<select name="status" class="ops-input">
               <option value="">Todos</option><option value="OPEN">Aberto</option><option value="CLOSED">Fechado</option>
             </select></label>
@@ -312,6 +335,7 @@
         if(panel.isConnected)panel.innerHTML=`<p class="ops-muted" role="alert">${escapeHtml(error.message||'Falha na consulta do caixa.')}</p>`;
       }
     }
+    bindHistoricalNameLookups('[data-history-type="cash"][data-history-lookup]');
     content.querySelector('#web-cash-search-form')?.addEventListener('submit',async event=>{
       event.preventDefault();
       const form=event.currentTarget,result=content.querySelector('#web-cash-history-result');
@@ -439,10 +463,18 @@
         </select></label>
       <details class="ops-advanced-filters" ${historyFilter.sellerId||historyFilter.operatorId||historyFilter.customerId||historyFilter.productId||historyFilter.paymentMethod?'open':''}><summary>Filtros avançados</summary>
         <div class="ops-grid two">
-          <label>Vendedor<select class="ops-input" name="sellerId">${namedOptions(salesFilters.sellers,historyFilter.sellerId)}</select></label>
-          <label>Operador<select class="ops-input" name="operatorId">${namedOptions(salesFilters.operators,historyFilter.operatorId)}</select></label>
-          <label>Cliente<select class="ops-input" name="customerId">${namedOptions(salesFilters.customers,historyFilter.customerId)}</select></label>
-          <label>Produto<select class="ops-input" name="productId">${namedOptions(salesFilters.products,historyFilter.productId)}</select></label>
+          <label>Vendedor
+            <input type="search" class="ops-input" data-history-type="sales" data-history-lookup="sellers" placeholder="Pesquisar em todo o histórico" aria-label="Pesquisar vendedor">
+            <select class="ops-input" name="sellerId">${namedOptions(salesFilters.sellers,historyFilter.sellerId)}</select></label>
+          <label>Operador
+            <input type="search" class="ops-input" data-history-type="sales" data-history-lookup="operators" placeholder="Pesquisar em todo o histórico" aria-label="Pesquisar operador">
+            <select class="ops-input" name="operatorId">${namedOptions(salesFilters.operators,historyFilter.operatorId)}</select></label>
+          <label>Cliente
+            <input type="search" class="ops-input" data-history-type="sales" data-history-lookup="customers" placeholder="Pesquisar em todo o histórico" aria-label="Pesquisar cliente">
+            <select class="ops-input" name="customerId">${namedOptions(salesFilters.customers,historyFilter.customerId)}</select></label>
+          <label>Produto
+            <input type="search" class="ops-input" data-history-type="sales" data-history-lookup="products" placeholder="Pesquisar em todo o histórico" aria-label="Pesquisar produto">
+            <select class="ops-input" name="productId">${namedOptions(salesFilters.products,historyFilter.productId)}</select></label>
           <label>Pagamento<select class="ops-input" name="paymentMethod">
             ${[['','Todos'],['CASH','Dinheiro'],['PIX','PIX'],['DEBIT_CARD','Débito'],['CREDIT_CARD','Crédito'],['STORE_CREDIT','Crediário'],['OTHER','Outros']].map(([value,label])=>`<option value="${value}" ${historyFilter.paymentMethod===value?'selected':''}>${label}</option>`).join('')}
           </select></label>
@@ -458,6 +490,7 @@
     if(!routeActive('sales')||renderSequence!==salesHistoryRenderSequence)return;
     content.innerHTML=page('Últimas vendas','Histórico imutável, pagamentos, itens e devoluções.',body,
       api.webMode?'<button id="web-sales-export" class="ops-secondary" type="button">Exportar histórico CSV</button>':'');
+    if(api.webMode)bindHistoricalNameLookups('[data-history-type="sales"][data-history-lookup]');
     content.querySelector('#web-sales-export')?.addEventListener('click',async event=>{
       const button=event.currentTarget;button.disabled=true;button.setAttribute('aria-busy','true');
       try{
