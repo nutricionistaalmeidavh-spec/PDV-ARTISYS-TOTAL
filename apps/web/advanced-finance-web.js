@@ -73,22 +73,73 @@
   });
  }
  const bankState={file:null,rows:[]};
- async function renderBanks(){
+ async function renderBanks(filters={}){
   try{
-   const [accounts,batches,transactions,transfers]=await Promise.all([
-    request('accounts'),request('statements'),request('transactions'),request('transfers/suggestions')
+   const bankFilters={accountId:String(filters.accountId||''),status:String(filters.status||''),
+     direction:String(filters.direction||''),query:String(filters.query||''),
+     from:String(filters.from||''),to:String(filters.to||'')};
+   const bankQuery=new URLSearchParams(Object.entries(bankFilters).filter(([,value])=>value));
+   const [accounts,batches,transactions,transfers,groups,categories,centers]=await Promise.all([
+    request('accounts'),request('statements'),
+    request('transactions'+(bankQuery.size?'?'+bankQuery.toString():'')),
+    request('transfers/suggestions'),request('dre/groups'),request('dre/categories'),request('dre/cost-centers')
    ]);
    if(document.body.dataset.activeRoute!=='finance-banks')return;
-   const list=accounts.accounts||[],items=transactions.transactions||[];
+   const list=accounts.accounts||[],items=transactions.transactions||[],
+    planGroups=groups.groups||[],planCategories=categories.categories||[],planCenters=centers.costCenters||[];
+   const selectOptions=(arr,selected,anyLabel='Todos')=>
+    '<option value="">'+esc(anyLabel)+'</option>'+arr.map(x=>
+      '<option value="'+esc(x.id)+'" '+(selected===x.id?'selected':'')+'>'+esc(x.name)+'</option>').join('');
    content.innerHTML=wrap('Bancos e conciliação','Extratos OFX/CSV, baixas conciliadas e transferências entre contas sem duplicidade de DRE.',
-    '<section class="ops-card"><h2>Contas bancárias</h2><form id="cloud-bank-create" class="ops-form erp-inline-config-form"><label>Nome da conta<input class="ops-input" name="name" maxlength="100" required></label><label>Código do banco<input class="ops-input" name="bankCode" maxlength="20"></label><button class="ops-primary" type="submit">Cadastrar conta</button></form><p class="ops-muted">'+list.map(x=>esc(x.name)).join(' · ')+'</p></section>'+
-    '<section class="ops-card"><h2>Importar extrato</h2><p>O arquivo é lido e pré-visualizado neste navegador antes de enviar ao D1.</p><div class="ops-form-grid"><label>Conta<select id="cloud-bank-id" class="ops-input">'+list.filter(x=>x.active).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('')+'</select></label><label>Arquivo CSV ou OFX<input id="cloud-bank-file" type="file" class="ops-input" accept=".csv,.ofx,text/csv"></label></div><div id="cloud-bank-preview" class="ops-muted">Selecione um extrato.</div><button id="cloud-bank-confirm" type="button" class="ops-primary" disabled>Confirmar importação</button><small>Máximo de 500 linhas por lote. Lançamentos existentes não são reimportados.</small></section>'+
-    '<section class="ops-card"><h2>Movimentações do extrato</h2><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Data</th><th>Movimentação</th><th>Valor</th><th>Situação / ação</th></tr></thead><tbody>'+
+    '<section class="ops-card"><h2>Carteiras e contas</h2><p class="ops-muted">Movimentações de extrato não representam saldo bancário confirmado: não existe saldo inicial informado neste módulo.</p>'+
+    '<form id="cloud-bank-create" class="ops-form erp-inline-config-form"><label>Nome<input class="ops-input" name="name" maxlength="100" required></label>'+
+    '<label>Tipo<select class="ops-input" name="walletKind"><option value="BANK">Banco</option><option value="CASH">Dinheiro</option><option value="OTHER">Outra carteira</option></select></label>'+
+    '<label>Código do banco (opcional)<input class="ops-input" name="bankCode" maxlength="20"></label><button class="ops-primary" type="submit">Cadastrar carteira</button></form>'+
+    '<div class="ops-grid two">'+list.map(x=>'<div class="ops-card"><strong>'+esc(x.name)+'</strong><p class="ops-muted">'+esc(({BANK:'Banco',CASH:'Dinheiro',OTHER:'Outra'}[x.walletKind]||x.walletKind))+'</p>'+
+      (x.walletKind==='BANK'?'<small>Movimentação líquida importada: '+money(x.importedNetCents)+' · '+esc(x.importedMovements)+' linhas</small>':'<small>Carteira cadastrada; sem saldo atribuído automaticamente.</small>')+'</div>').join('')+'</div></section>'+
+    '<section class="ops-card"><h2>Importar extrato</h2><p>O arquivo é lido e pré-visualizado neste navegador antes de enviar ao D1.</p><div class="ops-form-grid"><label>Conta<select id="cloud-bank-id" class="ops-input">'+list.filter(x=>x.active&&x.walletKind==='BANK').map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('')+'</select></label><label>Arquivo CSV ou OFX<input id="cloud-bank-file" type="file" class="ops-input" accept=".csv,.ofx,text/csv"></label></div><div id="cloud-bank-preview" class="ops-muted">Selecione um extrato.</div><button id="cloud-bank-confirm" type="button" class="ops-primary" disabled>Confirmar importação</button><small>Máximo de 500 linhas por lote. Lançamentos existentes não são reimportados.</small></section>'+
+    '<section class="ops-card"><h2>Movimentações do extrato</h2>'+
+    '<form id="cloud-bank-filters" class="ops-form ops-form-grid" aria-label="Filtros bancários">'+
+    '<label>Conta<select name="accountId" class="ops-input">'+selectOptions(list.filter(x=>x.walletKind==='BANK'),bankFilters.accountId,'Todas as contas')+'</select></label>'+
+    '<label>Situação<select name="status" class="ops-input">'+[['','Todas'],['UNMATCHED','Pendente'],['MATCH','Conciliada'],['IGNORE','Ignorada'],['TRANSFER','Transferência']].map(x=>'<option value="'+x[0]+'" '+(bankFilters.status===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></label>'+
+    '<label>Direção<select name="direction" class="ops-input">'+[['','Entradas e saídas'],['IN','Entradas'],['OUT','Saídas']].map(x=>'<option value="'+x[0]+'" '+(bankFilters.direction===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></label>'+
+    '<label>Descrição<input type="search" name="query" class="ops-input" maxlength="100" value="'+esc(bankFilters.query)+'"></label>'+
+    '<label>De<input type="date" name="from" class="ops-input" value="'+esc(bankFilters.from)+'"></label>'+
+    '<label>Até<input type="date" name="to" class="ops-input" value="'+esc(bankFilters.to)+'"></label>'+
+    '<button class="ops-primary" type="submit">Aplicar filtros</button></form>'+
+    '<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Data</th><th>Movimentação</th><th>Valor</th><th>Situação / ação</th></tr></thead><tbody>'+
     (items.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.description)+'</td><td>'+money(x.amountCents)+'</td><td>'+(x.decision?esc(x.decision):'<button type="button" class="ops-link" data-cloud-suggest="'+esc(x.id)+'">Conciliar</button> <button type="button" class="ops-link" data-cloud-ignore="'+esc(x.id)+'">Ignorar</button>')+'</td></tr><tr id="cloud-match-'+esc(x.id)+'" hidden><td colspan="4"></td></tr>').join('')||'<tr><td colspan="4">Sem movimentações.</td></tr>')+
     '</tbody></table></div></section>'+
     '<section class="ops-card"><h2>Transferências entre contas próprias</h2><p>Transferências internas não contabilizam receita ou despesa.</p>'+
     ((transfers.transfers||[]).map(x=>'<div class="ops-detail-row"><span>'+money(x.amountCents)+' · '+esc(list.find(a=>a.id===x.fromAccountId)?.name||'Conta')+' → '+esc(list.find(a=>a.id===x.toAccountId)?.name||'Conta')+'</span><button class="ops-secondary" data-cloud-transfer="'+esc(x.fromTransactionId)+'" data-to="'+esc(x.toTransactionId)+'" type="button">Confirmar transferência</button></div>').join('')||'<p class="ops-muted">Nenhuma transferência candidata.</p>')+'</section>'+
-    '<section class="ops-card"><h2>Importações recentes</h2><p class="ops-muted">'+(batches.batches||[]).map(x=>esc(x.sourceName)).join(' · ')+'</p></section>');
+    '<section class="ops-card"><h2>Importações recentes</h2><p class="ops-muted">'+(batches.batches||[]).map(x=>esc(x.sourceName)).join(' · ')+'</p></section>'+
+    '<section class="ops-card"><details id="cloud-chart-of-accounts"><summary><strong>Plano de contas e centros de custo</strong></summary>'+
+    '<p class="ops-muted">Classificação canônica usada pelo DRE; cadastros aqui são os mesmos dos relatórios.</p>'+
+    '<div class="ops-grid two"><div><h3>Grupos do plano</h3>'+
+    '<form id="cloud-plan-group" class="ops-form"><label>Nome<input name="name" class="ops-input" required maxlength="100"></label>'+
+    '<label>Natureza<select name="nature" class="ops-input"><option value="REVENUE">Receita</option><option value="COST">Custo</option><option value="EXPENSE">Despesa</option><option value="OTHER">Outros</option></select></label><button type="submit" class="ops-secondary">Adicionar grupo</button></form>'+
+    '<p>'+planGroups.map(x=>esc(x.name)).join(' · ')+'</p></div>'+
+    '<div><h3>Categorias</h3><form id="cloud-plan-category" class="ops-form"><label>Nome<input name="name" class="ops-input" maxlength="100" required></label>'+
+    '<label>Tipo<select name="kind" class="ops-input"><option value="EXPENSE">Despesa</option><option value="INCOME">Receita</option><option value="BOTH">Ambos</option></select></label>'+
+    '<label>Grupo<select name="dreGroupId" class="ops-input">'+selectOptions(planGroups,'','Sem grupo')+'</select></label>'+
+    '<button type="submit" class="ops-secondary">Adicionar categoria</button></form>'+
+    '<p>'+planCategories.map(x=>esc(x.name)+' ('+esc(planGroups.find(g=>g.id===x.dreGroupId)?.name||'Sem grupo')+')').join(' · ')+'</p></div></div>'+
+    '<h3>Centros de custo</h3><form id="cloud-plan-center" class="ops-form erp-inline-config-form"><label>Nome<input name="name" class="ops-input" maxlength="100" required></label><button class="ops-secondary" type="submit">Adicionar centro</button></form>'+
+    '<p>'+planCenters.map(x=>esc(x.name)).join(' · ')+'</p></details></section>');
+   content.querySelector('#cloud-bank-filters')?.addEventListener('submit',ev=>{
+    ev.preventDefault();
+    const values=Object.fromEntries(new FormData(ev.currentTarget));
+    if(values.from&&values.to&&values.from>values.to){toast('Período bancário invertido.','error');return;}
+    void renderBanks(values);
+   });
+   for(const [formId,endpoint] of [['cloud-plan-group','dre/groups'],['cloud-plan-category','dre/categories'],['cloud-plan-center','dre/cost-centers']]){
+    content.querySelector('#'+formId)?.addEventListener('submit',async ev=>{
+     ev.preventDefault();const button=ev.currentTarget.querySelector('[type=submit]');button.disabled=true;
+     const body=Object.fromEntries(new FormData(ev.currentTarget));if(body.dreGroupId==='')body.dreGroupId=null;
+     try{await request(endpoint,{method:'POST',body});toast('Plano de contas atualizado.','success');await renderBanks(bankFilters);}
+     catch(e){toast(e.message,'error');button.disabled=false;}
+    });
+   }
    content.querySelector('#cloud-bank-create')?.addEventListener('submit',async ev=>{
     ev.preventDefault();const data=Object.fromEntries(new FormData(ev.currentTarget));
     try{await request('accounts',{method:'POST',body:data});toast('Conta bancária cadastrada.','success');await renderBanks();}catch(e){toast(e.message,'error');}
@@ -105,7 +156,7 @@
      bankState.file=file;bankState.rows=records;
      preview.innerHTML='<strong>'+records.length+' movimentos na prévia</strong><div class="ops-table-wrap"><table class="ops-table"><tbody>'+
       records.slice(0,12).map(row=>'<tr><td>'+esc(row.date)+'</td><td>'+esc(row.description)+'</td><td>'+money(row.amountCents)+'</td></tr>').join('')+'</tbody></table></div>';
-     confirm.disabled=!list.length;
+     confirm.disabled=!list.some(x=>x.active&&x.walletKind==='BANK');
     }catch(e){preview.textContent=e.message;toast(e.message,'error');}
    });
    content.querySelector('#cloud-bank-confirm')?.addEventListener('click',async ev=>{
