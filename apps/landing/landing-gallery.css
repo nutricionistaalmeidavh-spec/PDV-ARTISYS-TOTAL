@@ -84,7 +84,7 @@
    Interface labels and account dialogs remain actual DOM text. */
 .photo-hero{position:absolute;left:-9%;top:8%;width:116%;margin:0;isolation:isolate;
   transform:rotate(-1.1deg);transition:transform .6s cubic-bezier(.2,.8,.2,1)}
-.photo-hero img{display:block;width:100%;height:auto;aspect-ratio:1260/771;object-fit:cover;
+.photo-hero img{display:block;width:100%;height:auto;aspect-ratio:948/699;object-fit:cover;
   border-radius:22px;border:1px solid #7374ab55;
   box-shadow:0 38px 78px #000b,0 3px 18px #8568d32e}
 .photo-hero figcaption{font-size:11px;color:#c4c4df;padding:12px 8px;text-align:center;
