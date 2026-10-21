@@ -7,6 +7,16 @@ const err=e=>output({error:e.status?e.message:'Falha na operação.'},e.status||
 const q=(db,s,...args)=>db.prepare(s).bind(...args);
 const newId=()=>crypto.randomUUID();
 const stamp=ms=>new Date(ms).toISOString();
+// Add whole UTC calendar months without overflowing short months (Jan 31 -> Feb 28/29).
+export function manualLicenseExpiryFromMonths(startMs,months){
+ if(!Number.isFinite(startMs)||!Number.isInteger(months)||months<1||months>120)throw new RangeError('Duração inválida em meses.');
+ const end=new Date(startMs),day=end.getUTCDate();
+ end.setUTCDate(1);
+ end.setUTCMonth(end.getUTCMonth()+months);
+ const finalDay=new Date(Date.UTC(end.getUTCFullYear(),end.getUTCMonth()+1,0)).getUTCDate();
+ end.setUTCDate(Math.min(day,finalDay));
+ return end.toISOString();
+}
 const roles=new Set(['ADMINISTRATOR','MANAGER','SUPERVISOR','CASHIER','OPERATOR','WAITER','KITCHEN','STOCKKEEPER','PURCHASING','FINANCE','DELIVERY','READ_ONLY']);
 const statusList=new Set(['TRIAL','ACTIVE','PAST_DUE','SUSPENDED','CANCELLED']);
 const isOwner=member=>member?.profileKey==='OWNER';
@@ -302,9 +312,9 @@ export async function platformManagementRoute(request,db,env,path,now,{centralVe
  // The owner's e-mail, not an employee membership, identifies the licensed account.
  if(path==='/api/v1/platform/owner-license'&&request.method==='POST'){
   try{
-   const data=await bodyOf(request),email=validEmail(data.email),days=data.days,
+   const data=await bodyOf(request),email=validEmail(data.email),months=data.months,
     reason=validText(data.reason,240),company=data.businessName===undefined?null:validText(data.businessName,100);
-   if(!email||!Number.isInteger(days)||days<1||days>3650||!reason||reason.length<8||
+   if(!email||!Number.isInteger(months)||months<1||months>120||!reason||reason.length<8||
       (data.businessName!==undefined&&!company))
     throw fail(400,'E-mail, duração, estabelecimento ou motivo inválido.');
    if(!emailTransportPresent(env))throw fail(503,'Configure primeiro o envio de e-mails.');
@@ -315,7 +325,7 @@ export async function platformManagementRoute(request,db,env,path,now,{centralVe
    if(data.tenantId===undefined&&owned.length>1)throw fail(409,'Este e-mail possui várias empresas. Selecione uma.');
    if(data.tenantId===undefined&&owned.length===1)tenant=owned[0];
    let userId=user?.id||newId(),tenantId=tenant?.id||newId();
-   const when=stamp(now),expiresAt=stamp(now+days*86400000);
+   const when=stamp(now),expiresAt=manualLicenseExpiryFromMonths(now,months);
    if(!tenant){
     const branchId=newId(),slug='loja-'+tenantId.slice(0,8);
     const business=company||'Estabelecimento '+email.split('@')[0].slice(0,45);
@@ -361,9 +371,9 @@ export async function platformManagementRoute(request,db,env,path,now,{centralVe
      ON CONFLICT(tenant_id) DO UPDATE SET active=1,expires_at=excluded.expires_at,
       reason=excluded.reason,updated_at=excluded.updated_at,updated_by='CENTRAL_ADMIN'`,
       tenantId,expiresAt,reason,when),
-    audit(db,tenantId,'CENTRAL_ADMIN','OWNER_LICENSE_GRANTED',userId,now,{email,days,expiresAt,reason})
+    audit(db,tenantId,'CENTRAL_ADMIN','OWNER_LICENSE_GRANTED',userId,now,{email,months,expiresAt,reason})
    ]);
-   return output({granted:true,emailSent:true,email,tenantId,expiresAt},201);
+   return output({granted:true,emailSent:true,email,tenantId,months,expiresAt},201);
   }catch(e){return err(e);}
  }
  const licenseRevoke=path.match(/^\/api\/v1\/platform\/tenants\/([^/]{1,128})\/manual-license\/revoke$/);
