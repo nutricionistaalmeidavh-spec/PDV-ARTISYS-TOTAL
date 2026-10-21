@@ -124,6 +124,6 @@ test('marketing photos are real local WebP files and four gallery images can enl
     assert.match(html,new RegExp('/media/'+name+'\\.webp'));
   }
   assert.equal((html.match(/class="demo-photo-figure"/g)||[]).length,4);
-  assert.equal((html.match(/class="demo-photo-panel"/g)||[]).length,4);
+  assert.equal((html.match(/class="demo-panel demo-photo-panel"/g)||[]).length,4);
   assert.match(source('scripts/build-web.mjs'),/cpSync\(resolve\(root,'apps\/landing\/media'/);
 });
