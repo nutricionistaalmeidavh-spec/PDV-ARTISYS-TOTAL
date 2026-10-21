@@ -30,6 +30,13 @@
   const CASH_PAYMENT_LABELS=Object.freeze({CASH:'Dinheiro',PIX:'PIX',DEBIT_CARD:'Cartão de débito',CREDIT_CARD:'Cartão de crédito',STORE_CREDIT:'Crediário / crédito da loja',OTHER:'Outros'});
   function cashMovementLabel(value){const code=String(value||'').toUpperCase();return CASH_MOVEMENT_LABELS[code]||value||'—';}
   function cashPaymentLabel(value){const code=String(value||'').toUpperCase();return CASH_PAYMENT_LABELS[code]||value||'—';}
+  function namedOptions(rows,selected='',allLabel='Todos'){
+    const available=Array.isArray(rows)?rows:[];const chosen=String(selected||'');
+    const exists=available.some(row=>String(row.id)===chosen);
+    return `<option value="">${escapeHtml(allLabel)}</option>${available.map(row=>
+      `<option value="${escapeHtml(row.id)}" ${String(row.id)===chosen?'selected':''}>${escapeHtml(row.name||row.id)}</option>`
+    ).join('')}${chosen&&!exists?`<option value="${escapeHtml(chosen)}" selected>Registro anterior (${escapeHtml(chosen)})</option>`:''}`;
+  }
   function financeKindLabel(value){return FINANCE_KIND_LABELS[String(value||'').toUpperCase()]||String(value||'—');}
   function financeStatusCode(row){return row?.isOverdue&&row?.status!=='SETTLED'&&row?.status!=='CANCELLED'?'OVERDUE':String(row?.status||'OPEN').toUpperCase();}
   function financeStatusBadge(row){const code=financeStatusCode(row);return `<span class="ops-badge status-${escapeHtml(code.toLowerCase())}">${escapeHtml(FINANCE_STATUS_LABELS[code]||code)}</span>`;}
@@ -192,7 +199,7 @@
   // Same operational-pages renderer, with the Cloudflare persistence contract.
   async function renderWebCash(){
     const cfg=await ready();
-    const [open,sessions]=await Promise.all([api.openCash(cfg.terminalId),api.cashSessions({terminalId:cfg.terminalId})]);
+    const [open,sessions,cashFilters]=await Promise.all([api.openCash(cfg.terminalId),api.cashSessions({terminalId:cfg.terminalId}),api.cashFilterOptions()]);
     const movements=open?await api.cashMovements(open.id):[];
     if(!routeActive('cash'))return;
     const counts=sessions.filter(row=>row.status==='CLOSED').length;
@@ -227,18 +234,18 @@
       </table></div></section></div>
       <section class="ops-card"><h2>Histórico de fechamento</h2><div class="ops-table-wrap">
         <table class="ops-table"><thead><tr><th>Abertura</th><th>Fechamento</th>
-          <th>Esperado</th><th>Contado</th><th>Divergência</th><th>Terminal</th></tr></thead><tbody>
+          <th>Esperado</th><th>Contado</th><th>Divergência</th><th>Terminal</th><th>Comprovante</th></tr></thead><tbody>
         ${sessions.filter(row=>row.status==='CLOSED').map(row=>`<tr>
           <td>${when(row.openedAt)}</td><td>${when(row.closedAt)}</td>
           <td>${money(row.expectedCashCents)}</td><td>${money(row.countedCashCents)}</td>
           <td>${money(row.divergenceCents)}</td><td>${escapeHtml(row.terminalId||'DEFAULT')}</td><td><button class="ops-secondary" type="button" data-cash-close-print="${escapeHtml(row.id)}">Imprimir fechamento</button></td></tr>`).join('')||
-            `<tr><td colspan="6">${empty('Nenhum fechamento anterior.')}</td></tr>`}
+            `<tr><td colspan="7">${empty('Nenhum fechamento anterior.')}</td></tr>`}
         </tbody></table></div></section>
       <section class="ops-card"><details id="web-cash-history-search"><summary>Consultar histórico completo do caixa</summary>
         <form id="web-cash-search-form" class="ops-form">
           <div class="ops-grid two">
-            <label>Operador (ID)<input name="operatorId" class="ops-input"></label>
-            <label>Terminal (ID)<input name="terminalId" class="ops-input" placeholder="Todos os terminais"></label>
+            <label>Operador<select name="operatorId" class="ops-input">${namedOptions(cashFilters.operators)}</select></label>
+            <label>Terminal<select name="terminalId" class="ops-input">${namedOptions(cashFilters.terminals,'','Todos os terminais')}</select></label>
             <label>Situação<select name="status" class="ops-input">
               <option value="">Todos</option><option value="OPEN">Aberto</option><option value="CLOSED">Fechado</option>
             </select></label>
@@ -256,6 +263,55 @@
         .catch(error=>{try{popup.close();}catch{}showToast(error?.message||'Falha ao preparar fechamento.','error');})
         .finally(()=>{button.disabled=false;});
     }));
+    async function showCashAudit(sessionId){
+      const panel=content.querySelector('[data-cash-audit-panel]');
+      if(!panel)return;
+      panel.innerHTML='<p class="ops-muted">Consultando movimentações e estornos…</p>';
+      try{
+        const {session,movements,reversals}=await api.cashSessionAudit(sessionId);
+        if(!routeActive('cash')||!panel.isConnected)return;
+        const otherSessions=r=>[r.originalCashSessionId,r.cashSessionId]
+          .filter(id=>id&&id!==session.id).filter((id,index,arr)=>arr.indexOf(id)===index)
+          .map(id=>`<button type="button" class="ops-link" data-open-cash-session="${escapeHtml(id)}">Abrir caixa relacionado</button>`).join(' ');
+        panel.innerHTML=`<section class="ops-card"><div class="ops-card-head"><div>
+          <h2>Livro de caixa · ${escapeHtml(session.terminalId)}</h2>
+          <p>${when(session.openedAt)} – ${when(session.closedAt)} · ${badge(session.status)}</p>
+          </div><button class="ops-secondary" type="button" data-cash-audit-close>Fechar detalhes</button></div>
+          <div class="ops-metrics">
+          ${metric('Fundo inicial',money(session.openingCents))}
+          ${metric('Dinheiro esperado',money(session.expectedCashCents))}
+          ${metric('Dinheiro contado',session.countedCashCents==null?'—':money(session.countedCashCents))}
+          ${metric('Divergência',session.divergenceCents==null?'—':money(session.divergenceCents))}
+          </div>
+          <h3>Movimentações da sessão</h3>
+          <p class="ops-muted">Os lançamentos pertencem a este caixa. PIX e cartão não alteram o dinheiro físico esperado.</p>
+          <div class="ops-table-wrap"><table class="ops-table"><thead><tr>
+          <th>Quando</th><th>Movimento</th><th>Pagamento</th><th>Valor</th><th>Observação</th></tr></thead><tbody>
+          ${movements.map(m=>`<tr><td>${when(m.createdAt)}</td><td>${escapeHtml(cashMovementLabel(m.type))}</td>
+          <td>${escapeHtml(cashPaymentLabel(m.paymentMethod))}</td><td>${money(m.amountCents)}</td>
+          <td>${escapeHtml(m.note||'—')}</td></tr>`).join('')||
+          '<tr><td colspan="5">Nenhuma movimentação nesta sessão.</td></tr>'}
+          </tbody></table></div>
+          <h3>Estornos vinculados a esta sessão</h3>
+          <p class="ops-muted">O fechamento original permanece imutável. Um estorno posterior é registrado na data da compensação; reembolso em dinheiro usa o caixa aberto nessa data.</p>
+          <div class="ops-table-wrap"><table class="ops-table"><thead><tr>
+          <th>Quando</th><th>Venda</th><th>Motivo</th><th>Forma</th><th>Valor</th><th>Caixas vinculados</th></tr></thead><tbody>
+          ${reversals.map(r=>`<tr><td>${when(r.createdAt)}</td><td>${escapeHtml(r.saleNumber||r.saleId)}</td>
+          <td>${escapeHtml(r.kind==='CANCEL'?'Cancelamento':'Devolução')} · ${escapeHtml(r.reason||'—')}</td>
+          <td>${escapeHtml(cashPaymentLabel(r.paymentMethod))}</td><td>${money(r.amountCents)}</td>
+          <td>Original: ${escapeHtml(r.originalTerminalId||'—')}
+          <small>${r.cashSessionId?'Reembolso no terminal '+escapeHtml(r.refundTerminalId||'DEFAULT'):'Sem movimentação de dinheiro físico'}</small>
+          ${otherSessions(r)}</td></tr>`).join('')||
+          '<tr><td colspan="6">Nenhum estorno vinculado.</td></tr>'}
+          </tbody></table></div></section>`;
+        panel.querySelector('[data-cash-audit-close]')?.addEventListener('click',()=>{panel.innerHTML='';});
+        panel.querySelectorAll('[data-open-cash-session]').forEach(button=>button.addEventListener('click',()=>{
+          void showCashAudit(button.dataset.openCashSession);
+        }));
+      }catch(error){
+        if(panel.isConnected)panel.innerHTML=`<p class="ops-muted" role="alert">${escapeHtml(error.message||'Falha na consulta do caixa.')}</p>`;
+      }
+    }
     content.querySelector('#web-cash-search-form')?.addEventListener('submit',async event=>{
       event.preventDefault();
       const form=event.currentTarget,result=content.querySelector('#web-cash-history-result');
@@ -269,16 +325,18 @@
           const history=await api.cashSessionsSearch({...values,limit:20,offset});
           result.innerHTML=`<p class="ops-muted">${history.total} sessões encontradas</p>
           <div class="ops-table-wrap"><table class="ops-table"><thead>
-          <tr><th>Terminal</th><th>Operador</th><th>Abertura</th><th>Fechamento</th><th>Estado</th><th>Esperado</th></tr>
+          <tr><th>Terminal</th><th>Operador</th><th>Abertura</th><th>Fechamento</th><th>Estado</th><th>Esperado</th><th>Detalhes</th></tr>
           </thead><tbody>${history.items.map(row=>`<tr>
-          <td>${escapeHtml(row.terminalId||'DEFAULT')}</td><td>${escapeHtml(row.operatorId)}</td><td>${when(row.openedAt)}</td>
+          <td>${escapeHtml(row.terminalId||'DEFAULT')}</td><td>${escapeHtml(cashFilters.operators.find(x=>x.id===row.operatorId)?.name||row.operatorId)}</td><td>${when(row.openedAt)}</td>
           <td>${when(row.closedAt)}</td><td>${badge(row.status)}</td>
-          <td>${money(row.expectedCashCents)}</td></tr>`).join('')||
-          '<tr><td colspan="6">Nenhuma sessão corresponde aos filtros.</td></tr>'}</tbody>
+          <td>${money(row.expectedCashCents)}</td><td><button class="ops-secondary" type="button" data-cash-audit="${escapeHtml(row.id)}">Movimentos e estornos</button></td></tr>`).join('')||
+          '<tr><td colspan="7">Nenhuma sessão corresponde aos filtros.</td></tr>'}</tbody>
           </table></div><div class="ops-actions">
           <button class="ops-secondary" data-cash-page="-1" ${history.offset<=0?'disabled':''}>Anterior</button>
           <button class="ops-secondary" data-cash-page="1"
-            ${history.offset+history.items.length>=history.total?'disabled':''}>Próxima</button></div>`;
+            ${history.offset+history.items.length>=history.total?'disabled':''}>Próxima</button></div>
+          <section data-cash-audit-panel aria-live="polite"></section>`;
+          result.querySelectorAll('[data-cash-audit]').forEach(b=>b.addEventListener('click',()=>{void showCashAudit(b.dataset.cashAudit);}));
           result.querySelectorAll('[data-cash-page]').forEach(b=>b.addEventListener('click',()=>{
             if(!b.disabled)void pageAt(Math.max(0,history.offset+Number(b.dataset.cashPage)*history.limit));
           }));
@@ -369,7 +427,8 @@
       customerId:filters.customerId||'',sellerId:filters.sellerId||'',operatorId:filters.operatorId||'',
       productId:filters.productId||'',paymentMethod:filters.paymentMethod||'',
       limit:25,offset:Number(filters.offset)||0};
-    const history=api.webMode?await api.salesHistory(historyFilter):null;
+    const [history,salesFilters]=api.webMode?
+      await Promise.all([api.salesHistory(historyFilter),api.salesFilterOptions()]):[null,null];
     const sales=api.webMode?history.items:await api.salesHistory({limit:200});
     const historyTools=api.webMode?`<section class="ops-card"><form id="web-sales-filter" class="web-report-filter">
       <label>Busca por número<input name="query" class="ops-input" value="${escapeHtml(historyFilter.query)}" placeholder="Código da venda"></label>
@@ -378,12 +437,12 @@
       <label>Situação<select class="ops-input" name="status">
         ${[['COMPLETED','Concluídas'],['OPEN','Abertas'],['SUSPENDED','Suspensas'],['CANCELLED','Canceladas'],['','Todas']].map(([key,label])=>`<option value="${key}" ${historyFilter.status===key?'selected':''}>${label}</option>`).join('')}
         </select></label>
-      <details class="ops-advanced-filters"><summary>Filtros avançados</summary>
+      <details class="ops-advanced-filters" ${historyFilter.sellerId||historyFilter.operatorId||historyFilter.customerId||historyFilter.productId||historyFilter.paymentMethod?'open':''}><summary>Filtros avançados</summary>
         <div class="ops-grid two">
-          <label>Vendedor (ID)<input class="ops-input" name="sellerId" value="${escapeHtml(historyFilter.sellerId)}"></label>
-          <label>Operador (ID)<input class="ops-input" name="operatorId" value="${escapeHtml(historyFilter.operatorId)}"></label>
-          <label>Cliente (ID)<input class="ops-input" name="customerId" value="${escapeHtml(historyFilter.customerId)}"></label>
-          <label>Produto (ID)<input class="ops-input" name="productId" value="${escapeHtml(historyFilter.productId)}"></label>
+          <label>Vendedor<select class="ops-input" name="sellerId">${namedOptions(salesFilters.sellers,historyFilter.sellerId)}</select></label>
+          <label>Operador<select class="ops-input" name="operatorId">${namedOptions(salesFilters.operators,historyFilter.operatorId)}</select></label>
+          <label>Cliente<select class="ops-input" name="customerId">${namedOptions(salesFilters.customers,historyFilter.customerId)}</select></label>
+          <label>Produto<select class="ops-input" name="productId">${namedOptions(salesFilters.products,historyFilter.productId)}</select></label>
           <label>Pagamento<select class="ops-input" name="paymentMethod">
             ${[['','Todos'],['CASH','Dinheiro'],['PIX','PIX'],['DEBIT_CARD','Débito'],['CREDIT_CARD','Crédito'],['STORE_CREDIT','Crediário'],['OTHER','Outros']].map(([value,label])=>`<option value="${value}" ${historyFilter.paymentMethod===value?'selected':''}>${label}</option>`).join('')}
           </select></label>
@@ -591,11 +650,16 @@
 
   async function renderWebFinance(filters={}){
     await ready();
-    const selected={query:String(filters.query||'').slice(0,100),kind:String(filters.kind||'')};
-    const [summary,entries]=await Promise.all([api.financeSummary(),api.financeEntries(selected)]);
+    const selected={query:String(filters.query||'').slice(0,100),
+      kind:String(filters.kind||''),status:String(filters.status||'')};
+    const today=root.PdvBusinessDate?.localBusinessDate?.(new Date())||new Date().toISOString().slice(0,10);
+    const [summary,entries,dueResponse]=await Promise.all([
+      api.financeSummary(),api.financeEntries(selected),
+      api.request('/api/v1/finance-advanced/due?asOf='+encodeURIComponent(today)+'&horizonDays=30')
+    ]);
+    const due=dueResponse.due;
     if(!routeActive('finance'))return;
     const permitted=root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'finance.manage')===true;
-    const today=new Date().toISOString().slice(0,10);
     const items=entries.map(entry=>`<tr>
       <td><strong>${escapeHtml(entry.description)}</strong>
         <small class="ops-muted">${escapeHtml(entry.kind==='PAYABLE'?'A pagar':'A receber')}</small></td>
@@ -612,7 +676,18 @@
       ${metric('A receber',money(summary.receivableOpenCents))}
       ${metric('Recebido',money(summary.receivableSettledCents))}
       ${metric('Pago',money(summary.payableSettledCents))}
-    </div><section class="ops-card">
+    </div><section class="ops-card"><h2>Vencimentos — próximos 30 dias</h2>
+      <div class="ops-metrics">
+        ${metric('Atrasado',money(due.totals.overdueCents),String(due.totals.overdueCount)+' conta(s)')}
+        ${metric('Vence hoje',money(due.totals.todayCents),String(due.totals.todayCount)+' conta(s)')}
+        ${metric('Próximos 30 dias',money(due.totals.upcomingCents),String(due.totals.upcomingCount)+' conta(s)')}
+      </div><div class="ops-table-wrap"><table class="ops-table">
+      <thead><tr><th>Descrição</th><th>Tipo</th><th>Data</th><th>Pendente</th><th>Alerta</th></tr></thead><tbody>
+      ${due.items.slice(0,30).map(item=>`<tr><td>${escapeHtml(item.description)}</td>
+        <td>${escapeHtml(item.kind==='PAYABLE'?'A pagar':'A receber')}</td>
+        <td>${dateOnly(item.dueDate)}</td><td>${money(item.openCents)}</td>
+        <td>${escapeHtml(item.severity==='OVERDUE'?'Atrasado':item.severity==='TODAY'?'Vence hoje':'Próximo')}</td></tr>`).join('')||'<tr><td colspan="5">Nenhum vencimento aberto neste intervalo.</td></tr>'}
+      </tbody></table></div></section><section class="ops-card">
       <div class="ops-card-head"><div><h2>Lançamentos</h2>
         <p>Contas manuais. Vendas do PDV são contabilizadas nos relatórios sem duplicar recebimentos.</p></div>
         ${permitted?'<button type="button" class="ops-primary" id="web-finance-new">Novo lançamento</button>':''}
@@ -622,6 +697,9 @@
         <label>Tipo<select name="kind" class="ops-input">
           <option value="">Todos</option><option value="PAYABLE" ${selected.kind==='PAYABLE'?'selected':''}>A pagar</option>
           <option value="RECEIVABLE" ${selected.kind==='RECEIVABLE'?'selected':''}>A receber</option>
+        </select></label>
+        <label>Situação<select name="status" class="ops-input">
+          ${[['','Todas'],['OPEN','Em aberto'],['PARTIAL','Parcial'],['SETTLED','Liquidado'],['CANCELLED','Cancelado'],['OVERDUE','Atrasado']].map(([key,label])=>`<option value="${key}" ${selected.status===key?'selected':''}>${label}</option>`).join('')}
         </select></label><button class="ops-secondary" type="submit">Filtrar</button>
       </form><div class="ops-table-wrap"><table class="ops-table"><thead>
         <tr><th>Descrição</th><th>Vencimento</th><th>Valor</th><th>Em aberto</th><th>Situação</th><th>Ações</th></tr>
@@ -632,7 +710,7 @@
     content.querySelector('#web-finance-filters')?.addEventListener('submit',event=>{
       event.preventDefault();
       const form=event.currentTarget;
-      void renderWebFinance({query:form.elements.query.value,kind:form.elements.kind.value});
+      void renderWebFinance({query:form.elements.query.value,kind:form.elements.kind.value,status:form.elements.status.value});
     });
     content.querySelector('#web-finance-new')?.addEventListener('click',async()=>{
       if(!ux?.openFormDialog)return;

@@ -40,18 +40,27 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
  const reconcile=(t,b,key)=>one('SELECT * FROM finance_bank_reconciliations WHERE tenant_id=? AND branch_id=? AND transaction_id=?',t,b,key);
  const stamp=()=>clock();
  return {
-  async accounts(t,b){await branch(t,b);return many('SELECT id,name,bank_code AS bankCode,active FROM finance_bank_accounts WHERE tenant_id=? AND branch_id=? ORDER BY name',t,b);},
+  async accounts(t,b){
+   await branch(t,b);
+   return many(`SELECT a.id,a.name,a.bank_code AS bankCode,a.wallet_kind AS walletKind,a.active,
+     COALESCE(SUM(x.amount_cents),0) AS importedNetCents,
+     COUNT(x.id) AS importedMovements
+     FROM finance_bank_accounts a LEFT JOIN finance_bank_transactions x
+       ON x.account_id=a.id AND x.tenant_id=a.tenant_id AND x.branch_id=a.branch_id
+     WHERE a.tenant_id=? AND a.branch_id=?
+     GROUP BY a.id ORDER BY a.name,a.id`,t,b);
+  },
   async createAccount(t,b,user,body){
-   await branch(t,b);const name=str(body?.name,100),bankCode=str(body?.bankCode,20);
-   if(name.length<2)throw fail(400,'Nome da conta bancária inválido.');
-   const result={id:id(),name,bankCode,active:true};
-   await run('INSERT INTO finance_bank_accounts(id,tenant_id,branch_id,name,bank_code,created_by,created_at) VALUES(?,?,?,?,?,?,?)',result.id,t,b,name,bankCode,user,stamp());
+   await branch(t,b);const name=str(body?.name,100),bankCode=str(body?.bankCode,20),walletKind=body?.walletKind||'BANK';
+   if(name.length<2||!['BANK','CASH','OTHER'].includes(walletKind))throw fail(400,'Carteira financeira inválida.');
+   const result={id:id(),name,bankCode,walletKind,active:true};
+   await run('INSERT INTO finance_bank_accounts(id,tenant_id,branch_id,name,bank_code,wallet_kind,created_by,created_at) VALUES(?,?,?,?,?,?,?,?)',result.id,t,b,name,bankCode,walletKind,user,stamp());
    return result;
   },
   async batches(t,b){return many('SELECT id,account_id AS accountId,source_name AS sourceName,imported_at AS importedAt FROM finance_statement_batches WHERE tenant_id=? AND branch_id=? ORDER BY imported_at DESC LIMIT 100',t,b);},
   async importStatement(t,b,user,body){
    const account=await row('finance_bank_accounts',t,b,body?.accountId);
-   if(!account.active)throw fail(409,'Conta desativada.');
+   if(!account.active||account.wallet_kind!=='BANK')throw fail(409,'A importação de extratos é exclusiva de carteiras bancárias ativas.');
    if(!Array.isArray(body?.transactions)||body.transactions.length<1||body.transactions.length>500)throw fail(400,'Importe entre 1 e 500 movimentações.');
    const seen=new Map(),normalized=[];
    for(const raw of body.transactions){
@@ -75,13 +84,78 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
    const saved=await one('SELECT COUNT(*) AS n FROM finance_bank_transactions WHERE batch_id=?',batchId);
    return {batchId,imported:saved.n,duplicates:normalized.length-saved.n};
   },
-  async transactions(t,b,{accountId='',status=''}={}){
+  async transactions(t,b,{accountId='',status='',from='',to='',query='',direction='',limit=200,offset=0}={}){
    await branch(t,b);
+   if(accountId)await row('finance_bank_accounts',t,b,accountId);
    if(status&&!['UNMATCHED','MATCH','IGNORE','TRANSFER'].includes(status))throw fail(400,'Status inválido.');
-   return many('SELECT x.id,x.account_id AS accountId,x.tx_date AS date,x.amount_cents AS amountCents,x.description,x.fit_id AS fitId,r.decision,r.entry_id AS entryId,r.settlement_id AS settlementId '+
-    'FROM finance_bank_transactions x LEFT JOIN finance_bank_reconciliations r ON r.tenant_id=x.tenant_id AND r.branch_id=x.branch_id AND r.transaction_id=x.id '+
-    "WHERE x.tenant_id=? AND x.branch_id=? AND (?='' OR x.account_id=?) AND (?='' OR (?='UNMATCHED' AND r.id IS NULL) OR r.decision=?) ORDER BY x.tx_date,x.id LIMIT 500",
-    t,b,accountId,accountId,status,status,status);
+   if(direction&&!['IN','OUT'].includes(direction))throw fail(400,'Direção bancária inválida.');
+   if(from)date(from);if(to)date(to);
+   if(from&&to&&from>to)throw fail(400,'Datas invertidas.');
+   const count=Number(limit),skip=Number(offset);
+   if(!Number.isSafeInteger(count)||count<1||count>500||!Number.isSafeInteger(skip)||skip<0||skip>10000)
+    throw fail(400,'Paginação inválida.');
+   return many(`SELECT x.id,x.account_id AS accountId,x.tx_date AS date,
+     x.amount_cents AS amountCents,x.description,x.fit_id AS fitId,
+     r.decision,r.entry_id AS entryId,r.settlement_id AS settlementId
+     FROM finance_bank_transactions x
+     LEFT JOIN finance_bank_reconciliations r ON
+       r.tenant_id=x.tenant_id AND r.branch_id=x.branch_id AND r.transaction_id=x.id
+     WHERE x.tenant_id=? AND x.branch_id=?
+      AND (?='' OR x.account_id=?)
+      AND (?='' OR (?='UNMATCHED' AND r.id IS NULL) OR r.decision=?)
+      AND (?='' OR x.tx_date>=?)
+      AND (?='' OR x.tx_date<=?)
+      AND (?='' OR instr(lower(x.description),lower(?))>0 OR instr(lower(x.fit_id),lower(?))>0)
+      AND (?='' OR (?='IN' AND x.amount_cents>0) OR (?='OUT' AND x.amount_cents<0))
+     ORDER BY x.tx_date ASC,x.id ASC LIMIT ? OFFSET ?`,
+     t,b,accountId,accountId,status,status,status,from,from,to,to,
+     str(query,100),str(query,100),str(query,100),direction,direction,direction,count,skip);
+  },
+  async settlementSuggestions(t,b,transactionId){
+   const x=await tx(t,b,transactionId);if(await reconcile(t,b,x.id))return [];
+   return many(`SELECT f.id,f.entry_id AS entryId,e.description,e.kind,
+     f.amount_cents AS amountCents,f.occurred_at AS occurredAt,f.method
+     FROM finance_settlements f
+     JOIN finance_entries e ON e.id=f.entry_id AND e.tenant_id=f.tenant_id AND e.branch_id=f.branch_id
+     LEFT JOIN finance_settlement_reversals v ON v.settlement_id=f.id AND v.tenant_id=f.tenant_id AND v.branch_id=f.branch_id
+     LEFT JOIN finance_bank_reconciliations r ON r.settlement_id=f.id AND r.tenant_id=f.tenant_id AND r.branch_id=f.branch_id
+     WHERE f.tenant_id=? AND f.branch_id=? AND v.id IS NULL AND r.id IS NULL
+       AND e.cancelled_at IS NULL AND f.amount_cents=?
+       AND e.kind=? ORDER BY ABS(julianday(substr(f.occurred_at,1,10))-julianday(?)),f.id LIMIT 30`,
+     t,b,Math.abs(x.amount_cents),x.amount_cents<0?'PAYABLE':'RECEIVABLE',x.tx_date);
+  },
+  async dueOverview(t,b,{asOf=stamp().slice(0,10),horizonDays=30}={}){
+   await branch(t,b);const day=date(asOf),days=Number(horizonDays);
+   if(!Number.isSafeInteger(days)||days<1||days>90)throw fail(400,'Janela de vencimentos inválida.');
+   const end=dateObj(day);end.setUTCDate(end.getUTCDate()+days);
+   const entries=await many(`SELECT e.id,e.description,e.kind,e.due_date AS dueDate,
+     e.amount_cents AS amountCents,
+     e.amount_cents-COALESCE(SUM(f.amount_cents-COALESCE(r.amount_cents,0)),0) AS openCents
+     FROM finance_entries e
+     LEFT JOIN finance_settlements f ON f.tenant_id=e.tenant_id AND f.branch_id=e.branch_id AND f.entry_id=e.id
+     LEFT JOIN finance_settlement_reversals r ON r.tenant_id=e.tenant_id AND r.branch_id=e.branch_id AND r.settlement_id=f.id
+     WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL AND e.due_date<=?
+     GROUP BY e.id HAVING openCents>0 ORDER BY e.due_date,e.id LIMIT 300`,t,b,iso(end));
+   const totals={overdueCents:0,todayCents:0,upcomingCents:0,overdueCount:0,todayCount:0,upcomingCount:0};
+   const items=entries.map(x=>{
+    const severity=x.dueDate<day?'OVERDUE':x.dueDate===day?'TODAY':'UPCOMING';
+    const key=severity.toLowerCase();totals[key+'Cents']+=x.openCents;totals[key+'Count']++;
+    return {...x,severity};
+   });
+   return {asOf:day,through:iso(end),totals,items};
+  },
+  async recurrenceAlerts(t,b,{asOf=stamp().slice(0,10),horizonDays=7}={}){
+   await branch(t,b);const day=date(asOf),days=Number(horizonDays);
+   if(!Number.isSafeInteger(days)||days<1||days>60)throw fail(400,'Janela de alertas inválida.');
+   const end=dateObj(day);end.setUTCDate(end.getUTCDate()+days);
+   const rules=await many(`SELECT id,description,kind,amount_cents AS amountCents,
+     next_due_date AS nextDueDate,end_date AS endDate,frequency
+     FROM finance_recurrences
+     WHERE tenant_id=? AND branch_id=? AND status='ACTIVE'
+       AND next_due_date<=? AND (end_date IS NULL OR next_due_date<=end_date)
+     ORDER BY next_due_date,id LIMIT 200`,t,b,iso(end));
+   return {asOf:day,through:iso(end),items:rules.map(x=>({...x,
+     severity:x.nextDueDate<day?'OVERDUE':x.nextDueDate===day?'TODAY':'UPCOMING'}))};
   },
   async suggestions(t,b,transactionId){
    const x=await tx(t,b,transactionId);if(await reconcile(t,b,x.id))return [];

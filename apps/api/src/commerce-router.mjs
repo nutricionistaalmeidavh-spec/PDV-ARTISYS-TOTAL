@@ -218,6 +218,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
       }
     }
 
+    if(feature==='cash'&&parts[1]==='filter-options'&&parts.length===2&&method==='GET'){
+      requireAccess(member,'cash.view',user);
+      return json({options:await service.cashFilterOptions(tenant,branch)});
+    }
     if(feature==='cash'&&parts[1]==='sessions'){
       if(parts.length===3&&parts[2]==='search'&&method==='GET'){
         requireAccess(member,'cash.view',user);
@@ -233,6 +237,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
       }
       const id=parts[2];
       if(id&&id.length<=128){
+        if(parts.length===4&&parts[3]==='audit'&&method==='GET'){
+          requireAccess(member,'cash.view',user);
+          return json({audit:await service.cashSessionAudit(tenant,branch,id)});
+        }
         if(parts.length===4&&parts[3]==='movements'&&method==='GET'){
           requireAccess(member,'cash.view',user);
           return json({movements:await service.cashMovements(tenant,branch,id)});
@@ -349,6 +357,10 @@ export async function commerceRoute(request,db,session,member,tenantId,path,{now
           from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||''
         })});
       }
+    }
+    if(feature==='sales'&&parts.length===2&&parts[1]==='filter-options'&&method==='GET'){
+      requireAccess(member,'sales.view',user);
+      return json({options:await service.salesFilterOptions(tenant,branch)});
     }
     if(feature==='sales'){
       if(parts.length===2&&parts[1]==='history'&&method==='GET'){

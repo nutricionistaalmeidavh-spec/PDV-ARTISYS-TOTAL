@@ -8,7 +8,7 @@ import {hashPassword} from '../src/password.mjs';
 const origin='https://advanced-finance.test',time='2026-10-17T14:00:00.000Z';
 async function setup(){
  const db=openLocalDatabase();
- for(const name of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0038_product_menu_usage.sql'])
+ for(const name of ['0001_identity.sql','0002_commerce.sql','0003_cash_finance.sql','0004_advanced_finance.sql','0005_vertical_parity.sql','0006_desktop_parity.sql','0007_stock_transfers.sql','0008_transaction_reversals.sql','0009_catalog_inventory.sql','0010_purchase_orders.sql','0011_product_media.sql','0012_sale_item_notes.sql','0013_cash_terminals.sql','0014_checkout_configurations.sql','0015_seller_sales_targets.sql','0016_inventory_lot_receipts.sql','0017_inventory_minimum_levels.sql','0018_inventory_lot_balances.sql','0020_sale_configured_lines.sql','0038_product_menu_usage.sql','0039_p4_finance_operations.sql'])
   db.exec(readFileSync(new URL('../migrations/'+name,import.meta.url),'utf8'));
  const password='CorrectHorseBattery2026!';
  const hash=await hashPassword(password);
@@ -72,5 +72,34 @@ test('advanced finance HTTP route generates recurring payable and reports canoni
   const cashflow=await s.call(base+'dre/cashflow?branchId=branch-a&from=2026-10-01&to=2026-10-31',{cookie:owner});
   assert.equal(cashflow.status,200,cashflow.data.error);
   assert.equal(cashflow.data.cashflow.projectedPayableCents,9500);
+ }finally{s.close();}
+});
+test('P4 HTTP: wallet roles, date alerts, filtered bank history and matching lookup are tenant scoped',async()=>{
+ const s=await setup();try{
+  const owner=await s.login('owner'),viewer=await s.login('viewer'),other=await s.login('other');
+  const base='/api/v1/tenants/a/finance-advanced/';
+  const get=(path,cookie=owner)=>s.call(base+path+(path.includes('?')?'&':'?')+'branchId=branch-a',{cookie});
+  const wallet=await s.call(base+'accounts',{cookie:owner,method:'POST',body:{branchId:'branch-a',name:'Caixa físico',walletKind:'CASH'}});
+  assert.equal(wallet.status,201,wallet.data.error);
+  assert.equal(wallet.data.account.walletKind,'CASH');
+  const accounts=await get('accounts');
+  assert.equal(accounts.data.accounts[0].walletKind,'CASH');
+  assert.equal((await get('due?asOf=2026-10-17',viewer)).status,200);
+  const due=await get('due?unused=1&asOf=2026-10-17');
+  assert.equal(due.status,200,due.data.error);
+  assert.equal(due.data.due.totals.overdueCents,0);
+  const alerts=await get('recurrences/alerts?asOf=2026-10-17');
+  assert.equal(alerts.status,200,alerts.data.error);
+  assert.equal(alerts.data.alerts.items.length,0);
+  const tx=await get('transactions?status=UNMATCHED&direction=OUT&from=2026-10-01&to=2026-10-31');
+  assert.equal(tx.status,200,tx.data.error);
+  assert.deepEqual(tx.data.transactions,[]);
+  assert.equal((await get('transactions?direction=INVALID')).status,400);
+  assert.equal((await get('due?asOf=2026-10-17&horizonDays=500')).status,400);
+  assert.equal((await s.call(base+'due?branchId=branch-b&asOf=2026-10-17',{cookie:owner})).status,404);
+  assert.equal((await s.call(base+'due?branchId=branch-a&asOf=2026-10-17',{cookie:other})).status,404);
+  assert.equal((await s.call(base+'recurrences/alerts?branchId=branch-a&asOf=2026-10-17',{cookie:other})).status,404);
+  assert.equal((await s.call(base+'settlement-suggestions/missing?branchId=branch-a',{cookie:owner})).status,404);
+  assert.equal((await s.call(base+'accounts',{cookie:viewer,method:'POST',body:{branchId:'branch-a',name:'Denegado',walletKind:'BANK'}})).status,403);
  }finally{s.close();}
 });

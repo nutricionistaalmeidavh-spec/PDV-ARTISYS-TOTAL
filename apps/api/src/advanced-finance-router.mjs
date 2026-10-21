@@ -31,9 +31,12 @@ export async function advancedFinanceRoute(request,db,session,member,tenant,path
   if(method==='GET'){
    if(f==='accounts')return json({accounts:await svc.accounts(tenant,branch)});
    if(f==='statements')return json({batches:await svc.batches(tenant,branch)});
-   if(f==='transactions')return json({transactions:await svc.transactions(tenant,branch,{accountId:query('accountId'),status:query('status')})});
+   if(f==='transactions')return json({transactions:await svc.transactions(tenant,branch,{accountId:query('accountId'),status:query('status'),from:query('from'),to:query('to'),query:query('query'),direction:query('direction'),limit:query('limit')||200,offset:query('offset')||0})});
    if(f==='transfers/suggestions')return json({transfers:await svc.transferSuggestions(tenant,branch)});
+   if(f==='due')return json({due:await svc.dueOverview(tenant,branch,{asOf:query('asOf')||undefined,horizonDays:query('horizonDays')||30})});
+   if(f==='recurrences/alerts')return json({alerts:await svc.recurrenceAlerts(tenant,branch,{asOf:query('asOf')||undefined,horizonDays:query('horizonDays')||7})});
    if(feature[0]==='suggestions'&&feature.length===2)return json({suggestions:await svc.suggestions(tenant,branch,feature[1])});
+   if(feature[0]==='settlement-suggestions'&&feature.length===2)return json({settlements:await svc.settlementSuggestions(tenant,branch,feature[1])});
    if(f==='recurrences')return json({recurrences:await svc.recurrences(tenant,branch)});
    if(f==='dre')return json({dre:await svc.dre(tenant,branch,filters())});
    if(f==='dre/cashflow')return json({cashflow:await svc.cashflow(tenant,branch,filters())});
