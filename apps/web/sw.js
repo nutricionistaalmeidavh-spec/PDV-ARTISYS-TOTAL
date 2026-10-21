@@ -19,8 +19,17 @@ self.addEventListener('fetch',event=>{
   const url=new URL(request.url);
   if(url.origin!==self.location.origin||API_PATH.test(url.pathname)||request.method!=='GET')return;
   if(request.mode==='navigate'){
+    if(url.pathname.startsWith('/app')){
+      const refresh=caches.open(SHELL).then(cache=>fetch(request,{cache:'no-store'}).then(async response=>{
+        if(response.ok)await cache.put('/app/index.html',response.clone());
+        return response;
+      }));
+      event.waitUntil(refresh.catch(()=>undefined));
+      event.respondWith(caches.match('/app/index.html').then(cached=>cached||refresh));
+      return;
+    }
     event.respondWith(fetch(request,{cache:'no-store'}).catch(async()=>(
-      (await caches.match(url.pathname.startsWith('/app')?'/app/index.html':'/index.html'))||Response.error()
+      (await caches.match('/index.html'))||Response.error()
     )));
     return;
   }

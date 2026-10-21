@@ -262,9 +262,31 @@ try{
       'route '+route+' rendered a placeholder or failed state');
   }
 
+  await navigateUi(page,'credit');
+  await page.locator('[data-credit-new-customer]').click();
+  await page.locator('#credit-customer-form [name=name]').fill('Cliente crediário QA');
+  await page.locator('#credit-customer-form [name=creditLimit]').fill('150,00');
+  await page.locator('#credit-customer-form button[type=submit]').click();
+  await page.locator('#credit-customer-form').waitFor({state:'detached',timeout:12000});
+  assert.equal(await page.locator('[data-credit-form] [name=customerId] option:checked').textContent(),'Cliente crediário QA');
+  const customerReadsBefore=await page.evaluate(()=>performance.getEntriesByType('resource').filter(entry=>/\/customers(?:\?|$)/.test(new URL(entry.name).pathname+new URL(entry.name).search)).length);
+  await navigateUi(page,'financial-management');
+  await navigateUi(page,'credit');
+  const customerReadsAfter=await page.evaluate(()=>performance.getEntriesByType('resource').filter(entry=>/\/customers(?:\?|$)/.test(new URL(entry.name).pathname+new URL(entry.name).search)).length);
+  assert.equal(customerReadsAfter,customerReadsBefore,'revisiting a reference-data screen must use the short-lived scoped cache');
+
   // P4: exercise real hosted finance routes without changing canonical accounting.
   await navigateUi(page,'finance-banks');
   await page.locator('#cloud-bank-create').waitFor({timeout:12000});
+  for(const route of ['finance','finance-recurrences','management','finance-banks']){
+    await page.locator('.ops-page nav [data-route="'+route+'"]').click();
+    await page.locator('body[data-active-route="'+route+'"]').waitFor({timeout:12000});
+    if(route!=='finance-banks')await navigateUi(page,'finance-banks');
+  }
+  assert.doesNotMatch(await page.locator('#route-content').innerText(),/enviar ao D1/i);
+  await page.locator('[data-bank-page=previous]').waitFor();
+  await page.locator('[data-bank-page=next]').waitFor();
+  console.log('PASS: credit quick customer and finance navigation buttons.');
   await page.locator('#cloud-bank-create [name=name]').fill('Carteira P4 QA');
   await page.locator('#cloud-bank-create [name=walletKind]').selectOption('CASH');
   await page.locator('#cloud-bank-create button[type=submit]').click();

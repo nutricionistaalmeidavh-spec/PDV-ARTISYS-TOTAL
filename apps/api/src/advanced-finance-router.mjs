@@ -41,7 +41,11 @@ export async function advancedFinanceRoute(request,db,session,member,tenant,path
     limit:query('limit')||100,offset:query('offset')||0
    })});
    if(f==='statements')return json({batches:await svc.batches(tenant,branch)});
-   if(f==='transactions')return json({transactions:await svc.transactions(tenant,branch,{accountId:query('accountId'),status:query('status'),from:query('from'),to:query('to'),query:query('query'),direction:query('direction'),limit:query('limit')||200,offset:query('offset')||0})});
+   if(f==='transactions'){
+    const limit=Math.min(100,Math.max(1,Number(query('limit')||50))),offset=Math.max(0,Number(query('offset')||0));
+    const rows=await svc.transactions(tenant,branch,{accountId:query('accountId'),status:query('status'),from:query('from'),to:query('to'),query:query('query'),direction:query('direction'),limit:limit+1,offset});
+    return json({transactions:rows.slice(0,limit),pagination:{limit,offset,hasMore:rows.length>limit}});
+   }
    if(f==='transfers/suggestions')return json({transfers:await svc.transferSuggestions(tenant,branch)});
    if(f==='due')return json({due:await svc.dueOverview(tenant,branch,{asOf:query('asOf')||undefined,horizonDays:query('horizonDays')||30})});
    if(f==='recurrences/alerts')return json({alerts:await svc.recurrenceAlerts(tenant,branch,{asOf:query('asOf')||undefined,horizonDays:query('horizonDays')||7})});

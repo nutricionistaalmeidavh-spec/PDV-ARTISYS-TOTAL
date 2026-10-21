@@ -77,7 +77,8 @@
   try{
    const bankFilters={accountId:String(filters.accountId||''),status:String(filters.status||''),
      direction:String(filters.direction||''),query:String(filters.query||''),
-     from:String(filters.from||''),to:String(filters.to||'')};
+     from:String(filters.from||''),to:String(filters.to||''),limit:50,
+     offset:Math.max(0,Number(filters.offset||0))};
    const bankQuery=new URLSearchParams(Object.entries(bankFilters).filter(([,value])=>value));
    const [accounts,batches,transactions,transfers,groups,categories,centers]=await Promise.all([
     request('accounts'),request('statements'),
@@ -117,7 +118,7 @@
     '<label>Carteira<select name="accountId" class="ops-input">'+selectOptions(list.filter(x=>x.walletKind!=='BANK'),'','Selecione uma carteira')+'</select></label>'+
     '<button class="ops-secondary" type="submit">Consultar histórico</button></form>'+
     '<div id="cloud-wallet-history" aria-live="polite"></div></div></section>'+
-    '<section class="ops-card"><h2>Importar extrato</h2><p>O arquivo é lido e pré-visualizado neste navegador antes de enviar ao D1.</p><div class="ops-form-grid"><label>Conta<select id="cloud-bank-id" class="ops-input">'+list.filter(x=>x.active&&x.walletKind==='BANK').map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('')+'</select></label><label>Arquivo CSV ou OFX<input id="cloud-bank-file" type="file" class="ops-input" accept=".csv,.ofx,text/csv"></label></div><div id="cloud-bank-preview" class="ops-muted">Selecione um extrato.</div><button id="cloud-bank-confirm" type="button" class="ops-primary" disabled>Confirmar importação</button><small>Máximo de 500 linhas por lote. Lançamentos existentes não são reimportados.</small></section>'+
+    '<section class="ops-card"><h2>Importar extrato</h2><p>O arquivo permanece neste aparelho e é analisado no navegador. Ao confirmar, somente data, valor, descrição e identificador das movimentações são enviados para conciliação; o documento original não é armazenado.</p><div class="ops-form-grid"><label>Conta<select id="cloud-bank-id" class="ops-input">'+list.filter(x=>x.active&&x.walletKind==='BANK').map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('')+'</select></label><label>Arquivo CSV ou OFX<input id="cloud-bank-file" type="file" class="ops-input" accept=".csv,.ofx,text/csv"></label></div><div id="cloud-bank-preview" class="ops-muted">Selecione um extrato.</div><button id="cloud-bank-confirm" type="button" class="ops-primary" disabled>Confirmar importação</button><small>Máximo de 500 linhas por lote. Lançamentos existentes não são reimportados.</small></section>'+
     '<section class="ops-card"><h2>Movimentações do extrato</h2>'+
     '<form id="cloud-bank-filters" class="ops-form ops-form-grid" aria-label="Filtros bancários">'+
     '<label>Conta<select name="accountId" class="ops-input">'+selectOptions(list.filter(x=>x.walletKind==='BANK'),bankFilters.accountId,'Todas as contas')+'</select></label>'+
@@ -129,7 +130,7 @@
     '<button class="ops-primary" type="submit">Aplicar filtros</button></form>'+
     '<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Data</th><th>Movimentação</th><th>Valor</th><th>Situação / ação</th></tr></thead><tbody>'+
     (items.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.description)+'</td><td>'+money(x.amountCents)+'</td><td>'+(x.decision?esc(x.decision):'<button type="button" class="ops-link" data-cloud-suggest="'+esc(x.id)+'">Conciliar</button> <button type="button" class="ops-link" data-cloud-ignore="'+esc(x.id)+'">Ignorar</button>')+'</td></tr><tr id="cloud-match-'+esc(x.id)+'" hidden><td colspan="4"></td></tr>').join('')||'<tr><td colspan="4">Sem movimentações.</td></tr>')+
-    '</tbody></table></div></section>'+
+    '</tbody></table></div><div class="ops-actions" aria-label="Paginação das movimentações"><button type="button" class="ops-secondary" data-bank-page="previous" '+(bankFilters.offset?'':'disabled')+'>← Anterior</button><span>Página '+(Math.floor(bankFilters.offset/bankFilters.limit)+1)+'</span><button type="button" class="ops-secondary" data-bank-page="next" '+(transactions.pagination?.hasMore?'':'disabled')+'>Próxima →</button></div></section>'+
     '<section class="ops-card"><h2>Transferências entre contas próprias</h2><p>Transferências internas não contabilizam receita ou despesa.</p>'+
     ((transfers.transfers||[]).map(x=>'<div class="ops-detail-row"><span>'+money(x.amountCents)+' · '+esc(list.find(a=>a.id===x.fromAccountId)?.name||'Conta')+' → '+esc(list.find(a=>a.id===x.toAccountId)?.name||'Conta')+'</span><button class="ops-secondary" data-cloud-transfer="'+esc(x.fromTransactionId)+'" data-to="'+esc(x.toTransactionId)+'" type="button">Confirmar transferência</button></div>').join('')||'<p class="ops-muted">Nenhuma transferência candidata.</p>')+'</section>'+
     '<section class="ops-card"><h2>Importações recentes</h2><p class="ops-muted">'+(batches.batches||[]).map(x=>esc(x.sourceName)).join(' · ')+'</p></section>'+
@@ -180,8 +181,12 @@
     ev.preventDefault();
     const values=Object.fromEntries(new FormData(ev.currentTarget));
     if(values.from&&values.to&&values.from>values.to){toast('Período bancário invertido.','error');return;}
-    void renderBanks(values);
+    void renderBanks({...values,offset:0});
    });
+   content.querySelectorAll('[data-bank-page]').forEach(button=>button.addEventListener('click',()=>{
+    const offset=button.dataset.bankPage==='next'?bankFilters.offset+bankFilters.limit:Math.max(0,bankFilters.offset-bankFilters.limit);
+    void renderBanks({...bankFilters,offset});
+   }));
    for(const [formId,endpoint] of [['cloud-plan-group','dre/groups'],['cloud-plan-category','dre/categories'],['cloud-plan-center','dre/cost-centers']]){
     content.querySelector('#'+formId)?.addEventListener('submit',async ev=>{
      ev.preventDefault();const button=ev.currentTarget.querySelector('[type=submit]');button.disabled=true;
@@ -370,8 +375,8 @@
  content.addEventListener('click',event=>{
   const button=event.target.closest('button[data-route]');
   if(!button||!button.closest('.ops-page'))return;
-  const navigation=document.querySelector('#sidebar-nav [data-route="'+button.dataset.route+'"]');
-  if(navigation){event.preventDefault();navigation.click();}
+  event.preventDefault();
+  void root.PdvAppNavigation?.navigate?.(button.dataset.route);
  });
 }
  root.PdvAdvancedFinanceWeb=Object.freeze({renderBanks,renderRecurrences,renderDre});

@@ -95,10 +95,31 @@
       card('Saldo por vendedor',(balances.balances||[]).map(v=>'<div class="data-row"><strong>'+esc(v.sellerName)+'</strong><span>'+money(v.balanceCents)+'</span></div>').join('')||'<p class="ops-muted">Sem lançamentos de comissão.</p>')+
       card('Regras', (rules.rules||[]).map(v=>'<div class="data-row"><span>'+esc(v.sellerId)+'</span><strong>'+(v.commissionBps/100).toLocaleString('pt-BR')+'%</strong></div>').join('')||'<p class="ops-muted">Sem regras cadastradas.</p>'));
   }
-  async function credit(){
+  function openCreditCustomerCreate(){
+    const modal=window.PdvModal;
+    if(!modal?.open){notify('Cadastro de clientes indisponível.',true);return;}
+    modal.open('Novo cliente',`<form id="credit-customer-form"><div class="field-grid">
+      <div class="field wide"><label>Nome completo *</label><input name="name" required autofocus></div>
+      <div class="field"><label>CPF / CNPJ</label><input name="document"></div>
+      <div class="field"><label>Telefone</label><input name="phone"></div>
+      <div class="field"><label>E-mail</label><input name="email" type="email"></div>
+      <div class="field"><label>Limite do crediário (R$)</label><input name="creditLimit" inputmode="decimal" value="0,00"></div>
+      </div><div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Cancelar</button><button class="primary-button" type="submit">Salvar cliente</button></div></form>`,{onMount(host){
+      host.querySelector('#credit-customer-form')?.addEventListener('submit',async event=>{
+        event.preventDefault();const form=event.currentTarget,button=form.querySelector('[type="submit"]');button.disabled=true;
+        try{const data=formData(form),saved=await api.saveCustomer({name:data.name.trim(),document:data.document.trim(),phone:data.phone.trim(),email:data.email.trim(),notes:'',creditLimitCents:price(data.creditLimit),creditUsedCents:0,active:true});
+          modal.close();notify('Cliente cadastrado e selecionado.');await credit(saved.id);
+        }catch(error){showError(error);button.disabled=false;}
+      });
+    }});
+  }
+  async function credit(selectedCustomerId=''){
     const customers=await api.customers();
     root.innerHTML=section('Crediário','Limite e saldo por cliente vinculados às vendas reais.',
-      card('Consultar cliente',`<form data-credit-form class="ops-form-grid">${select('customerId','Cliente',customers)}<button class="ops-primary" type="submit">Consultar saldo</button></form><div data-credit-result role="status"></div>`));
+      card('Consultar cliente',`<form data-credit-form class="ops-form-grid">${select('customerId','Cliente',customers)}<button class="ops-secondary" type="button" data-credit-new-customer>+ Cliente</button><button class="ops-primary" type="submit">Consultar saldo</button></form><div data-credit-result role="status"></div>`));
+    const customerSelect=root.querySelector('[data-credit-form] [name="customerId"]');
+    if(selectedCustomerId)customerSelect.value=selectedCustomerId;
+    root.querySelector('[data-credit-new-customer]').addEventListener('click',openCreditCustomerCreate);
     root.querySelector('[data-credit-form]').addEventListener('submit',async event=>{
       event.preventDefault();const customerId=formData(event.currentTarget).customerId;if(!customerId)return;
       try{const result=await call('credit/'+id(customerId)),credit=result.credit;

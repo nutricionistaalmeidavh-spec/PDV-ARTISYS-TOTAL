@@ -18,7 +18,7 @@
     return id;
   }
   // Shared browser context belongs to one client module, never to individual views.
-  const browserContext={tenantId:null,branchId:null,lanMode:false};
+  const browserContext={tenantId:null,branchId:null,lanMode:false,readCache:new Map()};
   class ApiClient {
     constructor() {
       this.webMode=!root.artisysDesktop;
@@ -133,6 +133,7 @@
         e.status=response.status;
         throw e;
       }
+      if(!['GET','HEAD'].includes(method))this.invalidateReferenceCache();
       if(/^sales\/[^/]+\/complete$/.test(operation))this.completionKeys.delete(operation);
       if(operation==='products')return method==='GET'?value.products:value.product;
       if(operation==='products/categories')return method==='GET'?value.categories:value.category;
@@ -219,6 +220,7 @@
       const defaultBranch=branches.branches.find(item=>String(item.code||'').toUpperCase()==='MAIN')||branches.branches[0];
       this.tenantId=tenantId;
       this.branchId=defaultBranch.id;
+      this.invalidateReferenceCache();
       return {branch:defaultBranch,context};
     }
 
@@ -230,6 +232,15 @@
     }
 
     mutationId() { return root.crypto?.randomUUID ? root.crypto.randomUUID() : `${Date.now()}-${Math.random()}`; }
+    cachedReference(name,loader,ttlMs=20000){
+      if(!this.webMode)return loader();
+      const key=[this.tenantId||'',this.branchId||'',name].join('|'),now=Date.now(),cached=this.context.readCache.get(key);
+      if(cached&&cached.expiresAt>now)return cached.promise;
+      const promise=Promise.resolve().then(loader).catch(error=>{this.context.readCache.delete(key);throw error;});
+      this.context.readCache.set(key,{expiresAt:now+ttlMs,promise});
+      return promise;
+    }
+    invalidateReferenceCache(){this.context.readCache.clear();}
     async health() { const health=await this.request('/api/v1/health');if(this.webMode)this.context.lanMode=health.lanMode===true;return health; }
     setupStatus() { return this.request('/api/v1/setup/status'); }
     setupAdmin(body) { return this.request('/api/v1/setup/admin', { method: 'POST', body }); }
@@ -248,15 +259,15 @@
     currentSession() { return this.request('/api/v1/auth/session'); }
     authorizeReturn(body) { return this.request('/api/v1/auth/authorize', { method:'POST', body }); }
 
-    categories(includeInactive = false) { return this.request(this.webMode?'/api/v1/products/categories':`/api/v1/categories${includeInactive ? '?includeInactive=true' : ''}`); }
-    saveCategory(body) { return this.request(this.webMode?'/api/v1/products/categories':'/api/v1/categories', { method: 'POST', body }); }
+    categories(includeInactive = false) { const path=this.webMode?'/api/v1/products/categories':`/api/v1/categories${includeInactive ? '?includeInactive=true' : ''}`;return this.cachedReference('categories:'+includeInactive,()=>this.request(path)); }
+    async saveCategory(body) { const value=await this.request(this.webMode?'/api/v1/products/categories':'/api/v1/categories', { method: 'POST', body });this.invalidateReferenceCache();return value; }
     renameCategory(id,name,mutationId){return this.request('/api/v1/products/categories/'+encodeURIComponent(id),{method:'PATCH',body:{name},mutationId});}
     previewCatalogCsv(csv,mode='create'){return this.request('/api/v1/products/import/preview',{method:'POST',body:{csv,mode}});}
     commitCatalogCsv(csv,mutationId,mode='create',previewToken=null){
       return this.request('/api/v1/products/import/commit',{method:'POST',body:{csv,mode,...(previewToken?{previewToken}:{})},mutationId});
     }
-    products(includeInactive = false) { return this.request(`/api/v1/products${includeInactive ? '?includeInactive=true' : ''}`); }
-    saveProduct(body,mutationId) { return this.request('/api/v1/products', { method: 'POST', body,mutationId }); }
+    products(includeInactive = false) { return this.cachedReference('products:'+includeInactive,()=>this.request(`/api/v1/products${includeInactive ? '?includeInactive=true' : ''}`)); }
+    async saveProduct(body,mutationId) { const value=await this.request('/api/v1/products', { method: 'POST', body,mutationId });this.invalidateReferenceCache();return value; }
     updateProduct(id,body,mutationId) { return this.request(`/api/v1/products/${encodeURIComponent(id)}`, { method:'PATCH', body,mutationId }); }
     removeProduct(productId) { return this.request(`/api/v1/products/${encodeURIComponent(productId)}`, { method: 'DELETE' }); }
     recipe(productId) { return this.request(`/api/v1/vertical/recipes/${encodeURIComponent(productId)}`); }
@@ -266,8 +277,8 @@
     productPhotoDataUrl(productId, variant = 'thumbnail') { return root.artisysDesktop.photos.dataUrl({ productId, variant, sessionToken:this.sessionToken }); }
     uploadProductPhoto(productId) { return root.artisysDesktop.photos.pickAndUpload({ productId, sessionToken:this.sessionToken }); }
     removeProductPhoto(productId) { return root.artisysDesktop.photos.remove({ productId, sessionToken:this.sessionToken }); }
-    customers(includeInactive = false) { return this.request(`/api/v1/customers${includeInactive ? '?includeInactive=true' : ''}`); }
-    saveCustomer(body) { return this.request('/api/v1/customers', { method: 'POST', body }); }
+    customers(includeInactive = false) { return this.cachedReference('customers:'+includeInactive,()=>this.request(`/api/v1/customers${includeInactive ? '?includeInactive=true' : ''}`)); }
+    async saveCustomer(body) { const value=await this.request('/api/v1/customers', { method: 'POST', body });this.invalidateReferenceCache();return value; }
     users(includeInactive = false) { return this.request(`/api/v1/users${includeInactive ? '?includeInactive=true' : ''}`); }
     sellers() { return this.request('/api/v1/sellers'); }
     saveUser(body) { return this.request('/api/v1/users', { method: 'POST', body }); }
