@@ -104,6 +104,27 @@ try{
     .every(node=>node.classList.contains('in-view')),null,{timeout:10000});
   await page.waitForTimeout(900);
   await page.screenshot({path:'qa-artifacts/pdv-landing-desktop.png',fullPage:true});
+  // Verify pointer/arrow gallery navigation, readable zoom and preserved account entry.
+  await page.locator('[data-gallery-next]').click();
+  assert.equal(await page.locator('#tab-cardapio').getAttribute('aria-selected'),'true','gallery next must select menu');
+  assert.equal((await page.locator('[data-gallery-counter]').textContent()).trim(),'2 de 4');
+  await page.locator('[data-gallery-expand]').click();
+  assert.equal(await page.locator('#demo-gallery-zoom').evaluate(el=>el.open),true,'gallery preview should enlarge');
+  assert.equal(await page.locator('[data-gallery-zoom-content] .demo-panel').count(),1,'zoom contains selected panel');
+  await page.locator('[data-gallery-zoom-close]').click();
+  assert.equal(await page.locator('#demo-gallery-zoom').evaluate(el=>el.open),false);
+  await page.locator('#tab-cozinha').click();
+  await page.locator('.demo-frame .demo-panel:not([hidden])').evaluate(element=>{
+    const rect=element.getBoundingClientRect();
+    const x=rect.left+rect.width*0.75,y=rect.top+rect.height*0.5;
+    element.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:9,pointerType:'touch',clientX:x,clientY:y}));
+    element.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:9,pointerType:'touch',clientX:x-120,clientY:y}));
+  });
+  assert.equal(await page.locator('#tab-caixa').getAttribute('aria-selected'),'true','swipe left must select cashier preview');
+  await page.locator('[data-gallery-prev]').click();
+  assert.equal(await page.locator('#tab-cozinha').getAttribute('aria-selected'),'true','previous arrow must work');
+  await page.locator('#tab-mesas').click();
+
   // Premium surface visual QA, deliberately before any authenticated session.
   assert.equal(await page.locator('.premium-laptop').count(),1,'hero requires desktop mockup');
   assert.equal(await page.locator('.premium-tablet').count(),1,'hero requires menu mockup');
