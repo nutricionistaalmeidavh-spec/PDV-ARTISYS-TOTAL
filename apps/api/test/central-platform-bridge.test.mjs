@@ -9,7 +9,7 @@ const OLD='existing-legacy-platform-admin-token-2026-xyz';
 const NOW=Date.parse('2026-10-20T12:00:00.000Z');
 async function fixture(config={}){
  const db=openLocalDatabase();
- for(const file of ['0001_identity.sql','0030_public_registration.sql','0031_saas_access.sql','0034_platform_ui_sessions.sql','0036_central_platform_bridge.sql'])
+ for(const file of ['0001_identity.sql','0030_public_registration.sql','0031_saas_access.sql','0033_p2_account_security.sql','0034_platform_ui_sessions.sql','0035_password_resets.sql','0036_central_platform_bridge.sql','0041_central_owner_licenses.sql'])
   db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
  const api=createApi({DB:db,AUTH_ENABLED:'false',PLATFORM_ADMIN_TOKEN:OLD,ARTISYS_PLATFORM_CENTRAL_ENABLED:'true',
   ARTISYS_PLATFORM_BRIDGE_SECRET:secret,...config},{now:()=>NOW});
@@ -119,4 +119,53 @@ test('production flags persist through Wrangler deploy while legacy admin cutove
  assert.equal(config.vars.REGISTRATION_ENABLED,'false');
  assert.equal(config.vars.EMAIL_VERIFICATION_REQUIRED,'false');
  assert.equal(config.d1_databases[0].database_name,'pdv-artisys-total');
+});
+
+
+test('admin grants owner license by e-mail, emails a 48h one-use password link and never falsifies Asaas payment',async()=>{
+ const sent=[];
+ const x=await fixture({SAAS_ENTITLEMENTS_ENABLED:'true',EMAIL_FROM:'welcome@artisys.dev',
+  EMAIL:{send:async message=>{sent.push(message);return {messageId:'test-email-1'};}}});
+ try{
+  const req=async action=>{
+   const signed=await x.sign(JSON.stringify(action));
+   return x.api.fetch(new Request(origin+'/api/v1/integrations/artisys/platform',{method:'POST',...signed}));
+  };
+  const grant=await req({action:'owner-license',data:{email:'buyer@example.test',businessName:'Lanchonete Exemplo',days:30,reason:'Liberação comercial manual verificada'}});
+  assert.equal(grant.status,201,await grant.clone().text());
+  const body=await grant.json();
+  assert.equal(body.email,'buyer@example.test');
+  assert.equal(sent.length,1);
+  assert.match(sent[0].text,/recuperar-senha\/\#token=/);
+  const tenant=await x.db.prepare('SELECT name,active FROM tenants WHERE id=?').bind(body.tenantId).first();
+  assert.equal(tenant.name,'Lanchonete Exemplo');assert.equal(tenant.active,1);
+  const subscription=await x.db.prepare('SELECT plan_key AS plan,status FROM saas_subscriptions WHERE tenant_id=?').bind(body.tenantId).first();
+  assert.equal(subscription.status,'CANCELLED');
+  assert.equal(subscription.plan,'manual');
+  const manual=await x.db.prepare('SELECT active,expires_at AS expiresAt FROM saas_admin_licenses WHERE tenant_id=?').bind(body.tenantId).first();
+  assert.equal(manual.active,1);assert.equal(manual.expiresAt,body.expiresAt);
+  const user=await x.db.prepare("SELECT u.id FROM users u JOIN tenant_memberships m ON m.user_id=u.id WHERE m.tenant_id=? AND m.profile_key='OWNER'").bind(body.tenantId).first();
+  const reset=await x.db.prepare('SELECT expires_at AS until FROM saas_password_resets WHERE user_id=?').bind(user.id).first();
+  assert.equal(reset.until,NOW+48*3600000);
+  const list=await (await req({action:'tenants'})).json();
+  assert.equal(list.tenants.find(t=>t.id===body.tenantId).manualLicenseActive,true);
+  assert.equal((await req({action:'revoke-license',tenantId:body.tenantId})).status,200);
+  assert.equal((await x.db.prepare('SELECT active FROM saas_admin_licenses WHERE tenant_id=?').bind(body.tenantId).first()).active,0);
+  const events=await (await req({action:'audit'})).json();
+  assert.ok(events.events.some(e=>e.kind==='OWNER_LICENSE_GRANTED'));
+  assert.ok(events.events.some(e=>e.kind==='OWNER_LICENSE_REVOKED'));
+ }finally{x.close();}
+});
+test('manual license cannot be granted without e-mail transport and rejects invalid durations',async()=>{
+ const x=await fixture();
+ try{
+  const req=async data=>{
+   const signed=await x.sign(JSON.stringify({action:'owner-license',data}));
+   return x.api.fetch(new Request(origin+'/api/v1/integrations/artisys/platform',{method:'POST',...signed}));
+  };
+  const valid={email:'buyer@example.test',days:30,reason:'Liberação manual testada'};
+  assert.equal((await req(valid)).status,503);
+  assert.equal((await req({...valid,days:-1})).status,400);
+  assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM users').bind().first()).n,0);
+ }finally{x.close();}
 });

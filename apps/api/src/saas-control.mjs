@@ -28,7 +28,12 @@ function audit(db,t,actor,kind,subject,now,detail={}){
 export async function tenantWriteAllowed(db,tenantId,env,now){
  if(env.SAAS_ENTITLEMENTS_ENABLED!=='true')return true;
  const s=await q(db,'SELECT status,ends_at AS endsAt FROM saas_subscriptions WHERE tenant_id=?',tenantId).first();
- return Boolean(s&&['TRIAL','ACTIVE'].includes(s.status)&&Date.parse(s.endsAt)>now);
+ if(s&&['TRIAL','ACTIVE'].includes(s.status)&&Date.parse(s.endsAt)>now)return true;
+ // Administrator-issued access is separate from Asaas-verified payments.
+ try{
+  const grant=await q(db,'SELECT active,expires_at AS expiresAt FROM saas_admin_licenses WHERE tenant_id=?',tenantId).first();
+  return Boolean(grant?.active===1&&Date.parse(grant.expiresAt)>now);
+ }catch{return false;}
 }
 async function ipBucket(request,env,now){
  // Cloudflare overwrites this header at the Workers edge. Never trust X-Forwarded-For.
@@ -264,7 +269,13 @@ export async function platformManagementRoute(request,db,env,path,now,{centralVe
     LEFT JOIN tenant_memberships m ON m.tenant_id=t.id AND m.profile_key='OWNER'
     LEFT JOIN users u ON u.id=m.user_id
     ORDER BY t.created_at DESC,t.id LIMIT 250`).all();
-   return output({pendingTenants:pending.results,tenants:all.results});
+   let licenses=[];
+   try{licenses=(await q(db,'SELECT tenant_id AS tenantId,active,expires_at AS endsAt,reason FROM saas_admin_licenses').all()).results;}catch{}
+   const byTenant=new Map(licenses.map(item=>[item.tenantId,item]));
+   return output({pendingTenants:pending.results,tenants:all.results.map(item=>{
+    const manual=byTenant.get(item.id);
+    return {...item,manualLicenseActive:manual?.active===1,manualLicenseEndsAt:manual?.endsAt||null,manualLicenseReason:manual?.reason||null};
+   })});
   }catch(e){return err(e);}
  }
  const approve=path.match(/^\/api\/v1\/platform\/tenants\/([^/]{1,128})\/approve$/);
@@ -286,6 +297,87 @@ export async function platformManagementRoute(request,db,env,path,now,{centralVe
    ]);
    return output({approved:true,tenantId,trialEndsAt:endsAt});
   }catch(e){return e.status?err(e):output({error:'Cadastro já aprovado ou inconsistência na ativação.'},409);}
+ }
+
+ // The owner's e-mail, not an employee membership, identifies the licensed account.
+ if(path==='/api/v1/platform/owner-license'&&request.method==='POST'){
+  try{
+   const data=await bodyOf(request),email=validEmail(data.email),days=data.days,
+    reason=validText(data.reason,240),company=data.businessName===undefined?null:validText(data.businessName,100);
+   if(!email||!Number.isInteger(days)||days<1||days>3650||!reason||reason.length<8||
+      (data.businessName!==undefined&&!company))
+    throw fail(400,'E-mail, duração, estabelecimento ou motivo inválido.');
+   if(!emailTransportPresent(env))throw fail(503,'Configure primeiro o envio de e-mails.');
+   const user=await q(db,'SELECT id FROM users WHERE email_norm=?',email).first();
+   const owned=user?(await q(db,"SELECT t.id,t.active,m.active AS memberActive FROM tenants t JOIN tenant_memberships m ON m.tenant_id=t.id WHERE m.user_id=? AND m.profile_key='OWNER' ORDER BY t.created_at DESC",user.id).all()).results:[];
+   let tenant=owned.find(item=>item.id===data.tenantId);
+   if(data.tenantId!==undefined&&!tenant)throw fail(403,'Empresa não pertence ao e-mail do proprietário.');
+   if(data.tenantId===undefined&&owned.length>1)throw fail(409,'Este e-mail possui várias empresas. Selecione uma.');
+   if(data.tenantId===undefined&&owned.length===1)tenant=owned[0];
+   let userId=user?.id||newId(),tenantId=tenant?.id||newId();
+   const when=stamp(now),expiresAt=stamp(now+days*86400000);
+   if(!tenant){
+    const branchId=newId(),slug='loja-'+tenantId.slice(0,8);
+    const business=company||'Estabelecimento '+email.split('@')[0].slice(0,45);
+    const unusablePassword=await hashPassword(newSessionToken());
+    await db.batch([
+     ...(!user?[q(db,'INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)',
+       userId,email,email.split('@')[0].slice(0,100),unusablePassword,when)]:[]),
+     q(db,'INSERT INTO tenants(id,slug,name,active,created_at) VALUES(?,?,?,1,?)',tenantId,slug,business,when),
+     q(db,'INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,active,created_at) VALUES(?,?,?,1,?)',tenantId,userId,'OWNER',when),
+     q(db,'INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)',branchId,tenantId,'MAIN','Matriz',when),
+     q(db,"INSERT INTO saas_subscriptions(tenant_id,plan_key,status,ends_at,updated_at,updated_by) VALUES(?,'manual','CANCELLED',?,?,'CENTRAL_ADMIN')",tenantId,when,when),
+     audit(db,tenantId,'CENTRAL_ADMIN','OWNER_EMAIL_PROVISIONED',userId,now,{email})
+    ]);
+   }else if(tenant.active===0||tenant.memberActive===0){
+    await db.batch([
+     q(db,'UPDATE tenants SET active=1 WHERE id=? AND active=0',tenantId),
+     q(db,"UPDATE tenant_memberships SET active=1 WHERE user_id=? AND tenant_id=? AND profile_key='OWNER'",userId,tenantId),
+     audit(db,tenantId,'CENTRAL_ADMIN','OWNER_REGISTRATION_APPROVED',userId,now,{email})
+    ]);
+   }
+   // Use existing password-setting page and single-use 48-hour reset tokens.
+   const secret=newSessionToken(),tokenHash=await sha256(secret),validUntil=now+48*3600000;
+   await q(db,`INSERT INTO saas_password_resets(user_id,token_hash,created_at,expires_at)
+    VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET token_hash=excluded.token_hash,
+    created_at=excluded.created_at,expires_at=excluded.expires_at`,userId,tokenHash,now,validUntil).run();
+   const link=new URL('/recuperar-senha/',new URL(request.url).origin);link.hash='token='+secret;
+   try{
+    await sendTransactionalEmail(env,{
+     to:email,subject:'Seu acesso ao PDV Total | ArtiSys',
+     text:'Seu acesso ao PDV Total foi liberado.\n\n'
+      +'Defina sua senha pelo link individual, válido por 48 horas e uma única utilização:\n'
+      +link.href+'\n\nA licença é válida até '+new Date(expiresAt).toLocaleDateString('pt-BR',{timeZone:'UTC'})+
+      '.\n\nSe não reconhece esta liberação, ignore esta mensagem.',
+     link:link.href
+    });
+   }catch{
+    await q(db,'DELETE FROM saas_password_resets WHERE user_id=? AND token_hash=?',userId,tokenHash).run();
+    throw fail(503,'Falha no envio: nenhuma licença nova foi ativada.');
+   }
+   await db.batch([
+    q(db,`INSERT INTO saas_admin_licenses(tenant_id,active,expires_at,reason,updated_at,updated_by)
+     VALUES(?,1,?,?,?,'CENTRAL_ADMIN')
+     ON CONFLICT(tenant_id) DO UPDATE SET active=1,expires_at=excluded.expires_at,
+      reason=excluded.reason,updated_at=excluded.updated_at,updated_by='CENTRAL_ADMIN'`,
+      tenantId,expiresAt,reason,when),
+    audit(db,tenantId,'CENTRAL_ADMIN','OWNER_LICENSE_GRANTED',userId,now,{email,days,expiresAt,reason})
+   ]);
+   return output({granted:true,emailSent:true,email,tenantId,expiresAt},201);
+  }catch(e){return err(e);}
+ }
+ const licenseRevoke=path.match(/^\/api\/v1\/platform\/tenants\/([^/]{1,128})\/manual-license\/revoke$/);
+ if(licenseRevoke&&request.method==='POST'){
+  try{
+   const tenantId=decodeURIComponent(licenseRevoke[1]);
+   const existing=await q(db,'SELECT active FROM saas_admin_licenses WHERE tenant_id=?',tenantId).first();
+   if(!existing||existing.active!==1)throw fail(409,'Esta empresa não tem licença manual ativa.');
+   await db.batch([
+    q(db,'UPDATE saas_admin_licenses SET active=0,updated_at=?,updated_by=? WHERE tenant_id=? AND active=1',stamp(now),'CENTRAL_ADMIN',tenantId),
+    audit(db,tenantId,'CENTRAL_ADMIN','OWNER_LICENSE_REVOKED',tenantId,now)
+   ]);
+   return output({revoked:true,tenantId});
+  }catch(e){return err(e);}
  }
  const match=path.match(/^\/api\/v1\/platform\/tenants\/([^/]{1,128})\/subscription$/);
  if(!match||request.method!=='PUT')return output({error:'Rota administrativa indisponível.'},404);
