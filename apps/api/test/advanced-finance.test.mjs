@@ -271,3 +271,21 @@ test('P0 finance searches: canonical category, center, bank match, maturity, sta
   assert.equal(await x.service.entriesSearch('a','x',{from:'2026-10-20',to:'2026-10-19'}).then(()=>200,e=>e.status),400);
  }finally{x.close();}
 });
+
+test('P0 maturity dashboard totals include all 320 entries while response bounds details to 300',async()=>{
+ const x=await setup();try{
+  const insert=x.db.prepare(`INSERT INTO finance_entries
+   (id,tenant_id,branch_id,kind,description,amount_cents,due_date,competence_date,created_by,created_at)
+   VALUES(?,?,?,?,?,?,?,?,?,?)`);
+  for(let i=0;i<320;i++)await insert.bind('due-bulk-'+i,'a','x','PAYABLE','Despesa '+i,100,
+   '2026-10-10','2026-10-10','u',now).run();
+  const due=await x.service.dueOverview('a','x',{asOf:'2026-10-17',horizonDays:30});
+  assert.equal(due.totals.overdueCount,320);
+  assert.equal(due.totals.overdueCents,32000);
+  assert.equal(due.items.length,300);
+  assert.equal(due.truncated,true);
+  const outsider=await x.service.dueOverview('b','y',{asOf:'2026-10-17',horizonDays:30});
+  assert.equal(outsider.totals.overdueCount,0);
+  assert.equal(outsider.totals.overdueCents,0);
+ }finally{x.close();}
+});
