@@ -114,7 +114,7 @@ test('preview gallery remains first-party, swipeable and scoped outside auth',()
 
 test('marketing photos are real local WebP files and four gallery images can enlarge',()=>{
   const html=source('apps/landing/index.html');
-  const expected=['pdv-hero-mockups','pdv-mesas','pdv-cardapio','pdv-garcom-cozinha','pdv-caixa'];
+  const expected=['pdv-integrado','pdv-mesas','pdv-cardapio','pdv-garcom-cozinha','pdv-caixa'];
   for(const name of expected){
     const path='apps/landing/media/'+name+'.webp';
     const image=readFileSync(new URL('../'+path,import.meta.url));
