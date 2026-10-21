@@ -142,8 +142,9 @@ test('admin grants owner license by e-mail, emails a 48h one-use password link a
   const subscription=await x.db.prepare('SELECT plan_key AS plan,status FROM saas_subscriptions WHERE tenant_id=?').bind(body.tenantId).first();
   assert.equal(subscription.status,'CANCELLED');
   assert.equal(subscription.plan,'manual');
-  const manual=await x.db.prepare('SELECT active,expires_at AS expiresAt FROM saas_admin_licenses WHERE tenant_id=?').bind(body.tenantId).first();
+  const manual=await x.db.prepare('SELECT active,expires_at AS expiresAt,owner_email AS email,owner_user_id AS ownerId FROM saas_admin_licenses WHERE tenant_id=?').bind(body.tenantId).first();
   assert.equal(manual.active,1);assert.equal(manual.expiresAt,body.expiresAt);
+  assert.equal(manual.email,'buyer@example.test');
   const user=await x.db.prepare("SELECT u.id FROM users u JOIN tenant_memberships m ON m.user_id=u.id WHERE m.tenant_id=? AND m.profile_key='OWNER'").bind(body.tenantId).first();
   const reset=await x.db.prepare('SELECT expires_at AS until FROM saas_password_resets WHERE user_id=?').bind(user.id).first();
   assert.equal(reset.until,NOW+48*3600000);
