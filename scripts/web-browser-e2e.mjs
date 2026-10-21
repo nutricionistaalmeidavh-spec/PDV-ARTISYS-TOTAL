@@ -75,6 +75,26 @@ try{
   await page.locator('#hero-title').waitFor({timeout:12000});
   assert.equal(await page.locator('#web-login-form').count(),0,'marketing must not render the cashier overlay');
   await page.screenshot({path:'qa-artifacts/pdv-landing-desktop.png',fullPage:true});
+  // Premium surface visual QA, deliberately before any authenticated session.
+  assert.equal(await page.locator('.premium-laptop').count(),1,'hero requires desktop mockup');
+  assert.equal(await page.locator('.premium-tablet').count(),1,'hero requires menu mockup');
+  assert.equal(await page.locator('.premium-phone').count(),2,'hero requires waiter and kitchen mockups');
+  const premiumStyles=await page.locator('.hero').evaluate(el=>getComputedStyle(el).color);
+  assert.ok(premiumStyles,'premium hero must be styled');
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('#hero-title').waitFor();
+  await page.screenshot({path:'qa-artifacts/pdv-landing-mobile.png',fullPage:true});
+  const landingMobileGeometry=await page.evaluate(()=>({
+    viewport:innerWidth,scroll:document.documentElement.scrollWidth,
+    loginVisible:!!document.querySelector('[data-open-login]')?.getBoundingClientRect().width,
+    registerVisible:!!document.querySelector('[data-open-register]')?.getBoundingClientRect().width
+  }));
+  assert.ok(landingMobileGeometry.scroll<=landingMobileGeometry.viewport+12,
+    'premium mobile landing horizontal overflow '+JSON.stringify(landingMobileGeometry));
+  assert.ok(landingMobileGeometry.loginVisible&&landingMobileGeometry.registerVisible,
+    'mobile login and registration CTAs must remain accessible');
+  await page.setViewportSize({width:1366,height:860});
+
   await page.locator('[data-open-register]').first().click();
   assert.equal(await page.locator('#registration-dialog').evaluate(el=>el.open),true);
   await page.locator('[data-close-register]').click();
