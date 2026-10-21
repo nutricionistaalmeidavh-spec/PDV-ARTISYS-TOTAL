@@ -28,8 +28,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #d7c2
 .button{min-height:44px;border-radius:11px;transition:transform .3s cubic-bezier(.2,.8,.2,1),background .2s,border-color .2s,box-shadow .25s}
 .button:hover{transform:translateY(-3px)}
 .button:active{transform:translateY(0)}
-.button-primary{background:linear-gradient(130deg,#9352f4,#6a40e6);color:#fff;box-shadow:0 12px 33px #703fe13d}
-.button-primary:hover{background:linear-gradient(130deg,#ad79ff,#794feb);box-shadow:0 17px 37px #703fe159}
+.button-primary{background:linear-gradient(130deg,#8f4cee,#6a40e6);color:#fff;box-shadow:0 12px 33px #703fe13d}
+.button-primary:hover{background:linear-gradient(130deg,#8541cf,#794feb);box-shadow:0 17px 37px #703fe159}
 .button-outline{background:rgba(19,25,44,.77);border-color:#646078;color:#fff}
 .button-outline:hover{background:#242444;border-color:#ba94ff}
 .hero{position:relative;isolation:isolate;grid-template-columns:.83fr 1.17fr;gap:18px;min-height:790px;padding-block:112px 125px}
