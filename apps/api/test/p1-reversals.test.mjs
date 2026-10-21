@@ -359,7 +359,8 @@ test('P1 history: 1,050 historical operators remain searchable, combined queries
   const lookup=await x.call(x.manager,'a',
     'sales/filter-options?branchId=branch-a&field=operators&query='+encodeURIComponent('Operador histórico '+missing));
   assert.equal(lookup.status,200,JSON.stringify(lookup.body));
-  assert.deepEqual(lookup.body.options.operators.map(x=>x.id),[newestId]);
+  assert.ok(lookup.body.options.operators.some(x=>x.id===newestId),
+    'Substring lookup must include the missing operator even when other names share its prefix');
   const selected=await x.call(x.manager,'a',
     'sales/history?branchId=branch-a&operatorId='+newestId+'&status=COMPLETED&from=2026-10-17&to=2026-10-17');
   assert.equal(selected.status,200,JSON.stringify(selected.body));
