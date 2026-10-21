@@ -238,6 +238,34 @@ try{
       'route '+route+' rendered a placeholder or failed state');
   }
 
+  // P4: exercise real hosted finance routes without changing canonical accounting.
+  await navigateUi(page,'finance-banks');
+  await page.locator('#cloud-bank-create').waitFor({timeout:12000});
+  await page.locator('#cloud-bank-create [name=name]').fill('Carteira P4 QA');
+  await page.locator('#cloud-bank-create [name=walletKind]').selectOption('CASH');
+  await page.locator('#cloud-bank-create button[type=submit]').click();
+  await page.locator('.ops-card').filter({hasText:'Carteira P4 QA'}).first().waitFor({timeout:12000});
+  const bankFilter=page.locator('#cloud-bank-filters');
+  await bankFilter.locator('select[name=status]').selectOption('UNMATCHED');
+  await bankFilter.locator('input[name=query]').fill('Teste de conciliação');
+  await bankFilter.locator('button[type=submit]').click();
+  await page.waitForFunction(()=>document.querySelector('#cloud-bank-filters [name=query]')?.value==='Teste de conciliação',
+    null,{timeout:12000});
+  assert.equal(await page.locator('#cloud-bank-filters [name=status]').inputValue(),'UNMATCHED');
+  await page.locator('#cloud-chart-of-accounts summary').click();
+  await page.locator('#cloud-plan-group').waitFor({timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-p4-wallets-bank-filters-plan.png',fullPage:true});
+  await navigateUi(page,'finance-recurrences');
+  await page.getByRole('heading',{name:'Alertas de vencimento e recorrência'}).waitFor({timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-p4-recurrence-alerts.png',fullPage:true});
+  await navigateUi(page,'finance');
+  await page.getByRole('heading',{name:'Vencimentos — próximos 30 dias'}).waitFor({timeout:12000});
+  await page.locator('#web-finance-filters select[name=status]').selectOption('OVERDUE');
+  await page.locator('#web-finance-filters button[type=submit]').click();
+  await page.waitForFunction(()=>document.querySelector('#web-finance-filters select[name=status]')?.value==='OVERDUE',
+    null,{timeout:12000});
+  await page.screenshot({path:'qa-artifacts/pdv-p4-finance-due-dates.png',fullPage:true});
+
   // SaaS owner administration: live Workerd/D1, real cookie, browser and server checks.
   await navigateUi(page,'saas-admin');
   await page.locator('#saas-admin #saas-branch-form').waitFor({timeout:12000});
@@ -793,8 +821,10 @@ try{
   await page.locator('.ux-dialog [name=amount]').fill('12,00');
   await page.locator('.ux-dialog [name=dueDate]').fill('2026-10-25');
   await page.locator('.ux-dialog__confirm').click();
-  await page.getByText('Energia QA P4').waitFor({timeout:12000});
-  await page.locator('[data-web-settle]').first().click();
+  const energyRow=page.locator('#route-content tr').filter({hasText:'Energia QA P4'})
+    .filter({has:page.locator('[data-web-settle]')});
+  await energyRow.waitFor({timeout:12000});
+  await energyRow.locator('[data-web-settle]').click();
   await page.locator('.ux-dialog [name=amount]').fill('5,00');
   await page.locator('.ux-dialog__confirm').click();
   await page.locator('.ux-dialog').waitFor({state:'detached',timeout:12000});
