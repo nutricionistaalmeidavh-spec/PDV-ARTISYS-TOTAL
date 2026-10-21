@@ -335,3 +335,109 @@ test('P3: name-based filters and immutable cash audit link closed sale sessions 
     assert.equal(wrongBranch.status,404,'branch mismatch must not expose session data');
   }finally{x.close();}
 });
+
+test('P1 history: 1,050 historical operators remain searchable, combined queries paginate and company boundaries hold',async()=>{
+ const x=await setup();try{
+  const salesStmt=x.db.prepare(`INSERT INTO sales
+    (id,tenant_id,branch_id,operator_id,seller_id,sale_number,status,created_at,completed_at)
+    VALUES(?,?,?,?,?,?,?,?,?)`);
+  const userStmt=x.db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)');
+  for(let i=0;i<1050;i++){
+   const actor='hist-'+String(i).padStart(4,'0');
+   await userStmt.bind(actor,actor+'@example.test','Operador histórico '+i,'unused',stamp).run();
+   await salesStmt.bind('synthetic-'+i,'a','branch-a',actor,null,'SYN-'+String(i).padStart(5,'0'),
+    'COMPLETED',stamp,stamp).run();
+  }
+  const newestId='hist-1049';
+  const first=await x.read('sales/filter-options');
+  assert.equal(first.status,200);
+  assert.equal(first.body.options.operators.length,1000,
+   'Initial selector is capped, so on-demand search is mandatory.');
+  assert.equal(first.body.options.operators.some(a=>a.id===newestId),false);
+  const lookup=await x.call(x.manager,'a',
+    'sales/filter-options?branchId=branch-a&field=operators&query='+encodeURIComponent('Operador histórico 1049'));
+  assert.equal(lookup.status,200,JSON.stringify(lookup.body));
+  assert.deepEqual(lookup.body.options.operators.map(x=>x.id),[newestId]);
+  const selected=await x.call(x.manager,'a',
+    'sales/history?branchId=branch-a&operatorId='+newestId+'&status=COMPLETED&from=2026-10-17&to=2026-10-17');
+  assert.equal(selected.status,200,JSON.stringify(selected.body));
+  assert.equal(selected.body.history.total,1);assert.equal(selected.body.history.items[0].operatorId,newestId);
+  const all=await x.call(x.manager,'a','sales/history?branchId=branch-a&status=COMPLETED&limit=100&offset=1000');
+  assert.equal(all.status,200,JSON.stringify(all.body));
+  assert.equal(all.body.history.total,1050);
+  assert.equal(all.body.history.items.length,50);
+  assert.equal((await x.call(x.outsider,'b','sales/filter-options?branchId=branch-b&field=operators&query=hist-1049'))
+    .body.options.operators.length,0);
+  const invalid=await x.call(x.manager,'a','sales/filter-options?branchId=branch-a&field=arbitrary&query=a');
+  assert.equal(invalid.status,400);
+ }finally{x.close();}
+});
+
+test('P1 cash: cross-terminal closed-session audit preserves cash, refunds and permissions across retry',async()=>{
+ const x=await setup();try{
+  const product=await x.item('P1-CASH-TERMINALS',1200,8);
+  const terminalA=(await x.write('cash/open',{openingCents:500,terminalId:'COUNTER-A'}));
+  const terminalB=(await x.write('cash/open',{openingCents:8000,terminalId:'COUNTER-B'}));
+  assert.equal(terminalA.status,201);assert.equal(terminalB.status,201);
+  const idA=terminalA.body.session.id,idB=terminalB.body.session.id;
+  const opened=(await x.write('sales',{terminalId:'COUNTER-A'})).body.sale;
+  assert.equal((await x.write('sales/'+opened.id+'/items',{productId:product,quantity:1})).status,200);
+  assert.equal((await x.write('sales/'+opened.id+'/complete',
+   {payments:[{method:'CASH',amountCents:1200}],terminalId:'COUNTER-A'})).status,200);
+  assert.equal((await x.write('cash/sessions/'+idA+'/close',{countedCashCents:1700})).status,200);
+  const refundBody={reason:'Compra devolvida pelo terminal B',terminalId:'COUNTER-B',
+    refunds:[{method:'CASH',amountCents:1200}]};
+  const mutation='cross-terminal-refund-exactly-once';
+  const refund=await x.write('sales/'+opened.id+'/cancel',refundBody,mutation);
+  assert.equal(refund.status,200,JSON.stringify(refund.body));
+  assert.equal((await x.write('sales/'+opened.id+'/cancel',refundBody,mutation)).status,200);
+  assert.equal((await x.write('sales/'+opened.id+'/cancel',refundBody)).status,409);
+  const auditA=(await x.read('cash/sessions/'+idA+'/audit')).body.audit;
+  const auditB=(await x.read('cash/sessions/'+idB+'/audit')).body.audit;
+  assert.equal(auditA.session.expectedCashCents,1700);
+  assert.equal(auditA.movements.some(m=>m.type==='REVERSAL'),false);
+  assert.equal(auditB.session.expectedCashCents,6800);
+  assert.equal(auditB.movements.filter(m=>m.type==='REVERSAL').length,1);
+  assert.equal(auditA.reversals[0].cashSessionId,idB);
+  assert.equal(auditB.reversals[0].originalCashSessionId,idA);
+  assert.equal((await x.write('cash/sessions/'+idB+'/close',{countedCashCents:6800})).status,200);
+  assert.equal((await x.read('cash/sessions/'+idB+'/audit')).body.audit.session.status,'CLOSED');
+  const filter=await x.call(x.manager,'a','cash/sessions/search?branchId=branch-a&status=CLOSED&terminalId=COUNTER-B');
+  assert.equal(filter.status,200);assert.equal(filter.body.history.total,1);
+  const names=await x.call(x.manager,'a','cash/filter-options?branchId=branch-a&field=terminals&query=COUNTER-B');
+  assert.deepEqual(names.body.options.terminals.map(r=>r.id),['COUNTER-B']);
+  assert.equal((await x.call(x.outsider,'b','cash/sessions/'+idA+'/audit?branchId=branch-b')).status,404);
+ }finally{x.close();}
+});
+
+test('P2 pinned desktop cash closing nominal: original Git blob rule and SaaS session agree exactly',async()=>{
+ const {createRequire}=await import('node:module');
+ const {createHash}=await import('node:crypto');
+ const {readFileSync}=await import('node:fs');
+ const {Buffer}=await import('node:buffer');
+ const {calculateCashClosing}=createRequire(import.meta.url)(
+  '../../../packages/core/js/domains/cash/cash-rules.js');
+ const file=readFileSync(new URL('../../../packages/core/js/domains/cash/cash-rules.js',import.meta.url));
+ const gitBlob=createHash('sha1').update('blob '+file.length+'\\0').update(file).digest('hex');
+ assert.equal(gitBlob,'1141be41b2898890b42ccc77f4554ac483357c3c',
+  'Execute the exact original desktop cash rule pinned at commit 7efea9c61f75be1536a1e516e917218f2b8bf2bf');
+ const baseline=calculateCashClosing({initialCashCents:1000,movements:[
+  {type:'SUPPLY',amountCents:500,paymentMethod:'CASH'},
+  {type:'WITHDRAWAL',amountCents:200,paymentMethod:'CASH'},
+  {type:'SALE',amountCents:1500,paymentMethod:'CASH'}
+ ],countedByMethod:{CASH:2800}});
+ assert.equal(baseline.expectedCashCents,2800);assert.equal(baseline.divergenceCents,0);
+ const x=await setup();try{
+  const product=await x.item('PINNED-BASELINE',1500,3);
+  const cash=(await x.write('cash/open',{openingCents:1000})).body.session;
+  assert.equal((await x.write('cash/sessions/'+cash.id+'/supply',{amountCents:500,note:'Suprimento do baseline'})).status,200);
+  assert.equal((await x.write('cash/sessions/'+cash.id+'/withdraw',{amountCents:200,note:'Sangria do baseline'})).status,200);
+  await x.sale(product,1,[{method:'CASH',amountCents:1500}]);
+  const closing=await x.write('cash/sessions/'+cash.id+'/close',{countedCashCents:baseline.countedCashCents});
+  assert.equal(closing.status,200,JSON.stringify(closing.body));
+  const audit=(await x.read('cash/sessions/'+cash.id+'/audit')).body.audit;
+  assert.equal(audit.session.expectedCashCents,baseline.expectedCashCents);
+  assert.equal(audit.session.countedCashCents,baseline.countedCashCents);
+  assert.equal(audit.session.divergenceCents,baseline.divergenceCents);
+ }finally{x.close();}
+});
