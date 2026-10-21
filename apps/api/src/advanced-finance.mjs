@@ -80,7 +80,7 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
    const a=await row('finance_bank_accounts',t,b,accountId);
    if(!a.active||!['CASH','OTHER'].includes(a.wallet_kind))throw fail(409,'Carteira operacional indisponível.');
    if(!['OPENING','CREDIT','DEBIT'].includes(kind)||!validMoney(amountCents)||
-       str(reason,240).length<3||!/^[-\\w]{8,128}$/.test(mutationId||''))
+       str(reason,240).length<3||!/^[-\w]{8,128}$/.test(mutationId||''))
     throw fail(400,'Movimentação ou identificador de repetição inválido.');
    const signed=kind==='DEBIT'?-amountCents:amountCents,description=str(reason,240);
    const previous=await one('SELECT * FROM finance_wallet_movements WHERE tenant_id=? AND branch_id=? AND account_id=? AND mutation_id=?',
@@ -90,7 +90,7 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
       throw fail(409,'Chave de repetição pertence a outra movimentação.');
     return {id:previous.id,accountId,kind,amountCents:signed,idempotent:true};
    }
-   if(kind==='OPENING'&&await one("SELECT id FROM finance_wallet_movements WHERE tenant_id=? AND branch_id=? AND account_id=? AND kind='OPENING'",t,b,accountId))
+   if(kind==='OPENING'&&await one("SELECT id FROM finance_wallet_movements WHERE tenant_id=? AND branch_id=? AND account_id=? LIMIT 1",t,b,accountId))
     throw fail(409,'Saldo inicial já registrado. Use entrada ou saída identificada.');
    const rowId=id();
    try{
@@ -108,7 +108,7 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
   },
   async walletTransfer(t,b,user,{fromAccountId,toAccountId,amountCents,reason,mutationId}={}){
    if(fromAccountId===toAccountId||!validMoney(amountCents)||
-      str(reason,240).length<3||!/^[-\\w]{8,128}$/.test(mutationId||''))
+      str(reason,240).length<3||!/^[-\w]{8,128}$/.test(mutationId||''))
     throw fail(400,'Transferência entre carteiras inválida.');
    const from=await row('finance_bank_accounts',t,b,fromAccountId),
     to=await row('finance_bank_accounts',t,b,toAccountId);
