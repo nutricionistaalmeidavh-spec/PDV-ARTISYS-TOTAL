@@ -277,13 +277,26 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
      LEFT JOIN finance_settlement_reversals r ON r.tenant_id=e.tenant_id AND r.branch_id=e.branch_id AND r.settlement_id=f.id
      WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL AND e.due_date<=?
      GROUP BY e.id HAVING openCents>0 ORDER BY e.due_date,e.id LIMIT 300`,t,b,iso(end));
-   const totals={overdueCents:0,todayCents:0,upcomingCents:0,overdueCount:0,todayCount:0,upcomingCount:0};
-   const items=entries.map(x=>{
-    const severity=x.dueDate<day?'OVERDUE':x.dueDate===day?'TODAY':'UPCOMING';
-    const key=severity.toLowerCase();totals[key+'Cents']+=x.openCents;totals[key+'Count']++;
-    return {...x,severity};
-   });
-   return {asOf:day,through:iso(end),totals,items};
+   // Totals cover ALL canonical unsettled entries, not only the first 300 table rows.
+   const totals=await one(`WITH balances AS (
+     SELECT e.due_date AS dueDate,e.amount_cents-
+       COALESCE((SELECT SUM(f.amount_cents-COALESCE(r.amount_cents,0))
+       FROM finance_settlements f LEFT JOIN finance_settlement_reversals r
+        ON r.settlement_id=f.id AND r.tenant_id=f.tenant_id AND r.branch_id=f.branch_id
+       WHERE f.tenant_id=e.tenant_id AND f.branch_id=e.branch_id AND f.entry_id=e.id),0) AS openCents
+     FROM finance_entries e WHERE e.tenant_id=? AND e.branch_id=?
+       AND e.cancelled_at IS NULL AND e.due_date<=?
+    ) SELECT
+      COALESCE(SUM(CASE WHEN dueDate<? THEN openCents ELSE 0 END),0) AS overdueCents,
+      COALESCE(SUM(CASE WHEN dueDate=? THEN openCents ELSE 0 END),0) AS todayCents,
+      COALESCE(SUM(CASE WHEN dueDate>? THEN openCents ELSE 0 END),0) AS upcomingCents,
+      SUM(CASE WHEN dueDate<? THEN 1 ELSE 0 END) AS overdueCount,
+      SUM(CASE WHEN dueDate=? THEN 1 ELSE 0 END) AS todayCount,
+      SUM(CASE WHEN dueDate>? THEN 1 ELSE 0 END) AS upcomingCount
+      FROM balances WHERE openCents>0`,t,b,iso(end),day,day,day,day,day,day);
+   const items=entries.map(x=>({...x,
+    severity:x.dueDate<day?'OVERDUE':x.dueDate===day?'TODAY':'UPCOMING'}));
+   return {asOf:day,through:iso(end),totals,items,truncated:items.length===300};
   },
   async recurrenceAlerts(t,b,{asOf=stamp().slice(0,10),horizonDays=7}={}){
    await branch(t,b);const day=date(asOf),days=Number(horizonDays);
