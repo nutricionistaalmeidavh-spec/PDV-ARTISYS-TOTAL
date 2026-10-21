@@ -118,7 +118,7 @@ try{
     loginVisible:!!document.querySelector('[data-open-login]')?.getBoundingClientRect().width,
     registerVisible:!!document.querySelector('[data-open-register]')?.getBoundingClientRect().width
   }));
-  assert.ok(landingMobileGeometry.scroll<=landingMobileGeometry.viewport+12,
+  assert.ok(landingMobileGeometry.scroll<=landingMobileGeometry.viewport+2,
     'premium mobile landing horizontal overflow '+JSON.stringify(landingMobileGeometry));
   assert.ok(landingMobileGeometry.loginVisible&&landingMobileGeometry.registerVisible,
     'mobile login and registration CTAs must remain accessible');
