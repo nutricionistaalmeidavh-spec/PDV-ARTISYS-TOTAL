@@ -74,6 +74,17 @@ try{
   await page.goto(origin+'/',{waitUntil:'domcontentloaded'});
   await page.locator('#hero-title').waitFor({timeout:12000});
   assert.equal(await page.locator('#web-login-form').count(),0,'marketing must not render the cashier overlay');
+  // Full-page screenshots do not inherently trigger IntersectionObserver offscreen entries.
+  // Drive the real scroll lifecycle first, verify every reveal fired, then return to hero.
+  const revealTargets=page.locator('[data-reveal]');
+  for(let i=0,n=await revealTargets.count();i<n;i++){
+    await revealTargets.nth(i).scrollIntoViewIfNeeded({timeout:10000});
+    await page.waitForTimeout(65);
+  }
+  assert.equal(await page.locator('[data-reveal]:not(.in-view)').count(),0,
+    'scroll reveal must not leave invisible landing content');
+  await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
+  await page.waitForTimeout(900);
   await page.screenshot({path:'qa-artifacts/pdv-landing-desktop.png',fullPage:true});
   // Premium surface visual QA, deliberately before any authenticated session.
   assert.equal(await page.locator('.premium-laptop').count(),1,'hero requires desktop mockup');
