@@ -65,3 +65,25 @@ test('self-hosted static server resolves only exact landing and app entrypoints'
     assert.notEqual((await serveLocalPwa('/../index.html',{rootDir:dir})).status,200);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+
+test('premium landing is bundled without remote runtime dependencies or auth route changes',()=>{
+  const html=source('apps/landing/index.html');
+  const css=source('apps/landing/landing-premium.css');
+  const motion=source('apps/landing/landing-motion.js');
+  const builder=source('scripts/build-web.mjs');
+  assert.match(html,/href="\/landing-premium\.css"/);
+  assert.match(html,/src="\/landing-motion\.js"/);
+  for(const asset of ['landing-premium.css','landing-motion.js'])
+    assert.match(builder,new RegExp("copyFileSync\\(resolve\\(root,'apps/landing/"+asset.replaceAll('.','\\.')+"'" ));
+  for(const device of ['premium-laptop','premium-tablet','premium-phone-waiter','premium-phone-kitchen'])
+    assert.match(html,new RegExp('class="[^"]*'+device));
+  for(const selector of ['data-open-login','data-open-register','registration-form','landing-login-form','landing-mfa-form'])
+    assert.match(html,new RegExp(selector));
+  assert.match(motion,/IntersectionObserver/);
+  assert.match(motion,/prefers-reduced-motion/);
+  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
+  assert.doesNotMatch(motion,/fetch\(|https?:\/\//);
+  assert.doesNotMatch(css,/@import|https?:\/\//);
+  assert.match(source('apps/web/manifest.webmanifest'),/\/app\//);
+});
