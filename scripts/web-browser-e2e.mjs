@@ -108,6 +108,9 @@ try{
   await page.locator('[data-gallery-next]').click();
   assert.equal(await page.locator('#tab-cardapio').getAttribute('aria-selected'),'true','gallery next must select menu');
   assert.equal((await page.locator('[data-gallery-counter]').textContent()).trim(),'2 de 4');
+  await page.locator('#painel-cardapio img').evaluate(img=>img.decode());
+  assert.ok(await page.locator('#painel-cardapio img').evaluate(img=>img.naturalWidth>750),
+    'menu photography must be fully loaded and readable');
   await page.locator('[data-gallery-expand]').click();
   assert.equal(await page.locator('#demo-gallery-zoom').evaluate(el=>el.open),true,'gallery preview should enlarge');
   assert.equal(await page.locator('[data-gallery-zoom-content] .demo-panel').count(),1,'zoom contains selected panel');
@@ -127,9 +130,11 @@ try{
   await page.locator('#tab-mesas').click();
 
   // Premium surface visual QA, deliberately before any authenticated session.
-  assert.equal(await page.locator('.premium-laptop').count(),1,'hero requires desktop mockup');
-  assert.equal(await page.locator('.premium-tablet').count(),1,'hero requires menu mockup');
-  assert.equal(await page.locator('.premium-phone').count(),2,'hero requires waiter and kitchen mockups');
+  const mainPhoto=page.locator('.photo-hero img');
+  assert.equal(await mainPhoto.count(),1,'photo hero must use a real local product image');
+  await mainPhoto.evaluate(img=>img.decode());
+  assert.ok(await mainPhoto.evaluate(img=>img.naturalWidth>=900),'photographic mockup should load at source resolution');
+  assert.equal(await page.locator('.demo-photo-figure img').count(),4,'four photo-led feature previews');
   const premiumStyles=await page.locator('.hero').evaluate(el=>getComputedStyle(el).color);
   assert.ok(premiumStyles,'premium hero must be styled');
   await page.setViewportSize({width:390,height:844});
