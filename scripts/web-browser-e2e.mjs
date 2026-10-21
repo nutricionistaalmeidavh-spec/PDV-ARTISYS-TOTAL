@@ -138,7 +138,9 @@ try{
   const premiumStyles=await page.locator('.hero').evaluate(el=>getComputedStyle(el).color);
   assert.ok(premiumStyles,'premium hero must be styled');
   await page.setViewportSize({width:390,height:844});
+  await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
   await page.locator('#hero-title').waitFor();
+  await page.waitForTimeout(450);
   await page.screenshot({path:'qa-artifacts/pdv-landing-mobile.png',fullPage:true});
   await page.locator('[data-gallery-next]').click();
   await page.locator('.demo-frame .demo-photo-panel:not([hidden]) img').evaluate(img=>img.decode());
