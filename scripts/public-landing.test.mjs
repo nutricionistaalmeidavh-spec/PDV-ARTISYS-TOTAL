@@ -127,3 +127,28 @@ test('marketing photos are real local WebP files and four gallery images can enl
   assert.equal((html.match(/class="demo-panel demo-photo-panel"/g)||[]).length,4);
   assert.match(source('scripts/build-web.mjs'),/cpSync\(resolve\(root,'apps\/landing\/media'/);
 });
+
+
+test('hero prioritizes the real integrated mockup, with visible text and no unwanted disclaimers',()=>{
+  const html=source('apps/landing/index.html');
+  const css=source('apps/landing/landing-gallery.css');
+  assert.match(html,/<section class="hero premium-hero container"/);
+  assert.match(html,/<h1 id="hero-title">Tudo conectado/);
+  assert.match(html,/class="hero-visual premium-stage"/);
+  assert.match(html,/src="\/media\/pdv-integrado\.webp"/);
+  assert.match(html,/<section class="trust-strip"[\s\S]*?<strong>Cardápio<\/strong>[\s\S]*?<strong>Mesas<\/strong>/);
+  assert.match(css,/\.premium-hero::before\{/);
+  assert.match(css,/\.premium-hero \.premium-stage \.photo-hero img\{/);
+  assert.match(css,/@media\(max-width:760px\)/);
+  for(const label of [
+    'Apresentação visual ilustrativa',
+    'As prévias são ilustrativas',
+    'Demonstração ilustrativa',
+    'Dados fictícios',
+    'Prévia ilustrativa;',
+    'Deslize para o lado ou use as setas'
+  ])assert.ok(!html.includes(label),label+' must not appear');
+  for(const id of ['registration-form','landing-login-form','landing-mfa-form','demo-gallery-zoom']){
+    assert.match(html,new RegExp('id="'+id+'"'));
+  }
+});
