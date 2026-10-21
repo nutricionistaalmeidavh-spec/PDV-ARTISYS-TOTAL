@@ -650,11 +650,16 @@
 
   async function renderWebFinance(filters={}){
     await ready();
-    const selected={query:String(filters.query||'').slice(0,100),kind:String(filters.kind||'')};
-    const [summary,entries]=await Promise.all([api.financeSummary(),api.financeEntries(selected)]);
+    const selected={query:String(filters.query||'').slice(0,100),
+      kind:String(filters.kind||''),status:String(filters.status||'')};
+    const today=root.PdvBusinessDate?.localBusinessDate?.(new Date())||new Date().toISOString().slice(0,10);
+    const [summary,entries,dueResponse]=await Promise.all([
+      api.financeSummary(),api.financeEntries(selected),
+      api.request('/api/v1/finance-advanced/due?asOf='+encodeURIComponent(today)+'&horizonDays=30')
+    ]);
+    const due=dueResponse.due;
     if(!routeActive('finance'))return;
     const permitted=root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'finance.manage')===true;
-    const today=new Date().toISOString().slice(0,10);
     const items=entries.map(entry=>`<tr>
       <td><strong>${escapeHtml(entry.description)}</strong>
         <small class="ops-muted">${escapeHtml(entry.kind==='PAYABLE'?'A pagar':'A receber')}</small></td>
@@ -671,7 +676,18 @@
       ${metric('A receber',money(summary.receivableOpenCents))}
       ${metric('Recebido',money(summary.receivableSettledCents))}
       ${metric('Pago',money(summary.payableSettledCents))}
-    </div><section class="ops-card">
+    </div><section class="ops-card"><h2>Vencimentos — próximos 30 dias</h2>
+      <div class="ops-metrics">
+        ${metric('Atrasado',money(due.totals.overdueCents),String(due.totals.overdueCount)+' conta(s)')}
+        ${metric('Vence hoje',money(due.totals.todayCents),String(due.totals.todayCount)+' conta(s)')}
+        ${metric('Próximos 30 dias',money(due.totals.upcomingCents),String(due.totals.upcomingCount)+' conta(s)')}
+      </div><div class="ops-table-wrap"><table class="ops-table">
+      <thead><tr><th>Descrição</th><th>Tipo</th><th>Data</th><th>Pendente</th><th>Alerta</th></tr></thead><tbody>
+      ${due.items.slice(0,30).map(item=>`<tr><td>${escapeHtml(item.description)}</td>
+        <td>${escapeHtml(item.kind==='PAYABLE'?'A pagar':'A receber')}</td>
+        <td>${dateOnly(item.dueDate)}</td><td>${money(item.openCents)}</td>
+        <td>${escapeHtml(item.severity==='OVERDUE'?'Atrasado':item.severity==='TODAY'?'Vence hoje':'Próximo')}</td></tr>`).join('')||'<tr><td colspan="5">Nenhum vencimento aberto neste intervalo.</td></tr>'}
+      </tbody></table></div></section><section class="ops-card">
       <div class="ops-card-head"><div><h2>Lançamentos</h2>
         <p>Contas manuais. Vendas do PDV são contabilizadas nos relatórios sem duplicar recebimentos.</p></div>
         ${permitted?'<button type="button" class="ops-primary" id="web-finance-new">Novo lançamento</button>':''}
@@ -681,6 +697,9 @@
         <label>Tipo<select name="kind" class="ops-input">
           <option value="">Todos</option><option value="PAYABLE" ${selected.kind==='PAYABLE'?'selected':''}>A pagar</option>
           <option value="RECEIVABLE" ${selected.kind==='RECEIVABLE'?'selected':''}>A receber</option>
+        </select></label>
+        <label>Situação<select name="status" class="ops-input">
+          ${[['','Todas'],['OPEN','Em aberto'],['PARTIAL','Parcial'],['SETTLED','Liquidado'],['CANCELLED','Cancelado'],['OVERDUE','Atrasado']].map(([key,label])=>`<option value="${key}" ${selected.status===key?'selected':''}>${label}</option>`).join('')}
         </select></label><button class="ops-secondary" type="submit">Filtrar</button>
       </form><div class="ops-table-wrap"><table class="ops-table"><thead>
         <tr><th>Descrição</th><th>Vencimento</th><th>Valor</th><th>Em aberto</th><th>Situação</th><th>Ações</th></tr>
@@ -691,7 +710,7 @@
     content.querySelector('#web-finance-filters')?.addEventListener('submit',event=>{
       event.preventDefault();
       const form=event.currentTarget;
-      void renderWebFinance({query:form.elements.query.value,kind:form.elements.kind.value});
+      void renderWebFinance({query:form.elements.query.value,kind:form.elements.kind.value,status:form.elements.status.value});
     });
     content.querySelector('#web-finance-new')?.addEventListener('click',async()=>{
       if(!ux?.openFormDialog)return;
