@@ -74,3 +74,32 @@ test('advanced finance HTTP route generates recurring payable and reports canoni
   assert.equal(cashflow.data.cashflow.projectedPayableCents,9500);
  }finally{s.close();}
 });
+test('P4 HTTP: wallet roles, date alerts, filtered bank history and matching lookup are tenant scoped',async()=>{
+ const s=await setup();try{
+  const owner=await s.login('owner'),viewer=await s.login('viewer'),other=await s.login('other');
+  const base='/api/v1/tenants/a/finance-advanced/';
+  const get=(path,cookie=owner)=>s.call(base+path+'?branchId=branch-a',{cookie});
+  const wallet=await s.call(base+'accounts',{cookie:owner,method:'POST',body:{branchId:'branch-a',name:'Caixa físico',walletKind:'CASH'}});
+  assert.equal(wallet.status,201,wallet.data.error);
+  assert.equal(wallet.data.account.walletKind,'CASH');
+  const accounts=await get('accounts');
+  assert.equal(accounts.data.accounts[0].walletKind,'CASH');
+  assert.equal((await get('due?asOf=2026-10-17',viewer)).status,200);
+  const due=await get('due?unused=1&asOf=2026-10-17');
+  assert.equal(due.status,200,due.data.error);
+  assert.equal(due.data.due.totals.overdueCents,0);
+  const alerts=await get('recurrences/alerts?asOf=2026-10-17');
+  assert.equal(alerts.status,200,alerts.data.error);
+  assert.equal(alerts.data.alerts.items.length,0);
+  const tx=await get('transactions?status=UNMATCHED&direction=OUT&from=2026-10-01&to=2026-10-31');
+  assert.equal(tx.status,200,tx.data.error);
+  assert.deepEqual(tx.data.transactions,[]);
+  assert.equal((await get('transactions?direction=INVALID')).status,400);
+  assert.equal((await get('due?asOf=2026-10-17&horizonDays=500')).status,400);
+  assert.equal((await s.call(base+'due?branchId=branch-b&asOf=2026-10-17',{cookie:owner})).status,404);
+  assert.equal((await s.call(base+'due?branchId=branch-a&asOf=2026-10-17',{cookie:other})).status,404);
+  assert.equal((await s.call(base+'recurrences/alerts?branchId=branch-a&asOf=2026-10-17',{cookie:other})).status,404);
+  assert.equal((await s.call(base+'settlement-suggestions/missing?branchId=branch-a',{cookie:owner})).status,404);
+  assert.equal((await s.call(base+'accounts',{cookie:viewer,method:'POST',body:{branchId:'branch-a',name:'Denegado',walletKind:'BANK'}})).status,403);
+ }finally{s.close();}
+});
