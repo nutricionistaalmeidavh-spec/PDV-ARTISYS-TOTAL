@@ -78,7 +78,7 @@ test('P4 HTTP: wallet roles, date alerts, filtered bank history and matching loo
  const s=await setup();try{
   const owner=await s.login('owner'),viewer=await s.login('viewer'),other=await s.login('other');
   const base='/api/v1/tenants/a/finance-advanced/';
-  const get=(path,cookie=owner)=>s.call(base+path+'?branchId=branch-a',{cookie});
+  const get=(path,cookie=owner)=>s.call(base+path+(path.includes('?')?'&':'?')+'branchId=branch-a',{cookie});
   const wallet=await s.call(base+'accounts',{cookie:owner,method:'POST',body:{branchId:'branch-a',name:'Caixa físico',walletKind:'CASH'}});
   assert.equal(wallet.status,201,wallet.data.error);
   assert.equal(wallet.data.account.walletKind,'CASH');
