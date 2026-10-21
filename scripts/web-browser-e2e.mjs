@@ -141,6 +141,8 @@ try{
   await page.locator('#hero-title').waitFor();
   await page.screenshot({path:'qa-artifacts/pdv-landing-mobile.png',fullPage:true});
   await page.locator('[data-gallery-next]').click();
+  await page.locator('.demo-frame .demo-photo-panel:not([hidden]) img').evaluate(img=>img.decode());
+  await page.waitForTimeout(650); // Record settled visual state, not its entry fade.
   await page.locator('.demo-frame').screenshot({path:'qa-artifacts/pdv-landing-gallery-mobile.png'});
   await page.locator('#tab-mesas').click();
   const landingMobileGeometry=await page.evaluate(()=>({
