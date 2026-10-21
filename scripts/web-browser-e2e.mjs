@@ -281,6 +281,11 @@ try{
   for(const route of ['finance','finance-recurrences','management','finance-banks']){
     await page.locator('.ops-page nav [data-route="'+route+'"]').click();
     await page.locator('body[data-active-route="'+route+'"]').waitFor({timeout:12000});
+    await page.waitForFunction(expected=>{
+      const host=document.querySelector('#route-content');
+      return document.body.dataset.activeRoute===expected&&Boolean(host?.querySelector('h1'))&&
+        !host.querySelector('.ops-loader')&&!/^Carregando\b/i.test(host.innerText.trim());
+    },route,{timeout:20000});
     if(route!=='finance-banks')await navigateUi(page,'finance-banks');
   }
   assert.doesNotMatch(await page.locator('#route-content').innerText(),/enviar ao D1/i);
@@ -289,8 +294,12 @@ try{
   console.log('PASS: credit quick customer and finance navigation buttons.');
   await page.locator('#cloud-bank-create [name=name]').fill('Carteira P4 QA');
   await page.locator('#cloud-bank-create [name=walletKind]').selectOption('CASH');
+  const walletCreated=page.waitForResponse(response=>response.request().method()==='POST'&&
+    new URL(response.url()).pathname.endsWith('/finance-advanced/accounts'),{timeout:20000});
   await page.locator('#cloud-bank-create button[type=submit]').click();
-  await page.locator('.ops-card').filter({hasText:'Carteira P4 QA'}).first().waitFor({timeout:12000});
+  const walletResponse=await walletCreated;
+  assert.equal(walletResponse.status(),201,await walletResponse.text());
+  await page.locator('.ops-card').filter({hasText:'Carteira P4 QA'}).first().waitFor({timeout:20000});
 
   // P0: two independent non-bank wallets, a genuine opening and atomic transfer.
   await page.locator('#cloud-bank-create [name=name]').fill('Carteira B P4 QA');
