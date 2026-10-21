@@ -284,3 +284,54 @@ test('P1 regression: two terminals cannot reverse the same item twice, even with
   assert.equal(await scalar(x.db,'SELECT SUM(amount_cents) AS n FROM sale_refund_movements WHERE sale_id=?',saleId),1000);
  }finally{x.close();}
 });
+
+test('P3: name-based filters and immutable cash audit link closed sale sessions to later refunds',async()=>{
+  const x=await setup();try{
+    const productId=await x.item('P3-AUDIT',1000,8);
+    const original=(await x.write('cash/open',{openingCents:1000})).body.session;
+    const saleId=await x.sale(productId,2,[{method:'CASH',amountCents:2000}]);
+    assert.equal((await x.write('cash/sessions/'+original.id+'/close',{countedCashCents:3000})).status,200);
+    const later=(await x.write('cash/open',{openingCents:3000})).body.session;
+    const cancelled=await x.write('sales/'+saleId+'/cancel',{
+      reason:'Estorno da venda em caixa encerrado',refunds:[{method:'CASH',amountCents:2000}]
+    });
+    assert.equal(cancelled.status,200,JSON.stringify(cancelled.body));
+    const salesFilters=await x.read('sales/filter-options');
+    assert.equal(salesFilters.status,200,JSON.stringify(salesFilters.body));
+    assert.ok(salesFilters.body.options.sellers.some(row=>row.id==='manager'&&row.name==='manager'));
+    assert.ok(salesFilters.body.options.operators.some(row=>row.id==='manager'));
+    assert.ok(salesFilters.body.options.products.some(row=>row.id===productId&&row.name==='Item P3-AUDIT'));
+    const salesHistory=await x.call(x.manager,'a',
+      'sales/history?branchId=branch-a&sellerId=manager&operatorId=manager&productId='+encodeURIComponent(productId));
+    assert.equal(salesHistory.status,200,JSON.stringify(salesHistory.body));
+    assert.equal(salesHistory.body.history.total,1);
+    const cashFilters=await x.read('cash/filter-options');
+    assert.equal(cashFilters.status,200,JSON.stringify(cashFilters.body));
+    assert.ok(cashFilters.body.options.operators.some(row=>row.id==='manager'));
+    assert.ok(cashFilters.body.options.terminals.some(row=>row.id==='DEFAULT'));
+    const firstAudit=await x.read('cash/sessions/'+original.id+'/audit');
+    assert.equal(firstAudit.status,200,JSON.stringify(firstAudit.body));
+    assert.equal(firstAudit.body.audit.session.status,'CLOSED');
+    assert.equal(firstAudit.body.audit.session.expectedCashCents,3000);
+    assert.equal(firstAudit.body.audit.movements.filter(m=>m.type==='REVERSAL').length,0,
+      'a later refund must not mutate the old cash ledger');
+    const reversal=firstAudit.body.audit.reversals.find(row=>row.saleId===saleId);
+    assert.ok(reversal,'return must be discoverable from original closed session');
+    assert.equal(reversal.originalCashSessionId,original.id);
+    assert.equal(reversal.cashSessionId,later.id);
+    assert.equal(reversal.amountCents,2000);
+    assert.equal((await x.write('cash/sessions/'+later.id+'/close',{countedCashCents:1000})).status,200);
+    const laterAudit=await x.read('cash/sessions/'+later.id+'/audit');
+    assert.equal(laterAudit.status,200,JSON.stringify(laterAudit.body));
+    assert.equal(laterAudit.body.audit.session.expectedCashCents,1000);
+    assert.equal(laterAudit.body.audit.session.status,'CLOSED','both original and refund sessions can be consulted after closing');
+    assert.ok(laterAudit.body.audit.movements.some(row=>row.type==='REVERSAL'&&row.saleId===saleId));
+    assert.ok(laterAudit.body.audit.reversals.some(row=>row.originalCashSessionId===original.id));
+    const outsider=await x.call(x.outsider,'b',
+      'cash/sessions/'+original.id+'/audit?branchId=branch-b');
+    assert.equal(outsider.status,404,'another tenant cannot access the cash session');
+    const wrongBranch=await x.call(x.manager,'a',
+      'cash/sessions/'+original.id+'/audit?branchId=branch-b');
+    assert.equal(wrongBranch.status,404,'branch mismatch must not expose session data');
+  }finally{x.close();}
+});

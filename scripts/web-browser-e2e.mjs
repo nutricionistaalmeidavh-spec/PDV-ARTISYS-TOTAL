@@ -489,6 +489,19 @@ try{
     return (await api.openCash(localStorage.getItem('artisys.pdv.webTerminalId.v1')))?.id;
   });
   assert.equal(firstStillOpen,firstCash,'closing terminal B cannot close terminal A');
+  // P3: inspect a genuinely closed terminal through the public cashier UI.
+  await secondPage.locator('#web-cash-history-search summary').click();
+  const terminalSelect=secondPage.locator('#web-cash-search-form select[name=terminalId]');
+  await terminalSelect.selectOption(secondTerminal);
+  assert.equal(await secondPage.locator('#web-cash-search-form input[name=operatorId]').count(),0,
+    'historical operator filters must use names, never raw ID text fields');
+  await secondPage.locator('#web-cash-search-form button[type=submit]').click();
+  const closedAudit=secondPage.locator('[data-cash-audit="'+secondCash+'"]');
+  await closedAudit.waitFor({timeout:12000});
+  await closedAudit.click();
+  await secondPage.getByRole('heading',{name:'Movimentações da sessão'}).waitFor({timeout:12000});
+  await secondPage.getByRole('heading',{name:'Estornos vinculados a esta sessão'}).waitFor({timeout:12000});
+  await secondPage.screenshot({path:'qa-artifacts/pdv-parity-cash-closed-audit.png',fullPage:true});
   await secondContext.close();
 
   // A suspended sale must remain reachable after its automatic dialog is
@@ -555,6 +568,12 @@ try{
   // Parity: the original sales-history route now offers server-side search and paging.
   await navigateUi(page,'sales');
   await page.locator('#web-sales-filter').waitFor({timeout:12000});
+  for(const field of ['sellerId','operatorId','customerId','productId']){
+    assert.equal(await page.locator('#web-sales-filter select[name="'+field+'"]').count(),1,
+      'P3 '+field+' should be chosen from historical names');
+    assert.equal(await page.locator('#web-sales-filter input[name="'+field+'"]').count(),0,
+      'P3 '+field+' must not expose a raw ID input');
+  }
   // Filter by the sale actually completed above; prior Workerd smoke leaves
   // legitimate independent sales in the same test D1.
   await page.locator('#web-sales-filter [name=query]').fill(completedSaleNumber);

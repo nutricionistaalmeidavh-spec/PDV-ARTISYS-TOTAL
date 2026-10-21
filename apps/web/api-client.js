@@ -79,6 +79,7 @@
         else if(original==='/api/v1/inventory/receipts')operation='inventory/receipts';
         else if(original.startsWith('/api/v1/purchasing/'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/cash/open')operation='cash';
+        else if(original==='/api/v1/cash/filter-options')operation='cash/filter-options';
         else if(original==='/api/v1/cash/sessions')operation=method==='POST'?'cash/open':'cash/sessions';
         else if(original.startsWith('/api/v1/cash/sessions/'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/finance/'))operation=original.slice(apiRoot.length);
@@ -173,6 +174,8 @@
       if(operation==='cash/open')return {session:value.session};
       if(operation==='cash/sessions')return value.sessions;
       if(operation==='cash/sessions/search')return value.history;
+      if(operation==='cash/filter-options')return value.options;
+      if(/^cash\/sessions\/[^/]+\/audit$/.test(operation))return value.audit;
       if(/^cash\/sessions\/[^/]+\/closing-document$/.test(operation))return value;
       if(operation.startsWith('cash/sessions/'))return operation.endsWith('/movements')?value.movements:value.result;
       if(/^sales\/[^/]+\/(customer|seller)$/.test(operation))return value.sale;
@@ -192,6 +195,7 @@
       if(operation==='reports/sales.csv')return value;
       if(operation==='sales'||operation.startsWith('sales?'))return method==='GET'?value.sales:value.sale;
       if(operation==='sales/history')return value.history;
+      if(operation==='sales/filter-options')return value.options;
       if(operation==='returns')return method==='GET'?value.returns:value.return;
       if(/^sales\/[^/]+\/returns\/quote$/.test(operation))return value.quote;
       if(/^sales\/[^/]+\/returns$/.test(operation))return method==='GET'?value.returns:value.result;
@@ -364,12 +368,15 @@
     }
     cashSessions(filters = {}) { return this.request(`/api/v1/cash/sessions${this.params(filters)}`); }
     cashSessionsSearch(filters = {}) { return this.request(`/api/v1/cash/sessions/search${this.params(filters)}`); }
+    cashFilterOptions() { return this.request('/api/v1/cash/filter-options'); }
+    cashSessionAudit(sessionId) { return this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/audit`); }
     cashMovements(sessionId) { return this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/movements`); }
 
     checkoutDocuments(query = '') { return this.request(`/api/v1/checkout/documents${this.params({query:query||undefined})}`); }
     openCheckoutDocument(type, id) { return this.request(`/api/v1/checkout/documents/${String(type||'').toLowerCase()}/${encodeURIComponent(id)}/open`, { method:'POST', body:this.webMode?{terminalId:this.config?.terminalId||webTerminalIdentity()}:{} }); }
     sales(status = '', limit = 50) { return this.request(`/api/v1/sales${this.params({status,limit})}`); }
     salesHistory(filters = {}) { return this.request(`/api/v1/sales/history${this.params(filters)}`); }
+    salesFilterOptions() { return this.request('/api/v1/sales/filter-options'); }
     compareSalesPeriods(filters = {}) { return this.request(`/api/v1/reports/compare${this.params(filters)}`); }
     dailySalesTrend(filters={}){return this.request('/api/v1/reports/daily-trend'+this.params(filters));}
     sellerSalesRanking(filters={}){return this.request('/api/v1/reports/commission-ranking'+this.params(filters));}
