@@ -268,7 +268,9 @@ try{
   await page.locator('#credit-customer-form [name=creditLimit]').fill('150,00');
   await page.locator('#credit-customer-form button[type=submit]').click();
   await page.locator('#credit-customer-form').waitFor({state:'detached',timeout:12000});
-  assert.equal(await page.locator('[data-credit-form] [name=customerId] option:checked').textContent(),'Cliente crediário QA');
+  await page.waitForFunction(expected=>
+    document.querySelector('[data-credit-form] [name=customerId] option:checked')?.textContent===expected,
+  'Cliente crediário QA',{timeout:20000});
   const customerReadsBefore=await page.evaluate(()=>performance.getEntriesByType('resource').filter(entry=>/\/customers(?:\?|$)/.test(new URL(entry.name).pathname+new URL(entry.name).search)).length);
   await navigateUi(page,'financial-management');
   await navigateUi(page,'credit');
