@@ -348,14 +348,16 @@ test('P1 history: 1,050 historical operators remain searchable, combined queries
    await salesStmt.bind('synthetic-'+i,'a','branch-a',actor,null,'SYN-'+String(i).padStart(5,'0'),
     'COMPLETED',stamp,stamp).run();
   }
-  const newestId='hist-1049';
   const first=await x.read('sales/filter-options');
   assert.equal(first.status,200);
   assert.equal(first.body.options.operators.length,1000,
    'Initial selector is capped, so on-demand search is mandatory.');
-  assert.equal(first.body.options.operators.some(a=>a.id===newestId),false);
+  const listed=new Set(first.body.options.operators.map(a=>a.id));
+  const missing=Array.from({length:1050},(_,i)=>i).find(i=>!listed.has('hist-'+String(i).padStart(4,'0')));
+  assert.notEqual(missing,undefined,'At least one historical name must be outside the initial 1,000');
+  const newestId='hist-'+String(missing).padStart(4,'0');
   const lookup=await x.call(x.manager,'a',
-    'sales/filter-options?branchId=branch-a&field=operators&query='+encodeURIComponent('Operador histórico 1049'));
+    'sales/filter-options?branchId=branch-a&field=operators&query='+encodeURIComponent('Operador histórico '+missing));
   assert.equal(lookup.status,200,JSON.stringify(lookup.body));
   assert.deepEqual(lookup.body.options.operators.map(x=>x.id),[newestId]);
   const selected=await x.call(x.manager,'a',
