@@ -41,6 +41,7 @@
       '<section class="data-card" role="tabpanel" id="web-settings-panel-company" aria-labelledby="web-settings-tab-company">'+
       '<h2>Empresa e filial</h2>'+errorMarkup(resultError(contextResult)||resultError(branchesResult))+
       '<p><strong>'+esc(context.name||'Estabelecimento')+'</strong> · '+esc(branch?.name||'Filial selecionada')+'</p>'+
+      (can('settings.manage')?'<p><button class="secondary-button" type="button" data-settings-profile>Perfil da loja</button></p>':'')+
       '<h3>Identificação nos comprovantes</h3><p>Nome, endereço, telefone e logotipo impressos nos comprovantes desta filial. Alterações valem para novas vendas; comprovantes anteriores preservam a identificação original.</p>'+
       errorMarkup(resultError(brandingResult))+
       (branding?'<form class="field-grid" data-settings-branding><label class="field"><span>Nome no comprovante</span><input name="name" maxlength="80" required value="'+esc(branding.name)+'"'+disabled+'></label>'+
@@ -57,13 +58,14 @@
       '<p>Configure papel, impressora, leitor, balança e gaveta para este navegador. A conexão com um equipamento só é solicitada quando você escolher conectá-lo.</p>'+
       '<button type="button" class="primary-button" data-settings-devices>Configurar dispositivos</button></section>'+
       '<section class="data-card" role="tabpanel" id="web-settings-panel-modules" aria-labelledby="web-settings-tab-modules" hidden><h2>Áreas da operação</h2>'+
-      '<p>Balcão, Caixa, Cardápio, Estoque, Clientes e Gestão usam a mesma base. Alimentação reúne mesas, pedidos, cozinha, personalizações de pizza e venda por peso. Ative as áreas que utilizar; esta escolha não cria outra empresa nem uma cobrança.</p>'+errorMarkup(resultError(modulesResult))+
+      '<p>Balcão, Caixa, Cardápio, Estoque, Clientes e Gestão usam a mesma base. Alimentação acrescenta mesas, comandas, pedidos e cozinha. Personalizações, fichas técnicas e unidade de venda pertencem ao produto. Ative as áreas que utilizar; esta escolha não cria outra empresa nem uma cobrança.</p>'+errorMarkup(resultError(modulesResult))+
       modules.map(item=>'<article class="module-family"><h3>'+esc(item.name)+'</h3><p>'+esc(item.description)+'</p><label><input type="checkbox" data-settings-module="'+esc(item.id)+'" '+(item.enabled?'checked ':'')+(!can('modules.manage')?'disabled':'')+'> Área ativa</label></article>').join('')+
       '<p data-module-feedback role="status" aria-live="polite"></p></section>'+
       '<section class="data-card" role="tabpanel" id="web-settings-panel-security" aria-labelledby="web-settings-tab-security" hidden><h2>Sua conta e segurança</h2>'+
       '<p>Consulte suas sessões e encerre o acesso de outros navegadores em Acessos. Senha e autenticação em duas etapas são gerenciadas na sua conta.</p>'+
       '<button class="secondary-button" type="button" data-settings-route="access">Ver sessões</button> <a class="secondary-button" href="/conta/">Abrir segurança da conta</a></section></section>';
     routeButtons(host,options);
+    host.querySelector('[data-settings-profile]')?.addEventListener('click',()=>void root.PdvR4AdvancedUi?.show?.({section:'segments'}));
     host.querySelector('[data-settings-refresh]')?.addEventListener('click',()=>void render(host,api,options));
     const tabButtons=Array.from(host.querySelectorAll('[data-settings-tab]'));
     function selectTab(button){

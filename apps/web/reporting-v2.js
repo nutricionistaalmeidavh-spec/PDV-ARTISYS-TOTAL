@@ -114,7 +114,8 @@
   function markActive() {
     document.body.dataset.activeRoute = 'reports';
     document.body.classList.remove('theme-home');
-    document.querySelectorAll('[data-route]').forEach(node => node.classList.toggle('active',node.dataset.route === 'reports'));
+    const parent=api.webMode?root.PdvWebNavigation.parent('reports'):'reports';
+    document.querySelectorAll('[data-route]').forEach(node => node.classList.toggle('active',node.dataset.route === parent));
   }
   function costBasisLabel(value) {
     if (value === 'HISTORICAL_SNAPSHOT') return 'Histórico (snapshot)';

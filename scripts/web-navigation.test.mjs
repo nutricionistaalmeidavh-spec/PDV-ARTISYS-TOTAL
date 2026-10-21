@@ -21,6 +21,7 @@ test('hosted route checks reject anonymous, unknown and unauthorized access and 
   assert.equal(navigation.sidebar(null,policy).length,0);
   assert.equal(navigation.canAccess(user('CASHIER'),'saas-admin',policy),false);
   assert.equal(navigation.canAccess(user('CASHIER'),'inventory',policy),false);
+  assert.equal(navigation.canAccess(user('CASHIER'),'access',policy),true,'staff can reach only their own account sessions');
   assert.equal(navigation.canAccess(user('OWNER'),'unknown',policy),false);
   assert.equal(navigation.canAccess(user('OWNER'),'WHOLESALE',policy,{moduleState:{WHOLESALE:false}}),false);
 });

@@ -8,7 +8,6 @@
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money=v=>(Number(v||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const can=p=>Boolean(root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,p));
-  const safe=async f=>{try{return await f();}catch{return null;}};
   const r4=(path,method='GET',body)=>api.request('/api/v1/restaurant'+path,{method,body});
   const uid=v=>encodeURIComponent(String(v||''));
   const select=(name,rows,labelFn=x=>x.name,empty='Selecione',required=true)=>
@@ -16,12 +15,11 @@
     rows.map(v=>'<option value="'+esc(v.id)+'">'+esc(labelFn(v))+'</option>').join('')+'</select>';
   const field=(name,title,type='text',attr='')=>'<label class="field"><span>'+esc(title)+'</span><input name="'+esc(name)+'" type="'+type+'" '+attr+'></label>';
   const toast=(msg,bad=false)=>root.PdvToast?.show?.(msg,bad?'error':'success');
-  let sessionId='',recipeProductId='',pizzaProductId='',recipeLoadToken=0,model={};
+  let sessionId='',recipeProductId='',pizzaProductId='',recipeLoadToken=0,showGeneration=0,editorOrigin='FOOD',model={};
   const sections=[
     {id:'service',name:'Comandas e divisão'},
     {id:'production',name:'KDS e impressoras'},
     {id:'pizza',name:'Opções de pizza'},
-    {id:'weight',name:'Venda por peso'},
     {id:'recipe',name:'Fichas técnicas'},
     {id:'segments',name:'Perfil da loja'}
   ];
@@ -44,21 +42,32 @@
       return {code,name,priceCents:eurosToCents(amount)};
     });
   }
-  async function load(){
-    const [products,stations,routes,tickets,profiles,onboard,orders,tables,ticketClock,modules,position]=await Promise.all([
-      safe(()=>api.products(false)),safe(()=>r4('/kitchen/stations').then(x=>x.stations)),
-      safe(()=>r4('/kitchen/routes').then(x=>x.routes)),safe(()=>r4('/kitchen/station-tickets').then(x=>x.tickets)),
-      safe(()=>r4('/pizzeria/profiles').then(x=>x.profiles)),
-      safe(()=>api.request('/api/v1/onboarding/segments')),
-      safe(()=>r4('/orders').then(x=>x.orders)),safe(()=>r4('/tables').then(x=>x.tables)),
-      safe(()=>r4('/tickets/time-zone')),safe(()=>api.modules()),sessionId?safe(()=>r4('/sessions/'+uid(sessionId)+'/position').then(x=>x.position)):null
-    ]);
-    model={products:products||[],stations:stations||[],routes:routes||[],tickets:tickets||[],
-      profiles:profiles||[],onboard:onboard||{},modules:modules||[],position:position||null,orders:orders||[],tables:tables||[],ticketClock:ticketClock||{timeZone:'America/Sao_Paulo'}};
-    model.recipe=recipeProductId?(await api.request('/api/v1/recipes/'+uid(recipeProductId))).recipe:null;
-    model.sessionOrders=model.orders.filter(o=>o.table_session_id===sessionId);
-    model.orderItems=model.sessionOrders.filter(o=>o.status==='DELIVERED')
-      .flatMap(o=>(o.items||[]).map(i=>({...i,orderId:o.id})));
+  async function load(target,productId){
+    const result={products:[],stations:[],routes:[],tickets:[],profiles:[],onboard:{},modules:[],position:null,orders:[],tables:[],ticketClock:{timeZone:'America/Sao_Paulo'},recipe:null};
+    const tasks=[];
+    const read=(key,request)=>tasks.push(request.then(value=>{result[key]=value;}));
+    if(target!=='segments')read('products',api.products(false));
+    if(target==='pizza'&&pizzaProductId)read('profiles',r4('/pizzeria/products/'+uid(pizzaProductId)).then(x=>x.profile?[x.profile]:[]));
+    if(target==='recipe'&&productId)read('profiles',api.productConfiguration(productId).then(x=>x.pizzaProfile?[x.pizzaProfile]:[]));
+    if(target==='recipe'&&productId)read('recipe',api.request('/api/v1/recipes/'+uid(productId)).then(x=>x.recipe));
+    if(target==='service'&&sessionId){
+      read('orders',r4('/orders').then(x=>x.orders));
+      read('tables',r4('/tables').then(x=>x.tables));
+      read('position',r4('/sessions/'+uid(sessionId)+'/position').then(x=>x.position));
+    }
+    if(target==='production'){
+      if(can('settings.manage'))read('ticketClock',r4('/tickets/time-zone'));
+      read('stations',r4('/kitchen/stations').then(x=>x.stations));
+      read('routes',r4('/kitchen/routes').then(x=>x.routes));
+      read('tickets',r4('/kitchen/station-tickets').then(x=>x.tickets));
+    }
+    if(target==='segments'){
+      read('onboard',api.request('/api/v1/onboarding/segments'));
+    }
+    await Promise.all(tasks);
+    result.sessionOrders=result.orders.filter(o=>o.table_session_id===sessionId);
+    result.orderItems=result.sessionOrders.filter(o=>o.status==='DELIVERED').flatMap(o=>(o.items||[]).map(i=>({...i,orderId:o.id})));
+    return result;
   }
   function service(){
     const active=model.tables.filter(t=>t.sessionId&&t.sessionId!==sessionId);
@@ -109,7 +118,7 @@
     return '<section class="data-card"><h2>Personalização de pizza</h2>'+
       '<p>Preços em reais. Uma opção por linha, por exemplo: Calabresa=42,00.</p>'+
       '<div class="restaurant-list">'+model.profiles.map(p=>'<div class="restaurant-row">'+esc(model.products.find(x=>x.id===p.productId)?.name||p.productId)+' · '+esc(p.policy)+'</div>').join('')+'</div>'+
-      (can('products.manage')?'<form data-r4-advanced="pizza" class="vertical-form"><label class="field"><span>Produto base</span>'+select('productId',model.products)+'</label>'+
+      (can('products.manage')?'<form data-r4-advanced="pizza" class="vertical-form"><label class="field"><span>Produto base</span>'+'<input type="hidden" name="productId" value="'+esc(pizzaProductId)+'"><strong>'+esc(model.products.find(p=>p.id===pizzaProductId)?.name||'Selecione o produto no Cardápio')+'</strong></label>'+
       '<label class="field"><span>Política</span><select name="policy"><option value="HIGHEST_FLAVOR">Cobrar sabor mais caro</option><option value="PROPORTIONAL_AVERAGE">Média dos sabores</option></select></label>'+
       '<label class="field"><span>Como os preços são definidos?</span><select name="pricingMode"><option value="DESKTOP_DELTAS">Preço base do produto + acréscimos</option><option value="ABSOLUTE_OPTIONS">Tabela de preços finais por opção</option></select></label>'+
       '<p>Em acréscimos, cadastre nos campos abaixo somente a diferença de preço; em tabela final, informe o preço completo.</p>'+
@@ -118,22 +127,11 @@
       '<label class="field"><span>Sabores</span><textarea name="flavors" required rows="3" placeholder="Calabresa=42,00"></textarea></label>'+
       '<label class="field"><span>Bordas (opcional)</span><textarea name="crusts" rows="2" placeholder="Catupiry=6,00"></textarea></label>'+
       '<label class="field"><span>Adicionais (opcional)</span><textarea name="addons" rows="2" placeholder="Queijo extra=5,00"></textarea></label>'+
-      '<button class="primary-button">Salvar cardápio de pizzas</button></form>':'')+
+      '<button class="primary-button">Salvar opções do produto</button></form>':'')+
       '<form data-r4-advanced="pizza-quote" class="vertical-form"><h3>Consultar preço</h3><label class="field"><span>Produto</span>'+
       select('productId',model.profiles.map(p=>({id:p.productId,name:model.products.find(x=>x.id===p.productId)?.name||p.productId})))+'</label>'+
       '<p>Selecione o produto e carregue seu perfil para escolher tamanho e sabores.</p><button class="secondary-button">Carregar opções</button></form>'+
       '<div data-r4-pizza-preview></div></section>';
-  }
-  function weight(){
-    return '<section class="data-card"><h2>Venda por peso</h2><p>Informe a quantidade em gramas. O preço será calculado no servidor.</p>'+
-      '<form data-r4-advanced="weight" class="vertical-form"><label class="field"><span>Produto em quilos</span>'+
-      select('productId',model.products.filter(p=>String(p.unit).toUpperCase()==='KG'),p=>p.name,'Produto selecionado manualmente',false)+'</label>'+
-      field('grams','Peso (gramas, se não tiver etiqueta)','number','min="1" max="100000000" step="1"')+
-      field('barcode','Etiqueta EAN-13 (bipagem opcional)','text','maxlength="13" inputmode="numeric" placeholder="20..."')+
-      '<div class="restaurant-actions"><button class="secondary-button" type="button" data-r4-connect-scale>Conectar balança</button>'+
-      '<button class="secondary-button" type="button" data-r4-read-scale>Ler peso estável</button></div>'+
-      '<small>Leitura opcional por WebSerial HTTPS; não solicita dispositivo sem ação sua.</small>'+
-      '<button class="primary-button">Calcular preço</button></form><output data-r4-result></output></section>';
   }
   const recipeUnits=['UN','KG','G','L','ML','M','M2','M3','CX','PCT'];
   const unitSelect=(name,value)=>'<select name="'+esc(name)+'" aria-label="Unidade">'+recipeUnits.map(u=>'<option '+(u===value?'selected ':'')+'value="'+u+'">'+u+'</option>').join('')+'</select>';
@@ -227,11 +225,11 @@
           recipeProductId=requested;
           const submitButton=form.querySelector('button.primary-button');if(submitButton)submitButton.disabled=true;
           try{
-            const loaded=requested?(await api.request('/api/v1/recipes/'+uid(requested))).recipe:null;
-            if(token!==recipeLoadToken)return;
-            model.recipe=loaded;render();
+            const [loaded,configuration]=requested?await Promise.all([api.request('/api/v1/recipes/'+uid(requested)).then(x=>x.recipe),api.productConfiguration(requested)]):[null,{}];
+            if(token!==recipeLoadToken||!form.isConnected)return;
+            model.recipe=loaded;model.profiles=configuration.pizzaProfile?[configuration.pizzaProfile]:[];render();
           }catch(error){
-            if(token!==recipeLoadToken)return;
+            if(token!==recipeLoadToken||!form.isConnected)return;
             recipeProductId=previous;form.elements.productId.value=previous;
             if(submitButton)submitButton.disabled=false;toast(error.message,true);
           }
@@ -244,8 +242,10 @@
         form.elements.productId.addEventListener('change',options);form.elements.kind.addEventListener('change',options);options();
         form.querySelector('[data-option-recipe-load]').addEventListener('click',async()=>{
           if(!form.elements.productId.value||!form.elements.code.value)return toast('Selecione o produto e a opção.',true);
+          const selected=[form.elements.productId.value,form.elements.kind.value,form.elements.code.value].join('|');
           try{
             const {recipe:option}=await api.request('/api/v1/recipes/'+uid(form.elements.productId.value)+'/options/'+uid(form.elements.kind.value)+'/'+uid(form.elements.code.value));
+            if(!form.isConnected||selected!==[form.elements.productId.value,form.elements.kind.value,form.elements.code.value].join('|'))return;
             form.querySelector('[data-recipe-components]').innerHTML=(option?.ingredients?.length?option.ingredients:[{}]).map(c=>ingredientRow(c,false)).join('');
             toast(option?'Ficha da opção carregada.':'Esta opção ainda não tem ficha. Adicione seus ingredientes.');
           }catch(error){toast(error.message,true);}
@@ -253,59 +253,36 @@
       }
     });
   }
+  function ticketClockForm(){
+    return '<section class="data-card"><form data-r4-advanced="ticket-clock" class="vertical-form"><h3>Data local da senha diária</h3><label class="field"><span>Fuso horário da filial</span><select name="timeZone">'+
+      ['America/Sao_Paulo','America/Manaus','America/Cuiaba','America/Belem','America/Recife','UTC'].map(z=>'<option value="'+esc(z)+'" '+(model.ticketClock?.timeZone===z?'selected':'')+'>'+esc(z)+'</option>').join('')+
+      '</select></label><button class="primary-button">Salvar fuso</button></form></section>';
+  }
   function segments(){
     const data=model.onboard,items=data.segments||[];
     return '<section class="data-card"><h2>Perfil da loja</h2><p>O segmento sugere recursos. Nenhum módulo será ativado automaticamente e não altera a licença.</p>'+
       (can('settings.manage')?'<form data-r4-advanced="segment" class="vertical-form"><label class="field"><span>Segmento</span>'+
         '<select name="segmentId">'+items.map(s=>'<option value="'+esc(s.id)+'" '+(data.selectedId===s.id?'selected':'')+'>'+esc(s.label)+'</option>').join('')+
-        '</select></label><button class="primary-button">Salvar preferência</button></form>'+
-      '<form data-r4-advanced="ticket-clock" class="vertical-form"><h3>Data local da senha diária</h3>'+
-      '<label class="field"><span>Fuso horário da filial</span><select name="timeZone">'+
-      ['America/Sao_Paulo','America/Manaus','America/Cuiaba','America/Belem','America/Recife','UTC'].map(z=>
-      '<option value="'+esc(z)+'" '+(model.ticketClock?.timeZone===z?'selected':'')+'>'+esc(z)+'</option>').join('')+
-      '</select></label><button class="primary-button">Salvar fuso</button></form>':'')+
+        '</select></label><button class="primary-button">Salvar preferência</button></form>':'')+
       '<div class="restaurant-list">'+items.map(s=>'<div class="restaurant-row"><strong>'+esc(s.label)+'</strong><small>'+
       (s.recommended.length?'Recomendado: '+esc(s.recommended.join(', ')):'Núcleo padrão')+'</small></div>').join('')+'</div>'+
-      '<h3>Áreas opcionais da loja</h3><p>Ative ou desative individualmente. As permissões continuam definidas pelo seu perfil; nenhuma licença é criada.</p>'+
-      (model.modules||[]).map(m=>'<form class="vertical-form" data-r4-advanced="module-toggle">'+
-       '<input type="hidden" name="moduleId" value="'+esc(m.id)+'">'+
-       '<label><input type="checkbox" name="enabled" '+(m.enabled?'checked ':'')+
-       ((!m.manageCapability||can(m.manageCapability))&&can('settings.manage')?'':'disabled')+'>'+
-       esc(m.name||m.id)+'</label>'+
-       (can('settings.manage')&&(!m.manageCapability||can(m.manageCapability))?'<button class="secondary-button">Salvar área</button>':'<small>Sem permissão para alterar</small>')+
-       '</form>').join('')+'</section>';
+      '<p>As áreas disponíveis são administradas em Configurações → Áreas.</p></section>';
   }
   function render(){
-    const renderer={service,production,pizza,weight,recipe,segments};
-    node.innerHTML='<section class="page vertical-page restaurant-page"><header class="page-head"><div><h1>'+(section==='recipe'?'Fichas técnicas':'Alimentação · Preferências')+'</h1>'+
-      '<p>Produtos, atendimento e preparo da mesma loja.</p></div><button class="secondary-button" type="button" data-r4-back>← Voltar para mesas</button></header>'+
-      '<nav class="restaurant-view-switch" aria-label="Seções da alimentação">'+sections.map(s=>'<button class="restaurant-btn '+(section===s.id?'':'secondary')+
-      '" type="button" data-r4-section="'+esc(s.id)+'">'+esc(s.name)+'</button>').join('')+'</nav>'+
-      renderer[section]()+'</section>';
+    const renderer={service,production,pizza,recipe,segments};
+    const titles={recipe:'Fichas técnicas',pizza:'Opções do produto',segments:'Perfil da loja',service:'Atendimento e comandas',production:'Preparo e impressoras'};
+    const tabs=['service','production'].includes(section)?sections.filter(s=>['service','production'].includes(s.id)):[];
+    node.innerHTML='<section class="page vertical-page restaurant-page"><header class="page-head"><div><h1>'+titles[section]+'</h1>'+
+      '<p>'+esc(['recipe','pizza'].includes(section)?(model.products.find(p=>p.id===(section==='recipe'?recipeProductId:pizzaProductId))?.name||'Cadastro do produto'):'Preferências da loja e da operação.')+'</p></div><button class="secondary-button" type="button" data-r4-back>← Voltar para mesas</button></header>'+
+      (tabs.length?'<nav class="restaurant-view-switch" aria-label="Atendimento e preparo">'+tabs.map(s=>'<button class="restaurant-btn '+(section===s.id?'':'secondary')+
+      '" type="button" data-r4-section="'+esc(s.id)+'">'+esc(s.name)+'</button>').join('')+'</nav>':'')+
+      renderer[section]()+(section==='production'&&can('settings.manage')?ticketClockForm():'')+'</section>';
     wireRecipeForms();
-    const back=node.querySelector('[data-r4-back]'),origin=document.body.dataset.activeRoute;
-    if(['inventory','products'].includes(origin))back.textContent=origin==='inventory'?'← Voltar ao Estoque':'← Voltar ao Cardápio';
-    back?.addEventListener('click',()=>void root.PdvAppNavigation?.navigate?.(['inventory','products'].includes(origin)?origin:'FOOD'));
-    node.querySelectorAll('[data-r4-section]').forEach(b=>b.addEventListener('click',()=>{section=b.dataset.r4Section;render();}));
+    const back=node.querySelector('[data-r4-back]'),origin=editorOrigin;
+    if(['inventory','products','settings'].includes(origin))back.textContent=origin==='inventory'?'← Voltar ao Estoque':origin==='settings'?'← Voltar às Configurações':'← Voltar ao Cardápio';
+    back?.addEventListener('click',()=>void root.PdvAppNavigation?.navigate?.(['inventory','products','settings'].includes(origin)?origin:'FOOD'));
+    node.querySelectorAll('[data-r4-section]').forEach(b=>b.addEventListener('click',()=>{void show({section:b.dataset.r4Section,sessionId,preserve:true});}));
     node.querySelectorAll('[data-r4-advanced]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();void submit(f);}));
-    node.querySelector('[data-r4-connect-scale]')?.addEventListener('click',async()=>{
-      try{
-        if(!root.PdvWebHardware?.connect)throw Error('Este navegador não suporta balança serial.');
-        await root.PdvWebHardware.connect('scale');
-        toast('Balança autorizada somente neste navegador.');
-      }catch(e){toast(e.message,true);}
-    });
-    node.querySelector('[data-r4-read-scale]')?.addEventListener('click',async()=>{
-      try{
-        if(!root.PdvWebHardware?.readWeight)throw Error('Leitura serial indisponível.');
-        const result=await root.PdvWebHardware.readWeight();
-        const grams=Math.round(result.weight*1000);
-        if(!Number.isSafeInteger(grams)||grams<=0)throw Error('Peso recebido inválido.');
-        const gramsField=node.querySelector('[data-r4-advanced="weight"] [name="grams"]');
-        if(gramsField){gramsField.value=String(grams);gramsField.focus();}
-        toast('Peso confirmado: '+grams+' g. Confira e calcule o preço no servidor.');
-      }catch(e){toast(e.message,true);}
-    });
     node.querySelectorAll('[data-r4-kds]').forEach(b=>b.addEventListener('click',async()=>{
       try{await r4('/kitchen/station-tickets/'+uid(b.dataset.r4Kds),'PATCH',{status:b.dataset.next});await show({sessionId,preserve:true});}
       catch(e){toast(e.message,true);}
@@ -343,21 +320,6 @@
           }catch(error){toast(error.message,true);}
         });
         return;
-      }
-      if(kind==='weight'){
-        if(!v.barcode&&!v.productId)throw Error('Selecione um produto ou leia uma etiqueta EAN-13.');
-        const quote=v.barcode?await r4('/weight/label','POST',{barcode:String(v.barcode).trim()}):
-          await r4('/weight/quote','POST',{productId:v.productId,grams:Number(v.grams)});
-        const output=node.querySelector('[data-r4-result]');
-        if(output){
-          output.innerHTML='<p>Preço calculado: '+money(quote.quote.totalCents)+'</p><button type="button" class="primary-button" data-r4-bakery-order>Gerar pedido de balcão</button>';
-          output.querySelector('[data-r4-bakery-order]')?.addEventListener('click',async()=>{
-            try{const order=await r4('/bakery/orders','POST',{items:[{productId:quote.quote.productId,quantity:quote.quote.quantity}]});
-              toast('Pedido de balcão registrado. Senha '+order.order.ticketNumber+'.');
-              await show({sessionId,preserve:true});
-            }catch(error){toast(error.message,true);}
-          });
-        }return;
       }
       if(kind==='option-recipe'){
         const ingredients=componentsFrom(form,false).map(c=>({ingredientId:c.productId,quantity:c.quantity}));
@@ -401,27 +363,33 @@
           ...(allocationMode?{allocations}:(String(v.individualShares||'').trim()?{shares:String(v.individualShares).split(';').map(x=>eurosToCents(x.trim()))}:{}))});
         toast('Divisão registrada: '+result.plan.shares.map(money).join(' + '));
       }
-      if(kind!=='pizza-quote'&&kind!=='weight')await show({sessionId,preserve:true});
+      if(kind!=='pizza-quote')await show({sessionId,preserve:true});
     }catch(e){toast(e.message,true);}
   }
   async function show({sessionId:id='',preserve=false,section:targetSection,productId}={}){
+    const generation=++showGeneration,origin=document.body.dataset.activeRoute;
+    const context=()=>[api.tenantId,api.branchId,root.PdvCurrentAccess?.id].join('|'),scope=context();
+    if(!preserve)editorOrigin=origin;
+    if(targetSection==='weight')return root.PdvAppNavigation?.navigate?.('checkout');
     sessionId=id||'';if(productId!==undefined){if(targetSection==='pizza')pizzaProductId=productId||'';else recipeProductId=productId||'';}
     if(targetSection&&sections.some(s=>s.id===targetSection))section=targetSection;else if(!preserve)section=sessionId?'service':'production';
     node.innerHTML='<section class="page"><h2>Carregando opções…</h2></section>';
     try{
-      await load();render();
+      const loaded=await load(section,recipeProductId);
+      if(generation!==showGeneration||document.body.dataset.activeRoute!==origin||scope!==context())return;
+      model=loaded;render();
       if(section==='pizza'&&pizzaProductId){
         const form=node.querySelector('[data-r4-advanced="pizza"]');
         if(form){
           form.elements.productId.value=pizzaProductId;
-          const {profile}=await r4('/pizzeria/products/'+uid(pizzaProductId));
+          const profile=model.profiles.find(p=>p.productId===pizzaProductId);
           if(profile&&form.isConnected){
             form.elements.policy.value=profile.policy;form.elements.pricingMode.value=profile.pricingMode;form.elements.maxFlavors.value=profile.maxFlavors;
             for(const kind of ['sizes','flavors','crusts','addons'])form.elements[kind].value=(profile[kind]||[]).map(x=>x.name+'='+(x.priceCents/100).toFixed(2).replace('.',',')).join('\n');
           }
         }
       }
-    }catch(e){node.textContent='Não foi possível carregar: '+e.message;}
+    }catch(e){if(generation===showGeneration&&document.body.dataset.activeRoute===origin&&scope===context())node.textContent='Não foi possível carregar: '+e.message;}
   }
 
   async function offerFirstRun(){

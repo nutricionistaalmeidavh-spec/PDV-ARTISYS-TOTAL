@@ -223,7 +223,10 @@
     }[state.route] || state.route;
     nav.innerHTML = items.map((route) => `<button class="nav-button ${parentRoute === route ? 'active' : ''}" type="button" data-route="${route}" title="${ROUTES[route].label}" aria-label="${ROUTES[route].label}"><span class="nav-button-icon">${icon(ROUTES[route].icon, 25)}</span><span class="nav-label">${escapeHtml(ROUTES[route].shortLabel || ROUTES[route].label)}</span></button>`).join('');
     const settingsButton = document.querySelector('#app-sidebar [data-route="settings"]');
-    if (settingsButton) settingsButton.hidden = !canAccessRoute('settings');
+    if (settingsButton) {
+      settingsButton.hidden = !canAccessRoute('settings');
+      settingsButton.classList.toggle('active',parentRoute==='settings'||state.route==='saas-admin');
+    }
     // Footer buttons survive sidebar re-renders. Replace their handler instead
     // of accumulating listeners and rendering the destination several times.
     document.querySelectorAll('[data-route]:not(.brand-mark)').forEach((button) => {button.onclick=() => navigate(button.dataset.route);});
@@ -380,7 +383,8 @@
         if(!host||!host.isConnected||document.body.dataset.activeRoute!=='home'||!sameHomeContext())return;
         const metric=(label,value)=>`<article class="ops-metric"><span>${escapeHtml(label)}</span>
           <strong>${escapeHtml(value)}</strong></article>`;
-        host.innerHTML=`<h2>Indicadores operacionais · ${escapeHtml(data.asOf)}</h2>
+        const indicatorDate=/^\d{4}-\d{2}-\d{2}$/.test(data.asOf)?data.asOf.split('-').reverse().join('/'):data.asOf;
+        host.innerHTML=`<h2>Indicadores operacionais · ${escapeHtml(indicatorDate)}</h2>
           <div class="ops-metrics">
             ${metric('Vendas concluídas',String(data.salesCount))}
             ${metric('Vendas líquidas',ui.formatCents(data.netSalesCents))}
@@ -531,13 +535,20 @@
     bindCheckoutProductCards(grid);
   }
 
+  function cartWeight(item){
+    if(item.configuration?.weight)return item.configuration.weight;
+    if(!api.webMode||item.configuration)return null;
+    const unit=String(state.products.find(product=>product.id===item.productId)?.unit||'').toUpperCase();
+    if(!['KG','G'].includes(unit))return null;
+    return {grams:Math.round(Number(item.quantity)*(unit==='KG'?1000:1)),source:'TOTAL'};
+  }
   function cartLine(item) {
     const changed = item.catalogUnitPriceCents != null && item.catalogUnitPriceCents !== item.unitPriceCents;
-    const weight=item.configuration?.weight||null;
+    const weight=cartWeight(item);
     const sourceDocument=item.configuration?.sourceDocument||null;
     const configured=Boolean(item.configuration?.pizza||item.configuration?.size||item.configuration?.variant||item.configuration?.options?.length||item.configuration?.comboSelections?.length);
     const configurationSummary=configured?window.PdvOrderComposer?.configurationSummary?.(item.configuration)||'':'';
-    const weightLabel=weight?`${quantityLabel(Number(weight.grams||0))} g · ${escapeHtml(String(weight.source||'MANUAL')==='SCALE'?'balança':String(weight.source||'MANUAL')==='BARCODE'?'etiqueta':'manual')}`:null;
+    const weightLabel=weight?`${quantityLabel(Number(weight.grams||0))} g · ${escapeHtml(String(weight.source||'MANUAL')==='SCALE'?'balança':String(weight.source||'MANUAL')==='BARCODE'?'etiqueta':String(weight.source)==='TOTAL'?'total':'manual')}`:null;
     const documentLabel=sourceDocument?`${escapeHtml(sourceDocument.orderNumber||sourceDocument.id||'Pedido')} · preço do pedido`:null;
     const priceDetails = changed ? `<small><s>${ui.formatCents(item.catalogUnitPriceCents)}</s> → ${ui.formatCents(item.unitPriceCents)}${item.priceOverrideReason ? ` · ${escapeHtml(item.priceOverrideReason)}` : ''}${documentLabel?` · ${documentLabel}`:''}</small>` : `<small>${ui.formatCents(item.unitPriceCents)}${weightLabel?` · ${weightLabel}`:''}${documentLabel?` · ${documentLabel}`:''}</small>`;
     const priceButton = !sourceDocument&&window.PdvAccessPolicy?.hasCapability(state.user,'sales.discount') ? `<button type="button" class="secondary-button cart-price-edit" data-price-item="${item.id}">Alterar preço</button>` : '';
@@ -823,7 +834,7 @@
 
   async function removeProduct(productId) {
     if (!state.sale) return;
-    const weighted=state.sale.items.filter(item=>item.productId===productId&&item.configuration?.weight);
+    const weighted=state.sale.items.filter(item=>item.productId===productId&&cartWeight(item));
     if(weighted.length===1)return removeWeightedItem(weighted[0].id);
     if(weighted.length>1)return showToast('Há mais de uma pesagem deste produto. Remova a linha desejada pelo × do carrinho.','error');
     try { state.sale = await api.removeSaleItem(state.sale.id, productId); if (state.selectedProductId === productId) state.selectedProductId = null; renderCheckout(); } catch (error) { showToast(error.message, 'error'); }
@@ -831,7 +842,7 @@
 
   async function clearCart() {
     if (!state.sale?.items?.length) return;
-    try { for (const item of [...state.sale.items]) state.sale = item.configuration?.weight ? await api.removeWeightedSaleItem(state.sale.id,item.id) : item.configuration? await api.removeConfiguredSaleItem(state.sale.id,item.id) : await api.removeSaleItem(state.sale.id,item.productId); state.selectedProductId = null; renderCheckout(); } catch (error) { showToast(error.message, 'error'); }
+    try { for (const item of [...state.sale.items]) state.sale = cartWeight(item) ? await api.removeWeightedSaleItem(state.sale.id,item.id) : item.configuration? await api.removeConfiguredSaleItem(state.sale.id,item.id) : await api.removeSaleItem(state.sale.id,item.productId); state.selectedProductId = null; renderCheckout(); } catch (error) { showToast(error.message, 'error'); }
   }
 
   async function applyDiscountFromInput() {
@@ -1708,6 +1719,7 @@
   }
 
   function openWebProductForm({prepared=false}={}){
+    const origin=state.route;
     openModal('Novo produto',`<form id="web-product-form">
       <div class="field"><label for="web-product-name">Nome do produto</label><input id="web-product-name" name="name" required minlength="2" maxlength="120" autocomplete="off" placeholder="Ex.: Café tradicional"></div>
       <div class="field-grid"><div class="field"><label for="web-product-sku">SKU / código</label><input id="web-product-sku" name="sku" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]*" placeholder="Ex.: CAFE-001"></div>
@@ -1739,7 +1751,8 @@
             categoryId:form.elements.categoryId.value||null,parentProductId:form.elements.parentProductId.value||null,
             variantLabel:form.elements.variantLabel.value.trim()||null,unit:form.elements.unit.value},form.dataset.operationKey);
           state.products=await api.products();
-          closeModal();renderWebProducts();showToast('Produto '+product.name+' cadastrado.','success');
+          if(form.isConnected){closeModal();if(state.route===origin){if(origin==='inventory')await navigate('inventory');else if(origin==='products')renderWebProducts();}}
+          showToast('Produto '+product.name+' cadastrado.','success');
         }catch(error){status.textContent=error.message;}
         finally{form.dataset.pending='false';button.disabled=false;button.textContent='Salvar produto';}
       });
@@ -1748,6 +1761,7 @@
 
 
   function openWebEditProductForm(product){
+    const origin=state.route;
     const price=(Number(product.salePriceCents||0)/100).toFixed(2).replace('.',',');
     const unitOptions=['UN','KG','G','L','M','M2','M3','CX','PCT'];
     openModal('Editar produto',`<form id="web-edit-product-form">
@@ -1782,7 +1796,7 @@
           },form.dataset.operationKey);
           state.products=await api.products();
           if(showInactiveWebProducts){const all=await api.products(true);inactiveWebProducts=all.filter(item=>item.active===false);}
-          closeModal();renderWebProducts();
+          if(form.isConnected){closeModal();if(state.route===origin){if(origin==='inventory')await navigate('inventory');else if(origin==='products')renderWebProducts();}}
           showToast(result.active?'Produto atualizado.':'Produto desativado sem apagar vendas e estoque.','success');
         }catch(error){status.textContent=error.message;}
         finally{form.dataset.pending='false';button.disabled=false;}

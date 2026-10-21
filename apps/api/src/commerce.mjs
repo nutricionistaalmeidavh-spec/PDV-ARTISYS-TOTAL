@@ -18,6 +18,7 @@ import {createReportDepthService} from './report-depth.mjs';
 import {createCheckoutConfigurationService} from './checkout-configuration.mjs';
 import {createR4ExtendedService} from './r4-extended-service.mjs';
 import {createSellerTargetService} from './seller-targets.mjs';
+import {businessDay,businessDateBounds} from './business-time.mjs';
 
 const {calculateSaleTotals,allocateSaleDiscount}=salePricing;
 const {resolvePayment,normalizeMethod}=paymentRules;
@@ -225,11 +226,15 @@ export function createCommerceService(db,{now=nowISO}={}){
       throw error(400,'Data inválida: informe AAAA-MM-DD.');
     return value;
   };
-  const period=({from='',to=''}={})=>{
+  const period=({from='',to='',timeZone}={})=>{
     const a=dateWindow(from),b=dateWindow(to);
     if(a&&b&&a>b)throw error(400,'O início não pode ser posterior ao fim.');
     if(a&&b&&(Date.parse(b)-Date.parse(a))>366*86400000)
       throw error(400,'Máximo de 366 dias por consulta.');
+    if(timeZone){
+      try{return {a:a?businessDateBounds(a,timeZone).a:'0000',b:b?businessDateBounds(b,timeZone).b:'9999'};}
+      catch{throw error(400,'Data ou fuso horário inválido.');}
+    }
     return {a:a?a+'T00:00:00.000Z':'0000',b:b?b+'T23:59:59.999Z':'9999'};
   };
   const snapshot=async(tenant,branch,id)=>{
@@ -997,16 +1002,24 @@ export function createCommerceService(db,{now=nowISO}={}){
       await batch(statements);
       return result;
     },
-    async homeIndicators(tenant,branch,{asOf=stamp().slice(0,10)}={}){
+    async homeIndicators(tenant,branch,{asOf}={}){
+      await branchExists(tenant,branch);
+      let timeZone='America/Sao_Paulo';
+      try{
+        const clock=await first('SELECT time_zone AS timeZone FROM r4_branch_ticket_clock WHERE tenant_id=? AND branch_id=?',tenant,branch);
+        timeZone=clock?.timeZone||timeZone;
+      }catch(e){if(!/no such table: r4_branch_ticket_clock/i.test(String(e?.message)))throw e;}
+      try{asOf=asOf||businessDay(stamp(),timeZone);}catch{throw error(400,'Fuso horário da filial inválido.');}
       period({from:asOf,to:asOf});
       const month=asOf.slice(0,7);
       const previousDay=new Date(Date.parse(asOf+'T00:00:00.000Z')-86400000)
         .toISOString().slice(0,10);
+      const daily=period({from:asOf,to:asOf,timeZone}),monthly=period({from:month+'-01',to:asOf,timeZone}),previous=period({from:previousDay,to:previousDay,timeZone});
       const [report,open,coverage,monthlyReport,goal,targetedGross,targetedRefunds,divergentCash,previousRefunds,margin]=await Promise.all([
-        this.reports(tenant,branch,{from:asOf,to:asOf}),
+        this.reports(tenant,branch,{from:asOf,to:asOf,timeZone}),
         first("SELECT COUNT(*) AS n FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND status='OPEN'",tenant,branch),
-        this.reportStockCoverage(tenant,branch,{asOf,days:30}),
-        this.reports(tenant,branch,{from:month+'-01',to:asOf}),
+        this.reportStockCoverage(tenant,branch,{asOf,days:30,timeZone}),
+        this.reports(tenant,branch,{from:month+'-01',to:asOf,timeZone}),
         first(`SELECT COUNT(*) AS count,COALESCE(SUM(t.target_cents),0) AS totalCents
           FROM seller_sales_targets t JOIN tenant_memberships m
           ON m.tenant_id=t.tenant_id AND m.user_id=t.seller_id AND m.active=1
@@ -1019,7 +1032,7 @@ export function createCommerceService(db,{now=nowISO}={}){
           AND m.user_id=t.seller_id AND m.active=1
           WHERE s.tenant_id=? AND s.branch_id=?
           AND s.status IN('COMPLETED','CANCELLED') AND s.completed_at>=?
-          AND s.completed_at<=?`,month,tenant,branch,month+'-01T00:00:00.000Z',asOf+'T23:59:59.999Z'),
+          AND s.completed_at<=?`,month,tenant,branch,monthly.a,monthly.b),
         first(`SELECT COALESCE(SUM(r.amount_cents),0) AS amountCents
           FROM sale_returns r JOIN sales s ON s.id=r.sale_id
           AND s.tenant_id=r.tenant_id AND s.branch_id=r.branch_id
@@ -1030,15 +1043,15 @@ export function createCommerceService(db,{now=nowISO}={}){
           AND m.user_id=t.seller_id AND m.active=1
           WHERE r.tenant_id=? AND r.branch_id=?
           AND r.created_at>=? AND r.created_at<=?`,
-          month,tenant,branch,month+'-01T00:00:00.000Z',asOf+'T23:59:59.999Z'),
+          month,tenant,branch,monthly.a,monthly.b),
         first(`SELECT COUNT(*) AS count,COALESCE(SUM(divergence_cents),0) AS divergenceCents
           FROM cash_sessions WHERE tenant_id=? AND branch_id=?
           AND status='CLOSED' AND divergence_cents<>0 AND closed_at>=?
-          AND closed_at<=?`,tenant,branch,asOf+'T00:00:00.000Z',asOf+'T23:59:59.999Z'),
+          AND closed_at<=?`,tenant,branch,daily.a,daily.b),
         first(`SELECT COALESCE(SUM(amount_cents),0) AS amountCents FROM sale_returns
           WHERE tenant_id=? AND branch_id=? AND created_at>=? AND created_at<=?`,
-          tenant,branch,previousDay+'T00:00:00.000Z',previousDay+'T23:59:59.999Z'),
-        this.marginReport(tenant,branch,{from:asOf,to:asOf})
+          tenant,branch,previous.a,previous.b),
+        this.marginReport(tenant,branch,{from:asOf,to:asOf,timeZone})
       ]);
       const monthlyTargetCents=goal?.count?goal.totalCents:null;
       const targetedSellerNetCents=(targetedGross?.amountCents||0)-(targetedRefunds?.amountCents||0);
@@ -1059,7 +1072,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         alerts.push({code:'REFUNDS_INCREASED',title:'Devoluções aumentaram',
           amountCents:report.sales.refundedCents,
           previousAmountCents:Number(previousRefunds.amountCents||0),route:'reports'});
-      return {asOf,alerts,
+      return {asOf,timeZone,alerts,
         divergentCashCount:Number(divergentCash.count||0),
         divergentCashCents:Number(divergentCash.divergenceCents||0),
         negativeMarginCount,
@@ -1083,9 +1096,9 @@ export function createCommerceService(db,{now=nowISO}={}){
         stockCoverageUnknown:coverage.coverageUnknown,
         source:'CANONICAL_SALES_CASH_STOCK'};
     },
-    async reports(tenant,branch,{from,to}={}){
+    async reports(tenant,branch,{from,to,timeZone}={}){
       await branchExists(tenant,branch);
-      const {a,b}=period({from,to});
+      const {a,b}=period({from,to,timeZone});
       // Never remove a completed sale from history after refund; recognize its
       // original amount on the completion date and the negative on the return date.
       const gross=await first("SELECT COUNT(*) AS count,COALESCE(SUM(total_cents),0) AS grossCents,COALESCE(SUM(discount_cents),0) AS discountsCents FROM sales WHERE tenant_id=? AND branch_id=? AND completed_at BETWEEN ? AND ? AND status IN('COMPLETED','CANCELLED')",tenant,branch,a,b);

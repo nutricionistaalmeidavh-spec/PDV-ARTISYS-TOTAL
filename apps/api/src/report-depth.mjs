@@ -64,7 +64,7 @@ export function createReportDepthService(h){
    }
    return '\uFEFF'+lines.join('\r\n')+'\r\n';
   },
-  async stockCoverage(tenant,branch,{asOf='',days=30}={}){
+  async stockCoverage(tenant,branch,{asOf='',days=30,timeZone}={}){
    await branchExists(tenant,branch);
    const span=Number(days);
    if(!Number.isSafeInteger(span)||span<1||span>365)
@@ -74,6 +74,7 @@ export function createReportDepthService(h){
    period({from:end,to:end});
    const start=new Date(Date.parse(end+'T00:00:00.000Z')-(span-1)*86400000)
      .toISOString().slice(0,10);
+   const bounds=period({from:start,to:end,timeZone});
    // A code deployment may precede the additive D1 migration.
    // Keep existing reports available while new minimum editing stays disabled.
    const minimumPoliciesAvailable=Boolean((await all(
@@ -104,9 +105,9 @@ export function createReportDepthService(h){
     ${minimumJoin}
     WHERE p.tenant_id=? AND p.track_stock=1 AND p.active=1
     ORDER BY p.name,p.id LIMIT 1001`,
-    branch,branch,start+'T00:00:00.000Z',end+'T23:59:59.999Z',
-    branch,start+'T00:00:00.000Z',end+'T23:59:59.999Z',
-    branch,start+'T00:00:00.000Z',end+'T23:59:59.999Z',
+    branch,branch,bounds.a,bounds.b,
+    branch,bounds.a,bounds.b,
+    branch,bounds.a,bounds.b,
     branch,...(minimumPoliciesAvailable?[branch]:[]),tenant);
    if(rows.length>1000)
      throw error(413,'Mais de 1000 produtos. Filtre ou exporte o cadastro por lotes.');

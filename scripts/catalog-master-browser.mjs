@@ -12,7 +12,8 @@ try{
   window.recipeFailure=false;
   window.PdvApiClient={ApiClient:class{
    webMode=true;
-   async products(){
+   async products(includeInactive){
+    if(!window.canEdit&&includeInactive)throw Error('Sem permissão para consultar inativos');
     if(window.deferMaster)await new Promise(resolve=>{window.releaseMaster=resolve;});
     return [{id:'flour',name:'Farinha de trigo',sku:'FAR',active:true,trackStock:true,unit:'KG',balance:2,menuEnabled:false,usageType:'INGREDIENT'},
      {id:'bread',name:'Pão preparado',sku:'PAO',active:true,trackStock:false,unit:'UN',menuEnabled:true,usageType:'DIRECT'},

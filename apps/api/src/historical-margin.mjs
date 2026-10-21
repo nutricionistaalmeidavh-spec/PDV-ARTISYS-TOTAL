@@ -8,9 +8,9 @@ export function createHistoricalMarginService(h){
   (_,i)=>items.slice(i*size,(i+1)*size));
  const amount=(milli,cents)=>Math.round(milli*cents/1000);
  return {
-  async margin(tenant,branch,{from='',to='',productId=''}={}){
+  async margin(tenant,branch,{from='',to='',productId='',timeZone}={}){
    await branchExists(tenant,branch);
-   const {a,b}=period({from,to});
+   const {a,b}=period({from,to,timeZone});
    const original=await all(`SELECT i.id AS saleItemId,COALESCE(c.id,i.id) AS lineId,i.sale_id AS saleId,
     i.product_id AS productId,i.product_name AS name,
     COALESCE(c.quantity_milli,i.quantity_milli) AS quantityMilli,

@@ -25,7 +25,7 @@
     const current=()=>token===generation&&panel.isConnected&&host.contains(panel)&&document.body.dataset.activeRoute==='inventory';
     panel.innerHTML='<h2>Cadastro mestre</h2><p>Carregando produtos, insumos e fichas técnicas…</p>';
     try{
-      const products=await api.products(true);
+      const products=await api.products(editable());
       if(!current())return;
       if(!Array.isArray(products))throw Error('Não foi possível consultar os produtos.');
       const recipes=new Map(),failures=[];

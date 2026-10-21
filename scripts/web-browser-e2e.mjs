@@ -103,7 +103,10 @@ try{
   });
   await navigateUi(page,'FOOD');
   await page.locator('[data-r4-action=advanced]').first().click();
-  await page.locator('[data-r4-section=segments]').click();
+  await page.locator('[data-r4-advanced=station]').waitFor();
+  assert.equal(await page.locator('[data-r4-section=pizza],[data-r4-section=weight],[data-r4-section=recipe],[data-r4-section=segments]').count(),0);
+  await navigateUi(page,'settings');
+  await page.locator('[data-settings-profile]').click();
   await page.locator('[data-r4-advanced=segment] [name=segmentId]').selectOption('RESTAURANT');
   const preferenceSaved=page.waitForResponse(response=>response.request().method()==='PUT'&&
     new URL(response.url()).pathname.endsWith('/onboarding/segments'));

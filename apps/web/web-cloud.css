@@ -154,3 +154,27 @@ body[data-offline] #web-offline-alert{
 
 body[data-runtime="web"] .web-login-links{display:flex;justify-content:center;gap:12px;margin:18px 0 0;font-size:13px}
 body[data-runtime="web"] .web-login-links a{color:var(--artisys-blue);font-weight:750;text-decoration:underline;text-underline-offset:3px}
+
+/* A narrow viewport must constrain the actual route, including food editors. */
+body[data-runtime="web"] :is(.vertical-page,.restaurant-page){min-width:0;max-width:100%;box-sizing:border-box}
+body[data-runtime="web"] :is(.vertical-page,.restaurant-page)>*{min-width:0;max-width:100%;box-sizing:border-box}
+body[data-runtime="web"] .restaurant-view-switch{display:flex;flex-wrap:wrap;width:auto;max-width:100%}
+body[data-runtime="web"] .vertical-page .page-head{flex-wrap:wrap}
+body[data-runtime="web"] .vertical-page :is(input,select,textarea,fieldset){min-width:0;max-width:100%;box-sizing:border-box}
+body[data-runtime="web"] .vertical-page :is(.field,.vertical-form,.restaurant-row,.restaurant-actions){min-width:0;overflow-wrap:anywhere}
+@media(max-width:680px){
+ body[data-runtime="web"] .checkout-layout{grid-template-columns:minmax(0,1fr);min-height:0}
+ body[data-runtime="web"] .checkout-main{display:flex;flex-direction:column}
+ body[data-runtime="web"] .checkout-product-region{display:flex;flex-direction:column;min-height:0}
+ body[data-runtime="web"] .sale-panel{position:static;max-height:none;display:flex;overflow:visible}
+ body[data-runtime="web"] .sale-cart-region .cart-list{min-height:72px;max-height:300px}
+ body[data-runtime="web"] .checkout-tools .scan-button{min-width:0}
+ body[data-runtime="web"] .sidebar .nav-button:not(.active){color:#36516f}
+ body[data-runtime="web"].home-view-classic.theme-home .sidebar{background:#fff;border-color:var(--line)}
+ body[data-runtime="web"] .vertical-page .page-head{flex-direction:column;align-items:stretch;gap:12px}
+ body[data-runtime="web"] .restaurant-view-switch .restaurant-btn{flex:1 1 auto}
+ body[data-runtime="web"] .restaurant-row{flex-wrap:wrap}
+ body[data-runtime="web"] .restaurant-form-row{grid-template-columns:minmax(0,1fr)}
+ body[data-runtime="web"] .vertical-page .vertical-form{grid-template-columns:minmax(0,1fr)}
+ body[data-runtime="web"] .vertical-page :is(.restaurant-actions,.modal-actions){flex-wrap:wrap}
+}

@@ -16,9 +16,8 @@
     credit:'financial-management',commissions:'financial-management','saas-admin':'settings'};
   function canAccess(user,route,policy,{moduleState={}}={}){
     if(!user||!routes.has(route))return false;
-    if(route==='settings')return true;
+    if(route==='settings'||route==='access')return true;
     if(route==='saas-admin')return user.profileKey==='OWNER';
-    if(route==='access'&&user.profileKey==='OWNER')return true;
     if(['FOOD','WHOLESALE'].includes(route)&&moduleState[route]===false)return false;
     const permission={suppliers:'suppliers.view',credit:'customers.view',commissions:'finance.view',
       FOOD:'restaurant.access',WHOLESALE:'wholesale.access'}[route];

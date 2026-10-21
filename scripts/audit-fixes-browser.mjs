@@ -9,7 +9,7 @@ import {openLocalDatabase} from '../apps/api/src/local-db.mjs';
 import {createApi} from '../apps/api/src/worker.mjs';
 import {serveLocalPwa} from '../apps/api/src/local-static.mjs';
 import {hashPassword} from '../apps/api/src/password.mjs';
-const {chromium}=createRequire(import.meta.url)('playwright');
+const engines=createRequire(import.meta.url)('playwright');
 const db=openLocalDatabase(),stamp=new Date().toISOString(),password='Somente-teste-123!';
 for(const file of readdirSync(new URL('../apps/api/migrations/',import.meta.url)).filter(x=>x.endsWith('.sql')).sort())
   db.exec(readFileSync(new URL('../apps/api/migrations/'+file,import.meta.url),'utf8'));
@@ -30,7 +30,7 @@ const server=createServer(async(req,res)=>{
   }catch(error){res.writeHead(500);res.end(String(error));}
 });
 await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
-const browser=await chromium.launch({headless:true});
+const browser=await engines[process.env.PDV_TEST_BROWSER||'chromium'].launch({headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[],badRequests=[];
 page.setDefaultTimeout(10000);
 page.on('pageerror',error=>errors.push(error.message));
@@ -116,6 +116,7 @@ try{
 
   await sidebar('Vendas e devoluções').click();await main.getByRole('button',{name:/Devoluções/}).click();await waitHeading('Devoluções');
   await page.locator('#app-sidebar [data-route=settings]').click();await waitHeading('Configurações');
+  assert.equal(await page.locator('#app-sidebar .nav-button.active').count(),1);
   await main.getByRole('tab',{name:'Áreas',exact:true}).click();await main.getByText('Alimentação',{exact:true}).first().waitFor();
   await page.screenshot({path:resolve(artifacts,'configuracoes.png')});
   await sidebar('Acessos e equipe').click();await waitHeading('Acessos e equipe');
@@ -137,6 +138,62 @@ try{
   assert.equal(disabled.status(),200);assert.equal(areaWrites,2);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
   await page.screenshot({path:resolve(artifacts,'configuracoes-mobile.png')});
+  const weighed=await call('products',{name:'Queijo por peso',sku:'PESO',unit:'KG',salePriceCents:2000,trackStock:false,menuEnabled:true});
+  await page.reload();await waitHeading('Início');
+  for(const width of [375,390,430,768]){
+    await page.setViewportSize({width,height:844});
+    await sidebar('Balcão').click();await main.locator('.checkout-layout').waitFor();
+    assert.equal(await page.locator('#app-sidebar .nav-button.active').count(),1,'the previous settings tab must not remain active');
+    const layout=await page.evaluate(()=>{const a=document.querySelector('.checkout-main').getBoundingClientRect(),b=document.querySelector('.sale-panel').getBoundingClientRect();return {main:{left:a.left,right:a.right,top:a.top,bottom:a.bottom},sale:{left:b.left,right:b.right,top:b.top,bottom:b.bottom},width:innerWidth,scroll:document.querySelector('#route-content').scrollWidth,client:document.querySelector('#route-content').clientWidth};});
+    assert.ok(layout.scroll<=layout.client+2,JSON.stringify(layout));
+    if(width<=680)assert.ok(layout.sale.top>=layout.main.bottom-2,'payment must follow products on mobile: '+JSON.stringify(layout));
+    await page.screenshot({path:resolve(artifacts,'balcao-'+width+'.png'),fullPage:true});
+  }
+  await page.setViewportSize({width:390,height:844});
+  await main.locator('[data-add-product="'+weighed.product.id+'"]').click();
+  await modal.locator('#weighted-product-form [name=grams]').fill('250');
+  await modal.getByRole('button',{name:'Adicionar à venda',exact:true}).click();await modal.waitFor({state:'hidden'});
+  await main.locator('.cart-line .qty-control').getByText(/250 g/).waitFor();
+  await main.locator('[data-add-product="'+weighed.product.id+'"]').click();
+  await modal.locator('#weighted-product-form [name=grams]').fill('125');await modal.getByRole('button',{name:'Adicionar à venda',exact:true}).click();await modal.waitFor({state:'hidden'});
+  await main.locator('.cart-line .qty-control').getByText(/375 g/).waitFor();
+  await main.getByRole('button',{name:'Remover pesagem',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#route-content .cart-list')?.textContent.includes('Nenhum item na venda.'));
+  await main.locator('[data-add-product="'+weighed.product.id+'"]').click();
+  await modal.locator('#weighted-product-form [name=grams]').fill('250');await modal.getByRole('button',{name:'Adicionar à venda',exact:true}).click();await modal.waitFor({state:'hidden'});
+  await main.getByRole('button',{name:/Finalizar venda/}).click();
+  const paymentBounds=await modal.locator('.modal-card').boundingBox();
+  assert.ok(paymentBounds.x>=0&&paymentBounds.x+paymentBounds.width<=390,'payment dialog must fit mobile');
+  await modal.getByRole('button',{name:'Concluir venda',exact:true}).click();await modal.waitFor({state:'hidden'});
+  const weightedSale=await db.prepare("SELECT total_cents FROM sales WHERE status='COMPLETED' ORDER BY completed_at DESC LIMIT 1").bind().first();
+  assert.equal(weightedSale.total_cents,500);await page.locator('#post-sale-new-sale').click();
+  await page.evaluate(async()=>{const api=new window.PdvApiClient.ApiClient();await api.initialize();await api.saveSetting('modules.FOOD.enabled',true,'global');});
+  await page.locator('#app-sidebar [data-route=settings]').click();await waitHeading('Configurações');
+  await sidebar('Alimentação').click();
+  await main.locator('[data-r4-web]').waitFor();
+  await main.getByRole('button',{name:'Configurações de atendimento',exact:true}).click();
+  await main.locator('[data-r4-advanced="station"]').waitFor();
+  const overflow=await page.evaluate(()=>({viewport:innerWidth,document:document.documentElement.scrollWidth,main:document.querySelector('#route-content').scrollWidth,client:document.querySelector('#route-content').clientWidth,
+    elements:[...document.querySelectorAll('#route-content *')].filter(e=>e.getBoundingClientRect().right>innerWidth+2).slice(0,8).map(e=>({tag:e.tagName,class:e.className,width:e.getBoundingClientRect().width}))}));
+  assert.ok(overflow.main<=overflow.client+2,JSON.stringify(overflow));
+  assert.equal(await main.locator('[data-r4-section=pizza], [data-r4-section=weight], [data-r4-section=recipe]').count(),0,'product setup must not be a restaurant preference tab');
+  await page.screenshot({path:resolve(artifacts,'preparo-mobile.png')});
+  await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) SELECT ?,?,?,password_hash,? FROM users WHERE id=?').bind('reader','reader@example.com','Leitura teste',stamp,'owner').run();
+  await db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)').bind('audit','reader','READ_ONLY',stamp).run();
+  const readerContext=await browser.newContext({viewport:{width:390,height:844}}),reader=await readerContext.newPage(),readerErrors=[];
+  reader.on('response',response=>{if(new URL(response.url()).pathname.startsWith('/api/')&&response.status()>=400&&response.status()!==401)readerErrors.push(response.status()+' '+response.url());});
+  await reader.goto('http://127.0.0.1:'+server.address().port+'/app/');
+  await reader.locator('#web-email').fill('reader@example.com');await reader.locator('#web-password').fill(password);
+  await reader.locator('#web-login-form button[type=submit]').click();await reader.locator('#auth-overlay').waitFor({state:'hidden'});
+  await reader.locator('#sidebar-nav [data-route=catalog]').click();await reader.locator('[data-flow-route=inventory]').click();
+  await reader.locator('#web-catalog-master [data-master-rows]').waitFor();
+  assert.equal(await reader.locator('[data-master-product]').count(),0);
+  await reader.evaluate(async()=>{const api=new window.PdvApiClient.ApiClient();await api.initialize();await api.logout();});
+  await db.prepare('UPDATE tenant_memberships SET profile_key=? WHERE tenant_id=? AND user_id=?').bind('CASHIER','audit','reader').run();
+  await reader.reload();await reader.locator('#web-email').fill('reader@example.com');await reader.locator('#web-password').fill(password);
+  await reader.locator('#web-login-form button[type=submit]').click();await reader.locator('#auth-overlay').waitFor({state:'hidden'});
+  await reader.locator('#sidebar-nav [data-route=access]').click();await reader.getByRole('heading',{name:'Suas sessões',exact:true}).waitFor();
+  assert.equal(await reader.getByRole('heading',{name:'Equipe e perfis',exact:true}).count(),0);
+  assert.deepEqual(readerErrors,[]);await readerContext.close();
   assert.deepEqual(errors,[]);assert.deepEqual(badRequests,[]);
   console.log('Audit fixes browser: navigation, contrast, master -> recipe -> menu -> canonical sale/stock, returns, settings, access, purchases and logistics passed.');
 }catch(error){

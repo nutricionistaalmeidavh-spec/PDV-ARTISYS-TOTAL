@@ -40,7 +40,7 @@
   async function ready(){if(!config)config=await api.initialize();return config;}
   function routeActive(route){return document.body.dataset.activeRoute===route;}
   function canAccess(route){if(route==='settings'&&api.webMode)return true;return root.PdvAccessPolicy?.canAccessRoute(root.PdvCurrentAccess,route)===true;}
-  function markActive(route){document.body.dataset.activeRoute=route;document.body.classList.remove('theme-home');document.querySelectorAll('[data-route]').forEach(node=>node.classList.toggle('active',node.dataset.route===route));}
+  function markActive(route){document.body.dataset.activeRoute=route;document.body.classList.remove('theme-home');const parent=api.webMode?root.PdvWebNavigation.parent(route):route;document.querySelectorAll('[data-route]').forEach(node=>node.classList.toggle('active',node.dataset.route===parent));}
 
   // Same canonical inventory route: web mode reads and writes only via the
   // authoritative tenant/branch API. No parallel inventory state or IPC fallback.
