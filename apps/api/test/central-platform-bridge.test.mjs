@@ -9,7 +9,7 @@ const OLD='existing-legacy-platform-admin-token-2026-xyz';
 const NOW=Date.parse('2026-10-20T12:00:00.000Z');
 async function fixture(config={}){
  const db=openLocalDatabase();
- for(const file of ['0001_identity.sql','0030_public_registration.sql','0031_saas_access.sql','0033_p2_account_security.sql','0034_platform_ui_sessions.sql','0035_password_resets.sql','0036_central_platform_bridge.sql','0900_central_owner_licenses.sql'])
+ for(const file of ['0001_identity.sql','0030_public_registration.sql','0031_saas_access.sql','0033_p2_account_security.sql','0034_platform_ui_sessions.sql','0035_password_resets.sql','0036_central_platform_bridge.sql','0041_central_owner_licenses.sql'])
   db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
  const api=createApi({DB:db,AUTH_ENABLED:'false',PLATFORM_ADMIN_TOKEN:OLD,ARTISYS_PLATFORM_CENTRAL_ENABLED:'true',
   ARTISYS_PLATFORM_BRIDGE_SECRET:secret,...config},{now:()=>NOW});
