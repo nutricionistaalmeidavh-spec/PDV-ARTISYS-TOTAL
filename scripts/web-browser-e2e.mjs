@@ -167,7 +167,7 @@ try{
   await page.locator('#cloud-bank-create [name=name]').fill('Carteira B P4 QA');
   await page.locator('#cloud-bank-create [name=walletKind]').selectOption('OTHER');
   await page.locator('#cloud-bank-create button[type=submit]').click();
-  await page.getByText('Carteira B P4 QA',{exact:true}).waitFor({timeout:12000});
+  await page.locator('.ops-card strong').filter({hasText:'Carteira B P4 QA'}).first().waitFor({timeout:12000});
   await page.locator('#cloud-wallet-ops').waitFor({timeout:12000});
   await page.locator('#cloud-wallet-adjust [name=accountId]').selectOption({label:'Carteira P4 QA'});
   await page.locator('#cloud-wallet-adjust [name=kind]').selectOption('OPENING');
