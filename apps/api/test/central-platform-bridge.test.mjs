@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {openLocalDatabase} from '../src/local-db.mjs';
 import {createApi} from '../src/worker.mjs';
+import {manualLicenseExpiryFromMonths} from '../src/saas-control.mjs';
 
 const origin='https://pdv-total.example.test',secret='private-bridge-secret-unique-to-pdv-admin-2026';
 const OLD='existing-legacy-platform-admin-token-2026-xyz';
@@ -131,10 +132,12 @@ test('admin grants owner license by e-mail, emails a 48h one-use password link a
    const signed=await x.sign(JSON.stringify(action));
    return x.api.fetch(new Request(origin+'/api/v1/integrations/artisys/platform',{method:'POST',...signed}));
   };
-  const grant=await req({action:'owner-license',data:{email:'buyer@example.test',businessName:'Lanchonete Exemplo',days:30,reason:'Liberação comercial manual verificada'}});
+  const grant=await req({action:'owner-license',data:{email:'buyer@example.test',businessName:'Lanchonete Exemplo',months:1,reason:'Liberação comercial manual verificada'}});
   assert.equal(grant.status,201,await grant.clone().text());
   const body=await grant.json();
   assert.equal(body.email,'buyer@example.test');
+  assert.equal(body.months,1);
+  assert.equal(body.expiresAt,'2026-11-20T12:00:00.000Z');
   assert.equal(sent.length,1);
   assert.match(sent[0].text,/recuperar-senha\/\#token=/);
   const tenant=await x.db.prepare('SELECT name,active FROM tenants WHERE id=?').bind(body.tenantId).first();
@@ -163,9 +166,19 @@ test('manual license cannot be granted without e-mail transport and rejects inva
    const signed=await x.sign(JSON.stringify({action:'owner-license',data}));
    return x.api.fetch(new Request(origin+'/api/v1/integrations/artisys/platform',{method:'POST',...signed}));
   };
-  const valid={email:'buyer@example.test',days:30,reason:'Liberação manual testada'};
+  const valid={email:'buyer@example.test',months:1,reason:'Liberação manual testada'};
   assert.equal((await req(valid)).status,503);
-  assert.equal((await req({...valid,days:-1})).status,400);
+  assert.equal((await req({...valid,months:-1})).status,400);
+  assert.equal((await req({...valid,months:121})).status,400);
+  assert.equal((await req({...valid,months:1.5})).status,400);
+  assert.equal((await req({email:valid.email,days:30,reason:valid.reason})).status,400);
   assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM users').bind().first()).n,0);
  }finally{x.close();}
+});
+
+test('manual license expiry is based on UTC calendar months',()=>{
+ assert.equal(manualLicenseExpiryFromMonths(Date.parse('2027-01-31T15:25:40Z'),1),'2027-02-28T15:25:40.000Z');
+ assert.equal(manualLicenseExpiryFromMonths(Date.parse('2028-01-31T15:25:40Z'),1),'2028-02-29T15:25:40.000Z');
+ assert.equal(manualLicenseExpiryFromMonths(Date.parse('2027-01-31T15:25:40Z'),2),'2027-03-31T15:25:40.000Z');
+ assert.equal(manualLicenseExpiryFromMonths(Date.parse('2027-12-31T15:25:40Z'),1),'2028-01-31T15:25:40.000Z');
 });
