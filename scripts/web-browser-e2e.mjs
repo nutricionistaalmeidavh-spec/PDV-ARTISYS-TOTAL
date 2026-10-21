@@ -101,7 +101,7 @@ try{
     root.style.scrollBehavior=previousBehavior;
   });
   await page.waitForFunction(()=>[...document.querySelectorAll('[data-reveal]')]
-    .every(node=>node.classList.contains('in-view')),{timeout:10000});
+    .every(node=>node.classList.contains('in-view')),null,{timeout:10000});
   await page.waitForTimeout(900);
   await page.screenshot({path:'qa-artifacts/pdv-landing-desktop.png',fullPage:true});
   // Premium surface visual QA, deliberately before any authenticated session.
