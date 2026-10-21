@@ -210,9 +210,25 @@
  }
  async function renderRecurrences(){
   try{
-   const data=await request('recurrences');if(document.body.dataset.activeRoute!=='finance-recurrences')return;
-   const list=data.recurrences||[];
+   const [data,notice,due]=await Promise.all([
+    request('recurrences'),request('recurrences/alerts?asOf='+encodeURIComponent(date())+'&horizonDays=14'),
+    request('due?asOf='+encodeURIComponent(date())+'&horizonDays=14')
+   ]);
+   if(document.body.dataset.activeRoute!=='finance-recurrences')return;
+   const list=data.recurrences||[],alerts=notice.alerts?.items||[],dueItems=due.due?.items||[];
+   const severityText=x=>x==='OVERDUE'?'Atrasada':x==='TODAY'?'Vence hoje':'Próxima';
    content.innerHTML=wrap('Contas recorrentes','Crie compromissos periódicos e gere parcelas em lote, sem duplicar lançamentos.',
+    '<section class="ops-card"><h2>Alertas de vencimento e recorrência</h2>'+
+    '<p class="ops-muted">Próximos 14 dias. Consultas locais aos registros da filial; nenhum lembrete é enviado a serviços externos.</p>'+
+    '<div class="ops-metrics"><article class="ops-metric"><span>Recorrências a gerar</span><strong>'+alerts.length+'</strong></article>'+
+    '<article class="ops-metric"><span>Contas em atraso</span><strong>'+dueItems.filter(x=>x.severity==='OVERDUE').length+'</strong></article>'+
+    '<article class="ops-metric"><span>Em aberto até 14 dias</span><strong>'+money(due.due?.totals?.todayCents+due.due?.totals?.upcomingCents)+'</strong></article></div>'+
+    '<div class="ops-grid two"><div><h3>Regras recorrentes</h3>'+
+    (alerts.map(x=>'<p role="status" class="ops-muted">'+esc(severityText(x.severity))+' · '+esc(x.description)+' · '+esc(x.nextDueDate)+' · '+money(x.amountCents)+'</p>').join('')||'<p class="ops-muted">Nenhuma regra requer geração.</p>')+
+    '<p class="ops-muted">Use “Gerar contas” para materializar as parcelas. Alertas não criam lançamentos sozinhos.</p></div>'+
+    '<div><h3>Vencimentos em aberto</h3>'+
+    (dueItems.slice(0,20).map(x=>'<p class="ops-muted">'+esc(severityText(x.severity))+' · '+esc(x.description)+' · '+esc(x.dueDate)+' · '+money(x.openCents)+'</p>').join('')||'<p class="ops-muted">Sem vencimentos pendentes neste período.</p>')+
+    '</div></div></section>'+
     '<section class="ops-card"><h2>Nova recorrência</h2><form id="cloud-rec-create" class="ops-form ops-form-grid"><label>Descrição<input name="description" class="ops-input" required></label><label>Tipo<select name="kind" class="ops-input"><option value="PAYABLE">Despesa a pagar</option><option value="RECEIVABLE">Valor a receber</option></select></label><label>Valor (R$)<input name="amount" class="ops-input" placeholder="129,90" required></label><label>Frequência<select name="frequency" class="ops-input"><option value="MONTHLY">Mensal</option><option value="WEEKLY">Semanal</option><option value="YEARLY">Anual</option><option value="DAILY">Diária</option></select></label><label>Primeiro vencimento<input type="date" name="startDate" value="'+esc(date())+'" class="ops-input" required></label><label>Último vencimento (opcional)<input type="date" name="endDate" class="ops-input"></label><button class="ops-primary" type="submit">Salvar recorrência</button></form></section>'+
     '<section class="ops-card"><h2>Gerar parcelas pendentes</h2><form id="cloud-rec-generate" class="ops-form erp-inline-config-form"><label>Gerar até<input class="ops-input" type="date" name="asOf" value="'+esc(date())+'" required></label><button class="ops-primary" type="submit">Gerar contas</button></form><small>Até 100 parcelas por regra em cada execução, com lançamento único por vencimento.</small></section>'+
     '<section class="ops-card"><h2>Recorrências cadastradas</h2><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Compromisso</th><th>Tipo</th><th>Valor</th><th>Próximo vencimento</th><th>Situação</th><th></th></tr></thead><tbody>'+
