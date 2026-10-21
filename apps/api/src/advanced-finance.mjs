@@ -107,7 +107,7 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
       AND (?='' OR x.tx_date<=?)
       AND (?='' OR instr(lower(x.description),lower(?))>0 OR instr(lower(x.fit_id),lower(?))>0)
       AND (?='' OR (?='IN' AND x.amount_cents>0) OR (?='OUT' AND x.amount_cents<0))
-     ORDER BY x.tx_date DESC,x.id DESC LIMIT ? OFFSET ?`,
+     ORDER BY x.tx_date ASC,x.id ASC LIMIT ? OFFSET ?`,
      t,b,accountId,accountId,status,status,status,from,from,to,to,
      str(query,100),str(query,100),str(query,100),direction,direction,direction,count,skip);
   },
