@@ -76,8 +76,10 @@ test('premium landing is bundled without remote runtime dependencies or auth rou
   assert.match(html,/src="\/landing-motion\.js"/);
   for(const asset of ['landing-premium.css','landing-motion.js'])
     assert.match(builder,new RegExp("copyFileSync\\(resolve\\(root,'apps/landing/"+asset.replaceAll('.','\\.')+"'" ));
-  for(const device of ['premium-laptop','premium-tablet','premium-phone-waiter','premium-phone-kitchen'])
-    assert.match(html,new RegExp('class="[^"]*'+device));
+  assert.match(html,/class="photo-hero"/);
+  assert.match(html,/class="demo-panel demo-photo-panel"/);
+  assert.doesNotMatch(html,/class="premium-laptop"/);
+  assert.match(builder,/cpSync\(resolve\(root,'apps\/landing\/media'/);
   for(const selector of ['data-open-login','data-open-register','registration-form','landing-login-form','landing-mfa-form'])
     assert.match(html,new RegExp(selector));
   assert.match(motion,/IntersectionObserver/);
@@ -108,4 +110,20 @@ test('preview gallery remains first-party, swipeable and scoped outside auth',()
   assert.match(script,/showModal/);
   assert.match(css,/touch-action:pan-y/);
   assert.doesNotMatch(script,/\/api\/|fetch\(|https?:\/\//);
+});
+
+test('marketing photos are real local WebP files and four gallery images can enlarge',()=>{
+  const html=source('apps/landing/index.html');
+  const expected=['pdv-hero-mockups','pdv-mesas','pdv-cardapio','pdv-garcom-cozinha','pdv-caixa'];
+  for(const name of expected){
+    const path='apps/landing/media/'+name+'.webp';
+    const image=readFileSync(new URL('../'+path,import.meta.url));
+    assert.equal(image.toString('ascii',0,4),'RIFF',path+' RIFF header');
+    assert.equal(image.toString('ascii',8,12),'WEBP',path+' WebP header');
+    assert.ok(image.length>20000&&image.length<400000,'optimized non-placeholder local image '+path);
+    assert.match(html,new RegExp('/media/'+name+'\\.webp'));
+  }
+  assert.equal((html.match(/class="demo-photo-figure"/g)||[]).length,4);
+  assert.equal((html.match(/class="demo-photo-panel"/g)||[]).length,4);
+  assert.match(source('scripts/build-web.mjs'),/cpSync\(resolve\(root,'apps\/landing\/media'/);
 });
