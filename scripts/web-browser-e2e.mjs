@@ -85,6 +85,24 @@ try{
     'scroll reveal must not leave invisible landing content');
   await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
   await page.waitForTimeout(900);
+  // Scroll through each reveal target before full-page screenshots, then wait for all transitions.
+  // A fullPage screenshot alone does not fire IntersectionObserver for sections outside the viewport.
+  await page.evaluate(async()=>{
+    const root=document.documentElement;
+    const previousBehavior=root.style.scrollBehavior;
+    root.style.scrollBehavior='auto';
+    const targets=[...document.querySelectorAll('[data-reveal]')];
+    for(const node of targets){
+      node.scrollIntoView({block:'center',behavior:'instant'});
+      await new Promise(resolve=>setTimeout(resolve,85));
+    }
+    window.scrollTo({top:0,behavior:'instant'});
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    root.style.scrollBehavior=previousBehavior;
+  });
+  await page.waitForFunction(()=>[...document.querySelectorAll('[data-reveal]')]
+    .every(node=>node.classList.contains('in-view')),{timeout:10000});
+  await page.waitForTimeout(900);
   await page.screenshot({path:'qa-artifacts/pdv-landing-desktop.png',fullPage:true});
   // Premium surface visual QA, deliberately before any authenticated session.
   assert.equal(await page.locator('.premium-laptop').count(),1,'hero requires desktop mockup');
