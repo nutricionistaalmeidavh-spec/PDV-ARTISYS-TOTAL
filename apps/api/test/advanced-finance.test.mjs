@@ -200,3 +200,74 @@ test('P4: match existing canonical settlement without duplication, and alert on 
   assert.equal(await x.service.recurrenceAlerts('a','x',{asOf:'2026-10-17',horizonDays:61}).then(()=>200,e=>e.status),400);
  }finally{x.close();}
 });
+
+
+test('P0 wallets: immutable audited balances, no overdraft, atomic transfer, replay and tenant isolation',async()=>{
+ const x=await setup();try{
+  const source=await x.service.createAccount('a','x','u',{name:'Cofre local',walletKind:'CASH'});
+  const destination=await x.service.createAccount('a','x','u',{name:'Carteira auxiliar',walletKind:'OTHER'});
+  const bank=await x.service.createAccount('a','x','u',{name:'Banco extratos',walletKind:'BANK'});
+  const open=await x.service.walletAdjust('a','x','u',{accountId:source.id,kind:'OPENING',
+   amountCents:10000,reason:'Contagem inicial de dinheiro',mutationId:'wallet-p0-opening'});
+  assert.equal(open.amountCents,10000);
+  assert.equal((await x.service.walletAdjust('a','x','u',{accountId:source.id,kind:'OPENING',
+   amountCents:10000,reason:'Contagem inicial de dinheiro',mutationId:'wallet-p0-opening'})).idempotent,true);
+  assert.equal(await x.service.walletAdjust('a','x','u',{accountId:source.id,kind:'OPENING',
+   amountCents:400,reason:'Outro saldo inicial',mutationId:'wallet-p0-reopen'}).then(()=>200,e=>e.status),409);
+  assert.equal(await x.service.walletAdjust('a','x','u',{accountId:source.id,kind:'DEBIT',
+   amountCents:11000,reason:'Retirada inválida',mutationId:'wallet-p0-overdraw'}).then(()=>200,e=>e.status),409);
+  assert.equal(await x.service.walletAdjust('a','x','u',{accountId:bank.id,kind:'CREDIT',
+   amountCents:100,reason:'Não permitido',mutationId:'wallet-p0-bank'}).then(()=>200,e=>e.status),409);
+  assert.equal(await x.service.walletAdjust('b','y','u',{accountId:source.id,kind:'CREDIT',
+   amountCents:100,reason:'Outra empresa',mutationId:'wallet-p0-cross'}).then(()=>200,e=>e.status),404);
+  assert.equal(await x.service.walletTransfer('a','x','u',{fromAccountId:source.id,toAccountId:destination.id,
+   amountCents:11000,reason:'Sem fundos para transferir',mutationId:'wallet-p0-overtransfer'}).then(()=>200,e=>e.status),409);
+  const args={fromAccountId:source.id,toAccountId:destination.id,amountCents:3000,
+   reason:'Remanejamento conferido',mutationId:'wallet-p0-transfer'};
+  assert.equal((await x.service.walletTransfer('a','x','u',args)).amountCents,3000);
+  assert.equal((await x.service.walletTransfer('a','x','u',args)).idempotent,true);
+  assert.equal(await x.service.walletTransfer('a','x','u',{...args,amountCents:2000}).then(()=>200,e=>e.status),409);
+  await x.service.walletAdjust('a','x','u',{accountId:destination.id,kind:'DEBIT',
+   amountCents:1000,reason:'Compra conferida fora do PDV',mutationId:'wallet-p0-spent'});
+  const list=await x.service.accounts('a','x');
+  assert.equal(list.find(a=>a.id===source.id).walletBalanceCents,7000);
+  assert.equal(list.find(a=>a.id===destination.id).walletBalanceCents,2000);
+  assert.equal((await x.service.walletMovements('a','x',destination.id)).length,2);
+  assert.equal(await x.service.walletMovements('b','y',destination.id).then(()=>200,e=>e.status),404);
+  const movements=await x.service.walletMovements('a','x',source.id);
+  assert.equal(movements.length,2);
+  await assert.rejects(x.db.prepare('UPDATE finance_wallet_movements SET amount_cents=1 WHERE id=?').bind(movements[0].id).run());
+  await assert.rejects(x.db.prepare('DELETE FROM finance_wallet_movements WHERE id=?').bind(movements[0].id).run());
+  assert.equal((await x.service.dre('a','x',{from:'2026-10-01',to:'2026-10-31',basis:'accrual'})).resultCents,0,
+    'Operational wallet movements never create duplicate accounting income or expense.');
+ }finally{x.close();}
+});
+
+test('P0 finance searches: canonical category, center, bank match, maturity, status and pagination',async()=>{
+ const x=await setup();try{
+  const group=await x.service.createGroup('a','x',{name:'Operação',nature:'EXPENSE'});
+  const category=await x.service.createCategory('a','x',{name:'Aluguel comercial',kind:'EXPENSE',dreGroupId:group.id});
+  const center=await x.service.createCostCenter('a','x',{name:'Matriz'});
+  const bank=await x.service.createAccount('a','x','u',{name:'Conta conciliada',walletKind:'BANK'});
+  const save=async(id,value,due,kind='PAYABLE')=>x.db.prepare(
+   'INSERT INTO finance_entries(id,tenant_id,branch_id,kind,description,amount_cents,due_date,competence_date,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)'
+  ).bind(id,'a','x',kind,id,value,due,due,'u',now).run();
+  await save('rec-early',8000,'2026-10-01');await save('rec-later',3000,'2026-10-30');
+  await save('income',1000,'2026-10-17','RECEIVABLE');
+  await x.service.classify('a','x','rec-early',{categoryId:category.id,costCenterId:center.id});
+  await x.service.importStatement('a','x','u',{accountId:bank.id,transactions:[
+   {date:'2026-10-17',amountCents:-2000,description:'Aluguel parcial',fitId:'finance-p0-a'}]});
+  const tx=(await x.service.transactions('a','x'))[0];
+  await x.service.match('a','x','u',{transactionId:tx.id,entryId:'rec-early'});
+  const filters={categoryId:category.id,costCenterId:center.id,groupId:group.id,
+   accountId:bank.id,from:'2026-10-01',to:'2026-10-18'};
+  const result=await x.service.entriesSearch('a','x',filters);
+  assert.equal(result.total,1);assert.equal(result.items[0].id,'rec-early');
+  assert.equal(result.items[0].status,'PARTIAL');assert.equal(result.items[0].openCents,6000);
+  assert.equal((await x.service.entriesSearch('a','x',{status:'OVERDUE',asOf:'2026-10-17'})).total,1);
+  assert.equal((await x.service.entriesSearch('a','x',{kind:'PAYABLE',limit:1,offset:1})).items.length,1);
+  assert.equal((await x.service.entriesSearch('b','y')).total,0);
+  assert.equal(await x.service.entriesSearch('b','y',{categoryId:category.id}).then(()=>200,e=>e.status),404);
+  assert.equal(await x.service.entriesSearch('a','x',{from:'2026-10-20',to:'2026-10-19'}).then(()=>200,e=>e.status),400);
+ }finally{x.close();}
+});
