@@ -39,6 +39,8 @@ copyFileSync(resolve(root,'apps/landing/landing.css'),resolve(output,'landing.cs
 copyFileSync(resolve(root,'apps/landing/landing-auth.css'),resolve(output,'landing-auth.css'));
 copyFileSync(resolve(root,'apps/landing/landing-premium.css'),resolve(output,'landing-premium.css'));
 copyFileSync(resolve(root,'apps/landing/landing-motion.js'),resolve(output,'landing-motion.js'));
+copyFileSync(resolve(root,'apps/landing/landing-gallery.css'),resolve(output,'landing-gallery.css'));
+copyFileSync(resolve(root,'apps/landing/landing-gallery.js'),resolve(output,'landing-gallery.js'));
 copyFileSync(resolve(root,'apps/landing/landing.js'),resolve(output,'landing.js'));
 const adminDir=resolve(output,'admin');mkdirSync(adminDir,{recursive:true});
 for(const name of ['html','css','js'])copyFileSync(resolve(root,'apps/landing/admin.'+name),resolve(adminDir,name==='html'?'index.html':'admin.'+name));
