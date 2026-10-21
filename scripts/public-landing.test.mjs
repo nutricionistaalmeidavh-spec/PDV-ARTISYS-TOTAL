@@ -65,3 +65,65 @@ test('self-hosted static server resolves only exact landing and app entrypoints'
     assert.notEqual((await serveLocalPwa('/../index.html',{rootDir:dir})).status,200);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+
+test('premium landing is bundled without remote runtime dependencies or auth route changes',()=>{
+  const html=source('apps/landing/index.html');
+  const css=source('apps/landing/landing-premium.css');
+  const motion=source('apps/landing/landing-motion.js');
+  const builder=source('scripts/build-web.mjs');
+  assert.match(html,/href="\/landing-premium\.css"/);
+  assert.match(html,/src="\/landing-motion\.js"/);
+  for(const asset of ['landing-premium.css','landing-motion.js'])
+    assert.match(builder,new RegExp("copyFileSync\\(resolve\\(root,'apps/landing/"+asset.replaceAll('.','\\.')+"'" ));
+  assert.match(html,/class="photo-hero"/);
+  assert.match(html,/class="demo-panel demo-photo-panel"/);
+  assert.doesNotMatch(html,/class="premium-laptop"/);
+  assert.match(builder,/cpSync\(resolve\(root,'apps\/landing\/media'/);
+  for(const selector of ['data-open-login','data-open-register','registration-form','landing-login-form','landing-mfa-form'])
+    assert.match(html,new RegExp(selector));
+  assert.match(motion,/IntersectionObserver/);
+  assert.match(motion,/prefers-reduced-motion/);
+  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
+  assert.doesNotMatch(motion,/fetch\(|https?:\/\//);
+  assert.doesNotMatch(css,/@import|https?:\/\//);
+  assert.match(source('apps/web/manifest.webmanifest'),/\/app\//);
+});
+
+
+test('preview gallery remains first-party, swipeable and scoped outside auth',()=>{
+  const html=source('apps/landing/index.html');
+  const script=source('apps/landing/landing-gallery.js');
+  const css=source('apps/landing/landing-gallery.css');
+  const build=source('scripts/build-web.mjs');
+  for(const path of ['landing-gallery.css','landing-gallery.js']){
+    assert.match(html,new RegExp(path.replaceAll('.','\\.')));
+    assert.match(build,new RegExp(path.replaceAll('.','\\.')));
+  }
+  for(const attr of ['data-gallery-prev','data-gallery-next','data-gallery-expand','data-gallery-counter','data-gallery-zoom-content','data-gallery-zoom-close']){
+    assert.match(html,new RegExp(attr));
+  }
+  assert.match(html,/id="painel-caixa"/);
+  assert.match(html,/data-demo="caixa"/);
+  assert.match(script,/pointerdown/);
+  assert.match(script,/pointerup/);
+  assert.match(script,/showModal/);
+  assert.match(css,/touch-action:pan-y/);
+  assert.doesNotMatch(script,/\/api\/|fetch\(|https?:\/\//);
+});
+
+test('marketing photos are real local WebP files and four gallery images can enlarge',()=>{
+  const html=source('apps/landing/index.html');
+  const expected=['pdv-integrado','pdv-mesas','pdv-cardapio','pdv-garcom-cozinha','pdv-caixa'];
+  for(const name of expected){
+    const path='apps/landing/media/'+name+'.webp';
+    const image=readFileSync(new URL('../'+path,import.meta.url));
+    assert.equal(image.toString('ascii',0,4),'RIFF',path+' RIFF header');
+    assert.equal(image.toString('ascii',8,12),'WEBP',path+' WebP header');
+    assert.ok(image.length>20000&&image.length<400000,'optimized non-placeholder local image '+path);
+    assert.match(html,new RegExp('/media/'+name+'\\.webp'));
+  }
+  assert.equal((html.match(/class="demo-photo-figure"/g)||[]).length,4);
+  assert.equal((html.match(/class="demo-panel demo-photo-panel"/g)||[]).length,4);
+  assert.match(source('scripts/build-web.mjs'),/cpSync\(resolve\(root,'apps\/landing\/media'/);
+});

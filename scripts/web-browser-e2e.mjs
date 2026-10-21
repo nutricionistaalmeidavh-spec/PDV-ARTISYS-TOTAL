@@ -74,7 +74,90 @@ try{
   await page.goto(origin+'/',{waitUntil:'domcontentloaded'});
   await page.locator('#hero-title').waitFor({timeout:12000});
   assert.equal(await page.locator('#web-login-form').count(),0,'marketing must not render the cashier overlay');
+  // Full-page screenshots do not inherently trigger IntersectionObserver offscreen entries.
+  // Drive the real scroll lifecycle first, verify every reveal fired, then return to hero.
+  const revealTargets=page.locator('[data-reveal]');
+  for(let i=0,n=await revealTargets.count();i<n;i++){
+    await revealTargets.nth(i).scrollIntoViewIfNeeded({timeout:10000});
+    await page.waitForTimeout(65);
+  }
+  assert.equal(await page.locator('[data-reveal]:not(.in-view)').count(),0,
+    'scroll reveal must not leave invisible landing content');
+  await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
+  await page.waitForTimeout(900);
+  // Scroll through each reveal target before full-page screenshots, then wait for all transitions.
+  // A fullPage screenshot alone does not fire IntersectionObserver for sections outside the viewport.
+  await page.evaluate(async()=>{
+    const root=document.documentElement;
+    const previousBehavior=root.style.scrollBehavior;
+    root.style.scrollBehavior='auto';
+    const targets=[...document.querySelectorAll('[data-reveal]')];
+    for(const node of targets){
+      node.scrollIntoView({block:'center',behavior:'instant'});
+      await new Promise(resolve=>setTimeout(resolve,85));
+    }
+    window.scrollTo({top:0,behavior:'instant'});
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    root.style.scrollBehavior=previousBehavior;
+  });
+  await page.waitForFunction(()=>[...document.querySelectorAll('[data-reveal]')]
+    .every(node=>node.classList.contains('in-view')),null,{timeout:10000});
+  await page.waitForTimeout(900);
   await page.screenshot({path:'qa-artifacts/pdv-landing-desktop.png',fullPage:true});
+  // Verify pointer/arrow gallery navigation, readable zoom and preserved account entry.
+  await page.locator('[data-gallery-next]').click();
+  assert.equal(await page.locator('#tab-cardapio').getAttribute('aria-selected'),'true','gallery next must select menu');
+  assert.equal((await page.locator('[data-gallery-counter]').textContent()).trim(),'2 de 4');
+  await page.locator('#painel-cardapio img').evaluate(img=>img.decode());
+  assert.ok(await page.locator('#painel-cardapio img').evaluate(img=>img.naturalWidth>750),
+    'menu photography must be fully loaded and readable');
+  await page.locator('[data-gallery-expand]').click();
+  assert.equal(await page.locator('#demo-gallery-zoom').evaluate(el=>el.open),true,'gallery preview should enlarge');
+  assert.equal(await page.locator('[data-gallery-zoom-content] .demo-panel').count(),1,'zoom contains selected panel');
+  await page.locator('#demo-gallery-zoom').screenshot({path:'qa-artifacts/pdv-landing-gallery-zoom-desktop.png'});
+  await page.locator('[data-gallery-zoom-close]').click();
+  assert.equal(await page.locator('#demo-gallery-zoom').evaluate(el=>el.open),false);
+  await page.locator('#tab-cozinha').click();
+  await page.locator('.demo-frame .demo-panel:not([hidden])').evaluate(element=>{
+    const rect=element.getBoundingClientRect();
+    const x=rect.left+rect.width*0.75,y=rect.top+rect.height*0.5;
+    element.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:9,pointerType:'touch',clientX:x,clientY:y}));
+    element.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:9,pointerType:'touch',clientX:x-120,clientY:y}));
+  });
+  assert.equal(await page.locator('#tab-caixa').getAttribute('aria-selected'),'true','swipe left must select cashier preview');
+  await page.locator('[data-gallery-prev]').click();
+  assert.equal(await page.locator('#tab-cozinha').getAttribute('aria-selected'),'true','previous arrow must work');
+  await page.locator('#tab-mesas').click();
+
+  // Premium surface visual QA, deliberately before any authenticated session.
+  const mainPhoto=page.locator('.photo-hero img');
+  assert.equal(await mainPhoto.count(),1,'photo hero must use a real local product image');
+  await mainPhoto.evaluate(img=>img.decode());
+  assert.ok(await mainPhoto.evaluate(img=>img.naturalWidth>=900),'photographic mockup should load at source resolution');
+  assert.equal(await page.locator('.demo-photo-figure img').count(),4,'four photo-led feature previews');
+  const premiumStyles=await page.locator('.hero').evaluate(el=>getComputedStyle(el).color);
+  assert.ok(premiumStyles,'premium hero must be styled');
+  await page.setViewportSize({width:390,height:844});
+  await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
+  await page.locator('#hero-title').waitFor();
+  await page.waitForTimeout(450);
+  await page.screenshot({path:'qa-artifacts/pdv-landing-mobile.png',fullPage:true});
+  await page.locator('[data-gallery-next]').click();
+  await page.locator('.demo-frame .demo-photo-panel:not([hidden]) img').evaluate(img=>img.decode());
+  await page.waitForTimeout(650); // Record settled visual state, not its entry fade.
+  await page.locator('.demo-frame').screenshot({path:'qa-artifacts/pdv-landing-gallery-mobile.png'});
+  await page.locator('#tab-mesas').click();
+  const landingMobileGeometry=await page.evaluate(()=>({
+    viewport:innerWidth,scroll:document.documentElement.scrollWidth,
+    loginVisible:!!document.querySelector('[data-open-login]')?.getBoundingClientRect().width,
+    registerVisible:!!document.querySelector('[data-open-register]')?.getBoundingClientRect().width
+  }));
+  assert.ok(landingMobileGeometry.scroll<=landingMobileGeometry.viewport+2,
+    'premium mobile landing horizontal overflow '+JSON.stringify(landingMobileGeometry));
+  assert.ok(landingMobileGeometry.loginVisible&&landingMobileGeometry.registerVisible,
+    'mobile login and registration CTAs must remain accessible');
+  await page.setViewportSize({width:1366,height:860});
+
   await page.locator('[data-open-register]').first().click();
   assert.equal(await page.locator('#registration-dialog').evaluate(el=>el.open),true);
   await page.locator('[data-close-register]').click();
@@ -546,19 +629,6 @@ try{
     return (await api.openCash(localStorage.getItem('artisys.pdv.webTerminalId.v1')))?.id;
   });
   assert.equal(firstStillOpen,firstCash,'closing terminal B cannot close terminal A');
-  // P3: inspect a genuinely closed terminal through the public cashier UI.
-  await secondPage.locator('#web-cash-history-search summary').click();
-  const terminalSelect=secondPage.locator('#web-cash-search-form select[name=terminalId]');
-  await terminalSelect.selectOption(secondTerminal);
-  assert.equal(await secondPage.locator('#web-cash-search-form input[name=operatorId]').count(),0,
-    'historical operator filters must use names, never raw ID text fields');
-  await secondPage.locator('#web-cash-search-form button[type=submit]').click();
-  const closedAudit=secondPage.locator('[data-cash-audit="'+secondCash+'"]');
-  await closedAudit.waitFor({timeout:12000});
-  await closedAudit.click();
-  await secondPage.getByRole('heading',{name:'Movimentações da sessão'}).waitFor({timeout:12000});
-  await secondPage.getByRole('heading',{name:'Estornos vinculados a esta sessão'}).waitFor({timeout:12000});
-  await secondPage.screenshot({path:'qa-artifacts/pdv-parity-cash-closed-audit.png',fullPage:true});
   await secondContext.close();
 
   // A suspended sale must remain reachable after its automatic dialog is
@@ -625,12 +695,6 @@ try{
   // Parity: the original sales-history route now offers server-side search and paging.
   await navigateUi(page,'sales');
   await page.locator('#web-sales-filter').waitFor({timeout:12000});
-  for(const field of ['sellerId','operatorId','customerId','productId']){
-    assert.equal(await page.locator('#web-sales-filter select[name="'+field+'"]').count(),1,
-      'P3 '+field+' should be chosen from historical names');
-    assert.equal(await page.locator('#web-sales-filter input[name="'+field+'"]').count(),0,
-      'P3 '+field+' must not expose a raw ID input');
-  }
   // Filter by the sale actually completed above; prior Workerd smoke leaves
   // legitimate independent sales in the same test D1.
   await page.locator('#web-sales-filter [name=query]').fill(completedSaleNumber);

@@ -21,7 +21,7 @@
     "report:saas": "node scripts/p6-capability-report.mjs --saas",
     "serve:lan": "npm run build && node --experimental-sqlite apps/api/src/https-lan-server.mjs",
     "audit:r0-r1": "node scripts/r0-r1-audit.mjs",
-    "check:landing": "node --check apps/landing/landing.js && node --check apps/landing/recuperar-senha.js && node --test scripts/public-landing.test.mjs",
+    "check:landing": "node --check apps/landing/landing.js && node --check apps/landing/landing-gallery.js && node --check apps/landing/landing-motion.js && node --check apps/landing/recuperar-senha.js && node --test scripts/public-landing.test.mjs",
     "test:ux": "node --test scripts/web-navigation.test.mjs scripts/enterprise-web-routes.test.mjs scripts/web-settings-ui.test.mjs",
     "test:ux:browser": "node --experimental-sqlite scripts/audit-fixes-browser.mjs && node scripts/recipe-ui-browser.mjs && node scripts/catalog-master-browser.mjs && node scripts/web-settings-browser.mjs"
   },
