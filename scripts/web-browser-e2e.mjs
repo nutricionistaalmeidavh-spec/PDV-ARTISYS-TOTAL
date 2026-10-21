@@ -757,8 +757,10 @@ try{
   await page.locator('.ux-dialog [name=amount]').fill('12,00');
   await page.locator('.ux-dialog [name=dueDate]').fill('2026-10-25');
   await page.locator('.ux-dialog__confirm').click();
-  await page.getByText('Energia QA P4').waitFor({timeout:12000});
-  await page.locator('[data-web-settle]').first().click();
+  const energyRow=page.locator('#route-content tr').filter({hasText:'Energia QA P4'})
+    .filter({has:page.locator('[data-web-settle]')});
+  await energyRow.waitFor({timeout:12000});
+  await energyRow.locator('[data-web-settle]').click();
   await page.locator('.ux-dialog [name=amount]').fill('5,00');
   await page.locator('.ux-dialog__confirm').click();
   await page.locator('.ux-dialog').waitFor({state:'detached',timeout:12000});
