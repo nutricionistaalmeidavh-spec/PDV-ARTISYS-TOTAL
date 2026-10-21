@@ -368,3 +368,9 @@ html.motion-ready [data-reveal],html.motion-ready [data-reveal].in-view{opacity:
 html{overflow-x:clip;max-width:100%}
 body{max-width:100%}
 .premium-stage-note{z-index:7}
+
+/* Touch targets, including the text-only access paths, meet 44px recommended size. */
+.nav-login,.footer-login{display:inline-flex;align-items:center;min-height:44px;padding-inline:8px}
+.dialog-close{min-width:44px;min-height:44px}
+.dialog-footer button,.dialog-footer a{display:inline-flex;align-items:center;min-height:30px}
+.feature-card a{display:inline-flex;align-items:center;min-height:38px}
