@@ -28,7 +28,7 @@ export async function platformBridgeRoute(request,db,env,now){
  if(!valid)return reply('invalid_platform_signature',403);
  let payload;try{payload=JSON.parse(body);}catch{return reply('invalid_platform_payload',400);}
  if(!payload||typeof payload!=='object'||Array.isArray(payload))return reply('invalid_platform_payload',400);
- const method=payload.action==='bootstrap'?'POST':payload.action==='approve'?'POST':'GET';
+ const method=['bootstrap','approve','owner-license','revoke-license'].includes(payload.action)?'POST':'GET';
  let target;
  switch(payload.action){
   case 'summary':case 'tenants':case 'audit':
@@ -40,6 +40,13 @@ export async function platformBridgeRoute(request,db,env,now){
    if(!payload.data||typeof payload.data!=='object'||Array.isArray(payload.data))
     return reply('invalid_bootstrap',400);
    target='/api/v1/platform/bootstrap';break;
+  case 'owner-license':
+   if(!payload.data||typeof payload.data!=='object'||Array.isArray(payload.data))
+    return reply('invalid_owner_license',400);
+   target='/api/v1/platform/owner-license';break;
+  case 'revoke-license':
+   if(!idOk(payload.tenantId))return reply('invalid_tenant_id',400);
+   target='/api/v1/platform/tenants/'+encodeURIComponent(payload.tenantId)+'/manual-license/revoke';break;
   default:return reply('platform_action_forbidden',403);
  }
  // A signature proves the caller; the primary key prevents replay across Worker instances.
@@ -50,7 +57,7 @@ export async function platformBridgeRoute(request,db,env,now){
  }catch{return reply('platform_bridge_schema_unavailable',503);}
  const proxy=new Request(new URL(target,request.url),{
   method,headers:method==='POST'?{'content-type':'application/json'}:{},
-  ...(method==='POST'?{body:JSON.stringify(payload.action==='bootstrap'?payload.data:{})}:{})
+  ...(method==='POST'?{body:JSON.stringify(['bootstrap','owner-license'].includes(payload.action)?payload.data:{})}:{})
  });
  return platformManagementRoute(proxy,db,env,target,now,{centralVerified:true});
 }
