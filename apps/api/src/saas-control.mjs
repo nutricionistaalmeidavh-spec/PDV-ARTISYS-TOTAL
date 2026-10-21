@@ -31,7 +31,11 @@ export async function tenantWriteAllowed(db,tenantId,env,now){
  if(s&&['TRIAL','ACTIVE'].includes(s.status)&&Date.parse(s.endsAt)>now)return true;
  // Administrator-issued access is separate from Asaas-verified payments.
  try{
-  const grant=await q(db,'SELECT active,expires_at AS expiresAt FROM saas_admin_licenses WHERE tenant_id=?',tenantId).first();
+  const grant=await q(db,`SELECT l.active,l.expires_at AS expiresAt FROM saas_admin_licenses l
+   JOIN users u ON u.id=l.owner_user_id AND u.email_norm=l.owner_email AND u.active=1
+   JOIN tenant_memberships m ON m.tenant_id=l.tenant_id AND m.user_id=u.id
+      AND m.profile_key='OWNER' AND m.active=1
+   WHERE l.tenant_id=?`,tenantId).first();
   return Boolean(grant?.active===1&&Date.parse(grant.expiresAt)>now);
  }catch{return false;}
 }
@@ -356,11 +360,12 @@ export async function platformManagementRoute(request,db,env,path,now,{centralVe
     throw fail(503,'Falha no envio: nenhuma licença nova foi ativada.');
    }
    await db.batch([
-    q(db,`INSERT INTO saas_admin_licenses(tenant_id,active,expires_at,reason,updated_at,updated_by)
-     VALUES(?,1,?,?,?,'CENTRAL_ADMIN')
-     ON CONFLICT(tenant_id) DO UPDATE SET active=1,expires_at=excluded.expires_at,
+    q(db,`INSERT INTO saas_admin_licenses(tenant_id,owner_user_id,owner_email,active,expires_at,reason,updated_at,updated_by)
+     VALUES(?,?,?,1,?,?,?,'CENTRAL_ADMIN')
+     ON CONFLICT(tenant_id) DO UPDATE SET owner_user_id=excluded.owner_user_id,
+      owner_email=excluded.owner_email,active=1,expires_at=excluded.expires_at,
       reason=excluded.reason,updated_at=excluded.updated_at,updated_by='CENTRAL_ADMIN'`,
-      tenantId,expiresAt,reason,when),
+      tenantId,userId,email,expiresAt,reason,when),
     audit(db,tenantId,'CENTRAL_ADMIN','OWNER_LICENSE_GRANTED',userId,now,{email,days,expiresAt,reason})
    ]);
    return output({granted:true,emailSent:true,email,tenantId,expiresAt},201);
