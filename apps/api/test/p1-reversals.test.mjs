@@ -365,31 +365,24 @@ test('P1 history: 1,050 historical operators remain searchable, combined queries
     'sales/history?branchId=branch-a&operatorId='+newestId+'&status=COMPLETED&from=2026-10-17&to=2026-10-17');
   assert.equal(selected.status,200,JSON.stringify(selected.body));
   assert.equal(selected.body.history.total,1);assert.equal(selected.body.history.items[0].operatorId,newestId);
-  // Synthetic history rows have no line items. Materialize one item/payment
-  // to exercise the actual item-level desktop-compatible CSV export contract.
-  const csvProduct=await x.item('CSV-HISTORY',1500,2);
-  await x.db.prepare(`UPDATE sales SET subtotal_cents=1500,total_cents=1500
-    WHERE tenant_id='a' AND branch_id='branch-a' AND id=?`).bind('synthetic-'+missing).run();
-  await x.db.prepare(`INSERT INTO sale_items
-    (id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?)`).bind('csv-history-item','a','branch-a','synthetic-'+missing,
-    csvProduct,'Produto histórico','CSV-HISTORY',1000,1500,stamp).run();
-  await x.db.prepare(`INSERT INTO sale_payments
-    (id,tenant_id,branch_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?)`)
-    .bind('csv-history-payment','a','branch-a','synthetic-'+missing,'PIX',1500,stamp).run();
-  const exported=await x.call(x.manager,'a',
-    'reports/details.csv?branchId=branch-a&operatorId='+encodeURIComponent(newestId)+
-    '&status=COMPLETED&from=2026-10-17&to=2026-10-17');
-  assert.equal(exported.status,200,JSON.stringify(exported.body));
-  assert.match(exported.body.csv,new RegExp('SYN-'+String(missing).padStart(5,'0')));
-  const outsiderExport=await x.call(x.outsider,'b',
-    'reports/details.csv?branchId=branch-b&operatorId='+encodeURIComponent(newestId));
-  assert.equal(outsiderExport.status,200);
-  assert.doesNotMatch(outsiderExport.body.csv,new RegExp('SYN-'+String(missing).padStart(5,'0')));
   const all=await x.call(x.manager,'a','sales/history?branchId=branch-a&status=COMPLETED&limit=100&offset=1000');
   assert.equal(all.status,200,JSON.stringify(all.body));
   assert.equal(all.body.history.total,1050);
   assert.equal(all.body.history.items.length,50);
+  // Export a genuine completed sale rather than mutating a finalized synthetic one.
+  const csvProduct=await x.item('CSV-HISTORY',1500,2);
+  await x.write('cash/open',{openingCents:0});
+  const csvSaleId=await x.sale(csvProduct,1,[{method:'PIX',amountCents:1500}]);
+  const csvSale=(await x.read('sales/'+csvSaleId)).body.sale;
+  const exported=await x.call(x.manager,'a',
+    'reports/details.csv?branchId=branch-a&operatorId=manager&status=COMPLETED&from=2026-10-17&to=2026-10-17');
+  assert.equal(exported.status,200,JSON.stringify(exported.body));
+  assert.ok(exported.body.csv.includes(csvSale.saleNumber),'CSV must include the real sold product row');
+  const outsiderExport=await x.call(x.outsider,'b',
+    'reports/details.csv?branchId=branch-b&operatorId=manager');
+  assert.equal(outsiderExport.status,200);
+  assert.ok(!outsiderExport.body.csv.includes(csvSale.saleNumber),'CSV must not reveal the other company sale');
+
   assert.equal((await x.call(x.outsider,'b','sales/filter-options?branchId=branch-b&field=operators&query=hist-1049'))
     .body.options.operators.length,0);
   const invalid=await x.call(x.manager,'a','sales/filter-options?branchId=branch-a&field=arbitrary&query=a');
