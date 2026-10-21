@@ -1,0 +1,44 @@
+.nav-login,
+.footer-login,
+.dialog-footer button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font-weight: 800;
+}
+
+.nav-login {
+  font-size: 13px;
+  color: #36465c;
+}
+
+.nav-login:hover,
+.dialog-footer button:hover {
+  color: var(--blue);
+}
+
+.footer-login {
+  color: #b5d3ff;
+  font-size: 12px;
+}
+
+.dialog-footer button,
+.dialog-footer a {
+  color: var(--blue);
+  font-size: inherit;
+}
+
+.dialog-content form[hidden] {
+  display: none;
+}
+
+.dialog-content form .button-outline {
+  background: #fff;
+  color: var(--navy);
+  border-color: #cad5e4;
+}
+
+.dialog-content form .button + .button {
+  margin-top: 2px;
+}

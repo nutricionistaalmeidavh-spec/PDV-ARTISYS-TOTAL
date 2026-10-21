@@ -10,10 +10,12 @@ test('marketing is a distinct public entry, not a duplicate operating renderer',
   const html=source('apps/landing/index.html');
   assert.match(html,/<main id="conteudo">/);
   assert.match(html,/id="registration-form"/);
+  assert.match(html,/id="landing-login-form"/);
+  assert.match(html,/id="landing-mfa-form"/);
+  assert.match(html,/data-open-login/);
   assert.match(html,/data-demo="mesas"/);
   assert.match(html,/data-demo="cardapio"/);
   assert.match(html,/data-demo="cozinha"/);
-  assert.match(html,/\/app\//);
   assert.doesNotMatch(html,/src="\/app\.js"/);
   assert.match(source('scripts/build-web.mjs'),/app\/index\.html/);
 });
@@ -24,6 +26,18 @@ test('registration sends only to the same-origin API and has no external depende
   assert.doesNotMatch(js,/https?:\/\//);
   const wrangler=source('wrangler.jsonc');
   assert.match(wrangler,/"REGISTRATION_ENABLED": "false"/);
+});
+test('landing login authenticates in place and continues into the operational app',()=>{
+  const html=source('apps/landing/index.html');
+  const js=source('apps/landing/landing.js');
+  assert.match(html,/autocomplete="username"/);
+  assert.match(html,/autocomplete="current-password"/);
+  assert.match(html,/autocomplete="one-time-code"/);
+  assert.match(js,/request\('\/api\/v1\/auth\/login'/);
+  assert.match(js,/request\('\/api\/v1\/auth\/mfa\/login'/);
+  assert.match(js,/session\.mfaRequired/);
+  assert.match(js,/location\.assign\('\/app\/'\)/);
+  assert.doesNotMatch(html,/class="nav-login" href="\/app\//);
 });
 test('PWA opens the operational system, never marketing, when installed',()=>{
   const manifest=JSON.parse(source('apps/web/manifest.webmanifest'));

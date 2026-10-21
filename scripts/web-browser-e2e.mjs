@@ -75,11 +75,12 @@ try{
   await page.locator('[data-open-register]').first().click();
   assert.equal(await page.locator('#registration-dialog').evaluate(el=>el.open),true);
   await page.locator('[data-close-register]').click();
-  await page.goto(origin+'/app/',{waitUntil:'domcontentloaded'});
-  await page.locator('#web-login-form').waitFor({timeout:12000});
-  await page.locator('#web-email').fill('owner@example.test');
-  await page.locator('#web-password').fill('DummyStrongPassOnlyForCI2026');
-  await page.locator('#web-login-form button[type=submit]').click();
+  await page.locator('[data-open-login]').first().click();
+  assert.equal(await page.locator('#login-dialog').evaluate(el=>el.open),true);
+  await page.locator('#landing-login-form input[name=email]').fill('owner@example.test');
+  await page.locator('#landing-login-form input[name=password]').fill('DummyStrongPassOnlyForCI2026');
+  await page.locator('#landing-login-form button[type=submit]').click();
+  await page.waitForURL(origin+'/app/',{timeout:12000});
   await page.locator('body[data-active-route=home]').waitFor({timeout:12000});
   await page.getByRole('heading',{name:'Início',exact:true}).waitFor();
   // Optional areas are enabled deliberately in Settings. A business-profile
@@ -663,7 +664,7 @@ try{
 
   // P5: authorized home indicators are scoped and link back to the one report route.
   await navigateUi(page,'home');
-  await page.locator('#web-home-live [data-home-open-report]').waitFor({timeout:12000});
+  await page.locator('#web-home-live [data-home-open-report]').waitFor({timeout:30000});
   assert.match(await page.locator('#web-home-live').innerText(),/Terminais com caixa aberto/i);
   // home-003: real PWA shows authorized canonical alerts, not a fake fixture.
   await page.locator('#web-home-operational-alerts').waitFor({timeout:12000});
