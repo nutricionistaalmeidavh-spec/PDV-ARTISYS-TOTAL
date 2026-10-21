@@ -103,3 +103,29 @@ test('P4 HTTP: wallet roles, date alerts, filtered bank history and matching loo
   assert.equal((await s.call(base+'accounts',{cookie:viewer,method:'POST',body:{branchId:'branch-a',name:'Denegado',walletKind:'BANK'}})).status,403);
  }finally{s.close();}
 });
+
+test('P0 wallet and finance filters HTTP enforce roles, tenant and branch and never create duplicate balance',async()=>{
+ const s=await setup();try{
+  const owner=await s.login('owner'),viewer=await s.login('viewer'),other=await s.login('other');
+  const base='/api/v1/tenants/a/finance-advanced/';
+  const call=(route,method='GET',body,cookie=owner)=>
+    s.call(base+route+(method==='GET'?(route.includes('?')?'&':'?')+'branchId=branch-a':''),{
+      method,cookie,...(method==='GET'?{}:{body:{branchId:'branch-a',...body}})
+    });
+  const acct=await call('accounts','POST',{name:'Carteira operacional',walletKind:'CASH'});
+  assert.equal(acct.status,201,acct.data.error);
+  const wallet=acct.data.account.id;
+  assert.equal((await call('wallets/movement','POST',{accountId:wallet,kind:'OPENING',amountCents:9000,
+    reason:'Dinheiro contado',mutationId:'api-wallet-init'},viewer)).status,403);
+  assert.equal((await call('wallets/movement','POST',{accountId:wallet,kind:'OPENING',amountCents:9000,
+    reason:'Dinheiro contado',mutationId:'api-wallet-init'},other)).status,404);
+  assert.equal((await call('wallets/movement','POST',{accountId:wallet,kind:'OPENING',amountCents:9000,
+    reason:'Dinheiro contado',mutationId:'api-wallet-init'})).status,201);
+  assert.equal((await call('wallets/'+wallet+'/movements')).data.movements.length,1);
+  assert.equal((await call('entries/search?status=OPEN')).status,200);
+  assert.equal((await call('entries/search?status=INVALID')).status,400);
+  assert.equal((await s.call(base+'wallets/'+wallet+'/movements?branchId=branch-b',{cookie:owner})).status,404);
+  assert.equal((await s.call(base+'wallets/'+wallet+'/movements?branchId=branch-a',{cookie:other})).status,404);
+  assert.equal((await s.call(base+'entries/search?branchId=branch-b',{cookie:owner})).status,404);
+ }finally{s.close();}
+});
