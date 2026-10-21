@@ -290,13 +290,13 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
       COALESCE(SUM(CASE WHEN dueDate<? THEN openCents ELSE 0 END),0) AS overdueCents,
       COALESCE(SUM(CASE WHEN dueDate=? THEN openCents ELSE 0 END),0) AS todayCents,
       COALESCE(SUM(CASE WHEN dueDate>? THEN openCents ELSE 0 END),0) AS upcomingCents,
-      SUM(CASE WHEN dueDate<? THEN 1 ELSE 0 END) AS overdueCount,
-      SUM(CASE WHEN dueDate=? THEN 1 ELSE 0 END) AS todayCount,
-      SUM(CASE WHEN dueDate>? THEN 1 ELSE 0 END) AS upcomingCount
+      COALESCE(SUM(CASE WHEN dueDate<? THEN 1 ELSE 0 END),0) AS overdueCount,
+      COALESCE(SUM(CASE WHEN dueDate=? THEN 1 ELSE 0 END),0) AS todayCount,
+      COALESCE(SUM(CASE WHEN dueDate>? THEN 1 ELSE 0 END),0) AS upcomingCount
       FROM balances WHERE openCents>0`,t,b,iso(end),day,day,day,day,day,day);
    const items=entries.map(x=>({...x,
     severity:x.dueDate<day?'OVERDUE':x.dueDate===day?'TODAY':'UPCOMING'}));
-   return {asOf:day,through:iso(end),totals,items,truncated:items.length===300};
+   return {asOf:day,through:iso(end),totals,items,truncated:totals.overdueCount+totals.todayCount+totals.upcomingCount>items.length};
   },
   async recurrenceAlerts(t,b,{asOf=stamp().slice(0,10),horizonDays=7}={}){
    await branch(t,b);const day=date(asOf),days=Number(horizonDays);
