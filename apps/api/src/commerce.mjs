@@ -335,8 +335,38 @@ export function createCommerceService(db,{now=nowISO}={}){
     releaseReservation:(t,b,id,u,key)=>catalogDepth.releaseReservation(t,b,id,u,key),
     stockReservations:(t,b,filters)=>catalogDepth.reservations(t,b,filters),
     purchaseCosts:(t,b,filters)=>catalogDepth.purchaseCosts(t,b,filters),
-    async salesFilterOptions(tenant,branch){
+    async salesFilterOptions(tenant,branch,filters={}){
       await branchExists(tenant,branch);
+      const field=text(filters.field||'',24),query=text(filters.query||'',100);
+      if(field){
+        const sql={
+          sellers:`SELECT DISTINCT s.seller_id AS id,COALESCE(u.display_name,s.seller_id) AS name
+            FROM sales s LEFT JOIN users u ON u.id=s.seller_id
+            WHERE s.tenant_id=? AND s.branch_id=? AND s.seller_id IS NOT NULL
+              AND (instr(lower(COALESCE(u.display_name,s.seller_id)),lower(?))>0
+                OR instr(lower(s.seller_id),lower(?))>0)
+            ORDER BY name,id LIMIT 100`,
+          operators:`SELECT DISTINCT s.operator_id AS id,COALESCE(u.display_name,s.operator_id) AS name
+            FROM sales s LEFT JOIN users u ON u.id=s.operator_id
+            WHERE s.tenant_id=? AND s.branch_id=?
+              AND (instr(lower(COALESCE(u.display_name,s.operator_id)),lower(?))>0
+                OR instr(lower(s.operator_id),lower(?))>0)
+            ORDER BY name,id LIMIT 100`,
+          customers:`SELECT DISTINCT s.customer_id AS id,COALESCE(c.name,s.customer_id) AS name
+            FROM sales s LEFT JOIN customers c ON c.id=s.customer_id AND c.tenant_id=s.tenant_id
+            WHERE s.tenant_id=? AND s.branch_id=? AND s.customer_id IS NOT NULL
+              AND (instr(lower(COALESCE(c.name,s.customer_id)),lower(?))>0
+                OR instr(lower(s.customer_id),lower(?))>0)
+            ORDER BY name,id LIMIT 100`,
+          products:`SELECT si.product_id AS id,MAX(si.product_name) AS name
+            FROM sale_items si WHERE si.tenant_id=? AND si.branch_id=?
+             GROUP BY si.product_id HAVING instr(lower(MAX(si.product_name)),lower(?))>0
+               OR instr(lower(si.product_id),lower(?))>0
+             ORDER BY name,id LIMIT 100`
+        }[field];
+        if(!sql)throw error(400,'Campo histórico inválido.');
+        return {[field]:await all(sql,tenant,branch,query,query)};
+      }
       // Options come from historical records, including inactive actors/products.
       // Tenant and branch are always derived from the authenticated request.
       const [sellers,operators,customers,products]=await Promise.all([
@@ -796,8 +826,25 @@ export function createCommerceService(db,{now=nowISO}={}){
           branchId:branch};
       }));
     },
-    async cashFilterOptions(tenant,branch){
+    async cashFilterOptions(tenant,branch,filters={}){
       await branchExists(tenant,branch);
+      const field=text(filters.field||'',24),query=text(filters.query||'',100);
+      if(field){
+        const sql={
+          operators:`SELECT DISTINCT c.operator_id AS id,COALESCE(u.display_name,c.operator_id) AS name
+            FROM cash_sessions c LEFT JOIN users u ON u.id=c.operator_id
+            WHERE c.tenant_id=? AND c.branch_id=? AND
+              (instr(lower(COALESCE(u.display_name,c.operator_id)),lower(?))>0
+                OR instr(lower(c.operator_id),lower(?))>0)
+            ORDER BY name,id LIMIT 100`,
+          terminals:`SELECT DISTINCT terminal_id AS id,terminal_id AS name
+            FROM cash_sessions WHERE tenant_id=? AND branch_id=?
+             AND instr(lower(terminal_id),lower(?))>0
+            ORDER BY terminal_id LIMIT 100`
+        }[field];
+        if(!sql)throw error(400,'Filtro de caixa inválido.');
+        return {[field]:await all(sql,...(field==='terminals'?[tenant,branch,query]:[tenant,branch,query,query]))};
+      }
       const [operators,terminals]=await Promise.all([
         all(`SELECT DISTINCT c.operator_id AS id,COALESCE(u.display_name,c.operator_id) AS name
           FROM cash_sessions c LEFT JOIN users u ON u.id=c.operator_id
