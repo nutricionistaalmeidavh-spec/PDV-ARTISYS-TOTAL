@@ -263,6 +263,55 @@
         .catch(error=>{try{popup.close();}catch{}showToast(error?.message||'Falha ao preparar fechamento.','error');})
         .finally(()=>{button.disabled=false;});
     }));
+    async function showCashAudit(sessionId){
+      const panel=content.querySelector('[data-cash-audit-panel]');
+      if(!panel)return;
+      panel.innerHTML='<p class="ops-muted">Consultando movimentações e estornos…</p>';
+      try{
+        const {session,movements,reversals}=await api.cashSessionAudit(sessionId);
+        if(!routeActive('cash')||!panel.isConnected)return;
+        const otherSessions=r=>[r.originalCashSessionId,r.cashSessionId]
+          .filter(id=>id&&id!==session.id).filter((id,index,arr)=>arr.indexOf(id)===index)
+          .map(id=>`<button type="button" class="ops-link" data-open-cash-session="${escapeHtml(id)}">Abrir caixa relacionado</button>`).join(' ');
+        panel.innerHTML=`<section class="ops-card"><div class="ops-card-head"><div>
+          <h2>Livro de caixa · ${escapeHtml(session.terminalId)}</h2>
+          <p>${when(session.openedAt)} – ${when(session.closedAt)} · ${badge(session.status)}</p>
+          </div><button class="ops-secondary" type="button" data-cash-audit-close>Fechar detalhes</button></div>
+          <div class="ops-metrics">
+          ${metric('Fundo inicial',money(session.openingCents))}
+          ${metric('Dinheiro esperado',money(session.expectedCashCents))}
+          ${metric('Dinheiro contado',session.countedCashCents==null?'—':money(session.countedCashCents))}
+          ${metric('Divergência',session.divergenceCents==null?'—':money(session.divergenceCents))}
+          </div>
+          <h3>Movimentações da sessão</h3>
+          <p class="ops-muted">Os lançamentos pertencem a este caixa. PIX e cartão não alteram o dinheiro físico esperado.</p>
+          <div class="ops-table-wrap"><table class="ops-table"><thead><tr>
+          <th>Quando</th><th>Movimento</th><th>Pagamento</th><th>Valor</th><th>Observação</th></tr></thead><tbody>
+          ${movements.map(m=>`<tr><td>${when(m.createdAt)}</td><td>${escapeHtml(cashMovementLabel(m.type))}</td>
+          <td>${escapeHtml(cashPaymentLabel(m.paymentMethod))}</td><td>${money(m.amountCents)}</td>
+          <td>${escapeHtml(m.note||'—')}</td></tr>`).join('')||
+          '<tr><td colspan="5">Nenhuma movimentação nesta sessão.</td></tr>'}
+          </tbody></table></div>
+          <h3>Estornos vinculados a esta sessão</h3>
+          <p class="ops-muted">O fechamento original permanece imutável. Um estorno posterior é registrado na data da compensação; reembolso em dinheiro usa o caixa aberto nessa data.</p>
+          <div class="ops-table-wrap"><table class="ops-table"><thead><tr>
+          <th>Quando</th><th>Venda</th><th>Motivo</th><th>Forma</th><th>Valor</th><th>Caixas vinculados</th></tr></thead><tbody>
+          ${reversals.map(r=>`<tr><td>${when(r.createdAt)}</td><td>${escapeHtml(r.saleNumber||r.saleId)}</td>
+          <td>${escapeHtml(r.kind==='CANCEL'?'Cancelamento':'Devolução')} · ${escapeHtml(r.reason||'—')}</td>
+          <td>${escapeHtml(cashPaymentLabel(r.paymentMethod))}</td><td>${money(r.amountCents)}</td>
+          <td>Original: ${escapeHtml(r.originalTerminalId||'—')}
+          <small>${r.cashSessionId?'Reembolso no terminal '+escapeHtml(r.refundTerminalId||'DEFAULT'):'Sem movimentação de dinheiro físico'}</small>
+          ${otherSessions(r)}</td></tr>`).join('')||
+          '<tr><td colspan="6">Nenhum estorno vinculado.</td></tr>'}
+          </tbody></table></div></section>`;
+        panel.querySelector('[data-cash-audit-close]')?.addEventListener('click',()=>{panel.innerHTML='';});
+        panel.querySelectorAll('[data-open-cash-session]').forEach(button=>button.addEventListener('click',()=>{
+          void showCashAudit(button.dataset.openCashSession);
+        }));
+      }catch(error){
+        if(panel.isConnected)panel.innerHTML=`<p class="ops-muted" role="alert">${escapeHtml(error.message||'Falha na consulta do caixa.')}</p>`;
+      }
+    }
     content.querySelector('#web-cash-search-form')?.addEventListener('submit',async event=>{
       event.preventDefault();
       const form=event.currentTarget,result=content.querySelector('#web-cash-history-result');
