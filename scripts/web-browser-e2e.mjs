@@ -281,14 +281,21 @@ try{
   await navigateUi(page,'finance-banks');
   await page.locator('#cloud-bank-create').waitFor({timeout:12000});
   for(const route of ['finance','finance-recurrences','management','finance-banks']){
+    const bankLoaded=route==='finance-banks'?page.waitForResponse(response=>response.request().method()==='GET'&&
+      new URL(response.url()).pathname.endsWith('/finance-advanced/accounts'),{timeout:20000}):null;
     await page.locator('.ops-page nav [data-route="'+route+'"]').click();
     await page.locator('body[data-active-route="'+route+'"]').waitFor({timeout:12000});
+    if(bankLoaded)await bankLoaded;
     await page.waitForFunction(expected=>{
       const host=document.querySelector('#route-content');
       return document.body.dataset.activeRoute===expected&&Boolean(host?.querySelector('h1'))&&
         !host.querySelector('.ops-loader')&&!/^Carregando\b/i.test(host.innerText.trim());
     },route,{timeout:20000});
-    if(route!=='finance-banks')await navigateUi(page,'finance-banks');
+    if(route!=='finance-banks'){
+      const backLoaded=page.waitForResponse(response=>response.request().method()==='GET'&&
+        new URL(response.url()).pathname.endsWith('/finance-advanced/accounts'),{timeout:20000});
+      await navigateUi(page,'finance-banks');await backLoaded;
+    }
   }
   assert.doesNotMatch(await page.locator('#route-content').innerText(),/enviar ao D1/i);
   await page.locator('[data-bank-page=previous]').waitFor();
