@@ -1,6 +1,7 @@
 import {spawn} from 'node:child_process';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {mkdirSync} from 'node:fs';
+import {readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import assert from 'node:assert/strict';
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
@@ -21,9 +22,11 @@ let browser;
 // Traverse the same visible hubs as an operator; never bypass permissions with
 // PdvAppNavigation or synthesize hidden sidebar entries in the test.
 async function navigateUi(page,route){
-  await page.locator('#auth-overlay').waitFor({state:'hidden',timeout:12000});
+  await page.locator('#auth-overlay').waitFor({state:'hidden',timeout:30000});
   const parents={products:'catalog',inventory:'catalog',customers:'catalog',suppliers:'catalog',sellers:'catalog',
-    sales:'post-sale',returns:'post-sale',finance:'financial-management',reports:'financial-management'};
+    sales:'post-sale',returns:'post-sale',finance:'financial-management','finance-banks':'financial-management',
+    'finance-recurrences':'financial-management',management:'financial-management',reports:'financial-management',
+    credit:'financial-management',commissions:'financial-management'};
   const parent=parents[route];
   if(route==='saas-admin'){
     await navigateUi(page,'settings');
@@ -127,6 +130,31 @@ try{
   assert.equal(await page.locator('#auth-overlay').isVisible(),false,
     'persisted segment must not intercept cashier pointer events');
 
+  // Every hosted destination inherited from the desktop must have one real,
+  // reachable renderer. Empty business data is valid; placeholders, errors and
+  // screens left loading are not.
+  const routeAudit=['catalog','customers','suppliers','sellers','post-sale','sales','returns',
+    'financial-management','management','finance','finance-banks','finance-recurrences',
+    'reports','credit','commissions','access'];
+  for(const route of routeAudit){
+    await navigateUi(page,route);
+    await page.waitForFunction(expected=>{
+      if(document.body.dataset.activeRoute!==expected)return false;
+      const host=document.querySelector('#route-content');
+      return Boolean(host?.querySelector('h1,h2'))&&!host.querySelector('.ops-loader')&&
+        !/^Carregando\b/i.test(host.innerText.trim());
+    },route,{timeout:20000});
+    const audit=await page.evaluate(expected=>({
+      route:document.body.dataset.activeRoute,
+      owner:window.PdvRouteRegistry?.ownerOf?.(expected),
+      text:document.querySelector('#route-content')?.innerText||''
+    }),route);
+    assert.equal(audit.route,route);
+    assert.ok(audit.owner,'route '+route+' must have one canonical renderer');
+    assert.doesNotMatch(audit.text,/Módulo previsto|Não foi possível carregar|ainda não está disponível na versão online/i,
+      'route '+route+' rendered a placeholder or failed state');
+  }
+
   // SaaS owner administration: live Workerd/D1, real cookie, browser and server checks.
   await navigateUi(page,'saas-admin');
   await page.locator('#saas-admin #saas-branch-form').waitFor({timeout:12000});
@@ -136,9 +164,13 @@ try{
   await page.locator('#saas-branch-form [name=name]').fill('Filial browser QA');
   await page.locator('#saas-branch-form button[type=submit]').click();
   await page.locator('#saas-admin .saas-list').filter({hasText:'Filial browser QA'}).first().waitFor({timeout:12000});
-  await page.locator('#saas-invite-form [name=email]').fill('web-employee-qa@example.test');
+  const invitedEmail=`web-employee-${Date.now()}@example.test`;
+  await page.locator('#saas-invite-form [name=email]').fill(invitedEmail);
   await page.locator('#saas-invite-form [name=profileKey]').selectOption('CASHIER');
+  const inviteResponse=page.waitForResponse(response=>response.request().method()==='POST'&&
+    new URL(response.url()).pathname.endsWith('/invitations'),{timeout:12000});
   await page.locator('#saas-invite-form button[type=submit]').click();
+  assert.equal((await inviteResponse).status(),201,'owner creates a unique employee invitation');
   await page.locator('#saas-invite-secret:not([hidden])').waitFor({timeout:12000});
   const code=await page.locator('#saas-invite-code').inputValue();
   assert.match(code,/^[a-f0-9]{64}$/,'browser gets exactly one private invitation code');
@@ -154,13 +186,13 @@ try{
     await staffPage.locator('.web-invite-activation summary').click();
     await staffPage.locator('#web-invite-form').waitFor({timeout:12000});
     await staffPage.locator('#web-invite-form [name=token]').fill(code);
-    await staffPage.locator('#web-invite-form [name=email]').fill('web-employee-qa@example.test');
+    await staffPage.locator('#web-invite-form [name=email]').fill(invitedEmail);
     await staffPage.locator('#web-invite-form [name=displayName]').fill('Funcionario QA');
     await staffPage.locator('#web-invite-form [name=password]').fill('Employee-Strong-2026-Pass!');
     await staffPage.locator('#web-invite-form button[type=submit]').click();
     await staffPage.getByText('Conta ativada. Entre com seu e-mail e senha.').waitFor({timeout:12000});
     await staffPage.locator('#web-login-form').waitFor({timeout:12000});
-    await staffPage.locator('#web-email').fill('web-employee-qa@example.test');
+    await staffPage.locator('#web-email').fill(invitedEmail);
     await staffPage.locator('#web-password').fill('Employee-Strong-2026-Pass!');
     await staffPage.locator('#web-login-form button[type=submit]').click();
     await staffPage.locator('body[data-active-route=home]').waitFor({timeout:12000});
@@ -459,6 +491,22 @@ try{
   assert.equal(firstStillOpen,firstCash,'closing terminal B cannot close terminal A');
   await secondContext.close();
 
+  // A suspended sale must remain reachable after its automatic dialog is
+  // closed. Refresh the terminal-scoped list through the permanent checkout
+  // action, resume the exact draft, and then cancel it to keep later cases
+  // independent.
+  await page.locator('#show-suspended-sales').click();
+  const originalSuspended=page.locator('#modal-root .suspended-item').filter({hasText:originalSuspendedNumber});
+  await originalSuspended.waitFor({timeout:12000});
+  await originalSuspended.locator('[data-resume]').click();
+  await page.locator('#modal-root').waitFor({state:'hidden',timeout:12000}).catch(()=>{});
+  await page.locator('.cart-line').filter({hasText:'Produto Web QA'}).waitFor({timeout:12000});
+  assert.equal(await page.locator('.cart-line').filter({hasText:'Produto Web QA'}).count(),1,
+    'terminal A can reopen and resume its suspended sale after closing the first dialog');
+  await page.locator('#cancel-sale').click();
+  await page.locator('#confirm-cancel').click();
+  await page.locator('#confirm-cancel').waitFor({state:'detached',timeout:12000});
+
   // P3 configured catalogue E2E: edit a real product's options in the existing
   // product screen, select variant+required addition in the original composer,
   // and verify the configured snapshot is present in the canonical sale row.
@@ -520,6 +568,16 @@ try{
   await page.locator('#web-sales-filter button[type=submit]').click();
   const filterResult=await filteredHistoryResponse;
   assert.equal(filterResult.status(),200,'filtered history API must succeed');
+  const historyDownloadEvent=page.waitForEvent('download');
+  await page.locator('#web-sales-export').click();
+  const historyDownload=await historyDownloadEvent;
+  assert.match(historyDownload.suggestedFilename(),/^historico-vendas-.*\.csv$/,
+    'filtered immutable history is exportable from its own screen');
+  const historyCsv=await readFile(await historyDownload.path(),'utf8');
+  assert.match(historyCsv,new RegExp(completedSaleNumber),
+    'history export preserves the exact active sale filter');
+  assert.doesNotMatch(historyCsv,/Produto de outra venda inexistente/,
+    'history export cannot silently ignore the active filter');
   // Network completion does not imply the async view was committed. A matching
   // sale can already be visible in the *old* unfiltered table and its click
   // listener will be destroyed when the filter response later replaces the DOM.

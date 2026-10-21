@@ -397,7 +397,20 @@
       <button class="ops-secondary" type="button" data-history-page="1" ${history.offset+history.items.length>=history.total?'disabled':''}>Próxima →</button>
     </div>`:''}</section><section id="ops-sale-detail"></section>`;
     if(!routeActive('sales')||renderSequence!==salesHistoryRenderSequence)return;
-    content.innerHTML=page('Últimas vendas','Histórico imutável, pagamentos, itens e devoluções.',body);
+    content.innerHTML=page('Últimas vendas','Histórico imutável, pagamentos, itens e devoluções.',body,
+      api.webMode?'<button id="web-sales-export" class="ops-secondary" type="button">Exportar histórico CSV</button>':'');
+    content.querySelector('#web-sales-export')?.addEventListener('click',async event=>{
+      const button=event.currentTarget;button.disabled=true;button.setAttribute('aria-busy','true');
+      try{
+        const result=await api.exportSalesDetailCsvCanonical(historyFilter);
+        const blob=new Blob([result.csv||''],{type:'text/csv;charset=utf-8'});
+        const url=URL.createObjectURL(blob);const anchor=document.createElement('a');
+        anchor.href=url;anchor.download=`historico-vendas-${historyFilter.from||'inicio'}-a-${historyFilter.to||'hoje'}.csv`;
+        anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+        showToast('Histórico detalhado exportado.','success');
+      }catch(error){showToast(error.message||'Não foi possível exportar o histórico.','error');}
+      finally{button.disabled=false;button.removeAttribute('aria-busy');}
+    });
     content.querySelector('#web-sales-filter')?.addEventListener('submit',event=>{
       event.preventDefault();
       const form=event.currentTarget;
