@@ -320,9 +320,11 @@ test('P3: name-based filters and immutable cash audit link closed sale sessions 
     assert.equal(reversal.originalCashSessionId,original.id);
     assert.equal(reversal.cashSessionId,later.id);
     assert.equal(reversal.amountCents,2000);
+    assert.equal((await x.write('cash/sessions/'+later.id+'/close',{countedCashCents:1000})).status,200);
     const laterAudit=await x.read('cash/sessions/'+later.id+'/audit');
     assert.equal(laterAudit.status,200,JSON.stringify(laterAudit.body));
     assert.equal(laterAudit.body.audit.session.expectedCashCents,1000);
+    assert.equal(laterAudit.body.audit.session.status,'CLOSED','both original and refund sessions can be consulted after closing');
     assert.ok(laterAudit.body.audit.movements.some(row=>row.type==='REVERSAL'&&row.saleId===saleId));
     assert.ok(laterAudit.body.audit.reversals.some(row=>row.originalCashSessionId===original.id));
     const outsider=await x.call(x.outsider,'b',
