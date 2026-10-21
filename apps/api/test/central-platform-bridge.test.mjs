@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {openLocalDatabase} from '../src/local-db.mjs';
 import {createApi} from '../src/worker.mjs';
+import {tenantWriteAllowed} from '../src/saas-control.mjs';
 
 const origin='https://pdv-total.example.test',secret='private-bridge-secret-unique-to-pdv-admin-2026';
 const OLD='existing-legacy-platform-admin-token-2026-xyz';
@@ -143,6 +144,7 @@ test('admin grants owner license by e-mail, emails a 48h one-use password link a
   assert.equal(subscription.status,'CANCELLED');
   assert.equal(subscription.plan,'manual');
   const manual=await x.db.prepare('SELECT active,expires_at AS expiresAt,owner_email AS email,owner_user_id AS ownerId FROM saas_admin_licenses WHERE tenant_id=?').bind(body.tenantId).first();
+  assert.equal(await tenantWriteAllowed(x.db,body.tenantId,{SAAS_ENTITLEMENTS_ENABLED:'true'},NOW),true);
   assert.equal(manual.active,1);assert.equal(manual.expiresAt,body.expiresAt);
   assert.equal(manual.email,'buyer@example.test');
   const user=await x.db.prepare("SELECT u.id FROM users u JOIN tenant_memberships m ON m.user_id=u.id WHERE m.tenant_id=? AND m.profile_key='OWNER'").bind(body.tenantId).first();
@@ -152,6 +154,7 @@ test('admin grants owner license by e-mail, emails a 48h one-use password link a
   assert.equal(list.tenants.find(t=>t.id===body.tenantId).manualLicenseActive,true);
   assert.equal((await req({action:'revoke-license',tenantId:body.tenantId})).status,200);
   assert.equal((await x.db.prepare('SELECT active FROM saas_admin_licenses WHERE tenant_id=?').bind(body.tenantId).first()).active,0);
+  assert.equal(await tenantWriteAllowed(x.db,body.tenantId,{SAAS_ENTITLEMENTS_ENABLED:'true'},NOW),false);
   const events=await (await req({action:'audit'})).json();
   assert.ok(events.events.some(e=>e.kind==='OWNER_LICENSE_GRANTED'));
   assert.ok(events.events.some(e=>e.kind==='OWNER_LICENSE_REVOKED'));
