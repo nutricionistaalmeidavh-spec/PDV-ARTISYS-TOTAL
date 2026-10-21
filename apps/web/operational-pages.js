@@ -651,23 +651,43 @@
   async function renderWebFinance(filters={}){
     await ready();
     const selected={query:String(filters.query||'').slice(0,100),
-      kind:String(filters.kind||''),status:String(filters.status||'')};
+      kind:String(filters.kind||''),status:String(filters.status||''),
+      categoryId:String(filters.categoryId||''),costCenterId:String(filters.costCenterId||''),
+      groupId:String(filters.groupId||''),accountId:String(filters.accountId||''),
+      from:String(filters.from||''),to:String(filters.to||''),
+      offset:Math.max(0,Number(filters.offset)||0)};
     const today=root.PdvBusinessDate?.localBusinessDate?.(new Date())||new Date().toISOString().slice(0,10);
-    const [summary,entries,dueResponse]=await Promise.all([
-      api.financeSummary(),api.financeEntries(selected),
-      api.request('/api/v1/finance-advanced/due?asOf='+encodeURIComponent(today)+'&horizonDays=30')
+    const search=new URLSearchParams(Object.entries({...selected,limit:50,asOf:today})
+      .filter(([,value])=>value!==''&&value!==null));
+    const [summary,history,dueResponse,categoryResponse,centerResponse,accountResponse,groupResponse]=await Promise.all([
+      api.financeSummary(),
+      api.request('/api/v1/finance-advanced/entries/search?'+search.toString()),
+      api.request('/api/v1/finance-advanced/due?asOf='+encodeURIComponent(today)+'&horizonDays=30'),
+      api.request('/api/v1/finance-advanced/dre/categories'),
+      api.request('/api/v1/finance-advanced/dre/cost-centers'),
+      api.request('/api/v1/finance-advanced/accounts'),
+      api.request('/api/v1/finance-advanced/dre/groups')
     ]);
-    const due=dueResponse.due;
+    const entries=history.history.items,due=dueResponse.due,
+      categories=categoryResponse.categories||[],centers=centerResponse.costCenters||[],
+      accounts=accountResponse.accounts||[],groups=groupResponse.groups||[];
+    const selectItems=(rows,current,emptyLabel='Todos')=>
+      `<option value="">${escapeHtml(emptyLabel)}</option>`+
+      rows.map(x=>`<option value="${escapeHtml(x.id)}" ${x.id===current?'selected':''}>${escapeHtml(x.name)}</option>`).join('');
     if(!routeActive('finance'))return;
     const permitted=root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'finance.manage')===true;
     const items=entries.map(entry=>`<tr>
       <td><strong>${escapeHtml(entry.description)}</strong>
-        <small class="ops-muted">${escapeHtml(entry.kind==='PAYABLE'?'A pagar':'A receber')}</small></td>
+        <small class="ops-muted">${escapeHtml(entry.kind==='PAYABLE'?'A pagar':'A receber')} ·
+          ${escapeHtml(categories.find(c=>c.id===entry.categoryId)?.name||'Sem categoria')} ·
+          ${escapeHtml(centers.find(c=>c.id===entry.costCenterId)?.name||'Sem centro de custo')}</small></td>
       <td>${dateOnly(entry.dueDate)}</td>
       <td>${money(entry.amountCents)}</td>
       <td>${money(entry.openCents)}</td>
       <td>${financeStatusBadge(entry)}</td>
-      <td class="web-finance-actions">${permitted&&entry.status!=='CANCELLED'&&entry.openCents>0?
+      <td class="web-finance-actions">${permitted?
+         `<button class="ops-secondary" type="button" data-web-classify="${escapeHtml(entry.id)}">Classificar</button>`:''}
+       ${permitted&&entry.status!=='CANCELLED'&&entry.openCents>0?
          `<button class="ops-secondary" type="button" data-web-settle="${escapeHtml(entry.id)}">Liquidar</button>`:''}
        ${permitted&&entry.status==='OPEN'?
          `<button class="ops-link" type="button" data-web-cancel="${escapeHtml(entry.id)}">Cancelar</button>`:''}</td></tr>`).join('');
@@ -700,18 +720,53 @@
         </select></label>
         <label>Situação<select name="status" class="ops-input">
           ${[['','Todas'],['OPEN','Em aberto'],['PARTIAL','Parcial'],['SETTLED','Liquidado'],['CANCELLED','Cancelado'],['OVERDUE','Atrasado']].map(([key,label])=>`<option value="${key}" ${selected.status===key?'selected':''}>${label}</option>`).join('')}
-        </select></label><button class="ops-secondary" type="submit">Filtrar</button>
+        </select></label>
+        <label>Categoria<select name="categoryId" class="ops-input">${selectItems(categories,selected.categoryId)}</select></label>
+        <label>Centro de custo<select name="costCenterId" class="ops-input">${selectItems(centers,selected.costCenterId)}</select></label>
+        <label>Grupo DRE<select name="groupId" class="ops-input">${selectItems(groups,selected.groupId)}</select></label>
+        <label>Conta bancária conciliada<select name="accountId" class="ops-input">${selectItems(accounts.filter(a=>a.walletKind==='BANK'),selected.accountId)}</select></label>
+        <label>Vencimento inicial<input name="from" type="date" class="ops-input" value="${escapeHtml(selected.from)}"></label>
+        <label>Vencimento final<input name="to" type="date" class="ops-input" value="${escapeHtml(selected.to)}"></label>
+        <button class="ops-secondary" type="submit">Filtrar</button>
       </form><div class="ops-table-wrap"><table class="ops-table"><thead>
         <tr><th>Descrição</th><th>Vencimento</th><th>Valor</th><th>Em aberto</th><th>Situação</th><th>Ações</th></tr>
         </thead><tbody>${items||`<tr><td colspan="6">${empty('Nenhum lançamento encontrado.')}</td></tr>`}</tbody></table></div>
+      <p class="ops-muted">${history.history.total} lançamentos encontrados · exibindo até 50 por página.</p>
+      <div class="ops-actions">
+        <button type="button" class="ops-secondary" data-finance-page="-1" ${selected.offset===0?'disabled':''}>Anterior</button>
+        <button type="button" class="ops-secondary" data-finance-page="1"
+          ${selected.offset+entries.length>=history.history.total?'disabled':''}>Próxima</button>
+      </div>
       <p class="ops-muted">Os lançamentos manuais não alteram o dinheiro de caixa automaticamente; suprimentos e sangrias são feitos no módulo Caixa.</p>
       </section>`;
     content.innerHTML=page('Financeiro','Contas a pagar e a receber com histórico de liquidação.',markup);
     content.querySelector('#web-finance-filters')?.addEventListener('submit',event=>{
       event.preventDefault();
       const form=event.currentTarget;
-      void renderWebFinance({query:form.elements.query.value,kind:form.elements.kind.value,status:form.elements.status.value});
+      const next=Object.fromEntries(new FormData(form).entries());
+      if(next.from&&next.to&&next.from>next.to){showToast('Período de vencimentos invertido.','error');return;}
+      void renderWebFinance({...next,offset:0}).catch(e=>showToast(e.message,'error'));
     });
+    content.querySelectorAll('[data-finance-page]').forEach(button=>button.addEventListener('click',()=>{
+      void renderWebFinance({...selected,offset:Math.max(0,selected.offset+50*Number(button.dataset.financePage))})
+        .catch(error=>showToast(error.message,'error'));
+    }));
+    content.querySelectorAll('[data-web-classify]').forEach(button=>button.addEventListener('click',async()=>{
+      if(!ux?.openFormDialog)return;
+      const entry=entries.find(x=>x.id===button.dataset.webClassify);if(!entry)return;
+      const result=await ux.openFormDialog({
+        title:'Classificar · '+entry.description,
+        description:'Classifique este lançamento para o mesmo plano de contas utilizado na DRE.',
+        confirmLabel:'Salvar classificação',
+        body:`<label>Categoria<select name="categoryId" class="ops-input">${selectItems(categories,entry.categoryId,'Sem categoria')}</select></label>
+          <label>Centro de custo<select name="costCenterId" class="ops-input">${selectItems(centers,entry.costCenterId,'Sem centro')}</select></label>
+          <label>Grupo DRE<select name="dreGroupId" class="ops-input">${selectItems(groups,entry.dreGroupId,'Automático pela categoria')}</select></label>`,
+        onConfirm:data=>api.request('/api/v1/finance-advanced/dre/classify/'+encodeURIComponent(entry.id),
+          {method:'POST',body:{categoryId:data.categoryId||null,costCenterId:data.costCenterId||null,
+            dreGroupId:data.dreGroupId||null}})
+      });
+      if(result.confirmed){showToast('Classificação atualizada.','success');await renderWebFinance(selected);}
+    }));
     content.querySelector('#web-finance-new')?.addEventListener('click',async()=>{
       if(!ux?.openFormDialog)return;
       const key=api.mutationId();
