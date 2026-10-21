@@ -30,6 +30,13 @@
   const CASH_PAYMENT_LABELS=Object.freeze({CASH:'Dinheiro',PIX:'PIX',DEBIT_CARD:'Cartão de débito',CREDIT_CARD:'Cartão de crédito',STORE_CREDIT:'Crediário / crédito da loja',OTHER:'Outros'});
   function cashMovementLabel(value){const code=String(value||'').toUpperCase();return CASH_MOVEMENT_LABELS[code]||value||'—';}
   function cashPaymentLabel(value){const code=String(value||'').toUpperCase();return CASH_PAYMENT_LABELS[code]||value||'—';}
+  function namedOptions(rows,selected='',allLabel='Todos'){
+    const available=Array.isArray(rows)?rows:[];const chosen=String(selected||'');
+    const exists=available.some(row=>String(row.id)===chosen);
+    return `<option value="">${escapeHtml(allLabel)}</option>${available.map(row=>
+      `<option value="${escapeHtml(row.id)}" ${String(row.id)===chosen?'selected':''}>${escapeHtml(row.name||row.id)}</option>`
+    ).join('')}${chosen&&!exists?`<option value="${escapeHtml(chosen)}" selected>Registro anterior (${escapeHtml(chosen)})</option>`:''}`;
+  }
   function financeKindLabel(value){return FINANCE_KIND_LABELS[String(value||'').toUpperCase()]||String(value||'—');}
   function financeStatusCode(row){return row?.isOverdue&&row?.status!=='SETTLED'&&row?.status!=='CANCELLED'?'OVERDUE':String(row?.status||'OPEN').toUpperCase();}
   function financeStatusBadge(row){const code=financeStatusCode(row);return `<span class="ops-badge status-${escapeHtml(code.toLowerCase())}">${escapeHtml(FINANCE_STATUS_LABELS[code]||code)}</span>`;}
@@ -192,7 +199,7 @@
   // Same operational-pages renderer, with the Cloudflare persistence contract.
   async function renderWebCash(){
     const cfg=await ready();
-    const [open,sessions]=await Promise.all([api.openCash(cfg.terminalId),api.cashSessions({terminalId:cfg.terminalId})]);
+    const [open,sessions,cashFilters]=await Promise.all([api.openCash(cfg.terminalId),api.cashSessions({terminalId:cfg.terminalId}),api.cashFilterOptions()]);
     const movements=open?await api.cashMovements(open.id):[];
     if(!routeActive('cash'))return;
     const counts=sessions.filter(row=>row.status==='CLOSED').length;
@@ -237,8 +244,8 @@
       <section class="ops-card"><details id="web-cash-history-search"><summary>Consultar histórico completo do caixa</summary>
         <form id="web-cash-search-form" class="ops-form">
           <div class="ops-grid two">
-            <label>Operador (ID)<input name="operatorId" class="ops-input"></label>
-            <label>Terminal (ID)<input name="terminalId" class="ops-input" placeholder="Todos os terminais"></label>
+            <label>Operador<select name="operatorId" class="ops-input">${namedOptions(cashFilters.operators)}</select></label>
+            <label>Terminal<select name="terminalId" class="ops-input">${namedOptions(cashFilters.terminals,'','Todos os terminais')}</select></label>
             <label>Situação<select name="status" class="ops-input">
               <option value="">Todos</option><option value="OPEN">Aberto</option><option value="CLOSED">Fechado</option>
             </select></label>
@@ -369,7 +376,8 @@
       customerId:filters.customerId||'',sellerId:filters.sellerId||'',operatorId:filters.operatorId||'',
       productId:filters.productId||'',paymentMethod:filters.paymentMethod||'',
       limit:25,offset:Number(filters.offset)||0};
-    const history=api.webMode?await api.salesHistory(historyFilter):null;
+    const [history,salesFilters]=api.webMode?
+      await Promise.all([api.salesHistory(historyFilter),api.salesFilterOptions()]):[null,null];
     const sales=api.webMode?history.items:await api.salesHistory({limit:200});
     const historyTools=api.webMode?`<section class="ops-card"><form id="web-sales-filter" class="web-report-filter">
       <label>Busca por número<input name="query" class="ops-input" value="${escapeHtml(historyFilter.query)}" placeholder="Código da venda"></label>
@@ -378,12 +386,12 @@
       <label>Situação<select class="ops-input" name="status">
         ${[['COMPLETED','Concluídas'],['OPEN','Abertas'],['SUSPENDED','Suspensas'],['CANCELLED','Canceladas'],['','Todas']].map(([key,label])=>`<option value="${key}" ${historyFilter.status===key?'selected':''}>${label}</option>`).join('')}
         </select></label>
-      <details class="ops-advanced-filters"><summary>Filtros avançados</summary>
+      <details class="ops-advanced-filters" ${historyFilter.sellerId||historyFilter.operatorId||historyFilter.customerId||historyFilter.productId||historyFilter.paymentMethod?'open':''}><summary>Filtros avançados</summary>
         <div class="ops-grid two">
-          <label>Vendedor (ID)<input class="ops-input" name="sellerId" value="${escapeHtml(historyFilter.sellerId)}"></label>
-          <label>Operador (ID)<input class="ops-input" name="operatorId" value="${escapeHtml(historyFilter.operatorId)}"></label>
-          <label>Cliente (ID)<input class="ops-input" name="customerId" value="${escapeHtml(historyFilter.customerId)}"></label>
-          <label>Produto (ID)<input class="ops-input" name="productId" value="${escapeHtml(historyFilter.productId)}"></label>
+          <label>Vendedor<select class="ops-input" name="sellerId">${namedOptions(salesFilters.sellers,historyFilter.sellerId)}</select></label>
+          <label>Operador<select class="ops-input" name="operatorId">${namedOptions(salesFilters.operators,historyFilter.operatorId)}</select></label>
+          <label>Cliente<select class="ops-input" name="customerId">${namedOptions(salesFilters.customers,historyFilter.customerId)}</select></label>
+          <label>Produto<select class="ops-input" name="productId">${namedOptions(salesFilters.products,historyFilter.productId)}</select></label>
           <label>Pagamento<select class="ops-input" name="paymentMethod">
             ${[['','Todos'],['CASH','Dinheiro'],['PIX','PIX'],['DEBIT_CARD','Débito'],['CREDIT_CARD','Crédito'],['STORE_CREDIT','Crediário'],['OTHER','Outros']].map(([value,label])=>`<option value="${value}" ${historyFilter.paymentMethod===value?'selected':''}>${label}</option>`).join('')}
           </select></label>
