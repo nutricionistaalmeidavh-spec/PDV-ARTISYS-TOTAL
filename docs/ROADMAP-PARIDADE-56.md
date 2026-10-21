@@ -9,6 +9,14 @@
 
 ## Painel de acompanhamento
 
+### Atualização da `main` — 21/10/2026 (`f4a5a1d`)
+
+- A landing pública recebeu apresentação premium, galeria responsiva e movimento, preservando o login dentro da própria landing e o acesso à aplicação canônica.
+- Financeiro avançou com carteiras/contas, transferências internas, estorno de liquidações, filtros e trilha de auditoria. Isso reduz a lacuna funcional de `finance-051`, `finance-052`, `finance-053` e `finance-056`, mas os contratos continuam parciais até completar as comparações independentes exigidas pela matriz.
+- Histórico de caixas e vendas ganhou filtros e evidências adicionais; a classificação formal continua em **44 contratos cobertos, 24 parciais e 0 gaps**, com **49/496 comparações independentes**.
+- Ajustes de UX priorizados nesta rodada: destino do produto configurado somente no cadastro canônico; atalhos do Início antes dos indicadores; cadastro rápido e canônico de cliente no Atacado; criação de mesa por botão **+ Mesa**.
+- Próxima fila funcional: alertas financeiros de recorrência (`finance-057`), plano de contas/grupos DRE integral (`finance-054`), exportações XLSX/PDF equivalentes (`reports-068`) e ampliação sistemática das 447 comparações ainda pendentes.
+
 **`npm run report:saas` é o painel de execução prioritário:** 53 referências ao desktop no escopo web (53 cobertas, 0 parciais e 0 gaps), mais 3 capacidades locais opcionais fora do bloqueio de entrega. **`npm run report:parity`** continua exibindo todas as 56 capacidades da referência desktop e os contratos vinculados como evidência para auditoria. O total de 53 não substitui os gates SaaS de segurança, provisionamento, assinaturas e implantação.
 
 | Estado exibido | O que representa | Próximo passo |
@@ -61,7 +69,7 @@
 
 ## Migrações: política para aplicativo ainda novo
 
-As migrações SQL são incrementais e numeradas; a sequência vigente é de 0001 a 0028. Não são 28 versões distribuídas a clientes, nem importações de dados do desktop.
+As migrações SQL são incrementais e numeradas; a sequência vigente é de 0001 a 0040. Não são 40 versões distribuídas a clientes, nem importações de dados do desktop.
 
 - Mudança de classificação **não** deve gerar migration. Só alterações reais do banco exigem mudança de schema.
 - Não criar compatibilidade com bases de clientes antigos por padrão; como o app ainda não teve usuários, não inventar histórico a migrar. A importação de um banco desktop real seria tarefa separada, opcional e com consentimento.

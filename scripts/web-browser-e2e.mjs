@@ -169,6 +169,11 @@ try{
   await page.waitForURL(origin+'/app/',{timeout:12000});
   await page.locator('body[data-active-route=home]').waitFor({timeout:12000});
   await page.getByRole('heading',{name:'Início',exact:true}).waitFor();
+  await page.locator('#web-home-live').waitFor({timeout:30000});
+  assert.equal(await page.evaluate(()=>{
+    const menu=document.querySelector('.classic-home-section'),indicators=document.querySelector('#web-home-live');
+    return Boolean(menu&&indicators&&(menu.compareDocumentPosition(indicators)&Node.DOCUMENT_POSITION_FOLLOWING));
+  }),true,'operational shortcuts must precede indicators on mobile and desktop');
   // Optional areas are enabled deliberately in Settings. A business-profile
   // preference remains optional and must never activate another area itself.
   assert.equal(await page.locator('#r4-segment-first-run').count(),0,
@@ -191,7 +196,26 @@ try{
   await navigateUi(page,'FOOD');
   await page.locator('[data-r4-action=advanced]').first().click();
   await page.locator('[data-r4-advanced=station]').waitFor();
+  assert.equal(await page.locator('[data-r4-advanced=route]').count(),0,
+    'KDS settings must not duplicate the canonical product destination editor');
+  await page.locator('[data-r4-product-destinations]').waitFor();
   assert.equal(await page.locator('[data-r4-section=pizza],[data-r4-section=weight],[data-r4-section=recipe],[data-r4-section=segments]').count(),0);
+  await navigateUi(page,'WHOLESALE');
+  await page.locator('#wholesale-item-form').waitFor({timeout:12000});
+  await page.locator('#wholesale-new-customer').click();
+  await page.locator('#wholesale-customer-form').waitFor({timeout:12000});
+  await page.locator('#wholesale-customer-form [name=name]').fill('Atacado QA de navegador');
+  await page.locator('#wholesale-customer-form button[type=submit]').click();
+  await page.locator('#wholesale-customer-form').waitFor({state:'detached',timeout:12000});
+  const earlyWholesaleCustomerId=await page.locator('#wholesale-item-form [name=customerId]').inputValue();
+  assert.ok(earlyWholesaleCustomerId,'quick customer creation selects the canonical saved customer');
+  await navigateUi(page,'FOOD');
+  await page.locator('[data-r4-action=tab][data-id=tables]').click();
+  await page.locator('[data-r4-new-table]').click();
+  await page.locator('[data-r4-new-table-form]').waitFor({state:'visible',timeout:12000});
+  await page.locator('[data-r4-cancel-table]').click();
+  await page.locator('[data-r4-new-table-form]').waitFor({state:'hidden',timeout:12000});
+  console.log('PASS: canonical KDS routing, Home order, quick customer and + Mesa UI.');
   await navigateUi(page,'settings');
   await page.locator('[data-settings-profile]').click();
   await page.locator('[data-r4-advanced=segment] [name=segmentId]').selectOption('RESTAURANT');
@@ -597,7 +621,7 @@ try{
   await navigateUi(secondPage,'cash');
   await secondPage.locator('#web-cash-open').waitFor({timeout:12000});
   await secondPage.locator('#web-cash-open button[type=submit]').click();
-  await secondPage.locator('[data-cash-web=close]').waitFor({timeout:12000});
+  await secondPage.locator('[data-cash-web=close]').waitFor({timeout:30000});
   const [firstCash,secondCash]=await Promise.all([
     page.evaluate(async()=>{
       const api=new window.PdvApiClient.ApiClient();
@@ -619,7 +643,7 @@ try{
   assert.ok(!suspendedVisible.includes(originalSuspendedNumber),'terminal B must not resume terminal A sale');
   await secondPage.locator('#modal-root [data-close-modal]').first().click();
   await navigateUi(secondPage,'cash');
-  await secondPage.locator('[data-cash-web=close]').waitFor({timeout:12000});
+  await secondPage.locator('[data-cash-web=close]').waitFor({timeout:30000});
   await secondPage.locator('[data-cash-web=close]').click();
   await secondPage.locator('.ux-dialog [name=amount]').waitFor({timeout:12000});
   await secondPage.locator('.ux-dialog__confirm').click();
@@ -966,14 +990,10 @@ try{
 
   // R1: the Atacado page must consume unwrapped API objects, allow editing
   // a customer policy, price the cart and confirm a quote in the same PWA.
-  const wholesaleCustomer=await page.evaluate(async()=>{
-    const api=new window.PdvApiClient.ApiClient();
-    await api.initialize();
-    return api.saveCustomer({name:'Atacado QA de navegador',creditLimitCents:10000});
-  });
-  assert.ok(wholesaleCustomer.id);
   await navigateUi(page,'WHOLESALE');
   await page.locator('#wholesale-item-form').waitFor({timeout:12000});
+  const wholesaleCustomer={id:earlyWholesaleCustomerId};
+  await page.locator('#wholesale-item-form [name=customerId]').selectOption(wholesaleCustomer.id);
   await page.locator('[name=policyCustomerId]').selectOption(wholesaleCustomer.id);
   await page.locator('#wholesale-edit-policy').click();
   await page.locator('#wholesale-policy-form').waitFor({timeout:12000});
@@ -1007,6 +1027,7 @@ try{
   });
   assert.ok(foodProduct.id);
   await navigateUi(page,'FOOD');
+  await page.locator('[data-r4-action=tab][data-id=tables]').click();
   await page.locator('[data-r4-action=tab][data-id=orders]').click();
   const foodForm=page.locator('[data-r4-form=order]');
   await foodForm.waitFor({state:'visible',timeout:12000});

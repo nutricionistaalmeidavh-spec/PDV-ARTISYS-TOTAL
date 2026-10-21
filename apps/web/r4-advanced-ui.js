@@ -104,10 +104,7 @@
       '<button class="primary-button">Salvar setor</button></form>':'')+
       '<h3>Destino dos produtos</h3><div class="restaurant-list">'+model.routes.map(r=>'<div class="restaurant-row"><strong>'+
       esc(r.productName)+'</strong><small>'+esc(r.mode==='DIRECT'?'Sem KDS':r.stationName)+'</small></div>').join('')+'</div>'+
-      (can('products.manage')?'<form class="vertical-form" data-r4-advanced="route"><label class="field"><span>Produto</span>'+
-      select('productId',model.products)+'</label><label class="field"><span>Destino</span><select name="mode"><option value="PRODUCTION">Produção / KDS</option><option value="DIRECT">Sem KDS</option></select></label>'+
-      '<label class="field"><span>Setor</span>'+select('stationId',model.stations.filter(s=>s.active),s=>s.name,'Escolha estação',false)+'</label>'+
-      '<button class="primary-button">Salvar destino</button></form>':'')+
+      (can('products.manage')?'<div class="vertical-form"><p>O destino de preparo pertence ao cadastro canônico do produto. Altere-o no Estoque ou no Cardápio para que Balcão, pedidos e KDS usem a mesma configuração.</p><button class="secondary-button" type="button" data-r4-product-destinations>Configurar produtos no Estoque</button></div>':'')+
       '<h3>Fila por estação</h3><div class="restaurant-list">'+model.tickets.map(t=>'<div class="restaurant-row"><strong>'+
       esc(t.stationName)+' · '+esc(t.orderId?.slice(0,8))+'</strong><small>'+esc(t.status)+' · '+esc((t.items||[]).map(i=>i.productName+' × '+i.quantity).join(', '))+
       '</small><div class="restaurant-actions">'+(can('kitchen.update_status')?
@@ -282,6 +279,7 @@
     if(['inventory','products','settings'].includes(origin))back.textContent=origin==='inventory'?'← Voltar ao Estoque':origin==='settings'?'← Voltar às Configurações':'← Voltar ao Cardápio';
     back?.addEventListener('click',()=>void root.PdvAppNavigation?.navigate?.(['inventory','products','settings'].includes(origin)?origin:'FOOD'));
     node.querySelectorAll('[data-r4-section]').forEach(b=>b.addEventListener('click',()=>{void show({section:b.dataset.r4Section,sessionId,preserve:true});}));
+    node.querySelector('[data-r4-product-destinations]')?.addEventListener('click',()=>void root.PdvAppNavigation?.navigate?.('inventory'));
     node.querySelectorAll('[data-r4-advanced]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();void submit(f);}));
     node.querySelectorAll('[data-r4-kds]').forEach(b=>b.addEventListener('click',async()=>{
       try{await r4('/kitchen/station-tickets/'+uid(b.dataset.r4Kds),'PATCH',{status:b.dataset.next});await show({sessionId,preserve:true});}
@@ -292,8 +290,6 @@
     const kind=form.dataset.r4Advanced,v=Object.fromEntries(new FormData(form));
     try{
       if(kind==='station')await r4('/kitchen/stations','POST',{name:v.name,printerName:v.printerName,printEnabled:!!v.printEnabled});
-      if(kind==='route')await r4('/kitchen/routes','POST',{productId:v.productId,mode:v.mode,
-        stationId:v.mode==='PRODUCTION'?v.stationId:null});
       if(kind==='pizza'){
         const {profile}=await r4('/pizzeria/products/'+uid(v.productId));
         const parsed=key=>parseCatalog(v[key]).map(option=>({...option,code:profile?.[key]?.find(previous=>previous.name===option.name)?.code||option.code}));

@@ -372,8 +372,8 @@
     content.innerHTML=`<section id="classic-home-grid" class="classic-home-grid" aria-label="Início de ${escapeHtml(view.label)}"><header class="classic-home-head"><div><span class="classic-home-eyebrow">Início · ${escapeHtml(view.label)}</span><h1>${escapeHtml(view.title)}</h1><p>${escapeHtml(view.subtitle)}</p></div>${operatorName?`<span class="classic-home-operator">${escapeHtml(operatorName)}</span>`:''}</header>${view.sections.map(section=>`<section class="classic-home-section" data-home-section="${escapeHtml(section.key)}">${section.label?`<h2>${escapeHtml(section.label)}</h2>`:''}<div class="classic-home-tiles">${section.tiles.map(tile=>`<button type="button" class="home-tile tone-${escapeHtml(tile.tone||'blue')}" data-home-route="${escapeHtml(tile.route)}" aria-label="Abrir ${escapeHtml(tile.label)}"><span class="tile-icon">${icon(tile.icon,46)}</span><h3>${escapeHtml(tile.label)}</h3><p>${escapeHtml(tile.description)}</p>${tile.shortcut?`<span class="shortcut-badge">${escapeHtml(tile.shortcut)}</span>`:''}</button>`).join('')}</div></section>`).join('')}</section>`;
     document.body.classList.add('home-view-classic');
     if(api.webMode&&window.PdvAccessPolicy?.hasCapability(state.user,'reports.view')){
-      const heading=content.querySelector('.classic-home-head');
-      heading?.insertAdjacentHTML('afterend',`<section class="ops-card" id="web-home-live"
+      const homeGrid=content.querySelector('#classic-home-grid');
+      homeGrid?.insertAdjacentHTML('beforeend',`<section class="ops-card" id="web-home-live"
         aria-live="polite"><h2>Indicadores operacionais</h2>
         <p class="ops-muted">Consultando vendas, caixa e estoque registrados nesta filial...</p></section>`);
       const host=content.querySelector('#web-home-live');

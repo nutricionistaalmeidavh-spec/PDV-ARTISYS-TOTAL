@@ -76,7 +76,7 @@
    if(!can('restaurant.orders.view'))return '<p class="vertical-empty">Seu perfil não possui acesso às mesas.</p>';
    const open=state.tables.filter(t=>t.sessionId),free=state.tables.filter(t=>!t.sessionId&&t.active!==0);
    return '<section class="data-card"><h2>Mesas e comandas</h2>'+
-     (can('restaurant.tables.manage')?'<details><summary>Adicionar mesa</summary><form data-r4-form="table" class="vertical-form">'+field('Identificação','label','text','required maxlength="80"')+field('Lugares','seats','number','min="0" max="1000" value="4"')+'<button class="primary-button">Salvar mesa</button></form></details>':'')+
+     (can('restaurant.tables.manage')?'<div class="restaurant-actions"><button type="button" class="primary-button" data-r4-new-table>+ Mesa</button></div><div data-r4-new-table-form hidden><form data-r4-form="table" class="vertical-form">'+field('Identificação','label','text','required maxlength="80"')+field('Lugares','seats','number','min="0" max="1000" value="4"')+'<div class="restaurant-actions"><button class="primary-button">Salvar mesa</button><button type="button" class="secondary-button" data-r4-cancel-table>Cancelar</button></div></form></div>':'')+
      '<div class="restaurant-grid">'+state.tables.map(t=>
        '<article class="restaurant-table"><strong>'+esc(t.label)+'</strong><small>'+esc(t.sessionId?'Ocupada / '+title(t.sessionStatus):'Livre')+'</small>'+
        (t.sessionId?'<div class="restaurant-actions">'+btn('Ver comanda','select',t.sessionId)+'</div>':
@@ -211,6 +211,9 @@
      ({tables:tableSection,orders:orderSection,kitchen:kitchenSection,services:serviceSection,reports:reportSection}[state.section]||tableSection)()+
      '</section>';
    host.querySelectorAll('[data-r4-action]').forEach(el=>el.addEventListener('click',()=>void click(el)));
+   const newTableButton=host.querySelector('[data-r4-new-table]'),newTableForm=host.querySelector('[data-r4-new-table-form]');
+   newTableButton?.addEventListener('click',()=>{newTableForm.hidden=false;newTableButton.hidden=true;newTableForm.querySelector('[name="label"]')?.focus();});
+   host.querySelector('[data-r4-cancel-table]')?.addEventListener('click',()=>{newTableForm.hidden=true;newTableButton.hidden=false;});
    host.querySelectorAll('[data-r4-form]').forEach(el=>el.addEventListener('submit',e=>{e.preventDefault();void submit(el);}));
    host.querySelectorAll('[data-r4-order-item]').forEach(bindOrderRow);
  }
