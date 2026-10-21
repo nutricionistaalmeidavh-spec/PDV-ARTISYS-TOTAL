@@ -365,6 +365,18 @@ test('P1 history: 1,050 historical operators remain searchable, combined queries
     'sales/history?branchId=branch-a&operatorId='+newestId+'&status=COMPLETED&from=2026-10-17&to=2026-10-17');
   assert.equal(selected.status,200,JSON.stringify(selected.body));
   assert.equal(selected.body.history.total,1);assert.equal(selected.body.history.items[0].operatorId,newestId);
+  // Synthetic history rows have no line items. Materialize one item/payment
+  // to exercise the actual item-level desktop-compatible CSV export contract.
+  const csvProduct=await x.item('CSV-HISTORY',1500,2);
+  await x.db.prepare(`UPDATE sales SET subtotal_cents=1500,total_cents=1500
+    WHERE tenant_id='a' AND branch_id='branch-a' AND id=?`).bind('synthetic-'+missing).run();
+  await x.db.prepare(`INSERT INTO sale_items
+    (id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?)`).bind('csv-history-item','a','branch-a','synthetic-'+missing,
+    csvProduct,'Produto histórico','CSV-HISTORY',1000,1500,stamp).run();
+  await x.db.prepare(`INSERT INTO sale_payments
+    (id,tenant_id,branch_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?)`)
+    .bind('csv-history-payment','a','branch-a','synthetic-'+missing,'PIX',1500,stamp).run();
   const exported=await x.call(x.manager,'a',
     'reports/details.csv?branchId=branch-a&operatorId='+encodeURIComponent(newestId)+
     '&status=COMPLETED&from=2026-10-17&to=2026-10-17');
