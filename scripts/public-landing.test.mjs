@@ -87,3 +87,25 @@ test('premium landing is bundled without remote runtime dependencies or auth rou
   assert.doesNotMatch(css,/@import|https?:\/\//);
   assert.match(source('apps/web/manifest.webmanifest'),/\/app\//);
 });
+
+
+test('preview gallery remains first-party, swipeable and scoped outside auth',()=>{
+  const html=source('apps/landing/index.html');
+  const script=source('apps/landing/landing-gallery.js');
+  const css=source('apps/landing/landing-gallery.css');
+  const build=source('scripts/build-web.mjs');
+  for(const path of ['landing-gallery.css','landing-gallery.js']){
+    assert.match(html,new RegExp(path.replaceAll('.','\\.')));
+    assert.match(build,new RegExp(path.replaceAll('.','\\.')));
+  }
+  for(const attr of ['data-gallery-prev','data-gallery-next','data-gallery-expand','data-gallery-counter','data-gallery-zoom-content','data-gallery-zoom-close']){
+    assert.match(html,new RegExp(attr));
+  }
+  assert.match(html,/id="painel-caixa"/);
+  assert.match(html,/data-demo="caixa"/);
+  assert.match(script,/pointerdown/);
+  assert.match(script,/pointerup/);
+  assert.match(script,/showModal/);
+  assert.match(css,/touch-action:pan-y/);
+  assert.doesNotMatch(script,/\/api\/|fetch\(|https?:\/\//);
+});
