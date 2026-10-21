@@ -96,7 +96,27 @@
     '<label>Tipo<select class="ops-input" name="walletKind"><option value="BANK">Banco</option><option value="CASH">Dinheiro</option><option value="OTHER">Outra carteira</option></select></label>'+
     '<label>Código do banco (opcional)<input class="ops-input" name="bankCode" maxlength="20"></label><button class="ops-primary" type="submit">Cadastrar carteira</button></form>'+
     '<div class="ops-grid two">'+list.map(x=>'<div class="ops-card"><strong>'+esc(x.name)+'</strong><p class="ops-muted">'+esc(({BANK:'Banco',CASH:'Dinheiro',OTHER:'Outra'}[x.walletKind]||x.walletKind))+'</p>'+
-      (x.walletKind==='BANK'?'<small>Movimentação líquida importada: '+money(x.importedNetCents)+' · '+esc(x.importedMovements)+' linhas</small>':'<small>Carteira cadastrada; sem saldo atribuído automaticamente.</small>')+'</div>').join('')+'</div></section>'+
+      (x.walletKind==='BANK'?'<small>Movimentação líquida importada: '+money(x.importedNetCents)+' · '+esc(x.importedMovements)+' linhas</small>':
+        '<small>Saldo registrado: '+money(x.walletBalanceCents)+' · '+esc(x.walletMovementCount)+' movimento(s)</small>')+'</div>').join('')+'</div>'+
+    '<div id="cloud-wallet-ops"><h3>Movimentar carteiras não bancárias</h3>'+
+    '<p class="ops-muted">Registro operacional independente de vendas, baixas financeiras e gavetas do PDV. Somente valores efetivamente conferidos devem ser registrados.</p>'+
+    '<form id="cloud-wallet-adjust" class="ops-form ops-form-grid">'+
+    '<label>Carteira<select name="accountId" class="ops-input">'+selectOptions(list.filter(x=>x.walletKind!=='BANK'),'','Selecione uma carteira')+'</select></label>'+
+    '<label>Tipo<select name="kind" class="ops-input"><option value="OPENING">Saldo inicial</option><option value="CREDIT">Entrada manual</option><option value="DEBIT">Saída manual</option></select></label>'+
+    '<label>Valor (R$)<input name="amount" class="ops-input" inputmode="decimal" required placeholder="100,00"></label>'+
+    '<label>Justificativa<input name="reason" class="ops-input" minlength="3" maxlength="240" required></label>'+
+    '<button type="submit" class="ops-secondary">Registrar movimento</button></form>'+
+    '<h3>Transferência entre carteiras</h3>'+
+    '<form id="cloud-wallet-transfer" class="ops-form ops-form-grid">'+
+    '<label>Origem<select name="fromAccountId" class="ops-input">'+selectOptions(list.filter(x=>x.walletKind!=='BANK'),'','Selecione a origem')+'</select></label>'+
+    '<label>Destino<select name="toAccountId" class="ops-input">'+selectOptions(list.filter(x=>x.walletKind!=='BANK'),'','Selecione o destino')+'</select></label>'+
+    '<label>Valor (R$)<input name="amount" class="ops-input" inputmode="decimal" required placeholder="100,00"></label>'+
+    '<label>Justificativa<input name="reason" class="ops-input" minlength="3" maxlength="240" required></label>'+
+    '<button type="submit" class="ops-secondary">Transferir</button></form>'+
+    '<h3>Extrato de carteira</h3><form id="cloud-wallet-history-form" class="ops-form erp-inline-config-form">'+
+    '<label>Carteira<select name="accountId" class="ops-input">'+selectOptions(list.filter(x=>x.walletKind!=='BANK'),'','Selecione uma carteira')+'</select></label>'+
+    '<button class="ops-secondary" type="submit">Consultar histórico</button></form>'+
+    '<div id="cloud-wallet-history" aria-live="polite"></div></div></section>'+
     '<section class="ops-card"><h2>Importar extrato</h2><p>O arquivo é lido e pré-visualizado neste navegador antes de enviar ao D1.</p><div class="ops-form-grid"><label>Conta<select id="cloud-bank-id" class="ops-input">'+list.filter(x=>x.active&&x.walletKind==='BANK').map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('')+'</select></label><label>Arquivo CSV ou OFX<input id="cloud-bank-file" type="file" class="ops-input" accept=".csv,.ofx,text/csv"></label></div><div id="cloud-bank-preview" class="ops-muted">Selecione um extrato.</div><button id="cloud-bank-confirm" type="button" class="ops-primary" disabled>Confirmar importação</button><small>Máximo de 500 linhas por lote. Lançamentos existentes não são reimportados.</small></section>'+
     '<section class="ops-card"><h2>Movimentações do extrato</h2>'+
     '<form id="cloud-bank-filters" class="ops-form ops-form-grid" aria-label="Filtros bancários">'+
@@ -126,6 +146,36 @@
     '<p>'+planCategories.map(x=>esc(x.name)+' ('+esc(planGroups.find(g=>g.id===x.dreGroupId)?.name||'Sem grupo')+')').join(' · ')+'</p></div></div>'+
     '<h3>Centros de custo</h3><form id="cloud-plan-center" class="ops-form erp-inline-config-form"><label>Nome<input name="name" class="ops-input" maxlength="100" required></label><button class="ops-secondary" type="submit">Adicionar centro</button></form>'+
     '<p>'+planCenters.map(x=>esc(x.name)).join(' · ')+'</p></details></section>');
+   const walletFormAction=async(form,endpoint)=>{
+    const button=form.querySelector('[type=submit]');button.disabled=true;
+    try{
+      const data=Object.fromEntries(new FormData(form).entries());
+      const amountCents=cents(data.amount);
+      if(amountCents<=0)throw new Error('Informe valor positivo.');
+      delete data.amount;
+      await request(endpoint,{method:'POST',body:{...data,amountCents,mutationId:root.crypto.randomUUID()}});
+      toast('Movimentação operacional registrada.','success');await renderBanks(bankFilters);
+    }catch(e){toast(e.message,'error');button.disabled=false;}
+   };
+   content.querySelector('#cloud-wallet-adjust')?.addEventListener('submit',ev=>{
+    ev.preventDefault();void walletFormAction(ev.currentTarget,'wallets/movement');
+   });
+   content.querySelector('#cloud-wallet-transfer')?.addEventListener('submit',ev=>{
+    ev.preventDefault();void walletFormAction(ev.currentTarget,'wallets/transfer');
+   });
+   content.querySelector('#cloud-wallet-history-form')?.addEventListener('submit',async ev=>{
+    ev.preventDefault();const accountId=new FormData(ev.currentTarget).get('accountId');
+    if(!accountId){toast('Selecione uma carteira.','error');return;}
+    const host=content.querySelector('#cloud-wallet-history');host.textContent='Consultando extrato operacional…';
+    try{
+      const data=await request('wallets/'+encodeURIComponent(accountId)+'/movements');
+      if(!host.isConnected)return;
+      const entries=data.movements||[];
+      host.innerHTML='<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Justificativa</th></tr></thead><tbody>'+
+        (entries.map(x=>'<tr><td>'+esc(x.createdAt)+'</td><td>'+esc(x.kind)+'</td><td>'+money(x.amountCents)+'</td><td>'+esc(x.reason)+'</td></tr>').join('')||
+        '<tr><td colspan="4">Nenhuma movimentação.</td></tr>')+'</tbody></table></div>';
+    }catch(e){host.textContent=e.message;}
+   });
    content.querySelector('#cloud-bank-filters')?.addEventListener('submit',ev=>{
     ev.preventDefault();
     const values=Object.fromEntries(new FormData(ev.currentTarget));
