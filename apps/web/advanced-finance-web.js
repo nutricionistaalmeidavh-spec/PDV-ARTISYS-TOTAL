@@ -170,19 +170,34 @@
    });
    content.querySelectorAll('[data-cloud-ignore]').forEach(btn=>btn.addEventListener('click',async()=>{
     if(!root.confirm('Ignorar esta movimentação? Ela não gerará lançamento financeiro.'))return;
-    try{await request('reconcile/ignore',{method:'POST',body:{transactionId:btn.dataset.cloudIgnore}});await renderBanks();}catch(e){toast(e.message,'error');}
+    try{await request('reconcile/ignore',{method:'POST',body:{transactionId:btn.dataset.cloudIgnore}});await renderBanks(bankFilters);}catch(e){toast(e.message,'error');}
    }));
    content.querySelectorAll('[data-cloud-suggest]').forEach(btn=>btn.addEventListener('click',async()=>{
     const panel=document.getElementById('cloud-match-'+btn.dataset.cloudSuggest);
     if(!panel)return;
     try{
-     const matches=(await request('suggestions/'+encodeURIComponent(btn.dataset.cloudSuggest))).suggestions||[];
+     const [openMatches,existingSettlements]=await Promise.all([
+      request('suggestions/'+encodeURIComponent(btn.dataset.cloudSuggest)),
+      request('settlement-suggestions/'+encodeURIComponent(btn.dataset.cloudSuggest))
+     ]);
+     const matches=openMatches.suggestions||[],settlements=existingSettlements.settlements||[];
      panel.hidden=false;
-     panel.querySelector('td').innerHTML='<strong>Contas compatíveis por valor e natureza</strong> '+(matches.map(x=>
-      '<button type="button" class="ops-secondary" data-cloud-match="'+esc(x.id)+'">'+esc(x.description)+' · saldo '+money(x.openCents)+'</button>').join(' ')||'<span class="ops-muted">Crie um lançamento em Financeiro ou selecione um pagamento existente na API.</span>');
+     panel.querySelector('td').innerHTML='<strong>Contas em aberto (criar baixa conciliada)</strong> '+
+      (matches.map(x=>'<button type="button" class="ops-secondary" data-cloud-match="'+esc(x.id)+'">'+esc(x.description)+' · saldo '+money(x.openCents)+'</button>').join(' ')||
+       '<span class="ops-muted">Sem conta aberta compatível.</span>')+
+      '<h3>Pagamentos já registrados (sem duplicar baixa)</h3>'+
+      (settlements.map(x=>'<button type="button" class="ops-secondary" data-cloud-link="'+esc(x.id)+'">'+esc(x.description)+' · '+money(x.amountCents)+' · '+esc(String(x.occurredAt).slice(0,10))+'</button>').join(' ')||
+       '<p class="ops-muted">Nenhum pagamento existente com este valor e natureza.</p>');
+     panel.querySelectorAll('[data-cloud-link]').forEach(button=>button.addEventListener('click',async()=>{
+      button.disabled=true;
+      try{
+       await request('reconcile/link',{method:'POST',body:{transactionId:btn.dataset.cloudSuggest,settlementId:button.dataset.cloudLink}});
+       toast('Pagamento já existente vinculado ao extrato, sem duplicidade.','success');await renderBanks(bankFilters);
+      }catch(e){toast(e.message,'error');button.disabled=false;}
+     }));
      panel.querySelectorAll('[data-cloud-match]').forEach(button=>button.addEventListener('click',async()=>{
       button.disabled=true;
-      try{await request('reconcile/match',{method:'POST',body:{transactionId:btn.dataset.cloudSuggest,entryId:button.dataset.cloudMatch}});toast('Baixa financeira conciliada.','success');await renderBanks();}
+      try{await request('reconcile/match',{method:'POST',body:{transactionId:btn.dataset.cloudSuggest,entryId:button.dataset.cloudMatch}});toast('Baixa financeira conciliada.','success');await renderBanks(bankFilters);}
       catch(e){toast(e.message,'error');button.disabled=false;}
      }));
     }catch(e){toast(e.message,'error');}
