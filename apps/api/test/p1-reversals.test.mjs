@@ -418,7 +418,7 @@ test('P2 pinned desktop cash closing nominal: original Git blob rule and SaaS se
  const {calculateCashClosing}=createRequire(import.meta.url)(
   '../../../packages/core/js/domains/cash/cash-rules.js');
  const file=readFileSync(new URL('../../../packages/core/js/domains/cash/cash-rules.js',import.meta.url));
- const gitBlob=createHash('sha1').update('blob '+file.length+'\\0').update(file).digest('hex');
+ const gitBlob=createHash('sha1').update('blob '+file.length+'\0').update(file).digest('hex');
  assert.equal(gitBlob,'1141be41b2898890b42ccc77f4554ac483357c3c',
   'Execute the exact original desktop cash rule pinned at commit 7efea9c61f75be1536a1e516e917218f2b8bf2bf');
  const baseline=calculateCashClosing({initialCashCents:1000,movements:[
