@@ -185,6 +185,7 @@ jobs:
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0037_recipe_details.sql
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0038_product_menu_usage.sql
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0039_p4_finance_operations.sql
+          npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0040_wallet_operations.sql
       - name: Install one Chromium for all browser regression gates
         run: |
           npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0

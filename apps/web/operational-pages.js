@@ -30,6 +30,29 @@
   const CASH_PAYMENT_LABELS=Object.freeze({CASH:'Dinheiro',PIX:'PIX',DEBIT_CARD:'Cartão de débito',CREDIT_CARD:'Cartão de crédito',STORE_CREDIT:'Crediário / crédito da loja',OTHER:'Outros'});
   function cashMovementLabel(value){const code=String(value||'').toUpperCase();return CASH_MOVEMENT_LABELS[code]||value||'—';}
   function cashPaymentLabel(value){const code=String(value||'').toUpperCase();return CASH_PAYMENT_LABELS[code]||value||'—';}
+
+  function bindHistoricalNameLookups(selector){
+    content.querySelectorAll(selector).forEach(input=>{
+      let last=0,task=null;
+      input.addEventListener('input',()=>{
+        if(task)clearTimeout(task);
+        const requestId=++last,field=input.dataset.historyLookup;
+        const type=input.dataset.historyType;
+        const query=input.value.trim();
+        task=setTimeout(async()=>{
+          const select=input.closest('label')?.querySelector('select');
+          if(!select||!input.isConnected)return;
+          try{
+            const result=type==='cash'
+              ?await api.cashFilterOptions({field,query}):await api.salesFilterOptions({field,query});
+            if(requestId!==last||!select.isConnected)return;
+            select.innerHTML=namedOptions(result[field]||[],select.value);
+          }catch(error){if(input.isConnected)showToast(error.message,'error');}
+        },250);
+      });
+    });
+  }
+
   function namedOptions(rows,selected='',allLabel='Todos'){
     const available=Array.isArray(rows)?rows:[];const chosen=String(selected||'');
     const exists=available.some(row=>String(row.id)===chosen);
@@ -244,8 +267,8 @@
       <section class="ops-card"><details id="web-cash-history-search"><summary>Consultar histórico completo do caixa</summary>
         <form id="web-cash-search-form" class="ops-form">
           <div class="ops-grid two">
-            <label>Operador<select name="operatorId" class="ops-input">${namedOptions(cashFilters.operators)}</select></label>
-            <label>Terminal<select name="terminalId" class="ops-input">${namedOptions(cashFilters.terminals,'','Todos os terminais')}</select></label>
+            <label>Operador<input type="search" class="ops-input" data-history-type="cash" data-history-lookup="operators" placeholder="Buscar nome no histórico"><select name="operatorId" class="ops-input">${namedOptions(cashFilters.operators)}</select></label>
+            <label>Terminal<input type="search" class="ops-input" data-history-type="cash" data-history-lookup="terminals" placeholder="Buscar terminal no histórico"><select name="terminalId" class="ops-input">${namedOptions(cashFilters.terminals,'','Todos os terminais')}</select></label>
             <label>Situação<select name="status" class="ops-input">
               <option value="">Todos</option><option value="OPEN">Aberto</option><option value="CLOSED">Fechado</option>
             </select></label>
@@ -312,6 +335,7 @@
         if(panel.isConnected)panel.innerHTML=`<p class="ops-muted" role="alert">${escapeHtml(error.message||'Falha na consulta do caixa.')}</p>`;
       }
     }
+    bindHistoricalNameLookups('[data-history-type="cash"][data-history-lookup]');
     content.querySelector('#web-cash-search-form')?.addEventListener('submit',async event=>{
       event.preventDefault();
       const form=event.currentTarget,result=content.querySelector('#web-cash-history-result');
@@ -439,10 +463,18 @@
         </select></label>
       <details class="ops-advanced-filters" ${historyFilter.sellerId||historyFilter.operatorId||historyFilter.customerId||historyFilter.productId||historyFilter.paymentMethod?'open':''}><summary>Filtros avançados</summary>
         <div class="ops-grid two">
-          <label>Vendedor<select class="ops-input" name="sellerId">${namedOptions(salesFilters.sellers,historyFilter.sellerId)}</select></label>
-          <label>Operador<select class="ops-input" name="operatorId">${namedOptions(salesFilters.operators,historyFilter.operatorId)}</select></label>
-          <label>Cliente<select class="ops-input" name="customerId">${namedOptions(salesFilters.customers,historyFilter.customerId)}</select></label>
-          <label>Produto<select class="ops-input" name="productId">${namedOptions(salesFilters.products,historyFilter.productId)}</select></label>
+          <label>Vendedor
+            <input type="search" class="ops-input" data-history-type="sales" data-history-lookup="sellers" placeholder="Pesquisar em todo o histórico" aria-label="Pesquisar vendedor">
+            <select class="ops-input" name="sellerId">${namedOptions(salesFilters.sellers,historyFilter.sellerId)}</select></label>
+          <label>Operador
+            <input type="search" class="ops-input" data-history-type="sales" data-history-lookup="operators" placeholder="Pesquisar em todo o histórico" aria-label="Pesquisar operador">
+            <select class="ops-input" name="operatorId">${namedOptions(salesFilters.operators,historyFilter.operatorId)}</select></label>
+          <label>Cliente
+            <input type="search" class="ops-input" data-history-type="sales" data-history-lookup="customers" placeholder="Pesquisar em todo o histórico" aria-label="Pesquisar cliente">
+            <select class="ops-input" name="customerId">${namedOptions(salesFilters.customers,historyFilter.customerId)}</select></label>
+          <label>Produto
+            <input type="search" class="ops-input" data-history-type="sales" data-history-lookup="products" placeholder="Pesquisar em todo o histórico" aria-label="Pesquisar produto">
+            <select class="ops-input" name="productId">${namedOptions(salesFilters.products,historyFilter.productId)}</select></label>
           <label>Pagamento<select class="ops-input" name="paymentMethod">
             ${[['','Todos'],['CASH','Dinheiro'],['PIX','PIX'],['DEBIT_CARD','Débito'],['CREDIT_CARD','Crédito'],['STORE_CREDIT','Crediário'],['OTHER','Outros']].map(([value,label])=>`<option value="${value}" ${historyFilter.paymentMethod===value?'selected':''}>${label}</option>`).join('')}
           </select></label>
@@ -458,6 +490,7 @@
     if(!routeActive('sales')||renderSequence!==salesHistoryRenderSequence)return;
     content.innerHTML=page('Últimas vendas','Histórico imutável, pagamentos, itens e devoluções.',body,
       api.webMode?'<button id="web-sales-export" class="ops-secondary" type="button">Exportar histórico CSV</button>':'');
+    if(api.webMode)bindHistoricalNameLookups('[data-history-type="sales"][data-history-lookup]');
     content.querySelector('#web-sales-export')?.addEventListener('click',async event=>{
       const button=event.currentTarget;button.disabled=true;button.setAttribute('aria-busy','true');
       try{
@@ -651,23 +684,43 @@
   async function renderWebFinance(filters={}){
     await ready();
     const selected={query:String(filters.query||'').slice(0,100),
-      kind:String(filters.kind||''),status:String(filters.status||'')};
+      kind:String(filters.kind||''),status:String(filters.status||''),
+      categoryId:String(filters.categoryId||''),costCenterId:String(filters.costCenterId||''),
+      groupId:String(filters.groupId||''),accountId:String(filters.accountId||''),
+      from:String(filters.from||''),to:String(filters.to||''),
+      offset:Math.max(0,Number(filters.offset)||0)};
     const today=root.PdvBusinessDate?.localBusinessDate?.(new Date())||new Date().toISOString().slice(0,10);
-    const [summary,entries,dueResponse]=await Promise.all([
-      api.financeSummary(),api.financeEntries(selected),
-      api.request('/api/v1/finance-advanced/due?asOf='+encodeURIComponent(today)+'&horizonDays=30')
+    const search=new URLSearchParams(Object.entries({...selected,limit:50,asOf:today})
+      .filter(([,value])=>value!==''&&value!==null));
+    const [summary,history,dueResponse,categoryResponse,centerResponse,accountResponse,groupResponse]=await Promise.all([
+      api.financeSummary(),
+      api.request('/api/v1/finance-advanced/entries/search?'+search.toString()),
+      api.request('/api/v1/finance-advanced/due?asOf='+encodeURIComponent(today)+'&horizonDays=30'),
+      api.request('/api/v1/finance-advanced/dre/categories'),
+      api.request('/api/v1/finance-advanced/dre/cost-centers'),
+      api.request('/api/v1/finance-advanced/accounts'),
+      api.request('/api/v1/finance-advanced/dre/groups')
     ]);
-    const due=dueResponse.due;
+    const entries=history.history.items,due=dueResponse.due,
+      categories=categoryResponse.categories||[],centers=centerResponse.costCenters||[],
+      accounts=accountResponse.accounts||[],groups=groupResponse.groups||[];
+    const selectItems=(rows,current,emptyLabel='Todos')=>
+      `<option value="">${escapeHtml(emptyLabel)}</option>`+
+      rows.map(x=>`<option value="${escapeHtml(x.id)}" ${x.id===current?'selected':''}>${escapeHtml(x.name)}</option>`).join('');
     if(!routeActive('finance'))return;
     const permitted=root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'finance.manage')===true;
     const items=entries.map(entry=>`<tr>
       <td><strong>${escapeHtml(entry.description)}</strong>
-        <small class="ops-muted">${escapeHtml(entry.kind==='PAYABLE'?'A pagar':'A receber')}</small></td>
+        <small class="ops-muted">${escapeHtml(entry.kind==='PAYABLE'?'A pagar':'A receber')} ·
+          ${escapeHtml(categories.find(c=>c.id===entry.categoryId)?.name||'Sem categoria')} ·
+          ${escapeHtml(centers.find(c=>c.id===entry.costCenterId)?.name||'Sem centro de custo')}</small></td>
       <td>${dateOnly(entry.dueDate)}</td>
       <td>${money(entry.amountCents)}</td>
       <td>${money(entry.openCents)}</td>
       <td>${financeStatusBadge(entry)}</td>
-      <td class="web-finance-actions">${permitted&&entry.status!=='CANCELLED'&&entry.openCents>0?
+      <td class="web-finance-actions">${permitted?
+         `<button class="ops-secondary" type="button" data-web-classify="${escapeHtml(entry.id)}">Classificar</button>`:''}
+       ${permitted&&entry.status!=='CANCELLED'&&entry.openCents>0?
          `<button class="ops-secondary" type="button" data-web-settle="${escapeHtml(entry.id)}">Liquidar</button>`:''}
        ${permitted&&entry.status==='OPEN'?
          `<button class="ops-link" type="button" data-web-cancel="${escapeHtml(entry.id)}">Cancelar</button>`:''}</td></tr>`).join('');
@@ -700,18 +753,53 @@
         </select></label>
         <label>Situação<select name="status" class="ops-input">
           ${[['','Todas'],['OPEN','Em aberto'],['PARTIAL','Parcial'],['SETTLED','Liquidado'],['CANCELLED','Cancelado'],['OVERDUE','Atrasado']].map(([key,label])=>`<option value="${key}" ${selected.status===key?'selected':''}>${label}</option>`).join('')}
-        </select></label><button class="ops-secondary" type="submit">Filtrar</button>
+        </select></label>
+        <label>Categoria<select name="categoryId" class="ops-input">${selectItems(categories,selected.categoryId)}</select></label>
+        <label>Centro de custo<select name="costCenterId" class="ops-input">${selectItems(centers,selected.costCenterId)}</select></label>
+        <label>Grupo DRE<select name="groupId" class="ops-input">${selectItems(groups,selected.groupId)}</select></label>
+        <label>Conta bancária conciliada<select name="accountId" class="ops-input">${selectItems(accounts.filter(a=>a.walletKind==='BANK'),selected.accountId)}</select></label>
+        <label>Vencimento inicial<input name="from" type="date" class="ops-input" value="${escapeHtml(selected.from)}"></label>
+        <label>Vencimento final<input name="to" type="date" class="ops-input" value="${escapeHtml(selected.to)}"></label>
+        <button class="ops-secondary" type="submit">Filtrar</button>
       </form><div class="ops-table-wrap"><table class="ops-table"><thead>
         <tr><th>Descrição</th><th>Vencimento</th><th>Valor</th><th>Em aberto</th><th>Situação</th><th>Ações</th></tr>
         </thead><tbody>${items||`<tr><td colspan="6">${empty('Nenhum lançamento encontrado.')}</td></tr>`}</tbody></table></div>
+      <p class="ops-muted">${history.history.total} lançamentos encontrados · exibindo até 50 por página.</p>
+      <div class="ops-actions">
+        <button type="button" class="ops-secondary" data-finance-page="-1" ${selected.offset===0?'disabled':''}>Anterior</button>
+        <button type="button" class="ops-secondary" data-finance-page="1"
+          ${selected.offset+entries.length>=history.history.total?'disabled':''}>Próxima</button>
+      </div>
       <p class="ops-muted">Os lançamentos manuais não alteram o dinheiro de caixa automaticamente; suprimentos e sangrias são feitos no módulo Caixa.</p>
       </section>`;
     content.innerHTML=page('Financeiro','Contas a pagar e a receber com histórico de liquidação.',markup);
     content.querySelector('#web-finance-filters')?.addEventListener('submit',event=>{
       event.preventDefault();
       const form=event.currentTarget;
-      void renderWebFinance({query:form.elements.query.value,kind:form.elements.kind.value,status:form.elements.status.value});
+      const next=Object.fromEntries(new FormData(form).entries());
+      if(next.from&&next.to&&next.from>next.to){showToast('Período de vencimentos invertido.','error');return;}
+      void renderWebFinance({...next,offset:0}).catch(e=>showToast(e.message,'error'));
     });
+    content.querySelectorAll('[data-finance-page]').forEach(button=>button.addEventListener('click',()=>{
+      void renderWebFinance({...selected,offset:Math.max(0,selected.offset+50*Number(button.dataset.financePage))})
+        .catch(error=>showToast(error.message,'error'));
+    }));
+    content.querySelectorAll('[data-web-classify]').forEach(button=>button.addEventListener('click',async()=>{
+      if(!ux?.openFormDialog)return;
+      const entry=entries.find(x=>x.id===button.dataset.webClassify);if(!entry)return;
+      const result=await ux.openFormDialog({
+        title:'Classificar · '+entry.description,
+        description:'Classifique este lançamento para o mesmo plano de contas utilizado na DRE.',
+        confirmLabel:'Salvar classificação',
+        body:`<label>Categoria<select name="categoryId" class="ops-input">${selectItems(categories,entry.categoryId,'Sem categoria')}</select></label>
+          <label>Centro de custo<select name="costCenterId" class="ops-input">${selectItems(centers,entry.costCenterId,'Sem centro')}</select></label>
+          <label>Grupo DRE<select name="dreGroupId" class="ops-input">${selectItems(groups,entry.dreGroupId,'Automático pela categoria')}</select></label>`,
+        onConfirm:data=>api.request('/api/v1/finance-advanced/dre/classify/'+encodeURIComponent(entry.id),
+          {method:'POST',body:{categoryId:data.categoryId||null,costCenterId:data.costCenterId||null,
+            dreGroupId:data.dreGroupId||null}})
+      });
+      if(result.confirmed){showToast('Classificação atualizada.','success');await renderWebFinance(selected);}
+    }));
     content.querySelector('#web-finance-new')?.addEventListener('click',async()=>{
       if(!ux?.openFormDialog)return;
       const key=api.mutationId();

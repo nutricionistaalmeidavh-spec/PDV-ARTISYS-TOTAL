@@ -44,7 +44,11 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
    await branch(t,b);
    return many(`SELECT a.id,a.name,a.bank_code AS bankCode,a.wallet_kind AS walletKind,a.active,
      COALESCE(SUM(x.amount_cents),0) AS importedNetCents,
-     COUNT(x.id) AS importedMovements
+     COUNT(x.id) AS importedMovements,
+     COALESCE((SELECT SUM(w.amount_cents) FROM finance_wallet_movements w
+       WHERE w.tenant_id=a.tenant_id AND w.branch_id=a.branch_id AND w.account_id=a.id),0) AS walletBalanceCents,
+     (SELECT COUNT(*) FROM finance_wallet_movements w WHERE w.tenant_id=a.tenant_id
+       AND w.branch_id=a.branch_id AND w.account_id=a.id) AS walletMovementCount
      FROM finance_bank_accounts a LEFT JOIN finance_bank_transactions x
        ON x.account_id=a.id AND x.tenant_id=a.tenant_id AND x.branch_id=a.branch_id
      WHERE a.tenant_id=? AND a.branch_id=?
@@ -56,6 +60,143 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
    const result={id:id(),name,bankCode,walletKind,active:true};
    await run('INSERT INTO finance_bank_accounts(id,tenant_id,branch_id,name,bank_code,wallet_kind,created_by,created_at) VALUES(?,?,?,?,?,?,?,?)',result.id,t,b,name,bankCode,walletKind,user,stamp());
    return result;
+  },
+
+  // Non-bank wallet bookkeeping is NOT an accounting settlement or POS drawer.
+  // Mutations are scoped, idempotent and protected against overdraft in SQLite.
+  async walletMovements(t,b,accountId,{limit=100,offset=0}={}){
+   const a=await row('finance_bank_accounts',t,b,accountId);
+   if(a.wallet_kind==='BANK')throw fail(400,'Para bancos, consulte o extrato OFX/CSV.');
+   const n=Number(limit),skip=Number(offset);
+   if(!Number.isSafeInteger(n)||n<1||n>200||!Number.isSafeInteger(skip)||skip<0||skip>10000)
+    throw fail(400,'Paginação de carteira inválida.');
+   return many(`SELECT id,account_id AS accountId,kind,amount_cents AS amountCents,
+      counterpart_account_id AS counterpartAccountId,reason,operator_id AS operatorId,
+      mutation_id AS mutationId,created_at AS createdAt
+      FROM finance_wallet_movements WHERE tenant_id=? AND branch_id=? AND account_id=?
+      ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?`,t,b,accountId,n,skip);
+  },
+  async walletAdjust(t,b,user,{accountId,kind,amountCents,reason,mutationId}={}){
+   const a=await row('finance_bank_accounts',t,b,accountId);
+   if(!a.active||!['CASH','OTHER'].includes(a.wallet_kind))throw fail(409,'Carteira operacional indisponível.');
+   if(!['OPENING','CREDIT','DEBIT'].includes(kind)||!validMoney(amountCents)||
+       str(reason,240).length<3||!/^[-\w]{8,128}$/.test(mutationId||''))
+    throw fail(400,'Movimentação ou identificador de repetição inválido.');
+   const signed=kind==='DEBIT'?-amountCents:amountCents,description=str(reason,240);
+   const previous=await one('SELECT * FROM finance_wallet_movements WHERE tenant_id=? AND branch_id=? AND account_id=? AND mutation_id=?',
+      t,b,accountId,mutationId);
+   if(previous){
+    if(previous.kind!==kind||previous.amount_cents!==signed||previous.reason!==description)
+      throw fail(409,'Chave de repetição pertence a outra movimentação.');
+    return {id:previous.id,accountId,kind,amountCents:signed,idempotent:true};
+   }
+   if(kind==='OPENING'&&await one("SELECT id FROM finance_wallet_movements WHERE tenant_id=? AND branch_id=? AND account_id=? LIMIT 1",t,b,accountId))
+    throw fail(409,'Saldo inicial já registrado. Use entrada ou saída identificada.');
+   const rowId=id();
+   try{
+    await run(`INSERT INTO finance_wallet_movements
+      (id,tenant_id,branch_id,account_id,kind,amount_cents,reason,mutation_id,operator_id,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?)`,
+      rowId,t,b,accountId,kind,signed,description,mutationId,user,stamp());
+   }catch(e){
+    const winner=await one('SELECT * FROM finance_wallet_movements WHERE tenant_id=? AND branch_id=? AND account_id=? AND mutation_id=?',t,b,accountId,mutationId);
+    if(winner&&winner.kind===kind&&winner.amount_cents===signed&&winner.reason===description)
+     return {id:winner.id,accountId,kind,amountCents:signed,idempotent:true};
+    throw fail(409,'Saldo insuficiente, lançamento inicial repetido ou alteração concorrente.');
+   }
+   return {id:rowId,accountId,kind,amountCents:signed};
+  },
+  async walletTransfer(t,b,user,{fromAccountId,toAccountId,amountCents,reason,mutationId}={}){
+   if(fromAccountId===toAccountId||!validMoney(amountCents)||
+      str(reason,240).length<3||!/^[-\w]{8,128}$/.test(mutationId||''))
+    throw fail(400,'Transferência entre carteiras inválida.');
+   const from=await row('finance_bank_accounts',t,b,fromAccountId),
+    to=await row('finance_bank_accounts',t,b,toAccountId);
+   if(!from.active||!to.active||!['CASH','OTHER'].includes(from.wallet_kind)||
+      !['CASH','OTHER'].includes(to.wallet_kind))
+    throw fail(409,'Transferência operacional somente entre carteiras não bancárias ativas.');
+   const prior=await one('SELECT * FROM finance_wallet_movements WHERE tenant_id=? AND branch_id=? AND account_id=? AND mutation_id=?',t,b,fromAccountId,mutationId);
+   if(prior){
+    if(prior.kind!=='TRANSFER_OUT'||prior.amount_cents!==-amountCents||
+       prior.counterpart_account_id!==toAccountId||prior.reason!==str(reason,240))
+      throw fail(409,'Chave de repetição já aplicada com outros dados.');
+    return {fromAccountId,toAccountId,amountCents,idempotent:true};
+   }
+   const description=str(reason,240),ts=stamp();
+   try{
+    await db.batch([
+     q(`INSERT INTO finance_wallet_movements
+      (id,tenant_id,branch_id,account_id,kind,amount_cents,counterpart_account_id,
+       reason,mutation_id,operator_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+       id(),t,b,fromAccountId,'TRANSFER_OUT',-amountCents,toAccountId,description,mutationId,user,ts),
+     q(`INSERT INTO finance_wallet_movements
+      (id,tenant_id,branch_id,account_id,kind,amount_cents,counterpart_account_id,
+       reason,mutation_id,operator_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+       id(),t,b,toAccountId,'TRANSFER_IN',amountCents,fromAccountId,description,mutationId,user,ts)
+    ]);
+   }catch(e){
+    const winner=await one('SELECT * FROM finance_wallet_movements WHERE tenant_id=? AND branch_id=? AND account_id=? AND mutation_id=?',t,b,fromAccountId,mutationId);
+    if(winner&&winner.kind==='TRANSFER_OUT'&&winner.amount_cents===-amountCents&&
+       winner.counterpart_account_id===toAccountId&&winner.reason===description)
+      return {fromAccountId,toAccountId,amountCents,idempotent:true};
+    throw fail(409,'Transferência não concluída: saldo insuficiente ou conflito concorrente.');
+   }
+   return {fromAccountId,toAccountId,amountCents};
+  },
+  async entriesSearch(t,b,{query='',kind='',status='',categoryId='',costCenterId='',groupId='',
+    accountId='',from='',to='',limit=100,offset=0,asOf=stamp().slice(0,10)}={}){
+   await branch(t,b);const today=date(asOf);
+   if(kind&&!['PAYABLE','RECEIVABLE'].includes(kind)||
+      status&&!['OPEN','PARTIAL','SETTLED','CANCELLED','OVERDUE'].includes(status))
+    throw fail(400,'Filtro financeiro inválido.');
+   if(from)date(from);if(to)date(to);if(from&&to&&from>to)throw fail(400,'Período invertido.');
+   const lim=Number(limit),skip=Number(offset);
+   if(!Number.isSafeInteger(lim)||lim<1||lim>200||!Number.isSafeInteger(skip)||skip<0||skip>100000)
+    throw fail(400,'Paginação financeira inválida.');
+   for(const [table,key] of [['finance_categories',categoryId],['finance_cost_centers',costCenterId],
+     ['finance_dre_groups',groupId],['finance_bank_accounts',accountId]]){
+    if(key)await row(table,t,b,key);
+   }
+   const clauses=['e.tenant_id=?','e.branch_id=?'];
+   const args=[t,b];
+   if(query){clauses.push('instr(lower(e.description),lower(?))>0');args.push(str(query,100));}
+   if(kind){clauses.push('e.kind=?');args.push(kind);}
+   if(from){clauses.push('e.due_date>=?');args.push(from);}
+   if(to){clauses.push('e.due_date<=?');args.push(to);}
+   if(categoryId){clauses.push('d.category_id=?');args.push(categoryId);}
+   if(costCenterId){clauses.push('d.cost_center_id=?');args.push(costCenterId);}
+   if(groupId){clauses.push('d.dre_group_id=?');args.push(groupId);}
+   if(accountId){
+    clauses.push(`EXISTS(SELECT 1 FROM finance_settlements sf
+      JOIN finance_bank_reconciliations br ON br.settlement_id=sf.id
+       AND br.tenant_id=sf.tenant_id AND br.branch_id=sf.branch_id
+      JOIN finance_bank_transactions bt ON bt.id=br.transaction_id
+       AND bt.tenant_id=br.tenant_id AND bt.branch_id=br.branch_id
+      WHERE sf.entry_id=e.id AND sf.tenant_id=e.tenant_id AND sf.branch_id=e.branch_id AND bt.account_id=?)`);
+    args.push(accountId);
+   }
+   const base=`WITH rows AS(
+     SELECT e.id,e.description,e.kind,e.amount_cents AS amountCents,e.due_date AS dueDate,
+       e.cancelled_at AS cancelledAt,COALESCE(d.category_id,'') AS categoryId,
+       COALESCE(d.cost_center_id,'') AS costCenterId,COALESCE(d.dre_group_id,'') AS dreGroupId,
+       COALESCE((SELECT SUM(s.amount_cents-COALESCE(v.amount_cents,0))
+         FROM finance_settlements s LEFT JOIN finance_settlement_reversals v ON v.settlement_id=s.id
+           AND v.tenant_id=s.tenant_id AND v.branch_id=s.branch_id
+         WHERE s.tenant_id=e.tenant_id AND s.branch_id=e.branch_id AND s.entry_id=e.id),0) AS settledCents
+     FROM finance_entries e LEFT JOIN finance_entry_dimensions d
+      ON d.entry_id=e.id AND d.tenant_id=e.tenant_id AND d.branch_id=e.branch_id
+     WHERE ${clauses.join(' AND ')}
+    ),filtered AS(SELECT *,amountCents-settledCents AS openCents,
+      CASE WHEN cancelledAt IS NOT NULL THEN 'CANCELLED'
+       WHEN amountCents=settledCents THEN 'SETTLED'
+       WHEN settledCents>0 THEN 'PARTIAL' ELSE 'OPEN' END AS status FROM rows)
+   SELECT * FROM filtered WHERE (?='' OR status=? OR (?='OVERDUE'
+      AND cancelledAt IS NULL AND openCents>0 AND dueDate<?))`;
+   const params=[...args,status,status,status,today];
+   const total=(await one('SELECT COUNT(*) AS n FROM ('+base+')',...params)).n;
+   const items=await many(base+' ORDER BY dueDate ASC,id ASC LIMIT ? OFFSET ?',...params,lim,skip);
+   return {items:items.map(x=>({...x,isOverdue:x.status!=='CANCELLED'&&x.openCents>0&&x.dueDate<today})),
+     total,limit:lim,offset:skip};
   },
   async batches(t,b){return many('SELECT id,account_id AS accountId,source_name AS sourceName,imported_at AS importedAt FROM finance_statement_batches WHERE tenant_id=? AND branch_id=? ORDER BY imported_at DESC LIMIT 100',t,b);},
   async importStatement(t,b,user,body){
@@ -136,13 +277,26 @@ export function createAdvancedFinanceService(db,{now:clock=now}={}){
      LEFT JOIN finance_settlement_reversals r ON r.tenant_id=e.tenant_id AND r.branch_id=e.branch_id AND r.settlement_id=f.id
      WHERE e.tenant_id=? AND e.branch_id=? AND e.cancelled_at IS NULL AND e.due_date<=?
      GROUP BY e.id HAVING openCents>0 ORDER BY e.due_date,e.id LIMIT 300`,t,b,iso(end));
-   const totals={overdueCents:0,todayCents:0,upcomingCents:0,overdueCount:0,todayCount:0,upcomingCount:0};
-   const items=entries.map(x=>{
-    const severity=x.dueDate<day?'OVERDUE':x.dueDate===day?'TODAY':'UPCOMING';
-    const key=severity.toLowerCase();totals[key+'Cents']+=x.openCents;totals[key+'Count']++;
-    return {...x,severity};
-   });
-   return {asOf:day,through:iso(end),totals,items};
+   // Totals cover ALL canonical unsettled entries, not only the first 300 table rows.
+   const totals=await one(`WITH balances AS (
+     SELECT e.due_date AS dueDate,e.amount_cents-
+       COALESCE((SELECT SUM(f.amount_cents-COALESCE(r.amount_cents,0))
+       FROM finance_settlements f LEFT JOIN finance_settlement_reversals r
+        ON r.settlement_id=f.id AND r.tenant_id=f.tenant_id AND r.branch_id=f.branch_id
+       WHERE f.tenant_id=e.tenant_id AND f.branch_id=e.branch_id AND f.entry_id=e.id),0) AS openCents
+     FROM finance_entries e WHERE e.tenant_id=? AND e.branch_id=?
+       AND e.cancelled_at IS NULL AND e.due_date<=?
+    ) SELECT
+      COALESCE(SUM(CASE WHEN dueDate<? THEN openCents ELSE 0 END),0) AS overdueCents,
+      COALESCE(SUM(CASE WHEN dueDate=? THEN openCents ELSE 0 END),0) AS todayCents,
+      COALESCE(SUM(CASE WHEN dueDate>? THEN openCents ELSE 0 END),0) AS upcomingCents,
+      COALESCE(SUM(CASE WHEN dueDate<? THEN 1 ELSE 0 END),0) AS overdueCount,
+      COALESCE(SUM(CASE WHEN dueDate=? THEN 1 ELSE 0 END),0) AS todayCount,
+      COALESCE(SUM(CASE WHEN dueDate>? THEN 1 ELSE 0 END),0) AS upcomingCount
+      FROM balances WHERE openCents>0`,t,b,iso(end),day,day,day,day,day,day);
+   const items=entries.map(x=>({...x,
+    severity:x.dueDate<day?'OVERDUE':x.dueDate===day?'TODAY':'UPCOMING'}));
+   return {asOf:day,through:iso(end),totals,items,truncated:totals.overdueCount+totals.todayCount+totals.upcomingCount>items.length};
   },
   async recurrenceAlerts(t,b,{asOf=stamp().slice(0,10),horizonDays=7}={}){
    await branch(t,b);const day=date(asOf),days=Number(horizonDays);

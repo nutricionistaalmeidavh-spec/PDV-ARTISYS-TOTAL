@@ -30,6 +30,16 @@ export async function advancedFinanceRoute(request,db,session,member,tenant,path
   const f=feature.join('/');
   if(method==='GET'){
    if(f==='accounts')return json({accounts:await svc.accounts(tenant,branch)});
+   if(feature[0]==='wallets'&&feature.length===3&&feature[2]==='movements')
+    return json({movements:await svc.walletMovements(tenant,branch,feature[1],
+      {limit:query('limit')||100,offset:query('offset')||0})});
+   if(f==='entries/search')return json({history:await svc.entriesSearch(tenant,branch,{
+    query:query('query'),kind:query('kind'),status:query('status'),
+    categoryId:query('categoryId'),costCenterId:query('costCenterId'),
+    groupId:query('groupId'),accountId:query('accountId'),
+    from:query('from'),to:query('to'),asOf:query('asOf')||undefined,
+    limit:query('limit')||100,offset:query('offset')||0
+   })});
    if(f==='statements')return json({batches:await svc.batches(tenant,branch)});
    if(f==='transactions')return json({transactions:await svc.transactions(tenant,branch,{accountId:query('accountId'),status:query('status'),from:query('from'),to:query('to'),query:query('query'),direction:query('direction'),limit:query('limit')||200,offset:query('offset')||0})});
    if(f==='transfers/suggestions')return json({transfers:await svc.transferSuggestions(tenant,branch)});
@@ -47,6 +57,8 @@ export async function advancedFinanceRoute(request,db,session,member,tenant,path
   }
   if(method==='POST'){
    if(f==='accounts')return json({account:await svc.createAccount(tenant,branch,user,input)},201);
+   if(f==='wallets/movement')return json({movement:await svc.walletAdjust(tenant,branch,user,input)},201);
+   if(f==='wallets/transfer')return json({transfer:await svc.walletTransfer(tenant,branch,user,input)},201);
    if(f==='statements/import')return json({result:await svc.importStatement(tenant,branch,user,input)},201);
    if(f==='reconcile/match')return json({reconciliation:await svc.match(tenant,branch,user,input)});
    if(f==='reconcile/link')return json({reconciliation:await svc.linkSettlement(tenant,branch,user,input)});

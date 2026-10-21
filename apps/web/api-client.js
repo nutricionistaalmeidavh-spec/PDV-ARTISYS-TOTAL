@@ -368,7 +368,7 @@
     }
     cashSessions(filters = {}) { return this.request(`/api/v1/cash/sessions${this.params(filters)}`); }
     cashSessionsSearch(filters = {}) { return this.request(`/api/v1/cash/sessions/search${this.params(filters)}`); }
-    cashFilterOptions() { return this.request('/api/v1/cash/filter-options'); }
+    cashFilterOptions(filters = {}) { return this.request('/api/v1/cash/filter-options'+this.params(filters)); }
     cashSessionAudit(sessionId) { return this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/audit`); }
     cashMovements(sessionId) { return this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/movements`); }
 
@@ -376,7 +376,7 @@
     openCheckoutDocument(type, id) { return this.request(`/api/v1/checkout/documents/${String(type||'').toLowerCase()}/${encodeURIComponent(id)}/open`, { method:'POST', body:this.webMode?{terminalId:this.config?.terminalId||webTerminalIdentity()}:{} }); }
     sales(status = '', limit = 50) { return this.request(`/api/v1/sales${this.params({status,limit})}`); }
     salesHistory(filters = {}) { return this.request(`/api/v1/sales/history${this.params(filters)}`); }
-    salesFilterOptions() { return this.request('/api/v1/sales/filter-options'); }
+    salesFilterOptions(filters = {}) { return this.request('/api/v1/sales/filter-options'+this.params(filters)); }
     compareSalesPeriods(filters = {}) { return this.request(`/api/v1/reports/compare${this.params(filters)}`); }
     dailySalesTrend(filters={}){return this.request('/api/v1/reports/daily-trend'+this.params(filters));}
     sellerSalesRanking(filters={}){return this.request('/api/v1/reports/commission-ranking'+this.params(filters));}
