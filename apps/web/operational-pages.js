@@ -234,12 +234,12 @@
       </table></div></section></div>
       <section class="ops-card"><h2>Histórico de fechamento</h2><div class="ops-table-wrap">
         <table class="ops-table"><thead><tr><th>Abertura</th><th>Fechamento</th>
-          <th>Esperado</th><th>Contado</th><th>Divergência</th><th>Terminal</th></tr></thead><tbody>
+          <th>Esperado</th><th>Contado</th><th>Divergência</th><th>Terminal</th><th>Comprovante</th></tr></thead><tbody>
         ${sessions.filter(row=>row.status==='CLOSED').map(row=>`<tr>
           <td>${when(row.openedAt)}</td><td>${when(row.closedAt)}</td>
           <td>${money(row.expectedCashCents)}</td><td>${money(row.countedCashCents)}</td>
           <td>${money(row.divergenceCents)}</td><td>${escapeHtml(row.terminalId||'DEFAULT')}</td><td><button class="ops-secondary" type="button" data-cash-close-print="${escapeHtml(row.id)}">Imprimir fechamento</button></td></tr>`).join('')||
-            `<tr><td colspan="6">${empty('Nenhum fechamento anterior.')}</td></tr>`}
+            `<tr><td colspan="7">${empty('Nenhum fechamento anterior.')}</td></tr>`}
         </tbody></table></div></section>
       <section class="ops-card"><details id="web-cash-history-search"><summary>Consultar histórico completo do caixa</summary>
         <form id="web-cash-search-form" class="ops-form">
