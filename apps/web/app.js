@@ -6,7 +6,6 @@
   const { ApiClient } = window.PdvApiClient;
   const api = new ApiClient();
   const routeRegistry = window.PdvRouteRegistry;
-  const WEB_ROUTES=new Set(['home','checkout','products','inventory','sales','cash','finance','finance-banks','finance-recurrences','management','reports','settings','customers','suppliers','sellers','FOOD','WHOLESALE','credit','commissions','saas-admin']);
   if (!routeRegistry) throw new Error('PdvRouteRegistry must load before app.js.');
 
   const ROUTES = {
@@ -14,7 +13,7 @@
     checkout: { label: 'Balcão', shortLabel:'Balcão', icon: 'cart' },
     FOOD: { label: 'Alimentação', shortLabel:'Alimentação', icon: 'store' },
     WHOLESALE: { label: 'Atacado', shortLabel:'Atacado', icon: 'document' },
-    products: { label: 'Produtos', icon: 'document' },
+    products: { label: 'Cardápio', icon: 'document' },
     customers: { label: 'Clientes', icon: 'users' },
     suppliers: { label: 'Fornecedores', icon: 'document' },
     credit: { label: 'Crediário', icon: 'cash' },
@@ -58,6 +57,7 @@
     customerQuery: '',
     discountPercent: 0,
     paymentDraft: [],
+    paymentSettlement: null,
     selectedSellerId: '',
     pendingNewSaleKey:null,
     photoSyncStatus: null,
@@ -197,20 +197,14 @@
   }
 
   function canAccessRoute(route) {
-    if(route==='settings'&&api.webMode)return Boolean(state.user);
-    if(route==='saas-admin'&&api.webMode)return state.user?.profileKey==='OWNER';
-    if(api.webMode){
-      if(!WEB_ROUTES.has(route))return false;
-      const permission={suppliers:'suppliers.view',credit:'customers.view',commissions:'finance.view',FOOD:'restaurant.access',WHOLESALE:'wholesale.access'}[route];
-      if(permission)return Boolean(window.PdvAccessPolicy?.hasCapability(state.user,permission));
-    }
+    if(api.webMode)return window.PdvWebNavigation.canAccess(state.user,route,window.PdvAccessPolicy,moduleAccessOptions());
     return Boolean(window.PdvAccessPolicy?.canAccessRoute(state.user, route, moduleAccessOptions()));
   }
 
   function renderSidebar() {
     const nav = document.getElementById('sidebar-nav');
     const accessPolicy = window.PdvAccessPolicy;
-    const items = api.webMode ? ['home','checkout','customers','suppliers','sellers','FOOD','WHOLESALE','credit','commissions','products','inventory','sales','cash','finance','finance-banks','finance-recurrences','management','reports','saas-admin'].filter(route=>canAccessRoute(route))
+    const items = api.webMode ? window.PdvWebNavigation.sidebar(state.user,accessPolicy,moduleAccessOptions())
       : (accessPolicy?.routesForUser(state.user, moduleAccessOptions()) || ['home']).filter(route=>route!=='settings');
     const parentRoute = {
       finance:'financial-management',
@@ -223,13 +217,16 @@
       returns:'post-sale',
       products:'catalog',
       customers:'catalog',
+      suppliers:'catalog',
       inventory:'catalog',
       sellers:'catalog'
     }[state.route] || state.route;
     nav.innerHTML = items.map((route) => `<button class="nav-button ${parentRoute === route ? 'active' : ''}" type="button" data-route="${route}" title="${ROUTES[route].label}" aria-label="${ROUTES[route].label}"><span class="nav-button-icon">${icon(ROUTES[route].icon, 25)}</span><span class="nav-label">${escapeHtml(ROUTES[route].shortLabel || ROUTES[route].label)}</span></button>`).join('');
     const settingsButton = document.querySelector('#app-sidebar [data-route="settings"]');
     if (settingsButton) settingsButton.hidden = !canAccessRoute('settings');
-    document.querySelectorAll('[data-route]').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.route)));
+    // Footer buttons survive sidebar re-renders. Replace their handler instead
+    // of accumulating listeners and rendering the destination several times.
+    document.querySelectorAll('[data-route]:not(.brand-mark)').forEach((button) => {button.onclick=() => navigate(button.dataset.route);});
     window.dispatchEvent(new CustomEvent('artisys:sidebar-rendered'));
   }
 
@@ -306,7 +303,9 @@
     state.discountPercent = state.sale?.subtotalCents ? Number(((state.sale.discountCents / state.sale.subtotalCents) * 100).toFixed(2)) : 0;
   }
 
+  let navigationGeneration=0;
   async function navigate(route) {
+    const generation=++navigationGeneration;
     if (!ROUTES[route]) route = 'home';
     if (!canAccessRoute(route)) route = 'home';
     state.route = route;
@@ -317,7 +316,10 @@
     if (route === 'checkout') {
       try { await restoreCheckoutState(); } catch (error) { showToast(error.message, 'error'); }
     }
-    await renderRoute(); content.focus({ preventScroll: true });
+    if(generation!==navigationGeneration)return;
+    await renderRoute();
+    if(generation!==navigationGeneration)return;
+    content.focus({ preventScroll: true });
     // Desktop keeps the route accessible; web reports have a selected keyboard
     // tab whose focus must be restored AFTER route-level focus is applied.
     if(api.webMode&&route==='reports'&&state.route===route){
@@ -329,6 +331,8 @@
   }
 
   async function renderRoute() {
+    if(api.webMode&&state.route==='access')
+      return window.PdvWebSettings.renderAccess(content,{api,user:state.user,navigate,toast:showToast});
     if(api.webMode&&state.route==='saas-admin')
       return window.PdvSaasAdmin.render(content,{
         api,user:state.user,memberships:state.sessionMemberships,
@@ -485,7 +489,6 @@
     content.innerHTML = `<section class="checkout-layout"><div class="checkout-main"><div class="checkout-hero"><div><h1>Balcão</h1><p>Venda rápida e prática para o seu cliente</p></div><em>Agilidade no atendimento,<br>mais vendas todos os dias.</em></div><div class="checkout-tools"><label class="search-field" for="product-search">${icon('document')}<input id="product-search" aria-label="Buscar produto por nome, código ou código de barras" autocomplete="off" placeholder="Buscar produto por nome, código ou código de barras..." value="${escapeHtml(state.productQuery)}"><span>▥</span></label><button id="scan-focus" class="scan-button" type="button">▥ &nbsp; Ler código (F2)</button><button id="peripherals-settings" class="scan-button" type="button">Dispositivos locais</button><button id="checkout-documents" class="scan-button" type="button">${icon('history',18)} &nbsp; Comandas e pedidos</button></div><div class="category-chips"><button class="category-chip ${!state.categoryId ? 'active' : ''}" data-category="">Todos</button>${state.categories.map((category) => `<button class="category-chip ${state.categoryId === category.id ? 'active' : ''}" data-category="${category.id}">${escapeHtml(category.name)}</button>`).join('')}</div><div class="product-grid">${checkoutProductGridHtml()}</div><div class="checkout-actions"><h3>Ações da venda</h3><div class="action-grid"><button class="action-button" id="new-sale" type="button">▶ &nbsp; Iniciar venda <small>F1</small></button><button class="action-button orange" id="remove-item" type="button">⌫ &nbsp; Cancelar item <small>F3</small></button><button class="action-button red" id="cancel-sale" type="button">⊗ &nbsp; Cancelar venda <small>F4</small></button><button class="action-button blue" id="suspend-sale" type="button">Ⅱ &nbsp; Suspender <small>F6</small></button>${api.webMode?'<button class="action-button" id="print-prebill" type="button">Pré-conta não fiscal</button>':''}</div></div></div><aside class="sale-panel">${checkoutDocumentContextMarkup()}<div class="customer-block"><h3>Cliente <small class="optional-label">(opcional)</small></h3><label class="search-field" for="customer-search">⌕<input id="customer-search" aria-label="Buscar cliente" autocomplete="off" placeholder="Buscar cliente..." value="${escapeHtml(state.customerQuery)}"></label><div id="customer-suggestions"></div>${customer ? `<div class="customer-selected"><span class="avatar">${escapeHtml(initials(customer.name))}</span><div><strong>${escapeHtml(customer.name)}</strong><small>${escapeHtml(customer.document || 'Sem documento')}</small></div><button id="remove-customer" type="button" aria-label="Remover cliente">×</button></div>` : ''}</div><div class="cart-head"><h3>Itens da venda (${sale?.items?.length || 0})</h3><button id="clear-cart" class="secondary-button" type="button">Limpar carrinho</button></div><div class="cart-list">${sale?.items?.map((item) => cartLine(item)).join('') || '<div class="empty-state">Nenhum item na venda.</div>'}</div><div class="totals"><div class="total-row"><span>Subtotal</span><strong>${ui.formatCents(sale?.subtotalCents || 0)}</strong></div><div class="total-row"><span>Desconto</span><div class="discount-control"><span>%</span><input id="discount-percent" type="number" aria-label="Percentual de desconto" min="0" max="100" step="0.01" value="${state.discountPercent || 0}"><strong>${ui.formatCents(sale?.discountCents || 0)}</strong></div></div><div class="total-row grand-total"><span>Total da venda</span><strong>${ui.formatCents(sale?.totalCents || 0)}</strong></div></div><div class="payment-strip"><button class="pay-button" data-pay="cash">Dinheiro</button><button class="pay-button card" data-pay="card">Cartão</button><button class="pay-button pix" data-pay="pix">PIX</button></div><button class="finalize-button" id="finalize-sale" type="button">Finalizar venda (F12) &nbsp; ›</button></aside></section>`;
     content.querySelector('.sale-panel')?.insertAdjacentHTML('afterbegin', `<div class="customer-block"><label class="checkout-context-label" for="seller-select">Vendedor / Garçom</label><select id="seller-select" class="secondary-button checkout-seller-select">${state.sellers.map((seller) => `<option value="${seller.id}" ${seller.id === (sale?.sellerId || state.selectedSellerId) ? 'selected' : ''}>${escapeHtml(seller.name)}</option>`).join('')}</select></div>`);
     if(api.webMode){
-      content.querySelector('#checkout-documents')?.remove();
       if(!window.PdvAccessPolicy?.hasCapability(state.user,'customers.view'))content.querySelectorAll('.customer-block').forEach(block=>{block.hidden=true;});
       content.querySelector('#scan-focus')?.setAttribute('title','Digite ou use um leitor USB como teclado');
       content.querySelector('#clear-cart')?.setAttribute('title','Remove itens desta venda, sem apagá-la');
@@ -532,7 +535,7 @@
     const changed = item.catalogUnitPriceCents != null && item.catalogUnitPriceCents !== item.unitPriceCents;
     const weight=item.configuration?.weight||null;
     const sourceDocument=item.configuration?.sourceDocument||null;
-    const configured=Boolean(item.configuration?.pizza||item.configuration?.variant||item.configuration?.options?.length||item.configuration?.comboSelections?.length);
+    const configured=Boolean(item.configuration?.pizza||item.configuration?.size||item.configuration?.variant||item.configuration?.options?.length||item.configuration?.comboSelections?.length);
     const configurationSummary=configured?window.PdvOrderComposer?.configurationSummary?.(item.configuration)||'':'';
     const weightLabel=weight?`${quantityLabel(Number(weight.grams||0))} g · ${escapeHtml(String(weight.source||'MANUAL')==='SCALE'?'balança':String(weight.source||'MANUAL')==='BARCODE'?'etiqueta':'manual')}`:null;
     const documentLabel=sourceDocument?`${escapeHtml(sourceDocument.orderNumber||sourceDocument.id||'Pedido')} · preço do pedido`:null;
@@ -558,7 +561,7 @@
       if(checkoutBarcodeBusy){showToast('Conclua a leitura anterior antes de escanear novamente.','error');return;}
       const code=String(search.value||'').trim().toLowerCase();
       if(!code)return;
-      const matches=state.products.filter(p=>p.active!==false&&
+      const matches=state.products.filter(p=>p.active!==false&&p.menuEnabled!==false&&p.usageType!=='INGREDIENT'&&
         [p.barcode,p.sku].some(value=>value&&String(value).trim().toLowerCase()===code));
       if(matches.length!==1){
         showToast(matches.length?'Código ambíguo: corrija os códigos duplicados no catálogo.':'Código não encontrado no catálogo.','error');
@@ -654,16 +657,8 @@
           const type=button.dataset.openCheckoutDocument.slice(0,split);
           const id=button.dataset.openCheckoutDocument.slice(split+1);
           try{
-            const currentOperationalDocument=Boolean(state.checkoutDocumentContext);
-            const targetSaleId=String(button.dataset.checkoutDocumentSale||'').trim();
-            const sameCanonicalSale=Boolean(targetSaleId&&state.sale?.id===targetSaleId);
-            if(state.sale?.status==='OPEN'&&state.sale.items?.length&&!currentOperationalDocument&&!sameCanonicalSale)throw new Error('Finalize, suspenda ou cancele a venda atual antes de abrir uma comanda ou pedido.');
-            if(state.sale?.status==='OPEN'&&!state.sale.items?.length&&!currentOperationalDocument&&!sameCanonicalSale){await api.cancelSale(state.sale.id,'Substituída por documento operacional');state.sale=null;}
-            if(state.sale?.status==='OPEN'&&targetSaleId&&state.sale.id===targetSaleId)state.checkoutDocumentContext={type,document:rows.find(row=>row.type===type&&String(row.id)===String(id))||null};
             button.disabled=true;
-            const opened=await api.openCheckoutDocument(type,id);
-            state.sale=opened.sale;
-            state.checkoutDocumentContext={type,document:opened.document};
+            const opened=await openOperationalDocument(type,id);
             state.discountPercent=0;state.selectedProductId=null;
             closeModal();renderCheckout();
             const label=type==='COMMAND'?'Comanda':type==='DELIVERY'?(opened.document?.fulfillmentType==='PICKUP'?'Retirada':'Delivery'):'Pedido';
@@ -741,13 +736,14 @@
     try {
       if(api.webMode){
         const catalogue=await api.productConfiguration(productId);
-        if(catalogue.variants?.length||catalogue.groups?.length){
+        if(catalogue.pizzaProfile||catalogue.variants?.length||catalogue.groups?.length){
           await window.PdvRestaurantOrderComposerUi.configure({
             api,modalRoot,product,
             onAdd:async line=>{
               const sale=await ensureSale();
               state.sale=await api.addConfiguredSaleItem(sale.id,{
                 productId:line.productId,quantity:line.quantity,
+                ...(line.configuration?.pizza?{pizza:line.configuration.pizza}:{}),
                 variantId:line.configuration?.variantId||undefined,
                 selections:line.configuration?.selections||[],
                 comboSelections:line.configuration?.comboSelections||[],
@@ -896,15 +892,28 @@
     try {
       if (!(await ensureCashOpen())) return;
       if (!isRouteActive('checkout')) return;
-      const allowed=allowedPaymentMethodsForCurrentSale();let method=preferredMethod ? ui.paymentMethodFromUi(preferredMethod) : allowed[0];if(!allowed.includes(method))method=allowed[0]; state.paymentDraft = [{ method, amountCents: state.sale.totalCents }]; renderPaymentModal();
+      state.paymentSettlement=api.webMode?await api.checkoutSettlement(state.sale.id):null;
+      const allowed=allowedPaymentMethodsForCurrentSale();let method=preferredMethod ? ui.paymentMethodFromUi(preferredMethod) : allowed[0];if(!allowed.includes(method))method=allowed[0];
+      const due=state.paymentSettlement?.amountDueCents??state.sale.totalCents;
+      state.paymentDraft=state.paymentSettlement?.shares?state.paymentSettlement.shares.map(share=>({...share,method})):due>0?[{method,amountCents:due}]:[];
+      renderPaymentModal();
+    } catch(error){showToast(error.message,'error');
     } finally {
       paymentFlowInFlight = false;
     }
   }
 
   function renderPaymentModal() {
-    const paid = state.paymentDraft.reduce((sum, payment) => sum + payment.amountCents, 0); const remaining = Math.max((state.sale?.totalCents || 0) - paid, 0);
-    openModal('Pagamento da venda', `<div class="total-row grand-total"><span>Total</span><strong>${ui.formatCents(state.sale.totalCents)}</strong></div><div class="payment-list">${state.paymentDraft.map((payment, index) => `<div class="payment-line"><strong>${escapeHtml(paymentLabel(payment.method))}</strong><span>${ui.formatCents(payment.amountCents)}</span><button class="danger-button" data-remove-payment="${index}" aria-label="Remover pagamento">×</button></div>`).join('')}</div><div class="total-row"><span>Restante</span><strong>${ui.formatCents(remaining)}</strong></div><div class="payment-add"><div class="field"><label>Forma</label><select id="new-payment-method">${allowedPaymentMethodsForCurrentSale().map(method=>`<option value="${method}">${escapeHtml(paymentLabel(method))}</option>`).join('')}</select></div><div class="field"><label>Valor</label><input id="new-payment-value" inputmode="decimal" value="${(remaining / 100).toFixed(2).replace('.', ',')}"></div><button class="secondary-button" id="add-payment">Adicionar</button></div><div class="modal-actions"><button class="secondary-button" data-close-modal>Voltar</button><button class="primary-button" id="confirm-payment">Concluir venda</button></div>`, { wide: true, onMount(root) { root.querySelectorAll('[data-remove-payment]').forEach((button) => button.addEventListener('click', () => { state.paymentDraft.splice(Number(button.dataset.removePayment), 1); renderPaymentModal(); })); root.querySelector('#add-payment').addEventListener('click', () => { const amountCents = centsFromInput(root.querySelector('#new-payment-value').value); if (amountCents <= 0) return showToast('Informe um valor maior que zero.', 'error'); state.paymentDraft.push({ method: root.querySelector('#new-payment-method').value, amountCents }); renderPaymentModal(); }); root.querySelector('#confirm-payment').addEventListener('click', completeCurrentSale); } });
+    if(api.webMode&&state.paymentSettlement?.shares){
+      openModal('Pagamento por pessoa',`<p>Total: ${ui.formatCents(state.sale.totalCents)} · Antecipado: ${ui.formatCents(state.paymentSettlement.prepaidCents)} · A receber: ${ui.formatCents(state.paymentSettlement.amountDueCents)}</p>
+        ${state.paymentDraft.map((share,index)=>`<label class="field">Pagador ${share.index} · ${ui.formatCents(share.amountCents)}<select data-share-method="${index}">${['CASH','PIX','DEBIT_CARD','CREDIT_CARD'].map(method=>`<option value="${method}" ${share.method===method?'selected':''}>${paymentLabel(method)}</option>`).join('')}</select></label>`).join('')||'<p>A conta já foi integralmente antecipada. Confirme para encerrar a venda.</p>'}
+        <div class="modal-actions"><button class="secondary-button" data-close-modal>Voltar</button><button class="primary-button" id="confirm-payment">Concluir venda</button></div>`,{onMount(root){
+          root.querySelectorAll('[data-share-method]').forEach(input=>input.addEventListener('change',()=>{state.paymentDraft[Number(input.dataset.shareMethod)].method=input.value;}));
+          root.querySelector('#confirm-payment').addEventListener('click',completeCurrentSale);
+        }});return;
+    }
+    const paid = state.paymentDraft.reduce((sum, payment) => sum + payment.amountCents, 0); const remaining = Math.max((state.paymentSettlement?.amountDueCents??state.sale?.totalCents??0) - paid, 0);
+    openModal('Pagamento da venda', `<div class="total-row grand-total"><span>Total</span><strong>${ui.formatCents(state.sale.totalCents)}</strong></div>${state.paymentSettlement?.prepaidCents?`<p>Já recebido: ${ui.formatCents(state.paymentSettlement.prepaidCents)} · A receber: ${ui.formatCents(state.paymentSettlement.amountDueCents)}</p>`:''}<div class="payment-list">${state.paymentDraft.map((payment, index) => `<div class="payment-line"><strong>${escapeHtml(paymentLabel(payment.method))}</strong><span>${ui.formatCents(payment.amountCents)}</span><button class="danger-button" data-remove-payment="${index}" aria-label="Remover pagamento">×</button></div>`).join('')}</div><div class="total-row"><span>Restante</span><strong>${ui.formatCents(remaining)}</strong></div><div class="payment-add"><div class="field"><label>Forma</label><select id="new-payment-method">${allowedPaymentMethodsForCurrentSale().map(method=>`<option value="${method}">${escapeHtml(paymentLabel(method))}</option>`).join('')}</select></div><div class="field"><label>Valor</label><input id="new-payment-value" inputmode="decimal" value="${(remaining / 100).toFixed(2).replace('.', ',')}"></div><button class="secondary-button" id="add-payment">Adicionar</button></div><div class="modal-actions"><button class="secondary-button" data-close-modal>Voltar</button><button class="primary-button" id="confirm-payment">Concluir venda</button></div>`, { wide: true, onMount(root) { root.querySelectorAll('[data-remove-payment]').forEach((button) => button.addEventListener('click', () => { state.paymentDraft.splice(Number(button.dataset.removePayment), 1); renderPaymentModal(); })); root.querySelector('#add-payment').addEventListener('click', () => { const amountCents = centsFromInput(root.querySelector('#new-payment-value').value); if (amountCents <= 0) return showToast('Informe um valor maior que zero.', 'error'); state.paymentDraft.push({ method: root.querySelector('#new-payment-method').value, amountCents }); renderPaymentModal(); }); root.querySelector('#confirm-payment').addEventListener('click', completeCurrentSale); } });
   }
 
   function paymentLabel(method) { return ({ CASH: 'Dinheiro', PIX: 'PIX', DEBIT_CARD: 'Cartão débito', CREDIT_CARD: 'Cartão crédito', STORE_CREDIT: 'A prazo', OTHER: 'Outro' })[method] || method; }
@@ -915,7 +924,7 @@
     saleCompletionInFlight = true;
     const confirmButton=document.getElementById('confirm-payment');
     if(confirmButton)confirmButton.disabled=true;
-    try { const result = await api.completeSale(state.sale.id, state.paymentDraft); const completed = result.sale; closeModal(); state.sale = null; clearCheckoutDocumentContext(); state.selectedProductId = null; state.discountPercent = 0; state.paymentDraft = []; state.products = await api.products(); if(api.webMode)window.PdvToast?.clear?.(); showToast(`Venda ${completed.saleNumber} finalizada. Troco: ${ui.formatCents(completed.changeCents)}`, 'success'); renderCheckout(); } catch (error) { showToast(error.message, 'error'); }
+    try { const result = await api.completeSale(state.sale.id, state.paymentDraft, api.webMode&&state.paymentSettlement?.shares?state.paymentDraft:undefined); const completed = result.sale; closeModal(); state.sale = null; clearCheckoutDocumentContext(); state.selectedProductId = null; state.discountPercent = 0; state.paymentDraft = []; state.products = await api.products(); if(api.webMode)window.PdvToast?.clear?.(); showToast(`Venda ${completed.saleNumber} finalizada. Troco: ${ui.formatCents(completed.changeCents)}`, 'success'); renderCheckout(); } catch (error) { showToast(error.message, 'error'); }
     finally { saleCompletionInFlight = false; if(confirmButton?.isConnected)confirmButton.disabled=false; }
   }
 
@@ -1057,6 +1066,7 @@
       }catch{}
     }
     if(!product)return false;
+    if(api.webMode){openWebEditProductForm(product);return true;}
     if(product.prepared){await openRecipeForm(product);return true;}
     openProductForm(product);
     return true;
@@ -1131,15 +1141,17 @@
   let showInactiveWebProducts=false;
   let webCategoryFilter='';
   function renderWebProducts(){
+    if(state.route!=='products'){void navigate(state.route==='inventory'?'inventory':'products');return;}
     const canManage=window.PdvAccessPolicy?.hasCapability(state.user,'products.manage');
     const canStock=window.PdvAccessPolicy?.hasCapability(state.user,'inventory.adjust');
-    const catalogItems=showInactiveWebProducts?[...state.products,...inactiveWebProducts]:state.products;
+    const catalogItems=(showInactiveWebProducts?[...state.products,...inactiveWebProducts]:state.products)
+      .filter(product=>product.menuEnabled!==false&&product.usageType!=='INGREDIENT');
     const listed=catalogItems.filter(p=>(!webCategoryFilter||(webCategoryFilter==='uncategorized'?!p.categoryId:p.categoryId===webCategoryFilter))&&
       (!state.productQuery||ui.normalizeSearch(p.name+' '+p.sku+' '+(p.barcode||'')+' '+(p.brand||'')+' '+(p.variantLabel||'')).includes(ui.normalizeSearch(state.productQuery))));
     content.innerHTML=`<section class="page web-products-page"><header class="page-head">
-      <div><span class="web-section-kicker">CADASTRO CANÔNICO</span><h1>Produtos e estoque</h1>
-      <p>Cadastre produtos e registre entradas. O saldo pertence ao histórico de movimentações.</p></div>
-      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Novo produto</button><button id="web-new-category" class="secondary-button" type="button">Gerenciar categorias</button><button id="web-import-csv" class="secondary-button" type="button">Importar CSV/XLSX</button>':''}
+      <div><span class="web-section-kicker">ITENS DE VENDA</span><h1>Cardápio</h1>
+      <p>Escolha os produtos e fichas do Estoque que podem ser vendidos.</p></div>
+      ${canManage?'<button id="web-new-product" class="primary-button" type="button">+ Adicionar ao Cardápio</button><button id="web-new-category" class="secondary-button" type="button">Gerenciar categorias</button><button id="web-import-csv" class="secondary-button" type="button">Importar CSV/XLSX</button>':''}
       ${canStock?'<button id="web-purchase-orders" class="secondary-button" type="button">Pedidos de compra</button>':''}
       ${canManage?`<button id="web-toggle-inactive" class="secondary-button" type="button">${showInactiveWebProducts?'Ocultar inativos':'Mostrar inativos'}</button>`:''}</header>
       <div class="toolbar"><label class="search-field" for="web-product-search">⌕ <input id="web-product-search"
@@ -1158,7 +1170,10 @@
           <div><small>Preço</small><strong>${ui.formatCents(p.salePriceCents)}</strong></div>
           <div><small>Disponível</small><strong>${p.trackStock?quantityLabel(p.available??p.balance):'Por componentes'}</strong></div>
           ${canManage?`<button type="button" class="secondary-button" data-web-edit="${escapeHtml(p.id)}">Editar</button>`:''}
+          ${canManage?`<button type="button" class="secondary-button" data-web-menu-remove="${escapeHtml(p.id)}">Retirar do Cardápio</button>`:''}
+          ${canManage&&!p.trackStock?`<button type="button" class="secondary-button" data-web-recipe="${escapeHtml(p.id)}">Ficha técnica</button>`:''}
           ${canManage&&p.active!==false?`<button type="button" class="secondary-button" data-web-customize="${escapeHtml(p.id)}">Variações e adicionais</button>`:''}
+          ${canManage&&p.active!==false?`<button type="button" class="secondary-button" data-web-pizza="${escapeHtml(p.id)}">Opções de pizza</button>`:''}
           ${canManage?`<button type="button" class="secondary-button" data-web-photo="${escapeHtml(p.id)}">${p.photo?'Trocar foto':'Adicionar foto'}</button>`:''}
           ${canManage&&p.photo?`<button type="button" class="secondary-button" data-web-photo-remove="${escapeHtml(p.id)}">Remover foto</button>`:''}
           ${canManage&&!p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-kit="${escapeHtml(p.id)}">Componentes do kit</button>`:''}
@@ -1168,7 +1183,16 @@
           ${p.trackStock?`<button type="button" class="secondary-button" data-web-moves="${escapeHtml(p.id)}">Movimentações</button>`:''}
         </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
       </div></section>`;
-    content.querySelector('#web-new-product')?.addEventListener('click',openWebProductForm);
+    content.querySelector('#web-new-product')?.addEventListener('click',openWebMenuSelector);
+    content.querySelectorAll('[data-web-menu-remove]').forEach(button=>button.addEventListener('click',async()=>{
+      button.disabled=true;
+      try{const product=state.products.find(p=>p.id===button.dataset.webMenuRemove);
+        await api.updateProduct(product.id,{menuEnabled:false,expectedVersion:product.editVersion});
+        state.products=await api.products();renderWebProducts();showToast('Item retirado do Cardápio. O cadastro do Estoque foi preservado.','success');
+      }catch(error){button.disabled=false;showToast(error.message,'error');}
+    }));
+    content.querySelectorAll('[data-web-recipe]').forEach(button=>button.addEventListener('click',()=>window.PdvR4AdvancedUi.show({section:'recipe',productId:button.dataset.webRecipe})));
+    content.querySelectorAll('[data-web-pizza]').forEach(button=>button.addEventListener('click',()=>window.PdvR4AdvancedUi.show({section:'pizza',productId:button.dataset.webPizza})));
     content.querySelector('#web-new-category')?.addEventListener('click',()=>openWebCategoryForm());
     content.querySelector('#web-products-category-filter')?.addEventListener('change',event=>{
       webCategoryFilter=event.currentTarget.value;renderWebProducts();
@@ -1667,7 +1691,23 @@
     }catch(e){showToast(e.message,'error');}
   }
 
-  function openWebProductForm(){
+  function openWebMenuSelector(){
+    const available=state.products.filter(p=>p.active!==false&&p.menuEnabled===false&&p.usageType!=='INGREDIENT');
+    openModal('Adicionar ao Cardápio',`<form id="web-menu-select"><p>O cadastro e a ficha técnica ficam no Estoque. Aqui você escolhe o que pode vender.</p>
+      <label class="field">Produto ou ficha técnica<select name="productId" required><option value="">Selecione do cadastro mestre</option>${available.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} · ${escapeHtml(p.sku)}</option>`).join('')}</select></label>
+      ${available.length?'':'<p>Nenhum item disponível fora do Cardápio.</p>'}<p role="status"></p>
+      <div class="modal-actions"><button type="button" class="secondary-button" data-master-create>Cadastrar no Estoque</button><button type="submit" class="primary-button" ${available.length?'':'disabled'}>Adicionar ao Cardápio</button></div></form>`,{onMount(root){
+        const form=root.querySelector('form');
+        root.querySelector('[data-master-create]').addEventListener('click',async()=>{closeModal();await navigate('inventory');openWebProductForm();});
+        form.addEventListener('submit',async event=>{event.preventDefault();const button=form.querySelector('[type=submit]');button.disabled=true;
+          try{const product=available.find(p=>p.id===form.elements.productId.value);if(!product)throw new Error('Selecione um produto.');
+            await api.updateProduct(product.id,{menuEnabled:true,expectedVersion:product.editVersion});state.products=await api.products();closeModal();renderWebProducts();showToast('Item adicionado ao Cardápio.','success');
+          }catch(error){form.querySelector('[role=status]').textContent=error.message;button.disabled=false;}
+        });
+      }});
+  }
+
+  function openWebProductForm({prepared=false}={}){
     openModal('Novo produto',`<form id="web-product-form">
       <div class="field"><label for="web-product-name">Nome do produto</label><input id="web-product-name" name="name" required minlength="2" maxlength="120" autocomplete="off" placeholder="Ex.: Café tradicional"></div>
       <div class="field-grid"><div class="field"><label for="web-product-sku">SKU / código</label><input id="web-product-sku" name="sku" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._\\-]*" placeholder="Ex.: CAFE-001"></div>
@@ -1678,7 +1718,9 @@
       <div class="field"><label>Produto pai<select name="parentProductId"><option value="">Produto independente</option>${state.products.filter(p=>!p.parentProductId).map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('')}</select></label></div>
       <div class="field"><label>Nome da variação<input name="variantLabel" maxlength="80" placeholder="Ex.: Azul / G"></label></div>
       <div class="field"><label>Unidade<select name="unit">${['UN','KG','G','L','M','M2','M3','CX','PCT'].map(unit=>`<option value="${unit}">${unit}</option>`).join('')}</select></label></div>
-      <label class="web-checkbox"><input name="track" type="checkbox" checked> Controlar saldo no estoque</label>
+      <label class="field">Tipo de cadastro<select name="usageType"><option value="DIRECT">Produto de venda</option><option value="INGREDIENT">Insumo de preparo</option><option value="BOTH">Produto e insumo</option></select></label>
+      <label class="web-checkbox"><input name="track" type="checkbox" ${prepared?'':'checked'}> Controlar saldo no estoque</label>
+      <p>Produtos preparados por ficha técnica usam o estoque dos ingredientes; deixe o controle próprio desmarcado.</p>
       <p class="web-form-feedback" role="status" aria-live="polite"></p>
       <div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button>
       <button class="primary-button" type="submit">Salvar produto</button></div>
@@ -1692,6 +1734,7 @@
           if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
           const product=await api.saveProduct({name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
             salePriceCents:centsFromInput(form.elements.price.value),trackStock:form.elements.track.checked,
+            menuEnabled:false,usageType:form.elements.usageType.value,
             brand:form.elements.brand.value.trim(),barcode:form.elements.barcode.value.trim(),
             categoryId:form.elements.categoryId.value||null,parentProductId:form.elements.parentProductId.value||null,
             variantLabel:form.elements.variantLabel.value.trim()||null,unit:form.elements.unit.value},form.dataset.operationKey);
@@ -1711,7 +1754,7 @@
       <div class="field"><label for="web-edit-product-name">Nome do produto</label><input id="web-edit-product-name" name="name" required minlength="2" maxlength="120" value="${escapeHtml(product.name)}"></div>
       <div class="field-grid"><div class="field"><label for="web-edit-product-sku">SKU</label><input id="web-edit-product-sku" name="sku" required maxlength="64" value="${escapeHtml(product.sku)}"></div>
       <div class="field"><label for="web-edit-product-price">Preço de venda (R$)</label><input id="web-edit-product-price" name="price" required inputmode="decimal" value="${escapeHtml(price)}"></div></div>
-      <div class="field"><label for="web-edit-product-unit">Unidade</label><select id="web-edit-product-unit" name="unit">${unitOptions.map(unit=>`<option value="${unit}" ${unit===product.unit?'selected':''}>${unit}</option>`).join('')}</select></div>
+      <label class="field">Tipo de cadastro<select name="usageType">${['DIRECT','INGREDIENT','BOTH'].map(kind=>`<option value="${kind}" ${kind===(product.usageType||'DIRECT')?'selected':''}>${({DIRECT:'Produto de venda',INGREDIENT:'Insumo de preparo',BOTH:'Produto e insumo'})[kind]}</option>`).join('')}</select></label><div class="field"><label for="web-edit-product-unit">Unidade</label><select id="web-edit-product-unit" name="unit">${unitOptions.map(unit=>`<option value="${unit}" ${unit===product.unit?'selected':''}>${unit}</option>`).join('')}</select></div>
       <div class="field"><label>Marca<input name="brand" maxlength="100" value="${escapeHtml(product.brand||'')}"></label></div>
       <div class="field"><label>Código de barras<input name="barcode" maxlength="80" value="${escapeHtml(product.barcode&&product.barcode!==product.sku?product.barcode:'')}"></label></div>
       <div class="field"><label>Categoria<select name="categoryId"><option value="">Sem categoria</option>${state.categories.map(c=>`<option value="${escapeHtml(c.id)}" ${c.id===product.categoryId?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}</select></label></div>
@@ -1730,7 +1773,7 @@
           if(!form.dataset.operationKey)form.dataset.operationKey=api.mutationId();
           const result=await api.updateProduct(product.id,{
             name:form.elements.name.value.trim(),sku:form.elements.sku.value.trim().toUpperCase(),
-            expectedVersion:product.editVersion,
+            usageType:form.elements.usageType.value,expectedVersion:product.editVersion,
             salePriceCents:centsFromInput(form.elements.price.value),unit:form.elements.unit.value,
             active:form.elements.active.checked,brand:form.elements.brand.value.trim(),
             barcode:form.elements.barcode.value.trim(),categoryId:form.elements.categoryId.value||null,
@@ -2032,8 +2075,11 @@ function openCategoryForm() {
     } catch(error) { showToast(error.message,'error'); }
   }
   window.PdvCatalogAdmin = Object.freeze({
-    openStockProductForm:(product=null)=>openProductForm(product),
-    openRecipeForm:(product=null)=>void openRecipeForm(product),
+    openStockProductForm:(product=null)=>api.webMode?(product?openWebEditProductForm(product):openWebProductForm()):openProductForm(product),
+    openRecipeForm:(product=null)=>api.webMode?window.PdvR4AdvancedUi.show({section:'recipe',productId:product?.id}):void openRecipeForm(product),
+    openPreparedProductForm:()=>openWebProductForm({prepared:true}),
+    openPurchaseOrders:openWebPurchaseOrders,
+    openTransfer:openWebStockTransfer,
     openInventoryItem
   });
 
@@ -2416,9 +2462,8 @@ function openCategoryForm() {
     await loadCommonData();
     renderSidebar();
     authOverlay.classList.add('hidden');authOverlay.innerHTML='';
-    await navigate('checkout');
+    await navigate('home');
     window.PdvUiLifecycle?.emit('auth:hidden',{reason:'authenticated'});
-    void window.PdvR4AdvancedUi?.offerFirstRun?.();
   }
 
   async function bootWeb(){
@@ -2475,6 +2520,28 @@ function openCategoryForm() {
     return sale;
   }
 
+  let openingOperationalDocument=false;
+  async function openOperationalDocument(type,id){
+    if(openingOperationalDocument)throw new Error('Aguarde a abertura do documento em andamento.');
+    openingOperationalDocument=true;
+    try{
+    if(!canAccessRoute('checkout'))throw new Error('Seu perfil não pode operar o Balcão.');
+    if(state.sale?.status==='OPEN'&&state.sale.items?.length){
+      const documents=await api.checkoutDocuments('');
+      const same=documents.some(row=>row.type===type&&String(row.id)===String(id)&&row.saleId===state.sale.id);
+      if(!same)throw new Error('Finalize, suspenda ou cancele a venda atual antes de abrir uma comanda ou pedido.');
+    }
+    const opened=await api.openCheckoutDocument(type,id);
+    // Only discard an empty draft after the requested document was accepted.
+    if(state.sale?.status==='OPEN'&&state.sale.id!==opened.sale.id&&!state.sale.items?.length){
+      await api.cancelSale(state.sale.id,'Substituída por documento operacional');state.sale=null;
+    }
+    await openCheckoutSale(opened.sale.id);
+    state.checkoutDocumentContext={type,document:opened.document};
+    renderCheckout();return opened;
+    }finally{openingOperationalDocument=false;}
+  }
+
   function registerBaseRoutes() {
     const ownedRoutes = {
       home: () => renderHome(),
@@ -2491,9 +2558,10 @@ function openCategoryForm() {
       products: () => renderProducts(),
       catalog: () => renderFlowHub('Cadastros','Clientes, produtos, estoque e equipe.',[
         {route:'customers',label:'Clientes',description:'Cadastro, histórico e crédito.',icon:'users',tone:'green'},
-        {route:'products',label:'Produtos',description:'Itens de venda e fichas técnicas.',icon:'document',tone:'purple'},
-        {route:'inventory',label:'Estoque',description:'Saldos e movimentações.',icon:'cubes',tone:'teal'},
-        {route:'sellers',label:'Equipe e acessos',description:'Pessoas, funções e permissões.',icon:'users',tone:'orange'}
+        {route:'products',label:'Cardápio',description:'Escolher o que pode ser vendido.',icon:'document',tone:'purple'},
+        {route:'inventory',label:'Estoque e fichas técnicas',description:'Cadastro mestre, insumos, receitas e movimentações.',icon:'cubes',tone:'teal'},
+        {route:'suppliers',label:'Fornecedores',description:'Cadastro e contatos para compras.',icon:'document',tone:'blue'},
+        {route:'sellers',label:'Equipe comercial',description:'Vendedores e comissões.',icon:'users',tone:'orange'}
       ]),
       'post-sale': () => renderFlowHub('Vendas e devoluções','Histórico de vendas, comprovantes, trocas e devoluções.',[
         {route:'sales',label:'Últimas vendas',description:'Consultar vendas recentes e seus detalhes.',icon:'history',tone:'slate'},
@@ -2502,14 +2570,18 @@ function openCategoryForm() {
       'financial-management': () => renderFlowHub('Gestão financeira','Resultados, análises e compromissos financeiros em um único fluxo.',[
         {route:'management',label:'Gestão e DRE',description:'Acompanhar resultado, margem e fluxo de caixa.',icon:'management',tone:'rose'},
         {route:'finance',label:'Financeiro',description:'Lançamentos, bancos, conciliação, recorrências e alertas.',icon:'chart',tone:'green'},
-        {route:'reports',label:'Relatórios',description:'Consultar vendas, estoque e desempenho do negócio.',icon:'document',tone:'indigo'}
+        {route:'reports',label:'Relatórios',description:'Consultar vendas, estoque e desempenho do negócio.',icon:'document',tone:'indigo'},
+        {route:'finance-banks',label:'Bancos e conciliação',description:'Contas bancárias, extratos e transferências.',icon:'chart',tone:'blue'},
+        {route:'finance-recurrences',label:'Recorrências',description:'Compromissos periódicos e parcelas.',icon:'history',tone:'orange'},
+        {route:'credit',label:'Crediário',description:'Saldos e recebimentos por cliente.',icon:'cash',tone:'teal'},
+        {route:'commissions',label:'Comissões',description:'Regras e saldos da equipe.',icon:'chart',tone:'purple'}
       ])
     };
     for (const [route, render] of Object.entries(ownedRoutes)) routeRegistry.register(route, { owner:'app', render });
   }
 
   registerBaseRoutes();
-  window.PdvAppNavigation = Object.freeze({ navigate,openCheckoutSale });
+  window.PdvAppNavigation = Object.freeze({ navigate,openCheckoutSale,openDocument:openOperationalDocument,canAccess:canAccessRoute });
   window.addEventListener('artisys:modules-state-changed',()=>{
     if(!state.user)return;
     if((state.route==='FOOD'||state.route==='WHOLESALE')&&!canAccessRoute(state.route)){

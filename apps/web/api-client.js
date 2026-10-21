@@ -18,7 +18,7 @@
     return id;
   }
   // Shared browser context belongs to one client module, never to individual views.
-  const browserContext={tenantId:null,branchId:null};
+  const browserContext={tenantId:null,branchId:null,lanMode:false};
   class ApiClient {
     constructor() {
       this.webMode=!root.artisysDesktop;
@@ -31,6 +31,7 @@
     get tenantId(){return this.context.tenantId;}
     set tenantId(id){this.context.tenantId=id;}
     get branchId(){return this.context.branchId;}
+    get lanMode(){return this.context.lanMode;}
     set branchId(id){this.context.branchId=id;}
 
     async initialize() {
@@ -86,6 +87,7 @@
         else if(original.startsWith('/api/v1/sales'))operation=original.slice(apiRoot.length);
         else if(original.startsWith('/api/v1/printing/'))operation=original.slice(apiRoot.length);
         else if(original==='/api/v1/returns')operation='returns';
+        else if(original.startsWith('/api/v1/checkout/documents'))operation=original.slice(apiRoot.length);
         else if(/^\/api\/v1\/(customers|suppliers|sellers|restaurant|recipes|onboarding|wholesale|commissions|credit)(\/|$)/.test(original))operation=original.slice(apiRoot.length);
         else throw new Error('Este módulo ainda não está disponível na versão online.');
         targetPath=apiRoot+'tenants/'+encodeURIComponent(this.tenantId)+'/'+operation;
@@ -143,6 +145,8 @@
       if(operation==='customers')return method==='GET'?value.customers:value.customer;
       if(operation==='suppliers')return method==='GET'?value.suppliers:value.supplier;
       if(operation==='sellers')return value.sellers;
+      if(operation==='checkout/documents')return value.documents;
+      if(operation.startsWith('checkout/documents/settlement/'))return value.settlement;
       // A single canonical API returns named envelopes; the wholesale view
       // consumes the underlying records/arrays just like the catalog screens.
       if(operation==='wholesale/tiers')return method==='GET'?value.tiers:value.tier;
@@ -222,7 +226,7 @@
     }
 
     mutationId() { return root.crypto?.randomUUID ? root.crypto.randomUUID() : `${Date.now()}-${Math.random()}`; }
-    health() { return this.request('/api/v1/health'); }
+    async health() { const health=await this.request('/api/v1/health');if(this.webMode)this.context.lanMode=health.lanMode===true;return health; }
     setupStatus() { return this.request('/api/v1/setup/status'); }
     setupAdmin(body) { return this.request('/api/v1/setup/admin', { method: 'POST', body }); }
     requestSetupActivation(email) { return this.request('/api/v1/setup/activation/request', { method:'POST', body:{email} }); }
@@ -363,7 +367,7 @@
     cashMovements(sessionId) { return this.request(`/api/v1/cash/sessions/${encodeURIComponent(sessionId)}/movements`); }
 
     checkoutDocuments(query = '') { return this.request(`/api/v1/checkout/documents${this.params({query:query||undefined})}`); }
-    openCheckoutDocument(type, id) { return this.request(`/api/v1/checkout/documents/${String(type||'').toLowerCase()}/${encodeURIComponent(id)}/open`, { method:'POST', body:{} }); }
+    openCheckoutDocument(type, id) { return this.request(`/api/v1/checkout/documents/${String(type||'').toLowerCase()}/${encodeURIComponent(id)}/open`, { method:'POST', body:this.webMode?{terminalId:this.config?.terminalId||webTerminalIdentity()}:{} }); }
     sales(status = '', limit = 50) { return this.request(`/api/v1/sales${this.params({status,limit})}`); }
     salesHistory(filters = {}) { return this.request(`/api/v1/sales/history${this.params(filters)}`); }
     compareSalesPeriods(filters = {}) { return this.request(`/api/v1/reports/compare${this.params(filters)}`); }
@@ -389,7 +393,8 @@
     discountSale(id, discountCents) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/discount`, { method: 'POST', body: { discountCents }, mutationId: this.mutationId() }); }
     suspendSale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/suspend`, { method: 'POST', body: {}, mutationId: this.mutationId() }); }
     resumeSale(id) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/resume`, { method: 'POST', body: {}, mutationId: this.mutationId() }); }
-    completeSale(id, payments) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/complete`, { method: 'POST', body: { payments }, mutationId: this.mutationId() }); }
+    completeSale(id, payments, shares) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/complete`, { method: 'POST', body: shares===undefined?{payments}:{shares}, mutationId: this.mutationId() }); }
+    checkoutSettlement(id){return this.request('/api/v1/checkout/documents/settlement/'+encodeURIComponent(id));}
     cancelSale(id, reason) { return this.request(`/api/v1/sales/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: { reason }, mutationId: this.mutationId() }); }
 
     returns(filters = {}) { return this.request(`/api/v1/returns${this.params(filters)}`); }
@@ -432,7 +437,11 @@
     prepareRestore(id) { return this.request(`/api/v1/backups/${encodeURIComponent(id)}/restore`, { method:'POST', body:{} }); }
 
     settings(filters={}) { return this.request(`/api/v1/settings${this.params(filters)}`); }
-    saveSetting(key,value,scope='global') { return this.request(`/api/v1/settings/${encodeURIComponent(key)}`, { method:'PUT', body:{value,scope} }); }
+    saveSetting(key,value,scope='global') {
+      const module=String(key).match(/^modules\.([A-Z_]+)\.enabled$/);
+      if(this.webMode&&module)return this.request('/api/v1/tenants/'+encodeURIComponent(this.tenantId)+'/modules/'+module[1],{method:'PATCH',body:{enabled:value}});
+      return this.request(`/api/v1/settings/${encodeURIComponent(key)}`, { method:'PUT', body:{value,scope} });
+    }
     removeSetting(key,scope='global') { return this.request(`/api/v1/settings/${encodeURIComponent(key)}${this.params({scope})}`, { method:'DELETE' }); }
 
     importPreview(body) { return this.request('/api/v1/imports/preview', { method:'POST', body }); }
@@ -447,7 +456,7 @@
     async modules(){
       if(!this.webMode)return this.request('/api/v1/modules');
       if(!this.tenantId)return [];
-      const result=await this.request('/api/v1/tenants/'+encodeURIComponent(this.tenantId)+'/lan/modules');
+      const result=await this.request('/api/v1/tenants/'+encodeURIComponent(this.tenantId)+'/modules');
       return result.modules||[];
     }
 

@@ -16,6 +16,7 @@ import {catalogEditVersion,catalogGuard,catalogGuardArgs} from './catalog-cas.mj
 import {createHistoricalMarginService} from './historical-margin.mjs';
 import {createReportDepthService} from './report-depth.mjs';
 import {createCheckoutConfigurationService} from './checkout-configuration.mjs';
+import {createR4ExtendedService} from './r4-extended-service.mjs';
 import {createSellerTargetService} from './seller-targets.mjs';
 
 const {calculateSaleTotals,allocateSaleDiscount}=salePricing;
@@ -44,6 +45,20 @@ const quantityMilli=value=>{
 };
 const {hasOwnProperty}=Object.prototype;
 const has=(object,key)=>hasOwnProperty.call(object,key);
+const requireSellableProduct=row=>{
+  if(row.menu_enabled===0||row.usage_type==='INGREDIENT')
+    throw error(409,'Este cadastro não está disponível para venda no Cardápio.');
+  return row;
+};
+function menuMetadata(body,old={menu_enabled:1,usage_type:'DIRECT'}){
+  if(has(body,'menuEnabled')&&typeof body.menuEnabled!=='boolean')
+    throw error(400,'A disponibilidade no Cardápio deve ser verdadeira ou falsa.');
+  const usageType=has(body,'usageType')?body.usageType:old.usage_type;
+  if(!['DIRECT','INGREDIENT','BOTH'].includes(usageType))
+    throw error(400,'Tipo de cadastro inválido. Escolha venda direta, insumo ou produto e insumo.');
+  return {usageType,menuEnabled:usageType==='INGREDIENT'?false:
+    has(body,'menuEnabled')?body.menuEnabled:Boolean(old.menu_enabled)};
+}
 
 function sqlError(e){
   const message=String(e?.message||e);
@@ -269,7 +284,7 @@ export function createCommerceService(db,{now=nowISO}={}){
   const catalogImporter=createCatalogImportService({q,first,batch,applied,audit,stamp,branchExists,requiredMutation,error,text,randomId});
   const historicalMargin=createHistoricalMarginService({all,branchExists,period,allocateSaleDiscount,error});
   const reportDepth=(salesHistory)=>createReportDepthService({all,branchExists,period,stamp,error,salesHistory});
-  const checkoutConfig=createCheckoutConfigurationService({q,first,batch,applied,audit,stamp,branchExists,product,requiredMutation,error});
+  const checkoutConfig=createCheckoutConfigurationService({q,first,batch,applied,audit,stamp,branchExists,product,requiredMutation,error,pizzaService:createR4ExtendedService(db)});
   const sellerTargets=createSellerTargetService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,error});
   const catalogDepth=createCatalogDepthService({q,first,all,batch,applied,audit,stamp,branchExists,requiredMutation,
     quantityMilli,error,text,randomId});
@@ -519,7 +534,8 @@ export function createCommerceService(db,{now=nowISO}={}){
       await branchExists(tenant,branch);
       const cap=Math.min(100,Math.max(1,Math.trunc(Number(limit)||100)));
       const rows=await all(`SELECT p.id,p.sku,p.name,p.sale_price_cents AS salePriceCents,p.unit,
-        p.track_stock AS trackStock,p.active,COALESCE(s.balance_milli,0) AS balanceMilli,
+        p.track_stock AS trackStock,p.active,p.menu_enabled AS menuEnabled,p.usage_type AS usageType,
+        COALESCE(s.balance_milli,0) AS balanceMilli,
         COALESCE((SELECT SUM(r.quantity_milli) FROM inventory_reservations r
           WHERE r.tenant_id=p.tenant_id AND r.branch_id=? AND r.product_id=p.id
           AND r.status='ACTIVE'),0) AS reservedMilli,p.brand,p.barcode,p.category_id,
@@ -531,7 +547,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         ORDER BY p.name,p.id LIMIT ?`,branch,branch,tenant,includeInactive?1:0,cap);
       return Promise.all(rows.map(async x=>({...x,editVersion:await catalogEditVersion(x),trackStock:Boolean(x.trackStock),active:Boolean(x.active),
         balance:x.balanceMilli/1000,reserved:x.reservedMilli/1000,
-        available:(x.balanceMilli-x.reservedMilli)/1000,menuEnabled:true,
+        available:(x.balanceMilli-x.reservedMilli)/1000,menuEnabled:Boolean(x.menuEnabled),
         brand:x.brand||'',barcode:x.barcode||x.sku,categoryId:x.category_id||null,
         parentProductId:x.parent_product_id||null,variantLabel:x.variant_label||null,
         lastCostCents:x.last_cost_cents||0,photo:Boolean(x.hasPhoto)})));
@@ -539,6 +555,7 @@ export function createCommerceService(db,{now=nowISO}={}){
     async createProduct(tenant,user,body,header){
       const key=requiredMutation(body,header),scope='product.create';
       const prior=await applied(tenant,scope,key);if(prior)return prior;
+      const {usageType,menuEnabled}=menuMetadata(body);
       const name=text(body?.name,120),sku=text(body?.sku,64).toUpperCase();
       if(!name||name.length<2||!/^[A-Z0-9][A-Z0-9._-]{0,63}$/.test(sku))throw error(400,'Informe nome e SKU válido.');
       const price=requiredNumber(body?.salePriceCents,'Preço');
@@ -556,13 +573,13 @@ export function createCommerceService(db,{now=nowISO}={}){
         throw error(404,'Produto pai não encontrado nesta empresa.');
       const id=randomId(),created=stamp();
       const result={id,name,sku,salePriceCents:price,unit,trackStock:body?.trackStock!==false,
-        active:true,brand,barcode,categoryId,parentProductId,variantLabel,lastCostCents:0};
+        active:true,brand,barcode,categoryId,parentProductId,variantLabel,lastCostCents:0,usageType,menuEnabled};
       await batch([
         q(`INSERT INTO products(id,tenant_id,sku,name,sale_price_cents,unit,track_stock,created_at,updated_at,
-           brand,barcode,category_id,parent_product_id,variant_label)
-           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           brand,barcode,category_id,parent_product_id,variant_label,menu_enabled,usage_type)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           id,tenant,sku,name,price,unit,result.trackStock?1:0,created,created,
-          brand,barcode,categoryId,parentProductId,variantLabel),
+          brand,barcode,categoryId,parentProductId,variantLabel,menuEnabled?1:0,usageType),
         audit(tenant,scope,key,result)
       ]);
       return result;
@@ -571,10 +588,11 @@ export function createCommerceService(db,{now=nowISO}={}){
       await branchExists(tenant,branch);
       const key=requiredMutation(body,header),scope='product.update:'+id;
       const previous=await applied(tenant,scope,key);if(previous)return previous;
-      if(!['name','sku','salePriceCents','unit','active','brand','barcode','categoryId','parentProductId','variantLabel'].some(field=>Object.hasOwn(body,field)))
+      if(!['name','sku','salePriceCents','unit','active','brand','barcode','categoryId','parentProductId','variantLabel','menuEnabled','usageType'].some(field=>Object.hasOwn(body,field)))
         throw error(400,'Informe ao menos um campo de produto para editar.');
       const old=await first('SELECT * FROM products WHERE tenant_id=? AND id=?',tenant,id);
       if(!old)throw error(404,'Produto não encontrado.');
+      const {usageType,menuEnabled}=menuMetadata(body,old);
       if(body?.expectedVersion!==undefined){
         if(typeof body.expectedVersion!=='string'||!/^[a-f0-9]{64}$/.test(body.expectedVersion))
           throw error(400,'Versão do cadastro inválida.');
@@ -617,15 +635,15 @@ export function createCommerceService(db,{now=nowISO}={}){
       if(parentProductId&&!await first('SELECT id FROM products WHERE id=? AND tenant_id=? AND parent_product_id IS NULL',parentProductId,tenant))
         throw error(404,'Produto pai não encontrado nesta empresa.');
       const result={id,name,sku,unit,salePriceCents:price,brand,barcode,categoryId,parentProductId,variantLabel,
-        trackStock:Boolean(old.track_stock),active,lastCostCents:old.last_cost_cents,updatedAt:stamp()};
+        trackStock:Boolean(old.track_stock),active,lastCostCents:old.last_cost_cents,updatedAt:stamp(),usageType,menuEnabled};
       await batch([
         q(`UPDATE products SET name=?,sku=?,
           sale_price_cents=CASE WHEN ${catalogGuard} THEN ? ELSE -1 END,
           unit=?,active=?,updated_at=?,
-          brand=?,barcode=?,category_id=?,parent_product_id=?,variant_label=?
+          brand=?,barcode=?,category_id=?,parent_product_id=?,variant_label=?,menu_enabled=?,usage_type=?
           WHERE id=? AND tenant_id=?`,
           name,sku,...catalogGuardArgs(old),price,unit,active?1:0,result.updatedAt,
-          brand,barcode,categoryId,parentProductId,variantLabel,id,tenant),
+          brand,barcode,categoryId,parentProductId,variantLabel,menuEnabled?1:0,usageType,id,tenant),
         audit(tenant,scope,key,result)
       ]);
       return result;
@@ -1373,7 +1391,9 @@ export function createCommerceService(db,{now=nowISO}={}){
       const key=requiredMutation(body,header),scope='sale.add-item:'+id;
       const previous=await applied(tenant,scope,key);if(previous)return snapshot(tenant,branch,id);
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
-      const row=await product(tenant,body?.productId);
+      const row=requireSellableProduct(await product(tenant,body?.productId));
+      if(await checkoutConfig.pizzaProfile(tenant,branch,row.id))
+        throw error(409,'Escolha tamanho e sabores antes de adicionar a pizza.');
       const milli=quantityMilli(body?.quantity??1);
       if(!milli)throw error(400,'Quantidade inválida: até três casas decimais.');
       const existing=await first('SELECT id,quantity_milli AS milli,configuration_json AS configurationJson FROM sale_items WHERE sale_id=? AND product_id=?',id,row.id);
@@ -1398,7 +1418,7 @@ export function createCommerceService(db,{now=nowISO}={}){
       const key=requiredMutation(body,header),scope='sale.add-configured:'+id;
       if(await applied(tenant,scope,key))return snapshot(tenant,branch,id);
       const sale=await tenantSale(tenant,branch,id);requireOpen(sale);
-      const p=await product(tenant,body?.productId),milli=quantityMilli(body?.quantity??1);
+      const p=requireSellableProduct(await product(tenant,body?.productId)),milli=quantityMilli(body?.quantity??1);
       if(!milli)throw error(400,'Quantidade inválida.');
       const note=body?.note??'';
       if(typeof note!=='string'||note.length>240||
@@ -1581,7 +1601,7 @@ export function createCommerceService(db,{now=nowISO}={}){
         throw error(400,'Informe o peso em gramas inteiras.');
       const source=String(body?.source||'MANUAL').toUpperCase();
       if(!['MANUAL','SCALE','BARCODE'].includes(source))throw error(400,'Origem de pesagem inválida.');
-      const row=await product(tenant,body?.productId);
+      const row=requireSellableProduct(await product(tenant,body?.productId));
       const unit=String(row.unit).toUpperCase();
       if(!['KG','G'].includes(unit))throw error(400,'O produto precisa estar cadastrado em KG ou G.');
       const quantity=unit==='G'?grams:grams/1000;
@@ -1864,6 +1884,19 @@ export function createCommerceService(db,{now=nowISO}={}){
            JOIN products p ON p.tenant_id=ri.tenant_id AND p.id=ri.ingredient_id
            WHERE ri.tenant_id=? AND ri.branch_id=? AND ri.product_id=? AND ri.version=? ORDER BY ri.ingredient_id`,
            tenant,branch,line.product_id,recipeVersion):[];
+        // Batch quantities retain their precision until the sold quantity is known.
+        // Legacy versions without details keep the original per-unit contract.
+        let batchDetails=null,batchComponents=[];
+        if(recipe.length){
+          try{
+            batchDetails=await first(`SELECT yield_quantity AS yieldQuantity,portion_quantity AS portionQuantity
+              FROM r4_recipe_details WHERE tenant_id=? AND branch_id=? AND product_id=? AND version=?`,
+              tenant,branch,line.product_id,recipeVersion);
+            if(batchDetails)batchComponents=await all(`SELECT ingredient_id AS productId,quantity,
+              conversion_factor AS conversionFactor,loss_percent AS lossPercent FROM r4_recipe_component_details
+              WHERE tenant_id=? AND branch_id=? AND product_id=? AND version=?`,tenant,branch,line.product_id,recipeVersion);
+          }catch(e){if(!/no such table: r4_recipe_(?:component_)?details/i.test(String(e?.message)))throw e;}
+        }
         if(p.track_stock&&(kit.length||recipe.length))
           throw error(409,'Produto com estoque próprio não pode conter kit ou ficha técnica de consumo.');
         if(kit.length&&recipe.length)
@@ -1915,6 +1948,13 @@ export function createCommerceService(db,{now=nowISO}={}){
           }
         }
         const allocations=composition.length?composition.map(c=>{
+          const batch=batchDetails&&batchComponents.find(x=>x.productId===c.productId);
+          if(batch){
+            const milli=Math.round(line.quantity_milli*batch.quantity*batch.conversionFactor*(1+batch.lossPercent/100)
+              /(batchDetails.yieldQuantity/batchDetails.portionQuantity));
+            if(!Number.isSafeInteger(milli)||milli<1)throw error(409,'Quantidade da ficha abaixo da precisão do estoque.');
+            return {productId:c.productId,milli,cost:c.unitCostCents};
+          }
           const numerator=line.quantity_milli*c.quantityMilli;
           if(!Number.isSafeInteger(numerator)||numerator%1000!==0)
             throw error(409,'Composição do kit não suporta esta quantidade fracionada.');
@@ -1922,7 +1962,16 @@ export function createCommerceService(db,{now=nowISO}={}){
         }):p.track_stock?[{productId:p.id,milli:line.quantity_milli,cost:p.last_cost_cents||0}]:[];
         if(p.track_stock&&optionAllocations.length)throw error(409,'Pizza composta não pode ter estoque próprio ativo.');
         allocations.push(...optionAllocations);
-        for(const a of allocations){
+        // A base recipe and selected options may consume the same ingredient.
+        // Persist one allocation per sale item/ingredient, as required by the
+        // canonical allocation and lot-ledger uniqueness contracts.
+        const combinedAllocations=new Map();
+        for(const allocation of allocations){
+          const existing=combinedAllocations.get(allocation.productId);
+          if(existing)existing.milli+=allocation.milli;
+          else combinedAllocations.set(allocation.productId,{...allocation});
+        }
+        for(const a of combinedAllocations.values()){
           if(a.milli<=0)throw error(409,'Componente fracionário abaixo da precisão de estoque.');
           debits.set(a.productId,(debits.get(a.productId)||0)+a.milli);
           const picked=await lotLedger.consume(tenant,branch,a.productId,a.milli,lotCache);

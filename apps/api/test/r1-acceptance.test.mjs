@@ -289,7 +289,7 @@ function proveCapability(id){
       // environment would silently suppress its TAP output (false green).
       const env={...process.env};delete env.NODE_TEST_CONTEXT;
       const result=execFileSync(process.execPath,[
-        '--experimental-sqlite','--test','--test-name-pattern='+matcher,resolve(ROOT,file)
+        '--experimental-sqlite','--test','--test-reporter=tap','--test-name-pattern='+matcher,resolve(ROOT,file)
       ],{cwd:ROOT,env,encoding:'utf8',timeout:180000,maxBuffer:16*1024*1024});
       assert.match(result,/# fail 0(?:\r?\n|$)/,'Fluxos de '+file+' falharam');
       stdoutByFile.set(file,result);

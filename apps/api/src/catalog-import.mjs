@@ -81,7 +81,7 @@ export function createCatalogImportService(h){
    if(!['true','false'].includes(trackRaw))errors.push('trackStock deve ser true ou false.');
    if(sku)skuCounts.set(sku,(skuCounts.get(sku)||0)+1);
    const existing=sku?await first(`SELECT id,name,sku,unit,sale_price_cents,track_stock,active,brand,
-      barcode,category_id,parent_product_id,variant_label,last_cost_cents,updated_at
+      barcode,category_id,parent_product_id,variant_label,last_cost_cents,updated_at,menu_enabled,usage_type
       FROM products WHERE tenant_id=? AND sku=?`,tenant,sku):null;
    existingSnapshots.push(existing);
    const updating=mode==='upsert'&&!!existing;

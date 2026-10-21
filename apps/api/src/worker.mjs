@@ -6,6 +6,7 @@ import {beginMfaLogin,finishMfaLogin,emailVerifyPublic,accountSecurityRoute} fro
 import {passwordResetRoute} from './password-reset.mjs';
 import {platformSessionRoute} from './platform-session.mjs';
 import {commerceRoute} from './commerce-router.mjs';
+import {checkoutDocumentsRoute} from './checkout-documents.mjs';
 import {tenantWriteAllowed,loginIpThrottled,recordLoginIpFailure,
  identityManagementRoute,invitationRegistrationRoute,acceptInvitationRoute,
  tenantManagementRoute,platformManagementRoute,createAdditionalTenant} from './saas-control.mjs';
@@ -263,6 +264,12 @@ export function createApi(env,{now=()=>Date.now()}={}){
         if(!membership)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
         if(!['GET','HEAD'].includes(method)&&!await tenantWriteAllowed(db,tenantId,env,now()))
           return failure(402,'Assinatura inativa ou vencida. Operações de escrita suspensas.');
+        // Business areas are available in the hosted app too. Reuse the same
+        // tenant-scoped policy without exposing device pairing or LAN controls.
+        if(/^modules(?:\/[A-Z_]+)?$/.test(commerceMatch[2])){
+          const modules=await r2LanRoute(request,db,session,membership,tenantId,'lan/'+commerceMatch[2],{now});
+          if(modules)return modules;
+        }
         if(env.LAN_MODE==='true'){
           const lan=await r2LanRoute(request,db,session,membership,tenantId,commerceMatch[2],{now});
           if(lan)return lan;
@@ -270,7 +277,12 @@ export function createApi(env,{now=()=>Date.now()}={}){
           if(deviceDenied)return deviceDenied;
           const moduleDenied=await authorizeLanModule(db,tenantId,commerceMatch[2]);
           if(moduleDenied)return moduleDenied;
+        }else if(/^(restaurant|wholesale)\//.test(commerceMatch[2])){
+          const moduleDenied=await authorizeLanModule(db,tenantId,commerceMatch[2],{useDefaults:false});
+          if(moduleDenied)return moduleDenied;
         }
+        const checkoutDocuments=await checkoutDocumentsRoute(request,db,session,membership,tenantId,commerceMatch[2]);
+        if(checkoutDocuments)return checkoutDocuments;
         const media=await productMediaRoute(request,db,env.FILES,env.LOCAL_MEDIA_ENABLED==='true',session,membership,tenantId,commerceMatch[2]);
         if(media)return media;
         const advanced=await advancedFinanceRoute(request,db,session,membership,tenantId,commerceMatch[2]);

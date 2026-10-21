@@ -237,30 +237,37 @@
   }
   function showSettings() {
     const previous=root.document.getElementById('pdv-peripherals-dialog');
-    if(previous){previous.showModal();return;}
+    if(previous){previous.close();previous.remove();}
+    const canReadBranding=()=>root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'settings.view')===true;
+    const canManageBranding=()=>root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'settings.manage')===true;
     const dialog=root.document.createElement('dialog');
     dialog.id='pdv-peripherals-dialog';
     dialog.setAttribute('aria-label','Dispositivos locais');
     dialog.style.cssText='max-width:min(540px,95vw);border:1px solid #64748b;border-radius:16px;padding:24px;color:#e5e7eb;background:#13233e;box-shadow:0 18px 60px #0008';
-    dialog.innerHTML='<form method="dialog" id="pdv-peripherals-form"><h2>Dispositivos locais</h2><p>Configuração deste navegador e filial. Não altera vendas nem dados do servidor.</p><fieldset><legend>Identificação do comprovante não fiscal</legend><label>Nome da loja <input name="receiptName" maxlength="80" autocomplete="organization"></label><p><label>Endereço <input name="receiptAddress" maxlength="160" autocomplete="street-address"></label></p><p><label>Telefone <input name="receiptPhone" maxlength="60" autocomplete="tel"></label></p><p><label>Logotipo PNG (até 512 KB; somente no PDF e no diálogo do navegador) <input type="file" name="receiptLogo" accept="image/png"></label></p><p><label><input type="checkbox" name="receiptRemoveLogo"> Remover logotipo atual</label></p><p>Conector local e serial imprimem texto, sem logotipo; configuração salva somente neste navegador e filial.</p></fieldset><label>Papel <select name="paperMm"><option value="58">58 mm</option><option value="80">80 mm</option></select></label><p><label>Impressora <select name="printerMode"><option value="browser">Diálogo do sistema (recomendado)</option><option value="serial">ESC/POS serial compatível (experimental)</option><option value="bridge">Conector local (sem diálogo)</option></select></label></p><p><label>Perfil da balança <select name="scaleProfile"><option value="generic">Serial numérico genérico</option><option value="urano-pop-s">Urano POP-S (requer homologação)</option></select></label></p><p><label>Velocidade serial <input name="scaleBaud" type="number" min="300" max="115200"></label></p><p><label>Comando de leitura Urano <select name="uranoCommand"><option value="0x04">0x04 (padrão)</option><option value="0x05">0x05</option></select></label></p><p><label>Velocidade da impressora serial <input name="printerBaud" type="number" min="300" max="115200"></label></p><p><label>Velocidade da gaveta serial <input name="drawerBaud" type="number" min="300" max="115200"></label></p><p><label><input name="cut" type="checkbox"> Acionar corte ESC/POS (somente quando compatível)</label></p><p><label><input name="autoPrint" type="checkbox"> Impressão automática (somente conector local)</label></p><p><label>Chave do conector local <input name="bridgeToken" type="password" autocomplete="off" placeholder="Código de pareamento de 64 caracteres"></label></p><p><button type="button" id="pdv-bridge-connect">Conectar serviço local</button><button type="button" id="pdv-bridge-queue">Consultar fila</button></p><div id="pdv-bridge-history"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-device="scale">Conectar balança</button><button type="button" data-device="printer">Conectar impressora serial</button><button type="button" data-device="drawer">Conectar gaveta</button><button type="button" id="pdv-test-printer">Imprimir teste</button><button type="button" id="pdv-test-drawer">Abrir gaveta</button></div><p role="status" id="pdv-peripherals-status" aria-live="polite"></p><div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" id="pdv-peripherals-save">Salvar</button><button value="cancel">Fechar</button></div></form>';
+    dialog.innerHTML='<form method="dialog" id="pdv-peripherals-form"><h2>Dispositivos locais</h2><p>Preferências dos dispositivos para este navegador. A identificação dos comprovantes é compartilhada pela filial.</p><fieldset><legend>Identificação do comprovante não fiscal</legend><label>Nome da loja <input name="receiptName" maxlength="80" autocomplete="organization"></label><p><label>Endereço <input name="receiptAddress" maxlength="160" autocomplete="street-address"></label></p><p><label>Telefone <input name="receiptPhone" maxlength="60" autocomplete="tel"></label></p><p><label>Logotipo PNG (até 512 KB; somente no PDF e no diálogo do navegador) <input type="file" name="receiptLogo" accept="image/png"></label></p><p><label><input type="checkbox" name="receiptRemoveLogo"> Remover logotipo atual</label></p><p>A identificação é sincronizada com a filial. Preferências de papel, impressora e balança são salvas neste navegador.</p></fieldset><label>Papel <select name="paperMm"><option value="58">58 mm</option><option value="80">80 mm</option></select></label><p><label>Impressora <select name="printerMode"><option value="browser">Diálogo do sistema (recomendado)</option><option value="serial">ESC/POS serial compatível (experimental)</option><option value="bridge">Conector local (sem diálogo)</option></select></label></p><p><label>Perfil da balança <select name="scaleProfile"><option value="generic">Serial numérico genérico</option><option value="urano-pop-s">Urano POP-S (requer homologação)</option></select></label></p><p><label>Velocidade serial <input name="scaleBaud" type="number" min="300" max="115200"></label></p><p><label>Comando de leitura Urano <select name="uranoCommand"><option value="0x04">0x04 (padrão)</option><option value="0x05">0x05</option></select></label></p><p><label>Velocidade da impressora serial <input name="printerBaud" type="number" min="300" max="115200"></label></p><p><label>Velocidade da gaveta serial <input name="drawerBaud" type="number" min="300" max="115200"></label></p><p><label><input name="cut" type="checkbox"> Acionar corte ESC/POS (somente quando compatível)</label></p><p><label><input name="autoPrint" type="checkbox"> Impressão automática (somente conector local)</label></p><p><label>Chave do conector local <input name="bridgeToken" type="password" autocomplete="off" placeholder="Código de pareamento de 64 caracteres"></label></p><p><button type="button" id="pdv-bridge-connect">Conectar serviço local</button><button type="button" id="pdv-bridge-queue">Consultar fila</button></p><div id="pdv-bridge-history"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-device="scale">Conectar balança</button><button type="button" data-device="printer">Conectar impressora serial</button><button type="button" data-device="drawer">Conectar gaveta</button><button type="button" id="pdv-test-printer">Imprimir teste</button><button type="button" id="pdv-test-drawer">Abrir gaveta</button></div><p role="status" id="pdv-peripherals-status" aria-live="polite"></p><div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" id="pdv-peripherals-save">Salvar</button><button value="cancel">Fechar</button></div></form>';
     root.document.body.append(dialog);
     const form=dialog.querySelector('form');
     const saved=settings();
+    const brandingFields=dialog.querySelector('fieldset');
+    brandingFields.disabled=true;
+    if(!canReadBranding())brandingFields.hidden=true;
+    dialog.addEventListener('close',()=>dialog.remove());
     let receiptBrand=root.PdvReceiptBranding?.read()||{name:'PDV TOTAL',address:'',phone:'',logoDataUrl:null};
     for(const [key,value] of [['receiptName',receiptBrand.name],['receiptAddress',receiptBrand.address],['receiptPhone',receiptBrand.phone]])form.elements.namedItem(key).value=value;
     for(const key of ['paperMm','printerMode','scaleProfile','scaleBaud','uranoCommand','printerBaud','drawerBaud'])form.elements.namedItem(key).value=String(saved[key]);
     form.elements.namedItem('cut').checked=saved.cut;
     form.elements.namedItem('autoPrint').checked=saved.autoPrint;
     const status=dialog.querySelector('#pdv-peripherals-status');
-    if(root.PdvReceiptBranding?.load){
+    if(canReadBranding()&&root.PdvReceiptBranding?.load){
       status.textContent='Carregando identificação da filial…';
       void root.PdvReceiptBranding.load().then(value=>{
         receiptBrand=value;
         for(const [field,key] of [['receiptName','name'],['receiptAddress','address'],['receiptPhone','phone']])
           form.elements.namedItem(field).value=value[key]||'';
+        brandingFields.disabled=!canManageBranding();
         status.textContent='Identificação carregada do servidor.';
       }).catch(error=>{
-        status.textContent='Não foi possível ler a identidade canônica: '+(error?.message||'Conexão indisponível.')+
+        status.textContent='Não foi possível carregar a identificação da filial: '+(error?.message||'Conexão indisponível.')+
           ' A identificação não pode ser alterada offline.';
       });
     }
@@ -292,6 +299,7 @@
     }
     dialog.addEventListener('click',async e=>{
       const kind=e.target?.dataset?.device;
+      let localSaved=false;
       try{
         if(kind){await connect(kind);status.textContent='Dispositivo conectado: '+kind+'.';}
         if(e.target?.id==='pdv-test-printer'){
@@ -314,6 +322,11 @@
         if(e.target?.id==='pdv-test-drawer'){await openDrawer();status.textContent='Pulso enviado; verifique a gaveta.';}
         if(e.target?.id==='pdv-peripherals-save'){
           const token=form.elements.namedItem('bridgeToken').value;
+          if(token)root.PdvLocalBridge.pair(token);
+          saveSettings({...settings(),...Object.fromEntries(new FormData(form)),cut:form.elements.namedItem('cut').checked,autoPrint:form.elements.namedItem('autoPrint').checked});
+          localSaved=true;
+          status.textContent='Preferências dos dispositivos salvas neste navegador.';
+          if(!canManageBranding()||brandingFields.disabled)return;
           const logoFile=form.elements.namedItem('receiptLogo').files?.[0];
           let logoDataUrl=receiptBrand.logoDataUrl;
           if(form.elements.namedItem('receiptRemoveLogo').checked)logoDataUrl=null;
@@ -335,11 +348,9 @@
             phone:form.elements.namedItem('receiptPhone').value,
             logoDataUrl});
           receiptBrand=updated;
-          if(token)root.PdvLocalBridge.pair(token);
-          saveSettings({...settings(),...Object.fromEntries(new FormData(form)),cut:form.elements.namedItem('cut').checked,autoPrint:form.elements.namedItem('autoPrint').checked});
-          status.textContent='Identificação sincronizada com o servidor. Preferências dos dispositivos salvas neste navegador.';
+          status.textContent='Identificação sincronizada com a filial. Preferências dos dispositivos salvas neste navegador.';
         }
-      }catch(error){status.textContent=error?.message||'Falha ao acessar dispositivo.';}
+      }catch(error){status.textContent=(localSaved?'As preferências locais foram salvas. Falha ao sincronizar a identificação: ':'')+(error?.message||'Falha ao acessar dispositivo.');}
     });
     dialog.showModal();
   }

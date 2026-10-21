@@ -19,7 +19,7 @@ function desktopNavigationBaseline(){
  }
  const web=read('../../web/app.js').toString('utf8');
  assert.ok(web.includes("if (!canAccessRoute(route)) route = 'home';"),'web route auth gate must remain');
- assert.ok(web.includes("await renderRoute(); content.focus({ preventScroll: true });"),'desktop focus contract preserved');
+ assert.match(web,/await renderRoute\(\);\s*if\(generation!==navigationGeneration\)return;\s*content\.focus\(\{ preventScroll: true \}\);/,'desktop focus contract preserved after rejecting stale navigation');
 }
 
 function harness(){

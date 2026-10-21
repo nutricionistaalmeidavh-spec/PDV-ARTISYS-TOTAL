@@ -4,10 +4,11 @@ import {execFileSync} from 'node:child_process';
 import {createServer as createTcpServer} from 'node:net';
 import {mkdtemp,mkdir,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {join,resolve,dirname} from 'node:path';
+import {join,resolve,dirname,sep,basename} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright';
+import {createRequire} from 'node:module';
+const {chromium}=createRequire(import.meta.url)('playwright');
 import {openLocalDatabase} from '../apps/api/src/local-db.mjs';
 import {applyLocalMigrations} from '../apps/api/src/local-migrations.mjs';
 import {createLanServer} from '../apps/api/src/https-lan-server.mjs';
@@ -157,5 +158,7 @@ try{
   if(browser)await browser.close();
   if(server)await new Promise(resolve=>server.close(resolve));
   if(db)db.close();
+  if(!resolve(folder).startsWith(resolve(tmpdir())+sep)||!basename(folder).startsWith('pdv-r2-mobile-lan-'))
+    throw Error('Refusing cleanup outside the generated LAN test directory.');
   await rm(folder,{recursive:true,force:true});
 }

@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
 import {createSpoolQueue} from '../../../tools/local-hardware-bridge/bridge.mjs';
 
-const root=resolve(new URL('../../../',import.meta.url).pathname);
+const root=resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const read=p=>readFileSync(join(root,p),'utf8');
 const matrix=JSON.parse(read('docs/parity/hardware-compatibility.json'));
 

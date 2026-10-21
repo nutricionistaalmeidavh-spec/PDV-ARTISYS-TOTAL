@@ -321,6 +321,7 @@
   }
 
   async function mountReturns() {
+    if(api.webMode)return root.PdvOperationalUi.renderReturns();
     if (document.body.dataset.activeRoute !== 'returns') return;
     if (currentPage()) return;
     state.mounted = true;

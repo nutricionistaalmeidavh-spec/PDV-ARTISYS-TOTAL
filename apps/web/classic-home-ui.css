@@ -23,6 +23,8 @@ body.home-view-classic.theme-home .window-controls button:hover { background: rg
    browser's native [hidden] presentation. */
 
 #classic-home-grid { width: min(1540px, 100%); margin: 0 auto; padding-bottom: 18px; color: #fff; }
+#classic-home-grid #web-home-live { color: #102b4e; }
+#classic-home-grid #web-home-live .ops-metric strong { color: #102b4e; }
 .classic-home-head { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:0 4px 12px; }
 .classic-home-eyebrow { display:block; margin-bottom:7px; color:#79b9ff; font-size:13px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; }
 .classic-home-head h1 { margin:0; color:#fff; font-size:clamp(24px,2.2vw,32px); letter-spacing:-.035em; }

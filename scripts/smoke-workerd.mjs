@@ -1,9 +1,15 @@
 import {spawn} from 'node:child_process';
 import assert from 'node:assert/strict';
 import {setTimeout as sleep} from 'node:timers/promises';
+import {createRequire} from 'node:module';
 
 const origin='http://127.0.0.1:8788';
-const child=spawn('npx',['--yes','wrangler@4.137.0','dev','--local','--ip','127.0.0.1','--port','8788','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false'],{
+const require=createRequire(import.meta.url);
+let wranglerCli=process.env.PDV_WRANGLER_CLI;
+if(!wranglerCli){try{wranglerCli=require.resolve('wrangler/bin/wrangler.js');}catch{}}
+const devArgs=['dev','--local','--ip','127.0.0.1','--port','8788','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false'];
+if(process.env.PDV_WORKERD_STATE_PATH)devArgs.push('--persist-to',process.env.PDV_WORKERD_STATE_PATH);
+const child=spawn(wranglerCli?process.execPath:'npx',wranglerCli?[wranglerCli,...devArgs]:['--yes','wrangler@4.137.0',...devArgs],{
   stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32',env:{...process.env,CI:'true'}
 });
 let stderr='',stdout='';
@@ -79,7 +85,7 @@ try {
   assert.equal(stock.stock.find(x=>x.productId===pid).quantity,1,'one completed sale must decrement exactly one unit');
 
   if(process.env.RUN_BROWSER_SMOKE==='true'){
-    const {chromium}=await import('playwright');
+    const {chromium}=createRequire(import.meta.url)('playwright');
     const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
     try{
       const page=await browser.newPage({viewport:{width:1280,height:800},locale:'pt-BR'});
@@ -94,31 +100,39 @@ try {
       assert.equal(await page.getByLabel('E-mail',{exact:true}).inputValue(),'owner@example.test','failed login must preserve entered e-mail');
       await page.getByLabel('Senha',{exact:true}).fill('DummyStrongPassOnlyForCI2026');
       await page.getByRole('button',{name:'Entrar no PDV'}).click();
-      await page.getByRole('heading',{name:'Balcão'}).waitFor({timeout:12000});
-      // First-run R4 segment preference is a real modal: choose a segment
-      // explicitly before interacting with the underlying checkout.
-      await page.locator('#r4-segment-first-run').waitFor({timeout:12000});
-      await page.locator('#r4-segment-first-run [name=segmentId]').selectOption('RESTAURANT');
-      await page.locator('#r4-segment-first-run [type=submit]').click();
-      await page.locator('#r4-segment-first-run').waitFor({state:'detached',timeout:12000});
-      assert.equal(await page.locator('#auth-overlay').isVisible(),false,'segment wizard must release checkout focus');
+      await page.locator('#auth-overlay').waitFor({state:'hidden',timeout:12000});
+      await page.getByRole('heading',{name:'Início',exact:true}).waitFor({timeout:12000});
+      assert.equal(await page.locator('#r4-segment-first-run').count(),0,'an optional business profile must not block first access');
+      assert.equal(await page.locator('#auth-overlay').isVisible(),false,'successful login must release operating application focus');
+      await page.locator('#sidebar-nav [data-route="checkout"]').click();
+      await page.getByRole('heading',{name:'Balcão',exact:true}).waitFor();
+      await page.locator('[data-add-product="'+pid+'"]').waitFor({timeout:12000});
       assert.equal(await page.locator('[data-add-product="'+pid+'"]').count(),1,'canonical product should reach original checkout');
       await page.locator('[data-add-product="'+pid+'"]').click();
       await page.locator('.cart-line').first().waitFor({timeout:12000});
       assert.match(await page.locator('.cart-list').innerText(),/Workerd Coffee/);
       assert.match(await page.locator('.totals').innerText(),/R\$\s*10,00/);
-      await page.locator('#sidebar-nav [data-route="products"]').click();
-      await page.getByRole('heading',{name:'Produtos e estoque'}).waitFor();
-      await page.getByRole('button',{name:'Novo produto'}).click();
+      await page.locator('#sidebar-nav [data-route="catalog"]').click();
+      await page.locator('[data-flow-route="inventory"]').click();
+      await page.getByRole('heading',{name:'Estoque',exact:true}).waitFor();
+      await page.getByRole('button',{name:'+ Produto / insumo',exact:true}).click();
       await page.getByLabel('Nome do produto').fill('Produto do navegador');
       await page.getByLabel('SKU / código').fill('BROWSER-TEST');
       await page.getByLabel('Preço de venda (R$)').fill('12,50');
       await page.getByRole('button',{name:'Salvar produto'}).click();
+      await page.getByRole('heading',{name:'Estoque',exact:true}).waitFor();
+      await page.locator('#sidebar-nav [data-route="catalog"]').click();
+      await page.locator('[data-flow-route="products"]').click();
+      await page.getByRole('heading',{name:'Cardápio',exact:true}).waitFor();
+      assert.equal(await page.locator('.web-product-row').filter({hasText:'Produto do navegador'}).count(),0,'a master record is not sellable until explicitly added to the menu');
+      await page.getByRole('button',{name:'+ Adicionar ao Cardápio',exact:true}).click();
+      await page.locator('#web-menu-select select[name="productId"]').selectOption({label:'Produto do navegador · BROWSER-TEST'});
+      await page.locator('#web-menu-select [type="submit"]').click();
       await page.getByText('Produto do navegador').first().waitFor();
-      await page.locator('[data-web-stock]').last().click();
+      await page.locator('.web-product-row').filter({hasText:'Produto do navegador'}).getByRole('button',{name:'Registrar entrada',exact:true}).click();
       await page.getByLabel('Quantidade recebida').fill('3');
       await page.locator('#web-stock-form button[type=submit]').click();
-      await page.getByRole('button',{name:'Balcão',exact:true}).first().click();
+      await page.locator('#sidebar-nav [data-route="checkout"]').click();
       await page.getByRole('heading',{name:'Balcão'}).waitFor();
       const cartAfter=await page.locator('.cart-list').innerText();
       assert.match(cartAfter,/Workerd Coffee/,'cart must survive route changes');

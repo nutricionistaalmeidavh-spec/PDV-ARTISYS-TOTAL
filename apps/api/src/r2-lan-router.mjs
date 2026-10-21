@@ -87,12 +87,13 @@ export async function authorizeLanBusinessRequest(request,db,member,tenantId){
 }
 
 /** Module policy is shared by web LAN: disable access but never erase history. */
-export async function authorizeLanModule(db,tenantId,path){
+export async function authorizeLanModule(db,tenantId,path,{useDefaults=true}={}){
   const moduleId=path.startsWith('restaurant/')?'FOOD':path.startsWith('wholesale/')?'WHOLESALE':null;
   if(!moduleId)return null;
   const row=await db.prepare('SELECT enabled FROM r2_tenant_modules WHERE tenant_id=? AND module_id=?')
     .bind(tenantId,moduleId).first();
   const def=getModuleDefinition(moduleId);
+  if(!row&&!useDefaults)return null; // Preserve existing hosted installations until explicitly configured.
   if(!(row?Boolean(row.enabled):def.defaultEnabled))
     return err(403,'Módulo opcional desativado para este estabelecimento.');
   return null;

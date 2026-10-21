@@ -98,9 +98,13 @@ body[data-offline] #web-offline-alert{
    background:#fff;box-shadow:0 -8px 24px rgba(8,26,53,.10)
  }
  body[data-runtime="web"] .sidebar .brand-mark,
- body[data-runtime="web"] .sidebar .sidebar-back,
- body[data-runtime="web"] .sidebar>[data-route="settings"]{display:none!important}
+ body[data-runtime="web"] .sidebar .sidebar-back{display:none!important}
+ body[data-runtime="web"] .sidebar>[data-route="settings"]{
+   flex:0 0 60px;width:60px;height:55px;max-height:55px;margin:5px 4px 0 0;padding:5px 1px;border-radius:12px
+ }
+ body[data-runtime="web"] .sidebar>[data-route="settings"] .nav-label{font-size:10px;max-width:60px}
  body[data-runtime="web"] .sidebar-nav{
+   flex:1 1 0;min-width:0;
    flex-direction:row;align-items:stretch;gap:2px;padding:5px 8px;
    min-height:0;height:100%;width:100%;overflow-y:hidden;overflow-x:auto;scrollbar-width:none;
    justify-content:flex-start

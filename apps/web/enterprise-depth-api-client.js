@@ -1,9 +1,13 @@
 'use strict';
 (() => {
   const ApiClient=window.PdvApiClient?.ApiClient;if(!ApiClient)return;
+  // The hosted client already implements purchasing, reservations and branch
+  // transfers. Desktop stock locations have different semantics: do not replace
+  // those methods with IPC-era routes when running the web application.
   const p=ApiClient.prototype;
   p.suppliers=function(includeInactive=false){return this.request(`/api/v1/suppliers${includeInactive?'?includeInactive=true':''}`);};
   p.saveSupplier=function(body){return this.request('/api/v1/suppliers',{method:'POST',body});};
+  if(!window.artisysDesktop)return;
   p.stockLocations=function(includeInactive=false){return this.request(`/api/v1/stock-locations${includeInactive?'?includeInactive=true':''}`);};
   p.createStockLocation=function(body){return this.request('/api/v1/stock-locations',{method:'POST',body});};
   p.stockBalances=function(filters={}){return this.request(`/api/v1/stock-balances${this.params(filters)}`);};

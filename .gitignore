@@ -8,6 +8,8 @@ apps/api/node_modules/
 apps/api/dist-check/
 *.seed.sql
 dist/
+qa-artifacts/
+debug.log
 
 # Ephemeral Cloudflare Workers Builds D1 schema configuration
 .wrangler-d1-bootstrap-*.json

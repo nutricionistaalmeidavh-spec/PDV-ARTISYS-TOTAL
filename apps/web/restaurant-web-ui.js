@@ -86,10 +86,10 @@
        const orders=state.orders.filter(o=>o.table_session_id===state.selected);
        const total=orders.filter(o=>o.status!=='CANCELLED').reduce((sum,o)=>sum+Number(o.total_cents||0),0);
        return '<div class="restaurant-card"><h3>'+esc(s.label)+' · Comanda '+esc(state.selected.slice(0,8))+'</h3>'+
-         '<p>Pedidos operacionais: '+money(total)+'. A cobrança é feita no caixa canônico.</p>'+btn('Imprimir pré-conta','prebill-table',state.selected)+
+         '<p>Pedidos operacionais: '+money(total)+'. A cobrança é feita no Balcão.</p>'+btn('Imprimir pré-conta','prebill-table',state.selected)+
          orders.map(o=>'<div class="restaurant-row">'+esc(orderLines(o))+' · '+esc(title(o.status))+'</div>').join('')+
          (can('restaurant.service.manage')?btn('Chamar garçom','service-waiter',state.selected)+btn('Solicitar conta','service-bill',state.selected):'')+
-         '<p>Recebimentos antecipados líquidos: '+money(state.prepayments?.totalCents||0)+'. O saldo é acertado no caixa canônico.</p>'+
+         '<p>Recebimentos antecipados líquidos: '+money(state.prepayments?.totalCents||0)+'. O saldo é acertado no Balcão.</p>'+
          (state.prepayments?.payments?.length?'<div class="restaurant-list">'+state.prepayments.payments.map(p=>
            '<div class="restaurant-row"><strong>'+esc(p.method)+' · '+money(p.amountCents)+
            '</strong><small>Recebido '+money(p.grossAmountCents)+' · '+esc(p.receivedAt)+
@@ -190,7 +190,7 @@
       splitDues.map(share=>'<label class="field"><span>Pagador '+share.index+' · restante '+money(share.amountCents)+'</span>'+
         '<select name="shareMethod'+share.index+'">'+methodOptions+'</select></label>').join('')+'</fieldset>':
       '<label class="field"><span>Forma de pagamento</span><select name="method">'+methodOptions+'</select></label>';
-   return '<section class="data-card"><h2>Pagamento no caixa canônico</h2><p>Venda '+esc(c.saleNumber||c.saleId.slice(0,8))+
+   return '<section class="data-card"><h2>Pagamento no Balcão</h2><p>Venda '+esc(c.saleNumber||c.saleId.slice(0,8))+
       ' · '+money(c.totalCents||0)+'</p>'+(prepaid?'<p>Antecipado: '+money(prepaid)+' · Saldo pendente: '+money(outstanding)+'</p>':'')+
       (split?'<p>'+split.parts+' partes · Taxa de serviço '+money(split.serviceChargeCents)+'</p>':'')+
       (c.status==='COMPLETED'?'<p>Pagamento concluído.</p>':
@@ -206,7 +206,7 @@
    host.innerHTML='<section class="page vertical-page restaurant-page" data-r4-web><header class="page-head"><div><h1>Alimentação</h1><p>Mesas, comandas, preparo e recebimento no mesmo caixa.</p></div>'+back()+'</header>'+
      '<nav class="restaurant-view-switch" aria-label="Operações de alimentação">'+tabs.map(([v,n])=>
        '<button type="button" class="restaurant-btn '+(state.section===v?'':'secondary')+'" data-r4-action="tab" data-id="'+v+'">'+n+'</button>').join('')+
-       btn('Avançado / segmentos','advanced')+btn('Atualizar','refresh')+'</nav>'+
+       btn('Configurações de atendimento','advanced')+btn('Atualizar','refresh')+'</nav>'+
      checkoutSection()+
      ({tables:tableSection,orders:orderSection,kitchen:kitchenSection,services:serviceSection,reports:reportSection}[state.section]||tableSection)()+
      '</section>';
@@ -324,18 +324,10 @@
        const session=what==='checkout-session',endpoint=session?'/sessions/'+encodeURIComponent(id):'/orders/'+encodeURIComponent(id);
        if(session){state.selected=id;state.prepayments=await safe(()=>action('/sessions/'+encodeURIComponent(id)+'/prepayments').then(v=>v.prepayments),null);}
        else state.prepayments=null;
-       let linked=(await action(endpoint+'/checkout')).checkout;
-       if(!linked){
-         try{
-           const opened=await api.request('/api/v1/sales',{method:'POST',body:session?{restaurantSessionId:id}:{restaurantOrderId:id}});
-           linked={saleId:opened.sale.id,status:opened.sale.status,totalCents:opened.sale.totalCents,saleNumber:opened.sale.saleNumber};
-         }catch(error){
-           linked=(await action(endpoint+'/checkout')).checkout;
-           if(!linked)throw error;
-         }
-       }
-       state.checkout=linked;
-       state.split=session?(await safe(()=>action(endpoint+'/split').then(v=>v.plan),null)):null;
+       const opened=await root.PdvAppNavigation.openDocument(session?'COMMAND':'DELIVERY',id);
+       state.checkout={saleId:opened.sale.id,status:opened.sale.status,totalCents:opened.sale.totalCents,saleNumber:opened.sale.saleNumber};
+       state.split=session?(await action(endpoint+'/split')).plan:null;
+       return;
      }
      if(what==='csv'){
        const text=await action('/reports/csv?from='+encodeURIComponent(state.from)+'&to='+encodeURIComponent(state.to));
@@ -385,7 +377,7 @@
        const sale=await api.request('/api/v1/sales/'+encodeURIComponent(v.saleId)+'/complete',{method:'POST',body});
        const settled=sale.sale||sale;
        state.checkout={...state.checkout,status:settled.status};
-       notice('Pagamento registrado na venda canônica.');
+       notice('Pagamento registrado na venda.');
      }
      await reload();
    }catch(e){notice(e.message,true);}

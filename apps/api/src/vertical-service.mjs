@@ -56,6 +56,12 @@ export function createVerticalService(db){
    if(!p)throw err(404,'Produto não encontrado.');
    return p;
  }
+ async function sellableProduct(t,id){
+   const p=await product(t,id);
+   if(p.menu_enabled===0||p.usage_type==='INGREDIENT')
+     throw err(409,'Este cadastro não está disponível para venda no Cardápio.');
+   return p;
+ }
  async function seller(t,id){
    const user=await first('SELECT u.id,u.display_name AS name FROM users u JOIN tenant_memberships m ON m.user_id=u.id WHERE u.id=? AND m.tenant_id=? AND u.active=1 AND m.active=1',id,t);
    if(!user)throw err(404,'Vendedor não encontrado neste estabelecimento.');
@@ -68,7 +74,7 @@ export function createVerticalService(db){
      const itemKey=item?.pizza?JSON.stringify([item.productId,item.pizza.sizeCode,item.pizza.flavorCodes,item.pizza.crustCode||null]):item?.productId;
      if(keys.has(itemKey))throw err(400,'Configuração de produto repetida. Agrupe a quantidade.');
      keys.add(itemKey);
-     const p=await product(t,item.productId),milli=qty(item.quantity);
+     const p=await sellableProduct(t,item.productId),milli=qty(item.quantity);
      const pizza=item.pizza?await createR4ExtendedService(db).quotePizza(t,b,{productId:p.id,...item.pizza}):null;
      result.push({productId:p.id,name:p.name,quantity:milli/1000,milli,
        unitPriceCents:pizza?.unitPriceCents??p.sale_price_cents,
@@ -89,7 +95,7 @@ export function createVerticalService(db){
    return {id:row.id,customerId:row.customer_id,status:row.status,totalCents:row.total_cents,saleId:row.sale_id||null,fulfillmentType:row.fulfillment,items,createdAt:row.created_at};
  }
  async function price(t,b,productId,quantity){
-   const productRow=await product(t,productId),milli=qty(quantity);
+   const productRow=await sellableProduct(t,productId),milli=qty(quantity);
    const tier=await first('SELECT id,min_quantity_milli,unit_price_cents FROM wholesale_tiers WHERE tenant_id=? AND branch_id=? AND product_id=? AND active=1 AND min_quantity_milli<=? ORDER BY min_quantity_milli DESC LIMIT 1',t,b,productId,milli);
    const unitPriceCents=tier?.unit_price_cents??productRow.sale_price_cents;
    return {productId,productName:productRow.name,quantity:milli/1000,unitPriceCents,

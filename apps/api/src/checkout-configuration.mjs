@@ -70,15 +70,22 @@ export function priceCheckoutConfiguration(config,basePriceCents,input={},error=
    configurationSnapshot:{version:1,variant:variant?{...variant}:null,options,
      comboSelections:[]}};
 }
-export function createCheckoutConfigurationService({q,first,batch,applied,audit,stamp,branchExists,product,requiredMutation,error}){
+export function createCheckoutConfigurationService({q,first,batch,applied,audit,stamp,branchExists,product,requiredMutation,error,pizzaService}){
+ async function pizza(t,b,id){
+   if(!pizzaService)return null;
+   try{return await pizzaService.pizzaProfile(t,b,id);}
+   catch(e){if(/no such table: r4_pizza_profiles/i.test(String(e?.message)))return null;throw e;}
+ }
  async function config(t,b,id){
    await branchExists(t,b);
    await product(t,id);
    const row=await first('SELECT config_json AS json FROM checkout_product_configurations WHERE tenant_id=? AND product_id=?',t,id);
    const value=row?JSON.parse(row.json):{version:1,groups:[],variants:[],combos:[]};
-   return {...value,productId:id};
+   const pizzaProfile=await pizza(t,b,id);
+   return {...value,productId:id,...(pizzaProfile?{pizzaProfile}:{})};
  }
  return {
+   pizzaProfile:pizza,
    configuration:config,
    async save(t,b,id,body,key){
      await branchExists(t,b);
@@ -100,6 +107,12 @@ export function createCheckoutConfigurationService({q,first,batch,applied,audit,
    async quote(t,b,id,body){
      const productRow=await product(t,id);
      const current=await config(t,b,id);
+     if(current.pizzaProfile){
+       if(!body?.pizza||typeof body.pizza!=='object'||Array.isArray(body.pizza))throw error(400,'Escolha tamanho e sabores da pizza.');
+       if(body.variantId||body.selections?.length||body.comboSelections?.length)throw error(400,'Use as opções do perfil de pizza.');
+       const priced=await pizzaService.quotePizza(t,b,{...body.pizza,productId:id});
+       return {unitPriceCents:priced.unitPriceCents,productId:id,configurationSnapshot:{version:1,pizza:true,...priced.configuration}};
+     }
      const quote=priceCheckoutConfiguration(current,productRow.sale_price_cents,body,error);
      return {...quote,productId:id};
    }

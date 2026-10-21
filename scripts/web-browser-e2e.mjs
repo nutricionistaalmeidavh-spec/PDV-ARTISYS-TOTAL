@@ -1,11 +1,16 @@
 import {spawn} from 'node:child_process';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {mkdirSync} from 'node:fs';
-import {chromium} from 'playwright';
+import {createRequire} from 'node:module';
 import assert from 'node:assert/strict';
+const require=createRequire(import.meta.url),{chromium}=require('playwright');
 
 const origin='http://127.0.0.1:8789';
-const worker=spawn('npx',['--yes','wrangler@4.137.0','dev','--local','--ip','127.0.0.1','--port','8789','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false','--var','EMAIL_FROM:disabled-in-local-e2e'],{
+let wranglerCli=process.env.PDV_WRANGLER_CLI;
+if(!wranglerCli){try{wranglerCli=require.resolve('wrangler/bin/wrangler.js');}catch{}}
+const devArgs=['dev','--local','--ip','127.0.0.1','--port','8789','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false','--var','EMAIL_FROM:disabled-in-local-e2e'];
+if(process.env.PDV_WORKERD_STATE_PATH)devArgs.push('--persist-to',process.env.PDV_WORKERD_STATE_PATH);
+const worker=spawn(wranglerCli?process.execPath:'npx',wranglerCli?[wranglerCli,...devArgs]:['--yes','wrangler@4.137.0',...devArgs],{
   stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32',
   env:{...process.env,CI:'true'}
 });
@@ -13,6 +18,24 @@ let stderr='';
 worker.stderr.on('data',v=>stderr=(stderr+v.toString()).slice(-6000));
 const errors=[];
 let browser;
+// Traverse the same visible hubs as an operator; never bypass permissions with
+// PdvAppNavigation or synthesize hidden sidebar entries in the test.
+async function navigateUi(page,route){
+  await page.locator('#auth-overlay').waitFor({state:'hidden',timeout:12000});
+  const parents={products:'catalog',inventory:'catalog',customers:'catalog',suppliers:'catalog',sellers:'catalog',
+    sales:'post-sale',returns:'post-sale',finance:'financial-management',reports:'financial-management'};
+  const parent=parents[route];
+  if(route==='saas-admin'){
+    await navigateUi(page,'settings');
+    await page.locator('#web-settings-tab-team').click();
+    await page.locator('#route-content [data-settings-route=saas-admin]').click();
+  }else if(parent){
+    await page.locator('#sidebar-nav [data-route='+parent+']').click();
+    await page.locator('#route-content [data-flow-route='+route+']').click();
+  }else if(route==='settings') await page.locator('#app-sidebar > [data-route=settings]').click();
+  else await page.locator('#sidebar-nav [data-route='+route+']').click();
+  await page.locator('body[data-active-route='+route+']').waitFor({timeout:12000});
+}
 try{
   let ready=false;
   for(let i=0;i<65;i++){
@@ -57,16 +80,40 @@ try{
   await page.locator('#web-email').fill('owner@example.test');
   await page.locator('#web-password').fill('DummyStrongPassOnlyForCI2026');
   await page.locator('#web-login-form button[type=submit]').click();
-  await page.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
-  await page.locator('#product-search').waitFor({state:'visible',timeout:12000});
-  // R4: the first authenticated owner session receives segment recommendations,
-  // but no optional module is activated by the choice itself.
-  const freshSegment=page.locator('#r4-segment-first-run');
-  if(await freshSegment.count()){
-    await freshSegment.locator('[name=segmentId]').selectOption('RESTAURANT');
-    await freshSegment.locator('[type=submit]').click();
-    await freshSegment.waitFor({state:'detached',timeout:12000});
+  await page.locator('body[data-active-route=home]').waitFor({timeout:12000});
+  await page.getByRole('heading',{name:'Início',exact:true}).waitFor();
+  // Optional areas are enabled deliberately in Settings. A business-profile
+  // preference remains optional and must never activate another area itself.
+  assert.equal(await page.locator('#r4-segment-first-run').count(),0,
+    'first login must reach Home without requiring a business segment');
+  await navigateUi(page,'settings');
+  await page.locator('#web-settings-tab-modules').click();
+  for(const moduleId of ['FOOD','WHOLESALE']){
+    const checkbox=page.locator('[data-settings-module='+moduleId+']');
+    if(!await checkbox.isChecked()){
+      assert.equal(await checkbox.isEnabled(),true,'owner must be allowed to configure '+moduleId);
+      const [changed]=await Promise.all([page.waitForResponse(response=>response.request().method()==='PATCH'&&
+        new URL(response.url()).pathname.endsWith('/modules/'+moduleId),{timeout:12000}),checkbox.check({timeout:12000})]);
+      assert.equal(changed.status(),200);
+      await page.locator('#web-settings-tab-modules').click();
+    }
   }
+  const modulesBeforePreference=await page.evaluate(async()=>{
+    const api=new window.PdvApiClient.ApiClient();return (await api.modules()).map(({id,enabled})=>({id,enabled}));
+  });
+  await navigateUi(page,'FOOD');
+  await page.locator('[data-r4-action=advanced]').first().click();
+  await page.locator('[data-r4-section=segments]').click();
+  await page.locator('[data-r4-advanced=segment] [name=segmentId]').selectOption('RESTAURANT');
+  const preferenceSaved=page.waitForResponse(response=>response.request().method()==='PUT'&&
+    new URL(response.url()).pathname.endsWith('/onboarding/segments'));
+  await page.locator('[data-r4-advanced=segment] button').click();
+  assert.equal((await preferenceSaved).status(),200);
+  const modulesAfterPreference=await page.evaluate(async()=>{
+    const api=new window.PdvApiClient.ApiClient();return (await api.modules()).map(({id,enabled})=>({id,enabled}));
+  });
+  assert.deepEqual(modulesAfterPreference,modulesBeforePreference,
+    'choosing a business profile must preserve the independently selected areas');
   const savedSegment=await page.evaluate(async()=>{
     const api=new window.PdvApiClient.ApiClient();
     return api.request('/api/v1/onboarding/segments');
@@ -77,7 +124,7 @@ try{
     'persisted segment must not intercept cashier pointer events');
 
   // SaaS owner administration: live Workerd/D1, real cookie, browser and server checks.
-  await page.locator('#app-sidebar [data-route=saas-admin]').click();
+  await navigateUi(page,'saas-admin');
   await page.locator('#saas-admin #saas-branch-form').waitFor({timeout:12000});
   assert.match(await page.locator('#saas-admin').innerText(),/Seu estabelecimento/);
   await page.screenshot({path:'qa-artifacts/pdv-saas-admin-desktop.png',fullPage:true});
@@ -112,17 +159,19 @@ try{
     await staffPage.locator('#web-email').fill('web-employee-qa@example.test');
     await staffPage.locator('#web-password').fill('Employee-Strong-2026-Pass!');
     await staffPage.locator('#web-login-form button[type=submit]').click();
-    await staffPage.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
-    assert.equal(await staffPage.locator('#app-sidebar [data-route=saas-admin]').count(),0,
+    await staffPage.locator('body[data-active-route=home]').waitFor({timeout:12000});
+    await navigateUi(staffPage,'settings');
+    await staffPage.locator('#web-settings-tab-team').click();
+    assert.equal(await staffPage.locator('#route-content [data-settings-route=saas-admin]').count(),0,
       'merchant SaaS administrator must not appear for a cashier');
   }finally{await staffContext.close();}
-  await page.locator('#app-sidebar [data-route=checkout]').click();
+  await navigateUi(page,'checkout');
   await page.locator('body[data-active-route=checkout]').waitFor();
   await page.locator('#product-search').waitFor({state:'visible',timeout:12000});
 
   assert.equal(await page.locator('#product-search').count(),1,'only the canonical checkout renderer should exist');
-  await page.locator('#app-sidebar [data-route=products]').click();
-  await page.locator('#web-new-product').click();
+  await navigateUi(page,'inventory');
+  await page.locator('#web-catalog-master [data-master-product]').click();
   await page.locator('#web-product-name').fill('Produto Web QA');
   const sku='BROWSER-'+Date.now();
   const barcode='7891780213442';
@@ -130,6 +179,18 @@ try{
   await page.locator('#web-product-form [name=barcode]').fill(barcode);
   await page.locator('#web-product-price').fill('12,90');
   await page.locator('#web-product-form button[type=submit]').click();
+  await page.locator('#web-product-form').waitFor({state:'detached',timeout:12000});
+  const masterRow=page.locator('#web-catalog-master [data-master-rows] tr').filter({hasText:sku});
+  await masterRow.waitFor({timeout:12000});
+  const masterId=await masterRow.locator('[data-master-edit]').getAttribute('data-master-edit');
+  assert.ok(masterId,'new product belongs to the master stock register');
+  await navigateUi(page,'products');
+  assert.equal(await page.locator('.web-product-row').filter({hasText:sku}).count(),0,
+    'a new master product must not become sellable before the operator adds it to Cardápio');
+  await page.locator('#web-new-product').click();
+  await page.locator('#web-menu-select [name=productId]').selectOption(masterId);
+  await page.locator('#web-menu-select button[type=submit]').click();
+  await page.locator('#web-menu-select').waitFor({state:'detached',timeout:12000});
   await page.locator('.web-product-row').filter({hasText:sku}).waitFor();
   // P1 category management regression: category rename must stay operable in
   // the canonical web UI and category filtering must not hide uncategorized goods.
@@ -227,7 +288,7 @@ try{
     'unrelated physical sheet1.xml must not create a product');
 
   // P2 counted inventory: exercise the actual canonical stock screen in Chromium.
-  await page.locator('#app-sidebar [data-route=inventory]').click();
+  await navigateUi(page,'inventory');
   const countForm=page.locator('#web-stock-count');
   await countForm.waitFor({timeout:12000});
   const productChoice=await countForm.locator('select[name=productId] option').filter({hasText:sku})
@@ -249,7 +310,7 @@ try{
   await countForm.locator('[name=quantity]').fill('2.25');
   await countForm.locator('[name=reason]').fill('Conferência física no navegador QA');
   await countForm.locator('button[type=submit]').click();
-  await page.locator('table tbody tr').filter({hasText:sku}).first().getByText('2,25',{exact:true}).waitFor({timeout:12000});
+  await page.locator('#web-stock-balances tbody tr').filter({hasText:sku}).getByText('2,25',{exact:true}).waitFor({timeout:12000});
   // P1 bin/shelf address E2E. The assignment never adds or subtracts stock.
   await page.locator('#web-storage-location-create [name=code]').fill('SHELF-QA-01');
   await page.locator('#web-storage-location-create [name=name]').fill('Prateleira de testes');
@@ -267,7 +328,7 @@ try{
   await page.screenshot({path:'qa-artifacts/pdv-parity-storage-address.png',fullPage:true});
   await page.screenshot({path:'qa-artifacts/pdv-parity-inventory-count.png',fullPage:true});
 
-  await page.locator('#app-sidebar [data-route=checkout]').click();
+  await navigateUi(page,'checkout');
   const product=page.locator('[data-add-product]').filter({hasText:'Produto Web QA'});
   await product.waitFor({timeout:12000});
   // USB HID scanners normally send the barcode followed by Enter. Exercise
@@ -345,8 +406,11 @@ try{
   await secondPage.locator('#web-email').fill('owner@example.test');
   await secondPage.locator('#web-password').fill('DummyStrongPassOnlyForCI2026');
   await secondPage.locator('#web-login-form button[type=submit]').click();
-  await secondPage.locator('body[data-active-route=checkout]').waitFor({timeout:12000});
+  await secondPage.locator('body[data-active-route=home]').waitFor({timeout:12000});
   await secondPage.locator('#auth-overlay').waitFor({state:'hidden',timeout:12000});
+  assert.equal(await secondPage.evaluate(async()=>{
+    const api=new window.PdvApiClient.ApiClient();return (await api.request('/api/v1/onboarding/segments')).selectedId;
+  }),'RESTAURANT','the optional business preference persists for a second authenticated browser');
   const secondTerminal=await secondPage.evaluate(()=>localStorage.getItem('artisys.pdv.webTerminalId.v1'));
   assert.ok(secondTerminal?.startsWith('WEB-'));
   assert.notEqual(secondTerminal,expectedTerminalId,'two independent browser profiles must have different terminals');
@@ -354,7 +418,7 @@ try{
   const secondBranchId=await secondPage.evaluate(()=>new window.PdvApiClient.ApiClient().branchId);
   assert.equal(secondBranchId,firstBranchId,
     'two terminals must not silently switch filial merely because a new branch sorts first by name');
-  await secondPage.locator('#app-sidebar [data-route=cash]').click();
+  await navigateUi(secondPage,'cash');
   await secondPage.locator('#web-cash-open').waitFor({timeout:12000});
   await secondPage.locator('#web-cash-open button[type=submit]').click();
   await secondPage.locator('[data-cash-web=close]').waitFor({timeout:12000});
@@ -369,7 +433,7 @@ try{
     })
   ]);
   assert.ok(firstCash&&secondCash&&firstCash!==secondCash,'two browsers must have independent open cash sessions');
-  await secondPage.locator('#app-sidebar [data-route=checkout]').click();
+  await navigateUi(secondPage,'checkout');
   await secondPage.locator('[data-add-product]').filter({hasText:'Produto Web QA'}).click();
   await secondPage.locator('.cart-line').filter({hasText:'Produto Web QA'}).waitFor({timeout:12000});
   await secondPage.locator('#suspend-sale').click();
@@ -378,7 +442,7 @@ try{
   assert.equal(suspendedVisible.length,1,'terminal B must show only its own suspended sale');
   assert.ok(!suspendedVisible.includes(originalSuspendedNumber),'terminal B must not resume terminal A sale');
   await secondPage.locator('#modal-root [data-close-modal]').first().click();
-  await secondPage.locator('#app-sidebar [data-route=cash]').click();
+  await navigateUi(secondPage,'cash');
   await secondPage.locator('[data-cash-web=close]').waitFor({timeout:12000});
   await secondPage.locator('[data-cash-web=close]').click();
   await secondPage.locator('.ux-dialog [name=amount]').waitFor({timeout:12000});
@@ -394,7 +458,7 @@ try{
   // P3 configured catalogue E2E: edit a real product's options in the existing
   // product screen, select variant+required addition in the original composer,
   // and verify the configured snapshot is present in the canonical sale row.
-  await page.locator('#app-sidebar [data-route=products]').click();
+  await navigateUi(page,'products');
   const configuredProductRow=page.locator('.web-product-row').filter({hasText:'Produto Web QA'});
   await configuredProductRow.locator('[data-web-customize]').click();
   await page.locator('#web-config-product-form [data-add-variant]').click();
@@ -413,7 +477,7 @@ try{
   await page.locator('#web-config-product-form button[type=submit]').click();
   await page.locator('#web-config-product-form').waitFor({state:'detached',timeout:12000});
 
-  await page.locator('#app-sidebar [data-route=checkout]').click();
+  await navigateUi(page,'checkout');
   await page.locator('[data-add-product]').filter({hasText:'Produto Web QA'}).click();
   await page.locator('#restaurant-config-product-form').waitFor({timeout:12000});
   await page.locator('#restaurant-config-product-form input[name=variantId]').first().check();
@@ -437,7 +501,7 @@ try{
   await page.locator('#confirm-cancel').waitFor({state:'detached',timeout:12000});
 
   // Parity: the original sales-history route now offers server-side search and paging.
-  await page.locator('#app-sidebar [data-route=sales]').click();
+  await navigateUi(page,'sales');
   await page.locator('#web-sales-filter').waitFor({timeout:12000});
   // Filter by the sale actually completed above; prior Workerd smoke leaves
   // legitimate independent sales in the same test D1.
@@ -549,7 +613,7 @@ try{
   assert.ok(geometry.scroll<=geometry.width+12,'mobile layout has horizontal overflow '+JSON.stringify(geometry));
 
   // P3: Close the very same cash session used by checkout.
-  await page.locator('#app-sidebar [data-route=cash]').click();
+  await navigateUi(page,'cash');
   await page.getByRole('heading',{name:'Caixa',exact:true}).waitFor({timeout:12000});
   try{
     await page.locator('[data-cash-web=close]').waitFor({timeout:12000});
@@ -577,7 +641,7 @@ try{
   assert.match(await page.locator('#route-content').innerText(),/Histórico de fechamento/);
 
   // P4: Create and partially settle a manual payable with the existing UX dialog.
-  await page.locator('#app-sidebar [data-route=finance]').click();
+  await navigateUi(page,'finance');
   await page.getByRole('heading',{name:'Financeiro',exact:true}).waitFor({timeout:12000});
   await page.locator('#web-finance-new').click();
   await page.locator('.ux-dialog [name=description]').fill('Energia QA P4');
@@ -595,7 +659,7 @@ try{
   await page.screenshot({path:'qa-artifacts/pdv-finance-mobile.png',fullPage:true});
 
   // P5: authorized home indicators are scoped and link back to the one report route.
-  await page.locator('#sidebar-nav [data-route=home]').click();
+  await navigateUi(page,'home');
   await page.locator('#web-home-live [data-home-open-report]').waitFor({timeout:12000});
   assert.match(await page.locator('#web-home-live').innerText(),/Terminais com caixa aberto/i);
   // home-003: real PWA shows authorized canonical alerts, not a fake fixture.
@@ -661,8 +725,8 @@ try{
     return e.scrollTop;
   });
   assert.ok(reportScroll>0,'mobile reports must be scrollable to verify restoration');
-  await page.locator('#app-sidebar [data-route=checkout]').click();
-  await page.locator('#app-sidebar [data-route=reports]').click();
+  await navigateUi(page,'checkout');
+  await navigateUi(page,'reports');
   await page.locator('[data-report-web=products][aria-selected=true]').waitFor();
   await page.waitForFunction(top=>document.querySelector('#route-content').scrollTop>=top-8,reportScroll,{timeout:12000});
   // home-004: the canonical report tab regains focus, not just CSS-selected state.
@@ -683,8 +747,8 @@ try{
   assert.equal(spreadsheetBytes.readUInt32LE(0),0x04034b50,'export must be a real ZIP-based XLSX');
   await page.locator('[data-report-web=finance]').click();
   await page.getByText('A pagar').first().waitFor();
-  await page.locator('#app-sidebar [data-route=checkout]').click();
-  await page.locator('#app-sidebar [data-route=reports]').click();
+  await navigateUi(page,'checkout');
+  await navigateUi(page,'reports');
   await page.locator('[data-report-web=finance][aria-selected=true]').waitFor({timeout:12000});
   await page.locator('[data-report-web=overview]').click();
   const manifest=await page.evaluate(async()=>fetch('/manifest.webmanifest').then(r=>r.json()));
@@ -704,7 +768,7 @@ try{
     return api.saveCustomer({name:'Atacado QA de navegador',creditLimitCents:10000});
   });
   assert.ok(wholesaleCustomer.id);
-  await page.locator('#app-sidebar [data-route=WHOLESALE]').click();
+  await navigateUi(page,'WHOLESALE');
   await page.locator('#wholesale-item-form').waitFor({timeout:12000});
   await page.locator('[name=policyCustomerId]').selectOption(wholesaleCustomer.id);
   await page.locator('#wholesale-edit-policy').click();
@@ -738,7 +802,7 @@ try{
     return client.saveProduct({name:'Salgado QA R4',sku:'R4-FOOD-'+Date.now(),salePriceCents:900,trackStock:false});
   });
   assert.ok(foodProduct.id);
-  await page.locator('#app-sidebar [data-route=FOOD]').click();
+  await navigateUi(page,'FOOD');
   await page.locator('[data-r4-action=tab][data-id=orders]').click();
   const foodForm=page.locator('[data-r4-form=order]');
   await foodForm.waitFor({state:'visible',timeout:12000});
@@ -777,6 +841,17 @@ try{
   console.log('PASS: P3 cash close, P4 manual finance + partial settlement, ReportsV2 CSV and P5 safe offline PWA.');
   // Network errors after explicit offline toggle are expected; no state writes are queued.
   console.log('PASS: real Chromium login -> canonical product -> stock -> checkout -> cash -> payment -> sale, responsive 390px.');
+}catch(error){
+  const diagnostic=browser?.contexts()?.[0]?.pages()?.[0];
+  if(diagnostic){
+    await diagnostic.screenshot({path:'qa-artifacts/pdv-browser-failure.png',fullPage:true}).catch(()=>{});
+    console.error('Browser failure state:',await diagnostic.evaluate(()=>({route:document.body.dataset.activeRoute,
+      headings:[...document.querySelectorAll('#route-content h1')].map(n=>n.textContent),
+      focus:document.activeElement?.outerHTML?.slice(0,500),
+      feedback:document.querySelector('[data-module-feedback]')?.textContent,
+      modules:[...document.querySelectorAll('[data-settings-module]')].map(n=>({id:n.dataset.settingsModule,checked:n.checked,disabled:n.disabled}))})).catch(()=>({})));
+  }
+  throw error;
 }finally{
   await browser?.close();
   const stop=signal=>{try{if(process.platform==='win32')worker.kill(signal);else process.kill(-worker.pid,signal);}catch{}};

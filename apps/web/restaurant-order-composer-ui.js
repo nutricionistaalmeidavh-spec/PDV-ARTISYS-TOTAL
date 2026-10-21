@@ -21,7 +21,16 @@
 
   async function configure({api,modalRoot,product,quantity=1,note='',onAdd}={}){
     if(!api||!modalRoot||!product||typeof onAdd!=='function')throw new TypeError('Configuração do compositor inválida.');
-    const config=await api.productConfiguration(product.id).catch(()=>({variants:[],groups:[],combos:[]}));
+    const fetched=await api.productConfiguration(product.id);
+    const pizzaProfile=fetched.pizzaProfile;
+    const config=pizzaProfile?{...fetched,pizza:true,combos:[],
+      variants:pizzaProfile.sizes.map(size=>({id:size.code,name:size.name,priceDeltaCents:size.priceCents,attributes:{pizzaSize:true,maxFlavors:pizzaProfile.maxFlavors}})),
+      groups:[{id:'__pizza_flavors__',name:'Sabores',selectionType:'MULTIPLE',required:true,minSelections:1,maxSelections:pizzaProfile.maxFlavors,
+        options:pizzaProfile.flavors.map(x=>({id:'FLAVOR:'+x.code,name:x.name,priceDeltaCents:x.priceCents}))},
+        {id:'__pizza_crust__',name:'Borda',selectionType:'SINGLE',minSelections:0,maxSelections:1,
+          options:pizzaProfile.crusts.map(x=>({id:'CRUST:'+x.code,name:x.name,priceDeltaCents:x.priceCents}))},
+        {id:'__pizza_addons__',name:'Adicionais',selectionType:'MULTIPLE',minSelections:0,maxSelections:12,
+          options:pizzaProfile.addons.map(x=>({id:'ADDON:'+x.code,name:x.name,priceDeltaCents:x.priceCents}))}].filter(group=>group.options.length)}:fetched;
     if(!hasConfiguration(config)){
       await onAdd({productId:product.id,name:product.name,unitPriceCents:Number(product.salePriceCents||0),quantity,note,configuration:{variantId:null,selections:[],comboSelections:[]}});
       return;
@@ -62,10 +71,14 @@
       const fd=new FormData(form);const variantId=String(fd.get('variantId')||'')||null;
       const selections=[...form.querySelectorAll('[data-option]:checked')].map(input=>input.value);
       const comboSelections=[...form.querySelectorAll('[data-combo]:checked')].map(input=>({groupId:input.dataset.groupId,productId:input.dataset.productId}));
+      const pizza=pizzaProfile?{sizeCode:variantId,flavorCodes:selections.filter(x=>x.startsWith('FLAVOR:')).map(x=>x.slice(7)),
+        crustCode:selections.find(x=>x.startsWith('CRUST:'))?.slice(6)||null,
+        addonCodes:selections.filter(x=>x.startsWith('ADDON:')).map(x=>x.slice(6))}:null;
       submitButton.disabled=true;submitButton.textContent='Adicionando...';
       try{
-        const priced=await api.priceConfiguredItem({productId:product.id,variantId:variantId||undefined,selections,comboSelections});
-        await onAdd({productId:product.id,name:product.name,unitPriceCents:priced.unitPriceCents,quantity,note:String(fd.get('note')||''),configurationSnapshot:priced.configurationSnapshot,configuration:{variantId,selections,comboSelections}});
+        const selection=pizza?{pizza}:{variantId:variantId||undefined,selections,comboSelections};
+        const priced=await api.priceConfiguredItem({productId:product.id,...selection});
+        await onAdd({productId:product.id,name:product.name,unitPriceCents:priced.unitPriceCents,quantity,note:String(fd.get('note')||''),configurationSnapshot:priced.configurationSnapshot,configuration:selection});
         close();
       }catch(error){errorNode.textContent=error.message;errorNode.classList.remove('hidden');}
       finally{submitButton.disabled=false;submitButton.textContent='Adicionar ao pedido';}

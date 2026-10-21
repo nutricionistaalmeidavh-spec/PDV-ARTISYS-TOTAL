@@ -20,6 +20,7 @@
   async function refs(){const [suppliers,products,locations,customers]=await Promise.all([api.suppliers(),api.products(),api.stockLocations(),api.customers()]);return{suppliers,products,locations,customers};}
 
   async function renderPurchases(){
+    if(api.webMode)return renderWebPurchases();
     try{
       const data=await refs();
       shell('Compras e recebimentos','Cadastre fornecedor, emita o pedido e receba mercadoria sem sair do fluxo.',`<div class="ops-grid"><section class="ops-card"><h2>Novo fornecedor</h2><form id="enterprise-supplier-form" class="ops-form-grid">${field('name','Nome')}${field('document','CPF / CNPJ','text','',false)}${field('phone','Telefone','text','',false)}${field('email','E-mail','email','',false)}<button class="ops-primary" type="submit">Salvar fornecedor</button></form><div data-supplier-list class="ops-muted">${data.suppliers.length?data.suppliers.map(s=>esc(s.name)).join(' · '):'Nenhum fornecedor cadastrado.'}</div></section><section class="ops-card"><h2>Novo pedido</h2><form id="enterprise-po-form" class="ops-form-grid">${select('supplierId','Fornecedor',data.suppliers)}${select('productId','Produto',data.products)}${field('quantity','Quantidade','number','1')}${field('unitCost','Custo unitário (R$)','number','0.00')}${select('locationId','Local de estoque',data.locations)}<button class="ops-primary" type="submit">Criar pedido</button></form></section></div><section class="ops-card"><div class="ops-card-head"><h2>Pedidos</h2><button class="ops-secondary" data-reload>Atualizar</button></div><div data-list><div class="ops-loader"></div></div></section>`);
@@ -47,6 +48,7 @@
   }
 
   async function renderLogistics(){
+    if(api.webMode)return renderWebLogistics();
     try{
       const data=await refs();
       shell('Logística de estoque','Locais, reservas, transferências e mercadoria em trânsito.',`<div class="ops-grid"><section class="ops-card"><h2>Novo local</h2><form id="enterprise-location-form" class="ops-form-grid">${field('name','Nome')}${field('id','Código','text','DEP-01')}<label class="field"><span>Tipo</span><select name="type"><option value="WAREHOUSE">Depósito</option><option value="STORE">Loja</option><option value="INTERNAL">Interno</option><option value="OTHER">Outro</option></select></label><button class="ops-primary" type="submit">Criar local</button></form></section><section class="ops-card"><h2>Nova transferência</h2><form id="enterprise-transfer-form" class="ops-form-grid">${select('from','Origem',data.locations)}${select('to','Destino',data.locations)}${select('productId','Produto',data.products)}${field('quantity','Quantidade','number','1')}<button class="ops-primary" type="submit">Criar transferência</button></form></section></div><section class="ops-card"><div class="ops-card-head"><h2>Transferências</h2><button class="ops-secondary" data-reload>Atualizar</button></div><div data-list></div></section><section class="ops-card"><h2>Reservas ativas</h2><div data-reservations></div></section>`);
@@ -62,6 +64,7 @@
   }
 
   async function renderOrders(){
+    if(api.webMode)return window.PdvAppNavigation?.navigate?.('WHOLESALE');
     try{
       const data=await refs();if(!api.config)await api.initialize();
       shell('Orçamentos e pedidos','Reserva de estoque, retirada/entrega e conversão para a venda canônica.',`<section class="ops-card"><h2>Novo orçamento</h2><form id="enterprise-order-form" class="ops-form-grid">${select('customerId','Cliente',data.customers)}${select('productId','Produto',data.products)}${field('quantity','Quantidade','number','1')}${select('locationId','Local',data.locations)}<label class="field"><span>Atendimento</span><select name="fulfillmentType"><option value="PICKUP">Retirada</option><option value="DELIVERY">Entrega</option></select></label><button class="ops-primary" type="submit">Criar orçamento</button></form></section><section class="ops-card"><div class="ops-card-head"><h2>Pedidos</h2><label class="field"><span>Pagamento no atendimento</span><select id="enterprise-fulfillment-method"><option value="PIX">PIX</option><option value="CASH">Dinheiro</option><option value="DEBIT_CARD">Cartão de débito</option><option value="CREDIT_CARD">Cartão de crédito</option></select></label><button class="ops-secondary" data-reload>Atualizar</button></div><div data-list></div></section>`);
@@ -75,6 +78,68 @@
     }catch(err){shell('Orçamentos e pedidos','Não foi possível carregar o fluxo.',`<div class="ops-error">${esc(err.message)}</div>`);}
   }
 
-  function mountInventory(page=content()?.querySelector('.ops-page,.page')){if(!page||page.querySelector('#enterprise-depth-entry'))return;const card=document.createElement('section');card.id='enterprise-depth-entry';card.className='ops-card';card.innerHTML='<div class="ops-card-head"><div><h2>Operação avançada</h2><p class="ops-muted">Compras, locais, reservas, transferências e pedidos com estoque comprometido.</p></div></div><div class="ops-actions"><button class="ops-primary" data-open="purchases">Compras</button><button class="ops-secondary" data-open="logistics">Logística</button><button class="ops-secondary" data-open="orders">Pedidos</button></div>';page.appendChild(card);card.querySelector('[data-open="purchases"]').addEventListener('click',()=>void renderPurchases());card.querySelector('[data-open="logistics"]').addEventListener('click',()=>void renderLogistics());card.querySelector('[data-open="orders"]').addEventListener('click',()=>void renderOrders());}
+  const allowed=capability=>window.PdvAccessPolicy?.hasCapability?.(window.PdvCurrentAccess,capability)===true;
+  const editableStock=()=>allowed('inventory.adjust');
+  const nameOf=(rows,id)=>rows.find(row=>row.id===id)?.name||id||'—';
+  function bindWebForm(page,selector,save,reload){
+    const form=page.querySelector(selector);if(!form)return;
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();if(form.dataset.pending==='true')return;
+      if(!editableStock())return toast('Seu perfil não permite alterar o estoque.',true);
+      form.dataset.pending='true';const button=form.querySelector('[type="submit"]');button.disabled=true;
+      if(!form.dataset.mutationId)form.dataset.mutationId=api.mutationId();
+      try{await save(new FormData(form),form.dataset.mutationId);delete form.dataset.mutationId;toast('Operação concluída.');await reload();}
+      catch(error){toast(error.message,true);}
+      finally{form.dataset.pending='false';button.disabled=false;}
+    });
+  }
+  async function renderWebPurchases(){
+    try{
+      const [orders,suppliers]=await Promise.all([api.purchaseOrders(),api.suppliers()]);
+      shell('Compras e recebimentos','Pedidos de fornecedores e recebimentos parciais no estoque da filial.',`
+        <section class="ops-card"><div class="ops-card-head"><h2>Pedidos de compra</h2><div class="ops-actions">
+          ${editableStock()?'<button type="button" class="ops-primary" data-purchase-manage>Novo pedido / receber mercadoria</button>':''}
+          <button type="button" class="ops-secondary" data-reload>Atualizar</button>
+        </div></div><p class="ops-muted">Os recebimentos parciais preservam o restante pendente. Cadastre fornecedores na área de Cadastros.</p>
+        ${orders.map(order=>`<article class="ops-row"><div><strong>${esc(nameOf(suppliers,order.supplierId))}</strong><small>${esc(statusLabel(order.status))} · ${order.items.length} itens</small></div><div><strong>${money(order.totalReceivedCents)} recebidos</strong><small>de ${money(order.totalOrderedCents)}</small></div></article>`).join('')||'<p class="ops-muted">Nenhum pedido de compra.</p>'}
+        </section>`);
+      const page=content();page.querySelector('[data-reload]')?.addEventListener('click',()=>void renderWebPurchases());
+      page.querySelector('[data-purchase-manage]')?.addEventListener('click',()=>{
+        if(editableStock())void window.PdvCatalogAdmin?.openPurchaseOrders?.();
+      });
+      routeRegistry.updated('inventory',{surface:'enterprise-purchases'});
+    }catch(error){shell('Compras e recebimentos','Não foi possível carregar os pedidos.',`<div class="ops-error">${esc(error.message)}</div>`);}
+  }
+  async function renderWebLogistics(){
+    try{
+      const [products,locations,branchResult,transfers,reservations]=await Promise.all([
+        api.products(),api.storageLocations(),api.tenantBranches(),api.stockTransfers(),api.stockReservations()
+      ]);
+      const branches=branchResult.branches||[],targets=branches.filter(row=>row.id!==api.branchId&&row.active!==false);
+      const physical=products.filter(row=>row.trackStock&&row.active!==false),canEdit=editableStock();
+      shell('Logística de estoque','Endereços de armazenagem, reservas e transferências entre filiais.',`
+        ${canEdit?`<div class="ops-grid"><section class="ops-card"><h2>Novo endereço de armazenagem</h2><form id="web-logistics-location" class="ops-form-grid">${field('code','Código','text','PRATELEIRA-01')}${field('name','Nome','text','Prateleira 1')}<button type="submit" class="ops-primary">Criar endereço</button></form></section>
+        <section class="ops-card"><h2>Transferir entre filiais</h2><p class="ops-muted">Origem: ${esc(nameOf(branches,api.branchId))}. A confirmação registra a saída e a entrada juntas.</p>${targets.length?`<form id="web-logistics-transfer" class="ops-form-grid">${select('toBranchId','Filial de destino',targets)}${select('productId','Produto',physical)}${field('quantity','Quantidade','number','1')}${field('reason','Motivo')}<button type="submit" class="ops-primary">Confirmar transferência</button></form>`:'<p>Cadastre outra filial ativa para transferir estoque.</p>'}</section></div>`:''}
+        <section class="ops-card"><h2>Endereços de armazenagem</h2><p class="ops-muted">Identificam onde guardar o produto. O saldo pertence à filial.</p>${locations.map(row=>`<div class="ops-row"><strong>${esc(row.code)} · ${esc(row.name)}</strong><span>${Number(row.assignedProducts||0)} produtos</span></div>`).join('')||'<p>Nenhum endereço cadastrado.</p>'}
+        ${canEdit?`<form id="web-logistics-assign" class="ops-form-grid">${select('productId','Produto',physical)}${select('locationId','Endereço',locations)}<button type="submit" class="ops-primary">Vincular produto</button></form>`:''}</section>
+        <section class="ops-card"><h2>Transferências registradas</h2>${transfers.map(row=>`<div class="ops-row"><div><strong>${esc(nameOf(products,row.productId))} · ${Number(row.quantity)}</strong><small>${esc(nameOf(branches,row.fromBranchId))} → ${esc(nameOf(branches,row.toBranchId))}</small></div><span>${esc(row.reason)}</span></div>`).join('')||'<p>Nenhuma transferência.</p>'}</section>
+        <section class="ops-card"><h2>Reservas</h2>${canEdit?`<form id="web-logistics-reserve" class="ops-form-grid">${select('productId','Produto',physical)}${field('quantity','Quantidade','number','1')}${field('reason','Motivo')}<button type="submit" class="ops-primary">Reservar estoque</button></form>`:''}
+        ${reservations.filter(row=>row.status==='ACTIVE').map(row=>`<div class="ops-row"><div><strong>${esc(nameOf(products,row.productId))} · ${Number(row.quantity)}</strong><small>${esc(row.reason)}</small></div>${canEdit?actionButton('Liberar reserva','release-reservation',row.id):''}</div>`).join('')||'<p>Sem reservas ativas.</p>'}</section>`);
+      const page=content();
+      page.querySelectorAll('input[name="quantity"]').forEach(input=>{input.min='0.001';input.step='0.001';});
+      page.querySelectorAll('input[name="reason"]').forEach(input=>{input.minLength=3;input.maxLength=240;});
+      bindWebForm(page,'#web-logistics-location',(data,key)=>api.createStorageLocation({code:data.get('code'),name:data.get('name')},key),renderWebLogistics);
+      bindWebForm(page,'#web-logistics-transfer',(data,key)=>api.transferStock({toBranchId:data.get('toBranchId'),productId:data.get('productId'),quantity:Number(data.get('quantity')),reason:data.get('reason')},key),renderWebLogistics);
+      bindWebForm(page,'#web-logistics-assign',(data,key)=>api.assignStorageLocation({productId:data.get('productId'),locationId:data.get('locationId')},key),renderWebLogistics);
+      bindWebForm(page,'#web-logistics-reserve',(data,key)=>api.reserveStock({productId:data.get('productId'),quantity:Number(data.get('quantity')),reason:data.get('reason')},key),renderWebLogistics);
+      page.querySelectorAll('[data-action="release-reservation"]').forEach(button=>button.addEventListener('click',async()=>{
+        if(!editableStock()||button.disabled)return;button.disabled=true;
+        if(!button.dataset.mutationId)button.dataset.mutationId=api.mutationId();
+        try{await api.releaseStockReservation(button.dataset.id,button.dataset.mutationId);await renderWebLogistics();}catch(error){toast(error.message,true);button.disabled=false;}
+      }));
+      routeRegistry.updated('inventory',{surface:'enterprise-logistics'});
+    }catch(error){shell('Logística de estoque','Não foi possível carregar a logística.',`<div class="ops-error">${esc(error.message)}</div>`);}
+  }
+  function mountInventory(page=content()?.querySelector('.ops-page,.page')){if(!page||page.querySelector('#enterprise-depth-entry'))return;const card=document.createElement('section');card.id='enterprise-depth-entry';card.className='ops-card';const ordersVisible=!api.webMode||(window.PdvAppNavigation?.canAccess?.('WHOLESALE')??window.PdvAccessPolicy?.canAccessRoute?.(window.PdvCurrentAccess,'WHOLESALE'))===true;card.innerHTML='<div class="ops-card-head"><div><h2>Operação avançada</h2><p class="ops-muted">Compras, armazenagem, reservas e transferências.</p></div></div><div class="ops-actions"><button class="ops-primary" data-open="purchases">Compras</button><button class="ops-secondary" data-open="logistics">Logística</button>'+(ordersVisible?'<button class="ops-secondary" data-open="orders">Orçamentos e pedidos</button>':'')+'</div>';page.appendChild(card);card.querySelector('[data-open="purchases"]').addEventListener('click',()=>void renderPurchases());card.querySelector('[data-open="logistics"]').addEventListener('click',()=>void renderLogistics());card.querySelector('[data-open="orders"]')?.addEventListener('click',()=>void renderOrders());}
   window.PdvEnterpriseDepthUi=Object.freeze({mountInventory,renderPurchases,renderLogistics,renderOrders});
 })();

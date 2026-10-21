@@ -29,8 +29,8 @@
           "name": "Navegação básica por tela",
           "status": "covered",
           "webEvidence": {
-            "file": "apps/web/app.js",
-            "contains": "const WEB_ROUTES",
+            "file": "apps/web/web-navigation.js",
+            "contains": "function canAccess(",
             "testFile": "scripts/web-browser-e2e.mjs",
             "testContains": "await page.locator('#product-search').fill('Web QA');",
             "testAssertionContains": "assert.equal(await page.locator('#product-search').inputValue(),'Web QA','search query survives cart mutation');",

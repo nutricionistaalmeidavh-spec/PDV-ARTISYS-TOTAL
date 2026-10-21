@@ -54,7 +54,7 @@
     const recent=Array.isArray(movementResult)?movementResult:
       movementResult?.movements?.items||movementResult?.movements||[];
     const body=`<section class="ops-card"><h2>Saldos por filial</h2>
-      <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Produto</th><th>SKU</th><th>Saldo atual</th></tr></thead>
+      <div class="ops-table-wrap"><table class="ops-table" id="web-stock-balances"><thead><tr><th>Produto</th><th>SKU</th><th>Saldo atual</th></tr></thead>
       <tbody>${balances.map(item=>`<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.sku)}</td><td>${qty(item.quantity)}</td></tr>`).join('')||'<tr><td colspan="3">Nenhum item com controle de estoque.</td></tr>'}</tbody></table></div></section>
       <section class="ops-card" id="web-storage-locations">
       <h2>Endereços de armazenagem</h2>
@@ -173,7 +173,7 @@
       <section class="ops-card"><h2>Movimentações recentes</h2><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Data</th><th>Produto</th><th>Tipo</th><th>Antes</th><th>Movimento</th><th>Depois</th><th>Motivo</th></tr></thead><tbody>${movements.slice(0,100).map(item=>`<tr><td>${when(item.createdAt)}</td><td>${escapeHtml(balances.find(p=>p.productId===item.productId)?.name||item.productId)}</td><td>${escapeHtml(item.type)}</td><td>${qty(item.quantityBefore)}</td><td>${qty(item.quantityDelta)}</td><td>${qty(item.quantityAfter)}</td><td>${escapeHtml(item.reason||'—')}</td></tr>`).join('')||`<tr><td colspan="7">${empty('Sem movimentações.')}</td></tr>`}</tbody></table></div></section>`;
     if(!routeActive('inventory'))return;
     content.innerHTML=page('Estoque','Saldos, mínimos, cadastros e movimentações imutáveis.',body);
-    content.querySelector('[data-route="products"]')?.addEventListener('click',()=>document.querySelector('#sidebar-nav [data-route="products"]')?.click());
+    content.querySelector('[data-route="products"]')?.addEventListener('click',()=>root.PdvAppNavigation?.navigate?.('products'));
     document.getElementById('inventory-new-product')?.addEventListener('click',()=>root.PdvCatalogAdmin?.openStockProductForm?.());
     document.getElementById('inventory-new-recipe')?.addEventListener('click',()=>root.PdvCatalogAdmin?.openRecipeForm?.());
     void (async()=>{try{
@@ -873,7 +873,7 @@
 
   async function renderSettings(){
     await ready();
-    if(api.webMode)return root.PdvR2LanSettings.render(content,api);
+    if(api.webMode)return api.lanMode?root.PdvR2LanSettings.render(content,api):root.PdvWebSettings.render(content,api);
     const [hardware,jobs]=await Promise.all([
       root.artisysDesktop.hardware.status().catch(()=>({})),
       api.printJobs().catch(()=>[])

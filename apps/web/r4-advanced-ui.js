@@ -16,14 +16,14 @@
     rows.map(v=>'<option value="'+esc(v.id)+'">'+esc(labelFn(v))+'</option>').join('')+'</select>';
   const field=(name,title,type='text',attr='')=>'<label class="field"><span>'+esc(title)+'</span><input name="'+esc(name)+'" type="'+type+'" '+attr+'></label>';
   const toast=(msg,bad=false)=>root.PdvToast?.show?.(msg,bad?'error':'success');
-  let sessionId='',model={};
+  let sessionId='',recipeProductId='',pizzaProductId='',recipeLoadToken=0,model={};
   const sections=[
     {id:'service',name:'Comandas e divisão'},
     {id:'production',name:'KDS e impressoras'},
-    {id:'pizza',name:'Pizzaria'},
-    {id:'weight',name:'Padaria / peso'},
+    {id:'pizza',name:'Opções de pizza'},
+    {id:'weight',name:'Venda por peso'},
     {id:'recipe',name:'Fichas técnicas'},
-    {id:'segments',name:'Segmentos'}
+    {id:'segments',name:'Perfil da loja'}
   ];
   let section='service';
   const eurosToCents=value=>{
@@ -55,6 +55,7 @@
     ]);
     model={products:products||[],stations:stations||[],routes:routes||[],tickets:tickets||[],
       profiles:profiles||[],onboard:onboard||{},modules:modules||[],position:position||null,orders:orders||[],tables:tables||[],ticketClock:ticketClock||{timeZone:'America/Sao_Paulo'}};
+    model.recipe=recipeProductId?(await api.request('/api/v1/recipes/'+uid(recipeProductId))).recipe:null;
     model.sessionOrders=model.orders.filter(o=>o.table_session_id===sessionId);
     model.orderItems=model.sessionOrders.filter(o=>o.status==='DELIVERED')
       .flatMap(o=>(o.items||[]).map(i=>({...i,orderId:o.id})));
@@ -124,7 +125,7 @@
       '<div data-r4-pizza-preview></div></section>';
   }
   function weight(){
-    return '<section class="data-card"><h2>Padaria e venda por peso</h2><p>Informe a quantidade em gramas. O preço será calculado no servidor.</p>'+
+    return '<section class="data-card"><h2>Venda por peso</h2><p>Informe a quantidade em gramas. O preço será calculado no servidor.</p>'+
       '<form data-r4-advanced="weight" class="vertical-form"><label class="field"><span>Produto em quilos</span>'+
       select('productId',model.products.filter(p=>String(p.unit).toUpperCase()==='KG'),p=>p.name,'Produto selecionado manualmente',false)+'</label>'+
       field('grams','Peso (gramas, se não tiver etiqueta)','number','min="1" max="100000000" step="1"')+
@@ -134,19 +135,123 @@
       '<small>Leitura opcional por WebSerial HTTPS; não solicita dispositivo sem ação sua.</small>'+
       '<button class="primary-button">Calcular preço</button></form><output data-r4-result></output></section>';
   }
+  const recipeUnits=['UN','KG','G','L','ML','M','M2','M3','CX','PCT'];
+  const unitSelect=(name,value)=>'<select name="'+esc(name)+'" aria-label="Unidade">'+recipeUnits.map(u=>'<option '+(u===value?'selected ':'')+'value="'+u+'">'+u+'</option>').join('')+'</select>';
+  function ingredientRow(component={},detailed=true){
+    const current=model.products.find(p=>p.id===(component.productId||component.ingredientId));
+    return '<fieldset data-recipe-component class="vertical-form"><legend>Ingrediente</legend><label class="field"><span>Produto / insumo</span>'+
+      '<select name="ingredientId" aria-label="Ingrediente" required><option value="">Selecione o insumo</option>'+
+      model.products.filter(p=>p.trackStock!==false&&p.id!==recipeProductId).map(p=>'<option value="'+esc(p.id)+'" '+(p.id===current?.id?'selected':'')+'>'+esc(p.name)+' ('+esc(p.unit)+')</option>').join('')+'</select></label>'+
+      field('ingredientQuantity',detailed?'Quantidade para a receita inteira':'Quantidade por unidade vendida','number','min="0.001" max="100000000" step="0.001" required value="'+esc(component.quantity||'')+'"')+
+      (detailed?'<label class="field"><span>Unidade na receita</span>'+unitSelect('ingredientUnit',component.unit||current?.unit||'UN')+'</label>'+
+      field('conversionFactor','Conversão: unidades de estoque por unidade da receita','number','min="0.000001" max="1000000" step="any" required value="'+esc(component.conversionFactor??1)+'"')+
+      field('lossPercent','Perda (%)','number','min="0" max="99.999" step="any" required value="'+esc(component.lossPercent??0)+'"'):'')+
+      '<button type="button" class="secondary-button" data-recipe-remove>Remover ingrediente</button></fieldset>';
+  }
   function recipe(){
-    return '<section class="data-card"><h2>Fichas técnicas</h2><p>Versões anteriores permanecem registradas. O débito de insumos ocorre apenas ao concluir uma venda.</p>'+
-      (can('products.manage')?'<form data-r4-advanced="recipe" class="vertical-form"><label class="field"><span>Produto preparado sem estoque próprio</span>'+
-      select('productId',model.products.filter(p=>p.trackStock===false))+'</label>'+
-      '<label class="field"><span>Ingredientes e quantidade (por unidade preparada)</span><textarea name="ingredients" required rows="4" placeholder="SKU-FARINHA=0,250"></textarea></label>'+
-      '<p>Uma linha por ingrediente: SKU=quantidade, até três casas decimais.</p>'+
-      '<button class="primary-button">Salvar nova versão</button></form>'+
-      '<form data-r4-advanced="option-recipe" class="vertical-form"><h3>Insumos de sabor, tamanho, borda ou adicional</h3>'+
+    const r=model.recipe||{},prepared=model.products.filter(p=>p.trackStock===false);
+    return '<section class="data-card"><h2>Fichas técnicas</h2><p>Cadastre os ingredientes da receita inteira e o rendimento. Cada venda consome somente a quantidade correspondente às porções vendidas.</p>'+
+      (can('products.manage')?'<form data-r4-advanced="recipe" class="vertical-form"><label class="field"><span>Produto preparado</span>'+
+      '<select name="productId" required><option value="">Selecione o produto</option>'+prepared.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===recipeProductId?'selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select></label>'+
+      '<p data-recipe-version>'+(r.version?'Versão atual: '+esc(r.version)+'. Salvar cria uma nova versão, sem alterar vendas anteriores.':'Selecione um produto preparado, com estoque próprio desativado.')+'</p>'+
+      field('yieldQuantity','Rendimento da receita inteira','number','min="0.001" max="100000000" step="0.001" required value="'+esc(r.yieldQuantity||1)+'"')+
+      '<label class="field"><span>Unidade do rendimento</span>'+unitSelect('yieldUnit',r.yieldUnit||'UN')+'</label>'+
+      field('portionQuantity','Quantidade do rendimento por porção vendida','number','min="0.001" max="100000000" step="0.001" required value="'+esc(r.portionQuantity||1)+'"')+
+      field('prepTimeMinutes','Tempo de preparo (minutos)','number','min="0" max="100000" step="1" required value="'+esc(r.prepTimeMinutes||0)+'"')+
+      '<h3>Ingredientes</h3><div data-recipe-components>'+((r.components?.length?r.components:[{}]).map(c=>ingredientRow(c))).join('')+'</div>'+
+      '<button type="button" class="secondary-button" data-recipe-add>+ Adicionar ingrediente</button>'+
+      '<output data-recipe-cost aria-live="polite"></output>'+
+      '<label class="field"><span>Modo de preparo</span><textarea name="preparationNotes" rows="4" maxlength="10000">'+esc(r.preparationNotes||'')+'</textarea></label>'+
+      '<label class="field"><span>Observações internas</span><textarea name="notes" rows="2" maxlength="10000">'+esc(r.notes||'')+'</textarea></label>'+
+      '<button class="primary-button">Salvar nova versão da ficha</button></form>'+
+      (model.profiles.length?'<details><summary>Fichas de opções de pizza</summary><form data-r4-advanced="option-recipe" class="vertical-form"><h3>Ingredientes de sabor, tamanho, borda ou adicional</h3>'+
       '<label class="field"><span>Produto de pizza</span>'+select('productId',model.profiles.map(p=>({id:p.productId,name:model.products.find(x=>x.id===p.productId)?.name||p.productId})))+'</label>'+
-      '<label class="field"><span>Tipo da opção</span><select name="kind"><option>FLAVOR</option><option>SIZE</option><option>CRUST</option><option>ADDON</option></select></label>'+
-      field('code','Código exato da opção','text','required maxlength="32"')+
-      '<label class="field"><span>Insumos por unidade (SKU=quantidade)</span><textarea name="ingredients" required rows="3" placeholder="QUEIJO=0,150"></textarea></label>'+
-      '<button class="primary-button">Salvar ficha da opção</button></form>':'')+'<output data-r4-result></output></section>';
+      '<label class="field"><span>Tipo da opção</span><select name="kind"><option value="FLAVOR">Sabor</option><option value="SIZE">Tamanho</option><option value="CRUST">Borda</option><option value="ADDON">Adicional</option></select></label>'+
+      '<label class="field"><span>Opção cadastrada</span><select name="code" required><option value="">Selecione o produto de pizza</option></select></label>'+
+      '<button type="button" class="secondary-button" data-option-recipe-load>Carregar ficha da opção</button>'+
+      '<p>Quantidades na unidade de estoque de cada insumo, por unidade vendida desta opção.</p><div data-recipe-components>'+ingredientRow({},false)+'</div>'+
+      '<button type="button" class="secondary-button" data-recipe-add>+ Adicionar ingrediente</button>'+
+      '<button class="primary-button">Salvar ficha da opção</button></form></details>':''):'<p>Seu perfil não permite editar fichas técnicas.</p>')+'<output data-r4-result></output></section>';
+  }
+  function componentsFrom(form,detailed=true){
+    return [...form.querySelectorAll('[data-recipe-component]')].map(row=>{
+      const value=name=>row.querySelector('[name="'+name+'"]')?.value;
+      const productId=value('ingredientId'),quantity=Number(value('ingredientQuantity'));
+      if(!productId||!Number.isFinite(quantity)||quantity<=0)throw Error('Selecione o insumo e preencha sua quantidade em cada ingrediente.');
+      return {productId,quantity,...(detailed?{unit:value('ingredientUnit'),conversionFactor:Number(value('conversionFactor')),lossPercent:Number(value('lossPercent'))}:{})};
+    });
+  }
+  function updateRecipeCost(form){
+    const target=form.querySelector('[data-recipe-cost]');if(!target)return;
+    try{
+      const components=componentsFrom(form),yieldQuantity=Number(form.elements.yieldQuantity.value),portionQuantity=Number(form.elements.portionQuantity.value);
+      if(!(yieldQuantity>0&&portionQuantity>0&&portionQuantity<=yieldQuantity))throw Error('Informe rendimento e porção válidos.');
+      const batch=components.reduce((total,c)=>{
+        if(!(c.conversionFactor>0&&c.lossPercent>=0&&c.lossPercent<100))throw Error('Confira conversões e perdas.');
+        return total+Math.round((model.products.find(p=>p.id===c.productId)?.lastCostCents||0)*c.quantity*c.conversionFactor*(1+c.lossPercent/100));
+      },0),perPortion=Math.round(batch/(yieldQuantity/portionQuantity));
+      const price=model.products.find(p=>p.id===form.elements.productId.value)?.salePriceCents||0;
+      const capacities=components.map(c=>{
+        const p=model.products.find(p=>p.id===c.productId),old=model.recipe?.components?.find(x=>x.productId===c.productId);
+        const balance=p?.balance??p?.stockQuantity??old?.balance;
+        return balance===undefined?null:Math.floor((Number(balance)+1e-9)/(c.quantity*c.conversionFactor*(1+c.lossPercent/100)/(yieldQuantity/portionQuantity)));
+      });
+      const capacity=capacities.every(x=>x!==null)?Math.max(0,Math.min(...capacities)):null;
+      target.textContent='Custo da receita: '+money(batch)+' · Custo por porção: '+money(perPortion)+' · '+(yieldQuantity/portionQuantity).toLocaleString('pt-BR')+' porções'+(price>0?' · CMV: '+(perPortion/price*100).toLocaleString('pt-BR',{maximumFractionDigits:2})+'% · Margem bruta por porção: '+money(price-perPortion):'')+(capacity!==null?' · Capacidade com estoque atual: '+capacity+' porções':'');
+    }catch(error){target.textContent=error.message;}
+  }
+  function wireRecipeForms(){
+    node.querySelectorAll('[data-r4-advanced="recipe"], [data-r4-advanced="option-recipe"]').forEach(form=>{
+      const detailed=form.dataset.r4Advanced==='recipe';
+      form.querySelector('[data-recipe-add]')?.addEventListener('click',()=>{
+        form.querySelector('[data-recipe-components]').insertAdjacentHTML('beforeend',ingredientRow({},detailed));updateRecipeCost(form);
+      });
+      form.addEventListener('click',event=>{const remove=event.target.closest('[data-recipe-remove]');if(remove){remove.closest('[data-recipe-component]').remove();updateRecipeCost(form);}});
+      form.addEventListener('input',()=>updateRecipeCost(form));
+      form.addEventListener('change',event=>{
+        const row=event.target.closest('[data-recipe-component]');
+        if(row&&detailed){
+          const ingredient=model.products.find(p=>p.id===row.querySelector('[name="ingredientId"]').value);
+          const units=row.querySelector('[name="ingredientUnit"]'),conversion=row.querySelector('[name="conversionFactor"]');
+          if(event.target.name==='ingredientId'&&ingredient){units.value=ingredient.unit;conversion.value='1';}
+          if(event.target.name==='ingredientUnit'&&ingredient){
+            const factor=units.value===ingredient.unit?1:({'G:KG':0.001,'KG:G':1000,'ML:L':0.001,'L:ML':1000})[units.value+':'+ingredient.unit];
+            if(factor!==undefined)conversion.value=String(factor);
+          }
+        }
+        updateRecipeCost(form);
+      });
+      if(detailed){
+        form.elements.productId.addEventListener('change',async()=>{
+          const previous=recipeProductId,requested=form.elements.productId.value,token=++recipeLoadToken;
+          recipeProductId=requested;
+          const submitButton=form.querySelector('button.primary-button');if(submitButton)submitButton.disabled=true;
+          try{
+            const loaded=requested?(await api.request('/api/v1/recipes/'+uid(requested))).recipe:null;
+            if(token!==recipeLoadToken)return;
+            model.recipe=loaded;render();
+          }catch(error){
+            if(token!==recipeLoadToken)return;
+            recipeProductId=previous;form.elements.productId.value=previous;
+            if(submitButton)submitButton.disabled=false;toast(error.message,true);
+          }
+        });updateRecipeCost(form);
+      }else{
+        const options=()=>{
+          const profile=model.profiles.find(p=>p.productId===form.elements.productId.value),key={FLAVOR:'flavors',SIZE:'sizes',CRUST:'crusts',ADDON:'addons'}[form.elements.kind.value];
+          form.elements.code.innerHTML='<option value="">Selecione a opção</option>'+(profile?.[key]||[]).map(x=>'<option value="'+esc(x.code)+'">'+esc(x.name)+'</option>').join('');
+        };
+        form.elements.productId.addEventListener('change',options);form.elements.kind.addEventListener('change',options);options();
+        form.querySelector('[data-option-recipe-load]').addEventListener('click',async()=>{
+          if(!form.elements.productId.value||!form.elements.code.value)return toast('Selecione o produto e a opção.',true);
+          try{
+            const {recipe:option}=await api.request('/api/v1/recipes/'+uid(form.elements.productId.value)+'/options/'+uid(form.elements.kind.value)+'/'+uid(form.elements.code.value));
+            form.querySelector('[data-recipe-components]').innerHTML=(option?.ingredients?.length?option.ingredients:[{}]).map(c=>ingredientRow(c,false)).join('');
+            toast(option?'Ficha da opção carregada.':'Esta opção ainda não tem ficha. Adicione seus ingredientes.');
+          }catch(error){toast(error.message,true);}
+        });
+      }
+    });
   }
   function segments(){
     const data=model.onboard,items=data.segments||[];
@@ -172,12 +277,15 @@
   }
   function render(){
     const renderer={service,production,pizza,weight,recipe,segments};
-    node.innerHTML='<section class="page vertical-page restaurant-page"><header class="page-head"><div><h1>Alimentação · Configuração avançada</h1>'+
-      '<p>Uma operação, um checkout e um cadastro canônico.</p></div><button class="secondary-button" type="button" data-r4-back>← Voltar para mesas</button></header>'+
+    node.innerHTML='<section class="page vertical-page restaurant-page"><header class="page-head"><div><h1>'+(section==='recipe'?'Fichas técnicas':'Alimentação · Preferências')+'</h1>'+
+      '<p>Produtos, atendimento e preparo da mesma loja.</p></div><button class="secondary-button" type="button" data-r4-back>← Voltar para mesas</button></header>'+
       '<nav class="restaurant-view-switch" aria-label="Seções da alimentação">'+sections.map(s=>'<button class="restaurant-btn '+(section===s.id?'':'secondary')+
       '" type="button" data-r4-section="'+esc(s.id)+'">'+esc(s.name)+'</button>').join('')+'</nav>'+
       renderer[section]()+'</section>';
-    node.querySelector('[data-r4-back]')?.addEventListener('click',()=>void root.PdvRestaurantWebUi?.show?.());
+    wireRecipeForms();
+    const back=node.querySelector('[data-r4-back]'),origin=document.body.dataset.activeRoute;
+    if(['inventory','products'].includes(origin))back.textContent=origin==='inventory'?'← Voltar ao Estoque':'← Voltar ao Cardápio';
+    back?.addEventListener('click',()=>void root.PdvAppNavigation?.navigate?.(['inventory','products'].includes(origin)?origin:'FOOD'));
     node.querySelectorAll('[data-r4-section]').forEach(b=>b.addEventListener('click',()=>{section=b.dataset.r4Section;render();}));
     node.querySelectorAll('[data-r4-advanced]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();void submit(f);}));
     node.querySelector('[data-r4-connect-scale]')?.addEventListener('click',async()=>{
@@ -209,8 +317,12 @@
       if(kind==='station')await r4('/kitchen/stations','POST',{name:v.name,printerName:v.printerName,printEnabled:!!v.printEnabled});
       if(kind==='route')await r4('/kitchen/routes','POST',{productId:v.productId,mode:v.mode,
         stationId:v.mode==='PRODUCTION'?v.stationId:null});
-      if(kind==='pizza')await r4('/pizzeria/profiles','POST',{productId:v.productId,policy:v.policy,pricingMode:v.pricingMode,maxFlavors:Number(v.maxFlavors),
-        sizes:parseCatalog(v.sizes),flavors:parseCatalog(v.flavors),crusts:parseCatalog(v.crusts),addons:parseCatalog(v.addons)});
+      if(kind==='pizza'){
+        const {profile}=await r4('/pizzeria/products/'+uid(v.productId));
+        const parsed=key=>parseCatalog(v[key]).map(option=>({...option,code:profile?.[key]?.find(previous=>previous.name===option.name)?.code||option.code}));
+        await r4('/pizzeria/profiles','POST',{productId:v.productId,policy:v.policy,pricingMode:v.pricingMode,maxFlavors:Number(v.maxFlavors),
+          sizes:parsed('sizes'),flavors:parsed('flavors'),crusts:parsed('crusts'),addons:parsed('addons')});
+      }
       if(kind==='pizza-quote'){
         const result=await r4('/pizzeria/products/'+uid(v.productId));
         const profile=result.profile;
@@ -248,23 +360,16 @@
         }return;
       }
       if(kind==='option-recipe'){
-        const ingredients=String(v.ingredients).split(/\r?\n/).filter(line=>line.trim()).map(line=>{
-          const [sku,qty]=line.split('='),product=model.products.find(p=>p.sku===sku?.trim());
-          if(!product||!qty||!/^\d+(?:[.,]\d{1,3})?$/.test(qty.trim()))throw Error('Informe SKU=quantidade com até três casas.');
-          return {ingredientId:product.id,quantity:Number(qty.replace(',','.'))};
-        });
-        const out=await api.request('/api/v1/recipes/'+uid(v.productId)+'/options/'+uid(v.kind)+'/'+uid(v.code.trim()),{
-          method:'PUT',body:{ingredients}});
+        const ingredients=componentsFrom(form,false).map(c=>({ingredientId:c.productId,quantity:c.quantity}));
+        const out=await api.request('/api/v1/recipes/'+uid(v.productId)+'/options/'+uid(v.kind)+'/'+uid(v.code),{method:'PUT',body:{ingredients}});
         toast('Ficha da opção salva, versão '+out.recipe.version+'.');
       }
       if(kind==='recipe'){
-        const ingredients=String(v.ingredients).split(/\r?\n/).filter(s=>s.trim()).map(line=>{
-          const [sku,qty]=line.split('=');
-          const product=model.products.find(p=>p.sku===sku?.trim());
-          if(!product||!qty||!/^\d+(?:[.,]\d{1,3})?$/.test(qty.trim()))throw Error('Confira SKU e quantidade de cada insumo.');
-          return {ingredientId:product.id,quantity:Number(qty.replace(',','.'))};
-        });
-        const out=await api.request('/api/v1/recipes/'+uid(v.productId),{method:'PUT',body:{ingredients}});
+        const components=componentsFrom(form);
+        const out=await api.request('/api/v1/recipes/'+uid(v.productId),{method:'PUT',body:{components,
+          yieldQuantity:Number(v.yieldQuantity),yieldUnit:v.yieldUnit,portionQuantity:Number(v.portionQuantity),
+          prepTimeMinutes:Number(v.prepTimeMinutes),preparationNotes:v.preparationNotes,notes:v.notes}});
+        recipeProductId=v.productId;
         toast('Ficha técnica versão '+out.recipe.version+' salva.');
       }
       if(kind==='segment'){
@@ -299,10 +404,24 @@
       if(kind!=='pizza-quote'&&kind!=='weight')await show({sessionId,preserve:true});
     }catch(e){toast(e.message,true);}
   }
-  async function show({sessionId:id='',preserve=false}={}){
-    sessionId=id||'';if(!preserve)section=sessionId?'service':'production';
+  async function show({sessionId:id='',preserve=false,section:targetSection,productId}={}){
+    sessionId=id||'';if(productId!==undefined){if(targetSection==='pizza')pizzaProductId=productId||'';else recipeProductId=productId||'';}
+    if(targetSection&&sections.some(s=>s.id===targetSection))section=targetSection;else if(!preserve)section=sessionId?'service':'production';
     node.innerHTML='<section class="page"><h2>Carregando opções…</h2></section>';
-    try{await load();render();}catch(e){node.textContent='Não foi possível carregar: '+e.message;}
+    try{
+      await load();render();
+      if(section==='pizza'&&pizzaProductId){
+        const form=node.querySelector('[data-r4-advanced="pizza"]');
+        if(form){
+          form.elements.productId.value=pizzaProductId;
+          const {profile}=await r4('/pizzeria/products/'+uid(pizzaProductId));
+          if(profile&&form.isConnected){
+            form.elements.policy.value=profile.policy;form.elements.pricingMode.value=profile.pricingMode;form.elements.maxFlavors.value=profile.maxFlavors;
+            for(const kind of ['sizes','flavors','crusts','addons'])form.elements[kind].value=(profile[kind]||[]).map(x=>x.name+'='+(x.priceCents/100).toFixed(2).replace('.',',')).join('\n');
+          }
+        }
+      }
+    }catch(e){node.textContent='Não foi possível carregar: '+e.message;}
   }
 
   async function offerFirstRun(){

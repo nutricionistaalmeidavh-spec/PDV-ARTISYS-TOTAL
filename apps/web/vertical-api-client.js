@@ -4,6 +4,7 @@
   const ApiClient=window.PdvApiClient?.ApiClient;
   if(!ApiClient)return;
   const e=encodeURIComponent;
+  const hostedModules=ApiClient.prototype.modules;
   const normalizeSale=sale=>{
     if(!sale||typeof sale!=='object'||Array.isArray(sale)||sale.manualDiscountCents==null)return sale;
     return {...sale,totalDiscountCents:sale.totalDiscountCents??sale.discountCents,discountCents:sale.manualDiscountCents};
@@ -14,7 +15,7 @@
     return normalized;
   };
   Object.assign(ApiClient.prototype,{
-    modules(){return this.request('/api/v1/vertical/modules');},
+    modules(){return this.webMode?hostedModules.call(this):this.request('/api/v1/vertical/modules');},
     setModule(id,enabled){return this.saveSetting(`modules.${String(id).toUpperCase()}.enabled`,Boolean(enabled),'global');},
     productConfiguration(productId){return this.request(this.webMode?`/api/v1/products/${e(productId)}/configuration`:`/api/v1/vertical/catalog/products/${e(productId)}/configuration`);},
     createOptionGroup(body){return this.request('/api/v1/vertical/catalog/option-groups',{method:'POST',body});},

@@ -16,9 +16,9 @@
       crustId:String(input.pizza.crustId||'')||null
     }:null
   });
-  const fractionLabel=value=>Math.abs(Number(value)-0.5)<0.000001?'½':Math.abs(Number(value)-1/3)<0.000001?'⅓':Math.abs(Number(value)-0.25)<0.000001?'¼':Number(value)===1?'':`${Math.round(Number(value||0)*100)}%`;
+  const fractionLabel=value=>value==null?'':Math.abs(Number(value)-0.5)<0.000001?'½':Math.abs(Number(value)-1/3)<0.000001?'⅓':Math.abs(Number(value)-0.25)<0.000001?'¼':Number(value)===1?'':`${Math.round(Number(value||0)*100)}%`;
   function configurationSummary(configuration={}){
-    const pizza=configuration?.pizza;
+    const pizza=configuration?.pizza?.size?configuration.pizza:configuration?.size?configuration:null;
     if(pizza?.size?.name){
       const parts=[pizza.size.name];
       const flavors=(pizza.flavors||[]).map(flavor=>`${fractionLabel(flavor.fraction)}${fractionLabel(flavor.fraction)?' ':''}${flavor.name}`);

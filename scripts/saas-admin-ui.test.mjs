@@ -8,7 +8,8 @@ test('owner administration uses the existing PDV renderer, not a parallel sales 
  assert.match(html,/src=".\/saas-admin-ui.js"/);
  assert.match(app,/profileKey:context.profileKey/);
  assert.match(app,/route==='saas-admin'/);
- assert.match(app,/state.user\?\.profileKey==='OWNER'/);
+ assert.match(app,/PdvWebNavigation\.canAccess\(state.user,route/);
+ assert.match(read('apps/web/web-navigation.js'),/route==='saas-admin'\)return user.profileKey==='OWNER'/);
  assert.match(admin,/\/members\//);
  assert.match(admin,/\/invitations/);
  assert.match(admin,/\/subscription/);

@@ -10,12 +10,14 @@ import {applyLocalMigrations} from '../src/local-migrations.mjs';
 test('selfhost canonical migrations run once; restart neither repeats ALTERs nor loses rows',async()=>{
   const db=openLocalDatabase();
   try{
+    const migrationCount=readdirSync(new URL('../migrations/',import.meta.url)).filter(name=>/^\d{4}_[a-z0-9_-]+\.sql$/.test(name)).length;
     const first=await applyLocalMigrations(db);
-    assert.equal(first.applied,36);
-    assert.equal(first.total,36);
+    assert.equal(first.applied,migrationCount);
+    assert.equal(first.total,migrationCount);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').bind().first()).n,migrationCount);
     await db.prepare("INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)").bind('a','site-a','First shop',new Date().toISOString()).run();
     const second=await applyLocalMigrations(db);
-    assert.deepEqual(second,{applied:0,total:36});
+    assert.deepEqual(second,{applied:0,total:migrationCount});
     const row=await db.prepare('SELECT name FROM tenants WHERE id=?').bind('a').first();
     assert.equal(row.name,'First shop');
   }finally{db.close();}

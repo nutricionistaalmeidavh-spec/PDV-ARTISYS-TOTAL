@@ -28,7 +28,7 @@ export function createR4ExtendedService(db){
      throw fail(404,'Filial não encontrada.');
  }
  async function product(t,id){
-   const row=await first('SELECT id,name,sku,unit,sale_price_cents,track_stock FROM products WHERE tenant_id=? AND id=? AND active=1',t,id);
+   const row=await first('SELECT id,name,sku,unit,sale_price_cents,track_stock,last_cost_cents FROM products WHERE tenant_id=? AND id=? AND active=1',t,id);
    if(!row)throw fail(404,'Produto não encontrado neste estabelecimento.');
    return row;
  }
@@ -480,33 +480,86 @@ export function createR4ExtendedService(db){
      });
    },
    async recipe(t,b,productId){
-     await branch(t,b);await product(t,productId);
+     await branch(t,b);const prepared=await product(t,productId);
      const row=await first('SELECT MAX(version) AS version FROM r4_recipe_versions WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,productId);
      if(!row?.version)return null;
-     const items=await all(`SELECT r.ingredient_id AS ingredientId,p.name AS ingredientName,r.quantity_milli / 1000.0 AS quantity
+     const items=await all(`SELECT r.ingredient_id AS ingredientId,p.name AS ingredientName,p.unit,
+        p.last_cost_cents AS costCents,r.quantity_milli / 1000.0 AS quantity,
+        COALESCE(s.balance_milli,0)/1000.0 AS balance
         FROM r4_recipe_ingredients r JOIN products p ON p.id=r.ingredient_id AND p.tenant_id=r.tenant_id
+        LEFT JOIN stock_positions s ON s.tenant_id=r.tenant_id AND s.branch_id=r.branch_id AND s.product_id=r.ingredient_id
         WHERE r.tenant_id=? AND r.branch_id=? AND r.product_id=? AND r.version=? ORDER BY p.name`,
         t,b,productId,row.version);
-     return {productId,version:row.version,ingredients:items};
+     let details=null,componentDetails=[];
+     try{
+       details=await first(`SELECT yield_quantity AS yieldQuantity,yield_unit AS yieldUnit,
+         portion_quantity AS portionQuantity,prep_time_minutes AS prepTimeMinutes,
+         preparation_notes AS preparationNotes,notes FROM r4_recipe_details
+         WHERE tenant_id=? AND branch_id=? AND product_id=? AND version=?`,t,b,productId,row.version);
+       if(details)componentDetails=await all(`SELECT ingredient_id AS productId,quantity,unit,
+         conversion_factor AS conversionFactor,loss_percent AS lossPercent FROM r4_recipe_component_details
+         WHERE tenant_id=? AND branch_id=? AND product_id=? AND version=?`,t,b,productId,row.version);
+     }catch(e){if(!/no such table: r4_recipe_(?:component_)?details/i.test(String(e?.message)))throw e;}
+     const meta=details||{yieldQuantity:1,yieldUnit:prepared.unit||'UN',portionQuantity:1,prepTimeMinutes:0,preparationNotes:'',notes:''};
+     const portions=meta.yieldQuantity/meta.portionQuantity;
+     const components=items.map(item=>{
+       const saved=componentDetails.find(c=>c.productId===item.ingredientId);
+       const c={productId:item.ingredientId,productName:item.ingredientName,quantity:item.quantity,unit:item.unit,conversionFactor:1,lossPercent:0,...saved,costCents:item.costCents||0,balance:item.balance};
+       c.requiredPerUnit=c.quantity*c.conversionFactor*(1+c.lossPercent/100)/portions;
+       c.totalCostCents=Math.round(c.costCents*c.quantity*c.conversionFactor*(1+c.lossPercent/100));
+       return c;
+     });
+     const theoreticalCostCents=components.reduce((n,c)=>n+c.totalCostCents,0),costPerPortionCents=Math.round(theoreticalCostCents/portions);
+     const capacity=components.length?Math.max(0,Math.min(...components.map(c=>Math.floor((c.balance+1e-9)/c.requiredPerUnit)))):0;
+     return {productId,version:row.version,...meta,components,theoreticalCostCents,costPerPortionCents,capacity,
+       cmvPercent:prepared.sale_price_cents>0?costPerPortionCents/prepared.sale_price_cents*100:null,
+       grossMarginCents:prepared.sale_price_cents-costPerPortionCents,
+       ingredients:components.map(c=>({ingredientId:c.productId,ingredientName:c.productName,quantity:c.requiredPerUnit}))};
    },
    async saveRecipe(t,b,productId,body,key){
      await branch(t,b);const p=await product(t,productId);
      if(p.track_stock)throw fail(409,'Produto com receita deve ter estoque próprio desativado para evitar débito duplo.');
-     if(!Array.isArray(body.ingredients)||!body.ingredients.length||body.ingredients.length>40)throw fail(400,'Ingredientes inválidos.');
-     const ingredients=[],seen=new Set();
-     for(const row of body.ingredients){
-       const ingredient=await product(t,row.ingredientId);
+     const input=body.components??body.ingredients;
+     if(!Array.isArray(input)||!input.length||input.length>40)throw fail(400,'Ingredientes inválidos.');
+     const positive=(value,title,max=100000000)=>{const n=Number(value);if(!Number.isFinite(n)||n<=0||n>max)throw fail(400,title+' inválido.');return n;};
+     const unit=value=>{const v=label(value,8).toUpperCase();if(!['UN','KG','G','L','ML','M','M2','M3','CX','PCT'].includes(v))throw fail(400,'Unidade da ficha inválida.');return v;};
+     const yieldQuantity=positive(body.yieldQuantity??1,'Rendimento'),portionQuantity=positive(body.portionQuantity??1,'Porção');
+     if(portionQuantity>yieldQuantity)throw fail(400,'A porção não pode superar o rendimento da receita.');
+     const meta={yieldQuantity,yieldUnit:unit(body.yieldUnit||p.unit||'UN'),portionQuantity,
+       prepTimeMinutes:integer(Number(body.prepTimeMinutes??0),0,100000,'Tempo de preparo'),
+       preparationNotes:label(body.preparationNotes,10000),notes:label(body.notes,10000)};
+     const portions=yieldQuantity/portionQuantity,ingredients=[],seen=new Set();
+     for(const row of input){
+       const ingredient=await product(t,row.productId??row.ingredientId);
        if(ingredient.id===p.id||seen.has(ingredient.id)||!ingredient.track_stock)throw fail(400,'Ingrediente repetido ou sem estoque.');
-       const milli=integer(Math.round(row.quantity*1000),1,100000000,'Quantidade de insumo');
-       if(Math.abs(row.quantity*1000-milli)>0.000001)throw fail(400,'Use até três casas decimais.');
-       seen.add(ingredient.id);ingredients.push({ingredientId:ingredient.id,quantity:milli/1000,milli});
+       const quantity=positive(row.quantity,'Quantidade de insumo');
+       if(Math.abs(quantity*1000-Math.round(quantity*1000))>0.000001)throw fail(400,'Use até três casas decimais na quantidade.');
+       const conversionFactor=positive(row.conversionFactor??1,'Fator de conversão',1000000),lossPercent=Number(row.lossPercent??0);
+       if(!Number.isFinite(lossPercent)||lossPercent<0||lossPercent>=100)throw fail(400,'Perda deve estar entre 0 e menos de 100%.');
+       const batchConsumption=quantity*conversionFactor*(1+lossPercent/100);
+       if(!Number.isFinite(batchConsumption)||!Number.isSafeInteger(Math.round(batchConsumption*(ingredient.last_cost_cents||0))))throw fail(400,'Custo da receita fora dos limites.');
+       const perPortion=batchConsumption/portions;
+       if(!Number.isFinite(perPortion)||perPortion>100000)throw fail(400,'Consumo da porção fora dos limites.');
+       const milli=Math.max(1,Math.round(perPortion*1000));
+       const component={ingredientId:ingredient.id,quantity,unit:unit(row.unit||ingredient.unit),conversionFactor,lossPercent,milli};
+       seen.add(ingredient.id);ingredients.push(component);
      }
+     const hasDetails=Boolean(await first("SELECT name FROM sqlite_master WHERE type='table' AND name='r4_recipe_details'"));
+     const rich=body.components!==undefined||['yieldQuantity','yieldUnit','portionQuantity','prepTimeMinutes','preparationNotes','notes'].some(k=>body[k]!==undefined)||input.some(x=>x.conversionFactor!==undefined||x.lossPercent!==undefined);
+     if(rich&&!hasDetails)throw fail(503,'Atualize as migrações do servidor para salvar a ficha técnica completa.');
      return mutation(t,'r4.recipe:'+b+':'+productId,key,async()=>{
        const prior=await first('SELECT MAX(version) AS version FROM r4_recipe_versions WHERE tenant_id=? AND branch_id=? AND product_id=?',t,b,productId);
        const version=(prior?.version||0)+1;
        const statements=[q('INSERT INTO r4_recipe_versions(tenant_id,branch_id,product_id,version,created_at) VALUES(?,?,?,?,?)',t,b,productId,version,stamp()),
          ...ingredients.map(x=>q('INSERT INTO r4_recipe_ingredients(tenant_id,branch_id,product_id,version,ingredient_id,quantity_milli) VALUES(?,?,?,?,?,?)',t,b,productId,version,x.ingredientId,x.milli))];
-       return {result:{productId,version,ingredients:ingredients.map(({milli,...x})=>x)},statements};
+       if(hasDetails){
+         statements.push(q(`INSERT INTO r4_recipe_details(tenant_id,branch_id,product_id,version,yield_quantity,yield_unit,portion_quantity,prep_time_minutes,preparation_notes,notes)
+          VALUES(?,?,?,?,?,?,?,?,?,?)`,t,b,productId,version,meta.yieldQuantity,meta.yieldUnit,meta.portionQuantity,meta.prepTimeMinutes,meta.preparationNotes,meta.notes));
+         statements.push(...ingredients.map(x=>q(`INSERT INTO r4_recipe_component_details(tenant_id,branch_id,product_id,version,ingredient_id,quantity,unit,conversion_factor,loss_percent)
+          VALUES(?,?,?,?,?,?,?,?,?)`,t,b,productId,version,x.ingredientId,x.quantity,x.unit,x.conversionFactor,x.lossPercent)));
+       }
+       return {result:{productId,version,...meta,components:ingredients.map(({milli,ingredientId,...x})=>({productId:ingredientId,...x})),
+         ingredients:ingredients.map(x=>({ingredientId:x.ingredientId,quantity:x.quantity*x.conversionFactor*(1+x.lossPercent/100)/portions}))},statements};
      });
    }
  };

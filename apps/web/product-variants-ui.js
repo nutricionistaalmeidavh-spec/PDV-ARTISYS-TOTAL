@@ -3,6 +3,9 @@
 (() => {
   const ApiClient=window.PdvApiClient?.ApiClient;
   if(!ApiClient)return;
+  // The browser's product configuration editor owns variants and checkout lines.
+  // This extension uses the Electron-only product-variants contract.
+  if(!window.artisysDesktop)return;
   const api=new ApiClient();
   const content=document.getElementById('route-content');
   const modalRoot=document.getElementById('modal-root');
