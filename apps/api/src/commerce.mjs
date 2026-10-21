@@ -335,6 +335,29 @@ export function createCommerceService(db,{now=nowISO}={}){
     releaseReservation:(t,b,id,u,key)=>catalogDepth.releaseReservation(t,b,id,u,key),
     stockReservations:(t,b,filters)=>catalogDepth.reservations(t,b,filters),
     purchaseCosts:(t,b,filters)=>catalogDepth.purchaseCosts(t,b,filters),
+    async salesFilterOptions(tenant,branch){
+      await branchExists(tenant,branch);
+      // Options come from historical records, including inactive actors/products.
+      // Tenant and branch are always derived from the authenticated request.
+      const [sellers,operators,customers,products]=await Promise.all([
+        all(`SELECT DISTINCT s.seller_id AS id,COALESCE(u.display_name,s.seller_id) AS name
+          FROM sales s LEFT JOIN users u ON u.id=s.seller_id
+          WHERE s.tenant_id=? AND s.branch_id=? AND s.seller_id IS NOT NULL
+          ORDER BY name,id LIMIT 1000`,tenant,branch),
+        all(`SELECT DISTINCT s.operator_id AS id,COALESCE(u.display_name,s.operator_id) AS name
+          FROM sales s LEFT JOIN users u ON u.id=s.operator_id
+          WHERE s.tenant_id=? AND s.branch_id=?
+          ORDER BY name,id LIMIT 1000`,tenant,branch),
+        all(`SELECT DISTINCT s.customer_id AS id,COALESCE(c.name,s.customer_id) AS name
+          FROM sales s LEFT JOIN customers c ON c.id=s.customer_id AND c.tenant_id=s.tenant_id
+          WHERE s.tenant_id=? AND s.branch_id=? AND s.customer_id IS NOT NULL
+          ORDER BY name,id LIMIT 1000`,tenant,branch),
+        all(`SELECT si.product_id AS id,MAX(si.product_name) AS name
+          FROM sale_items si WHERE si.tenant_id=? AND si.branch_id=?
+          GROUP BY si.product_id ORDER BY name,id LIMIT 1000`,tenant,branch)
+      ]);
+      return {sellers,operators,customers,products};
+    },
     async salesHistory(tenant,branch,filters={}){
       await branchExists(tenant,branch);
       const status=text(filters.status||'',32).toUpperCase();
@@ -772,6 +795,45 @@ export function createCommerceService(db,{now=nowISO}={}){
           countedCashCents:row.counted_cash_cents,divergenceCents:row.divergence_cents,
           branchId:branch};
       }));
+    },
+    async cashFilterOptions(tenant,branch){
+      await branchExists(tenant,branch);
+      const [operators,terminals]=await Promise.all([
+        all(`SELECT DISTINCT c.operator_id AS id,COALESCE(u.display_name,c.operator_id) AS name
+          FROM cash_sessions c LEFT JOIN users u ON u.id=c.operator_id
+          WHERE c.tenant_id=? AND c.branch_id=? ORDER BY name,id LIMIT 1000`,tenant,branch),
+        all(`SELECT DISTINCT terminal_id AS id,terminal_id AS name FROM cash_sessions
+          WHERE tenant_id=? AND branch_id=? ORDER BY terminal_id LIMIT 1000`,tenant,branch)
+      ]);
+      return {operators,terminals};
+    },
+    async cashSessionAudit(tenant,branch,id){
+      const row=await cashSession(tenant,branch,id);
+      const {closing,lines}=await cashClosing(tenant,branch,row,row.counted_cash_cents??0);
+      // One refund may reference both its historical sale session and the
+      // later session that paid the compensation. Never rewrite either ledger.
+      const reversals=await all(`SELECT r.id,r.return_id AS returnId,r.sale_id AS saleId,
+        s.sale_number AS saleNumber,rt.kind,rt.reason,
+        r.method AS paymentMethod,r.amount_cents AS amountCents,
+        r.cash_session_id AS cashSessionId,r.original_cash_session_id AS originalCashSessionId,
+        c1.terminal_id AS originalTerminalId,c2.terminal_id AS refundTerminalId,
+        r.operator_id AS operatorId,r.created_at AS createdAt
+        FROM sale_refund_movements r
+        JOIN sales s ON s.id=r.sale_id AND s.tenant_id=r.tenant_id AND s.branch_id=r.branch_id
+        JOIN sale_returns rt ON rt.id=r.return_id AND rt.tenant_id=r.tenant_id AND rt.branch_id=r.branch_id
+        LEFT JOIN cash_sessions c1 ON c1.id=r.original_cash_session_id
+          AND c1.tenant_id=r.tenant_id AND c1.branch_id=r.branch_id
+        LEFT JOIN cash_sessions c2 ON c2.id=r.cash_session_id
+          AND c2.tenant_id=r.tenant_id AND c2.branch_id=r.branch_id
+        WHERE r.tenant_id=? AND r.branch_id=?
+          AND (r.original_cash_session_id=? OR r.cash_session_id=?)
+        ORDER BY r.created_at,r.id`,tenant,branch,id,id);
+      return {session:{id:row.id,status:row.status,operatorId:row.operator_id,
+        terminalId:row.terminal_id||'DEFAULT',openedAt:row.opened_at,closedAt:row.closed_at||null,
+        openingCents:row.opening_cents,
+        expectedCashCents:row.expected_cash_cents??closing.expectedCashCents,
+        countedCashCents:row.counted_cash_cents,divergenceCents:row.divergence_cents},
+        movements:lines,reversals};
     },
     async cashSessionsSearch(tenant,branch,filters={}){
       await branchExists(tenant,branch);
