@@ -111,6 +111,7 @@ try{
   await page.locator('[data-gallery-expand]').click();
   assert.equal(await page.locator('#demo-gallery-zoom').evaluate(el=>el.open),true,'gallery preview should enlarge');
   assert.equal(await page.locator('[data-gallery-zoom-content] .demo-panel').count(),1,'zoom contains selected panel');
+  await page.locator('#demo-gallery-zoom').screenshot({path:'qa-artifacts/pdv-landing-gallery-zoom-desktop.png'});
   await page.locator('[data-gallery-zoom-close]').click();
   assert.equal(await page.locator('#demo-gallery-zoom').evaluate(el=>el.open),false);
   await page.locator('#tab-cozinha').click();
@@ -134,6 +135,9 @@ try{
   await page.setViewportSize({width:390,height:844});
   await page.locator('#hero-title').waitFor();
   await page.screenshot({path:'qa-artifacts/pdv-landing-mobile.png',fullPage:true});
+  await page.locator('[data-gallery-next]').click();
+  await page.locator('.demo-frame').screenshot({path:'qa-artifacts/pdv-landing-gallery-mobile.png'});
+  await page.locator('#tab-mesas').click();
   const landingMobileGeometry=await page.evaluate(()=>({
     viewport:innerWidth,scroll:document.documentElement.scrollWidth,
     loginVisible:!!document.querySelector('[data-open-login]')?.getBoundingClientRect().width,
