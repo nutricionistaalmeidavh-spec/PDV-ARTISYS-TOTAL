@@ -363,3 +363,9 @@ html.motion-ready [data-reveal],html.motion-ready [data-reveal].in-view{opacity:
 .premium-stage .premium-phone-waiter:hover{transform:rotate(4deg)}
 .premium-stage .premium-phone-kitchen:hover{transform:rotate(-3deg)}
 }
+
+/* Contain decorative stages within the document viewport on narrow mobile. */
+html{overflow-x:clip;max-width:100%}
+body{max-width:100%}
+.premium-stage{contain:layout paint}
+.premium-stage-note{z-index:7}
