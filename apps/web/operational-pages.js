@@ -276,16 +276,18 @@
           const history=await api.cashSessionsSearch({...values,limit:20,offset});
           result.innerHTML=`<p class="ops-muted">${history.total} sessões encontradas</p>
           <div class="ops-table-wrap"><table class="ops-table"><thead>
-          <tr><th>Terminal</th><th>Operador</th><th>Abertura</th><th>Fechamento</th><th>Estado</th><th>Esperado</th></tr>
+          <tr><th>Terminal</th><th>Operador</th><th>Abertura</th><th>Fechamento</th><th>Estado</th><th>Esperado</th><th>Detalhes</th></tr>
           </thead><tbody>${history.items.map(row=>`<tr>
-          <td>${escapeHtml(row.terminalId||'DEFAULT')}</td><td>${escapeHtml(row.operatorId)}</td><td>${when(row.openedAt)}</td>
+          <td>${escapeHtml(row.terminalId||'DEFAULT')}</td><td>${escapeHtml(cashFilters.operators.find(x=>x.id===row.operatorId)?.name||row.operatorId)}</td><td>${when(row.openedAt)}</td>
           <td>${when(row.closedAt)}</td><td>${badge(row.status)}</td>
-          <td>${money(row.expectedCashCents)}</td></tr>`).join('')||
-          '<tr><td colspan="6">Nenhuma sessão corresponde aos filtros.</td></tr>'}</tbody>
+          <td>${money(row.expectedCashCents)}</td><td><button class="ops-secondary" type="button" data-cash-audit="${escapeHtml(row.id)}">Movimentos e estornos</button></td></tr>`).join('')||
+          '<tr><td colspan="7">Nenhuma sessão corresponde aos filtros.</td></tr>'}</tbody>
           </table></div><div class="ops-actions">
           <button class="ops-secondary" data-cash-page="-1" ${history.offset<=0?'disabled':''}>Anterior</button>
           <button class="ops-secondary" data-cash-page="1"
-            ${history.offset+history.items.length>=history.total?'disabled':''}>Próxima</button></div>`;
+            ${history.offset+history.items.length>=history.total?'disabled':''}>Próxima</button></div>
+          <section data-cash-audit-panel aria-live="polite"></section>`;
+          result.querySelectorAll('[data-cash-audit]').forEach(b=>b.addEventListener('click',()=>{void showCashAudit(b.dataset.cashAudit);}));
           result.querySelectorAll('[data-cash-page]').forEach(b=>b.addEventListener('click',()=>{
             if(!b.disabled)void pageAt(Math.max(0,history.offset+Number(b.dataset.cashPage)*history.limit));
           }));
