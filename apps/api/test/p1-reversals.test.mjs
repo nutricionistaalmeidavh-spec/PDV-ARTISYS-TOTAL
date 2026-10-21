@@ -365,6 +365,15 @@ test('P1 history: 1,050 historical operators remain searchable, combined queries
     'sales/history?branchId=branch-a&operatorId='+newestId+'&status=COMPLETED&from=2026-10-17&to=2026-10-17');
   assert.equal(selected.status,200,JSON.stringify(selected.body));
   assert.equal(selected.body.history.total,1);assert.equal(selected.body.history.items[0].operatorId,newestId);
+  const exported=await x.call(x.manager,'a',
+    'reports/details.csv?branchId=branch-a&operatorId='+encodeURIComponent(newestId)+
+    '&status=COMPLETED&from=2026-10-17&to=2026-10-17');
+  assert.equal(exported.status,200,JSON.stringify(exported.body));
+  assert.match(exported.body.csv,new RegExp('SYN-'+String(missing).padStart(5,'0')));
+  const outsiderExport=await x.call(x.outsider,'b',
+    'reports/details.csv?branchId=branch-b&operatorId='+encodeURIComponent(newestId));
+  assert.equal(outsiderExport.status,200);
+  assert.doesNotMatch(outsiderExport.body.csv,new RegExp('SYN-'+String(missing).padStart(5,'0')));
   const all=await x.call(x.manager,'a','sales/history?branchId=branch-a&status=COMPLETED&limit=100&offset=1000');
   assert.equal(all.status,200,JSON.stringify(all.body));
   assert.equal(all.body.history.total,1050);
