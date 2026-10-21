@@ -38,3 +38,11 @@ CREATE TRIGGER wallet_no_update BEFORE UPDATE ON finance_wallet_movements
 BEGIN SELECT RAISE(ABORT,'WALLET_MOVEMENT_IMMUTABLE'); END;
 CREATE TRIGGER wallet_no_delete BEFORE DELETE ON finance_wallet_movements
 BEGIN SELECT RAISE(ABORT,'WALLET_MOVEMENT_IMMUTABLE'); END;
+
+CREATE UNIQUE INDEX idx_wallet_single_opening
+ ON finance_wallet_movements(tenant_id,branch_id,account_id) WHERE kind='OPENING';
+CREATE TRIGGER wallet_opening_first BEFORE INSERT ON finance_wallet_movements
+WHEN NEW.kind='OPENING' AND EXISTS (
+ SELECT 1 FROM finance_wallet_movements w WHERE w.tenant_id=NEW.tenant_id
+  AND w.branch_id=NEW.branch_id AND w.account_id=NEW.account_id
+) BEGIN SELECT RAISE(ABORT,'WALLET_OPENING_NOT_FIRST'); END;
