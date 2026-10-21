@@ -178,15 +178,15 @@ try{
   await page.locator('#cloud-wallet-adjust button[type=submit]').click();
   const openingResponse=await openedWallet;
   assert.equal(openingResponse.status(),201,await openingResponse.text());
-  await page.waitForFunction(()=>document.querySelector('#route-content')?.innerText.includes('R$ 25,00'),
+  await page.waitForFunction(()=>/R\$\s*25,00/.test(document.querySelector('#route-content')?.innerText||''),
     null,{timeout:12000});
   await page.locator('#cloud-wallet-transfer [name=fromAccountId]').selectOption({label:'Carteira P4 QA'});
   await page.locator('#cloud-wallet-transfer [name=toAccountId]').selectOption({label:'Carteira B P4 QA'});
   await page.locator('#cloud-wallet-transfer [name=amount]').fill('10,00');
   await page.locator('#cloud-wallet-transfer [name=reason]').fill('Transferência para carteira de apoio');
   await page.locator('#cloud-wallet-transfer button[type=submit]').click();
-  await page.waitForFunction(()=>document.querySelector('#route-content')?.innerText.includes('R$ 15,00')&&
-    document.querySelector('#route-content')?.innerText.includes('R$ 10,00'),null,{timeout:12000});
+  await page.waitForFunction(()=>/R\$\s*15,00/.test(document.querySelector('#route-content')?.innerText||'')&&
+    /R\$\s*10,00/.test(document.querySelector('#route-content')?.innerText||''),null,{timeout:12000});
   await page.locator('#cloud-wallet-history-form [name=accountId]').selectOption({label:'Carteira P4 QA'});
   await page.locator('#cloud-wallet-history-form button[type=submit]').click();
   await page.locator('#cloud-wallet-history tr').filter({hasText:'Transferência para carteira de apoio'}).waitFor({timeout:12000});
