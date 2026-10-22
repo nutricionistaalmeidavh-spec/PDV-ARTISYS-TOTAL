@@ -297,7 +297,7 @@ try{
     await page.waitForFunction(element=>!element.isConnected,previousDestination,{timeout:20000});
   }
   const bankPage=await page.locator('#route-content .ops-page').first().elementHandle();
-  await navigateUi(page,'finance');await page.waitForFunction(element=>!element.isConnected,bankPage,{timeout:20000});
+  await navigateUi(page,'finance-recurrences');await page.waitForFunction(element=>!element.isConnected,bankPage,{timeout:20000});
   const financePage=await page.locator('#route-content .ops-page').first().elementHandle();
   const reconciliationLoaded=page.waitForResponse(response=>response.request().method()==='GET'&&
     new URL(response.url()).pathname.endsWith('/finance-advanced/accounts'),{timeout:20000});
