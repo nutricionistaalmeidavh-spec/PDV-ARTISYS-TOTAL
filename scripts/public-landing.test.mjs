@@ -169,7 +169,10 @@ test('PDV custom hostname shares the existing Worker, API and legacy workers.dev
  assert.ok(!landing.includes('pdv.artisys.dev'),'frontend must use relative, same-origin API endpoints');
 });
 
-test('local workerd tests retain localhost origin with a configured production custom domain',()=>{
+test('local workerd smoke uses a temporary config without production routes',()=>{
  const smoke=source('scripts/smoke-workerd.mjs');
- assert.ok(smoke.includes('--infer-origin-from-routes=false'));
+ assert.ok(smoke.includes("delete devConfig.routes"));
+ assert.ok(smoke.includes("'--config',devConfigPath"));
+ assert.ok(smoke.includes('unlinkSync(devConfigPath)'));
+ assert.ok(!smoke.includes('--infer-origin-from-routes=false'));
 });
