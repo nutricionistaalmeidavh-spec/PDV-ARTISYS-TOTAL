@@ -152,3 +152,31 @@ test('hero prioritizes the real integrated mockup, with visible text and no unwa
     assert.match(html,new RegExp('id="'+id+'"'));
   }
 });
+
+test('PDV custom hostname shares the existing Worker, API and legacy workers.dev link',()=>{
+ const config=JSON.parse(source('wrangler.jsonc').replace(/^\s*\/\/.*$/gm,''));
+ assert.equal(config.name,'pdv-artisys-total');
+ assert.equal(config.main,'apps/api/src/worker.mjs');
+ assert.equal(config.workers_dev,true,'legacy payment and platform connections must stay reachable');
+ assert.deepEqual(config.routes,[{pattern:'pdv.artisys.dev',custom_domain:true}]);
+ assert.equal(config.assets.binding,'ASSETS');
+ assert.ok(config.assets.run_worker_first.includes('/api/*'),'existing API routing must remain unchanged');
+ const api=source('apps/api/src/worker.mjs');
+ assert.ok(api.includes("path==='/api/v1/integrations/artisys/platform'"));
+ assert.ok(api.includes("path==='/api/v1/integrations/artisys/billing'"));
+ const landing=source('apps/landing/landing.js');
+ assert.ok(landing.includes("'/api/v1/auth/login'")||landing.includes("request('/api/v1/auth/login'"));
+ assert.ok(!landing.includes('pdv.artisys.dev'),'frontend must use relative, same-origin API endpoints');
+});
+
+test('local workerd smoke uses a temporary config without production routes',()=>{
+ const smoke=source('scripts/smoke-workerd.mjs');
+ assert.ok(smoke.includes("delete devConfig.routes"));
+ assert.ok(smoke.includes("'--config',devConfigPath"));
+ assert.ok(smoke.includes('unlinkSync(devConfigPath)'));
+ assert.ok(!smoke.includes('--infer-origin-from-routes=false'));
+ const browserSmoke=source('scripts/web-browser-e2e.mjs');
+ assert.ok(browserSmoke.includes('delete devConfig.routes'));
+ assert.ok(browserSmoke.includes("'--config',devConfigPath"));
+ assert.ok(browserSmoke.includes('unlinkSync(devConfigPath)'));
+});
