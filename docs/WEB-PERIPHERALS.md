@@ -31,7 +31,7 @@ Em **Balcão → Dispositivos locais** há campos de nome da loja, endereço e t
 | Conector local de impressão com fila persistente, reenvio controlado e spooler do SO | **Implementado parcialmente** em `tools/local-hardware-bridge/`; não garante saída física nem paridade universal de drivers |
 | Fiscal NFC-e/NF-e e TEF | Não implementados neste adaptador de periféricos |
 
-A fonte versionada de status, ambientes e provas automatizadas é [`docs/parity/hardware-compatibility.json`](parity/hardware-compatibility.json). `PROTOCOL_VERIFIED` significa somente contrato emulado; `FIELD_VERIFIED` exigiria evidência real por modelo/firmware e atualmente **nenhum modelo foi declarado testado fisicamente**.
+A fonte versionada de status, ambientes e provas automatizadas é [fixtures de compatibilidade por protocolo](../apps/api/test/fixtures/regression/hardware-compatibility.json). `PROTOCOL_VERIFIED` significa somente contrato emulado; `FIELD_VERIFIED` exigiria evidência real por modelo/firmware e atualmente **nenhum modelo foi declarado testado fisicamente**.
 
 ## Próxima etapa de paridade total
 

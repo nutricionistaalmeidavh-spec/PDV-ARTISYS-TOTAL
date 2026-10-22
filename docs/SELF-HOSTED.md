@@ -35,7 +35,7 @@ O teste sobe Node+SQLite em porta aleatória na máquina, consulta a API e a int
 - Hardware local (impressora, balança, gaveta) continua via bridge opcional, sujeito a autorização e homologação física.
 - PDF utiliza impressão do navegador. XLSX é criado localmente, sem rede externa.
 - Faça backups consistentes de SQLite e arquivos WAL com o servidor encerrado; nunca suba dados reais no Git.
-- A homologação de paridade com desktop e uso comercial permanecem **pendentes** conforme docs/parity/P5-REPORTS-EXPERIENCE.md.
+- Consulte o [roadmap operacional](ROADMAP-OPERACIONAL.md) para criterios de aceite.
 
 ## Implantação alternativa
 

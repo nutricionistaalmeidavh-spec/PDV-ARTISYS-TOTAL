@@ -4,15 +4,15 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {runInNewContext} from 'node:vm';
 
-const fixture=JSON.parse(readFileSync(new URL('../../../docs/parity/fixtures/p5-home004-desktop-navigation.json',import.meta.url),'utf8'));
+const fixture=JSON.parse(readFileSync(new URL('./fixtures/regression/fixtures/p5-home004-desktop-navigation.json',import.meta.url),'utf8'));
 const read=(path)=>readFileSync(new URL(path,import.meta.url));
 const sha=(bytes)=>createHash('sha1').update('blob '+bytes.length+'\0').update(bytes).digest('hex');
 
 function desktopNavigationBaseline(){
  assert.equal(fixture.desktop.commit,'7efea9c61f75be1536a1e516e917218f2b8bf2bf');
- const desktop=read('../../../docs/parity/baseline/desktop-app.js');
+ const desktop=read('./fixtures/regression/baseline/desktop-app.js');
  assert.equal(sha(desktop),'87b463226b3440e8811d3fcbf3ddcdd4ccff4275');
- const report=read('../../../docs/parity/baseline/desktop-reporting-v2.js');
+ const report=read('./fixtures/regression/baseline/desktop-reporting-v2.js');
  assert.equal(sha(report),fixture.desktop.reportBlob);
  for(const anchor of fixture.desktop.anchors){
    assert.ok(desktop.toString('utf8').includes(anchor),'desktop navigation source missing: '+anchor);

@@ -135,7 +135,7 @@ controle de acesso e política de retenção externa ao diretório público.
 
 ```bash
 npm run test:api
-npm run test:parity
+npm run test:operations
 npm run test:selfhost
 npm run build
 ```
@@ -152,4 +152,4 @@ físicos não são requisitos para classificar o código.
 Automatizar regressões Windows/Linux, desconexão e recuperação simuladas,
 reinício, usuários concorrentes, idempotência, bridge periférica emulada e revisão de código.
 Testes físicos são opcionais e posteriores ao aceite do software. Consultar o gate em
-`docs/parity/P6-56-CAPACIDADES.md`.
+`docs/ROADMAP-OPERACIONAL.md`.

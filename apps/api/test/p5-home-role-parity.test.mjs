@@ -22,7 +22,7 @@ const ui=loadPinnedDesktopCommonJs('../../web/ui-model.js');
 const {homeForUser}=loadPinnedDesktopCommonJs('../../web/home-role-model.js',{
  './access-policy':policy
 });
-const fixture=JSON.parse(readFileSync(new URL('../../../docs/parity/fixtures/p5-home-roles-desktop-pinned.json',import.meta.url)));
+const fixture=JSON.parse(readFileSync(new URL('./fixtures/regression/fixtures/p5-home-roles-desktop-pinned.json',import.meta.url)));
 function gitBlobSha(file){
  const body=readFileSync(new URL(file,import.meta.url));
  return createHash('sha1').update('blob '+body.length+'\0').update(body).digest('hex');

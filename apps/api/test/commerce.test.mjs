@@ -8,7 +8,7 @@ const requireDesktop=createRequire(import.meta.url);
 const {createReportingService:createPinnedDesktopReportingService}=
   requireDesktop('../../../packages/core/js/domains/reports/reporting-service.js');
 const desktopStockFixture=JSON.parse(readFileSync(
-  new URL('../../../docs/parity/fixtures/p5-stock-shortage-desktop.json',import.meta.url),'utf8'));
+  new URL('./fixtures/regression/fixtures/p5-stock-shortage-desktop.json',import.meta.url),'utf8'));
 import {openLocalDatabase} from '../src/local-db.mjs';
 import {createApi} from '../src/worker.mjs';
 import {hashPassword} from '../src/password.mjs';
@@ -458,7 +458,7 @@ test('P4 finance: manual payable/receivable ledger settles partially, prevents o
 // P5 basic reports are compared to the byte-pinned desktop algorithm, not a
 // hand-written claim of visual equality. Exact numeric fields only.
 const p5ReportCoreFixture=JSON.parse(readFileSync(
- new URL('../../../docs/parity/fixtures/p5-report-core-desktop-pinned.json',import.meta.url),'utf8'));
+ new URL('./fixtures/regression/fixtures/p5-report-core-desktop-pinned.json',import.meta.url),'utf8'));
 function p5OriginalReport(){
  const {input:p,expected,desktop}=p5ReportCoreFixture;
  const source=readFileSync(new URL('../../../packages/core/js/domains/reports/reporting-service.js',import.meta.url));
@@ -1233,10 +1233,10 @@ test('P3 line note is atomic and idempotent, preserved in completed sale and can
 
 
 const p5Home003Fixture=JSON.parse(readFileSync(new URL(
- '../../../docs/parity/fixtures/p5-home003-desktop-alerts.json',import.meta.url),'utf8'));
+ './fixtures/regression/fixtures/p5-home003-desktop-alerts.json',import.meta.url),'utf8'));
 function p5DesktopAlerts(){
  const body=readFileSync(new URL(
-  '../../../docs/parity/baseline/desktop-reporting-v2.js',import.meta.url));
+  './fixtures/regression/baseline/desktop-reporting-v2.js',import.meta.url));
  const sha=createHash('sha1').update('blob '+body.length+'\0').update(body).digest('hex');
  assert.equal(sha,p5Home003Fixture.desktop.gitBlob,'Original desktop alert logic changed');
  const source=body.toString('utf8'),start=source.indexOf('  function managerAlerts(');
@@ -1686,7 +1686,7 @@ test('P1 restored category management API enforces tenant scope and products.man
 // Cross-platform certification is executable evidence, not an imported-file assertion.
 // Original modules below have immutable blob IDs from PDV-ARTISYS@7efea9c.
 const certifiedCheckoutFixture=JSON.parse(readFileSync(
-  new URL('../../../docs/parity/fixtures/checkout-core-desktop-v1.json',import.meta.url),'utf8'
+  new URL('./fixtures/regression/fixtures/checkout-core-desktop-v1.json',import.meta.url),'utf8'
 ));
 const originalRequire=createRequire(import.meta.url);
 const desktopPricing=originalRequire('../../../packages/core/js/domains/sales/pricing.js');

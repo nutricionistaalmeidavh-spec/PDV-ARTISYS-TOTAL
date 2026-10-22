@@ -8,7 +8,7 @@ import {createSpoolQueue} from '../../../tools/local-hardware-bridge/bridge.mjs'
 
 const root=resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const read=p=>readFileSync(join(root,p),'utf8');
-const matrix=JSON.parse(read('docs/parity/hardware-compatibility.json'));
+const matrix=JSON.parse(read('apps/api/test/fixtures/regression/hardware-compatibility.json'));
 
 test('cap-043 versioned R3 compatibility matrix names all four protocols, evidence and denies unearned FIELD_VERIFIED',()=>{
   assert.equal(matrix.schemaVersion,2);

@@ -1,4 +1,4 @@
-name: Verify SaaS canonical foundation
+name: Verify operational readiness
 
 on:
   push:
@@ -14,22 +14,10 @@ on:
       - 'apps/web/**'
       - 'apps/landing/**'
       - 'scripts/public-landing.test.mjs'
-      - 'docs/parity/**'
       - 'scripts/selfhost-backup.mjs'
       - 'scripts/selfhost-backup.test.mjs'
-      - 'scripts/p6-capability-report.mjs'
-      - 'scripts/p6-capability-report.test.mjs'
-      - 'scripts/r0-r1-audit.mjs'
-      - 'scripts/r0-r1-audit.test.mjs'
-      - 'scripts/check-desktop-parity.mjs'
-      - 'scripts/parity-rules.mjs'
-      - 'scripts/parity-rules.test.mjs'
       - 'scripts/report-xlsx.test.mjs'
       - 'scripts/smoke-selfhosted.mjs'
-      - 'scripts/parity-scenarios.mjs'
-      - 'scripts/parity-scenarios.test.mjs'
-      - 'scripts/parity-desktop-pricing.test.mjs'
-      - 'scripts/audit-parity-evidence.mjs'
       - 'scripts/web-browser-e2e.mjs'
       - 'scripts/*browser.mjs'
       - 'scripts/web-navigation.test.mjs'
@@ -37,9 +25,9 @@ on:
       - 'scripts/web-settings-ui.test.mjs'
       - 'scripts/r2-deploy.mjs'
       - 'scripts/r2-lan-browser-e2e.mjs'
-      - 'scripts/parity-docs.test.mjs'
+      - 'scripts/pricing-regression.test.mjs'
+      - 'docs/ROADMAP-OPERACIONAL.md'
       - 'README.md'
-      - 'docs/ROADMAP-PARIDADE-56.md'
       - 'docs/WEB-PERIPHERALS.md'
       - '.github/workflows/verify-saas-foundation.yml'
   workflow_dispatch:
@@ -72,17 +60,8 @@ jobs:
           node-version: '22'
       - name: Validate Cloudflare repository-root deployment contract
         run: npm run build
-      - name: Audit seven-screen contracts and the pinned desktop capability manifest
-        run: npm run test:parity
-      - name: Generate P6 canonical 56-capability blockers artifact
-        run: |
-          mkdir -p qa-artifacts
-          node scripts/p6-capability-report.mjs --json > qa-artifacts/p6-capabilities.json
-          mkdir -p qa-artifacts/parity
-          node scripts/p6-capability-report.mjs --json > qa-artifacts/parity/progresso-56.json
-          node scripts/p6-capability-report.mjs --markdown > qa-artifacts/parity/progresso-56.md
-          node scripts/r0-r1-audit.mjs --json > qa-artifacts/parity/r0-audit-56.json
-          node scripts/r0-r1-audit.mjs > qa-artifacts/parity/r1-readiness-21.md
+      - name: Test operational contracts and exports
+        run: npm run test:operations
       - name: Test free offline SQLite backup and restore
         run: npm run test:selfhost
       - name: Test canonical sales, inventory, cash and authorization contracts
@@ -210,13 +189,6 @@ jobs:
         run: node scripts/web-browser-e2e.mjs
       - name: R2 self-hosted HTTPS LAN mobile pairing, revocation, offline/reconnection E2E
         run: node --experimental-sqlite scripts/r2-lan-browser-e2e.mjs
-      - name: Save independently auditable P0 parity evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pdv-total-parity-evidence
-          path: qa-artifacts/parity/
-          if-no-files-found: error
       - name: Save browser visual QA evidence
         if: always()
         uses: actions/upload-artifact@v4
