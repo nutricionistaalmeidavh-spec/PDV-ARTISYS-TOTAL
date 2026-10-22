@@ -7,7 +7,10 @@ const origin='http://127.0.0.1:8788';
 const require=createRequire(import.meta.url);
 let wranglerCli=process.env.PDV_WRANGLER_CLI;
 if(!wranglerCli){try{wranglerCli=require.resolve('wrangler/bin/wrangler.js');}catch{}}
-const devArgs=['dev','--local','--ip','127.0.0.1','--port','8788','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false'];
+// Preserve the incoming localhost request URL when production custom domains are configured.
+// Otherwise Wrangler can rewrite Host/Origin to pdv.artisys.dev in local dev,
+// causing the security guard to reject intentionally insecure localhost cookies.
+const devArgs=['dev','--local','--infer-origin-from-routes=false','--ip','127.0.0.1','--port','8788','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false'];
 if(process.env.PDV_WORKERD_STATE_PATH)devArgs.push('--persist-to',process.env.PDV_WORKERD_STATE_PATH);
 const child=spawn(wranglerCli?process.execPath:'npx',wranglerCli?[wranglerCli,...devArgs]:['--yes','wrangler@4.137.0',...devArgs],{
   stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32',env:{...process.env,CI:'true'}
