@@ -2,12 +2,23 @@ import {spawn} from 'node:child_process';
 import assert from 'node:assert/strict';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {createRequire} from 'node:module';
+import {readFileSync,writeFileSync,unlinkSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
 
 const origin='http://127.0.0.1:8788';
 const require=createRequire(import.meta.url);
 let wranglerCli=process.env.PDV_WRANGLER_CLI;
 if(!wranglerCli){try{wranglerCli=require.resolve('wrangler/bin/wrangler.js');}catch{}}
-const devArgs=['dev','--local','--ip','127.0.0.1','--port','8788','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false'];
+// Wrangler 4.137 rewrites the request host to the production Custom Domain
+// in local dev. Keep the exact Worker/D1/assets configuration, but omit only
+// route declarations from a temporary file; never mutate production config.
+const rawConfig=readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8');
+const devConfig=JSON.parse(rawConfig.split(String.fromCharCode(10))
+ .filter(line=>!line.trimStart().startsWith('//')).join(String.fromCharCode(10)));
+delete devConfig.routes;
+const devConfigPath=fileURLToPath(new URL('../.wrangler-smoke-'+process.pid+'.json',import.meta.url));
+writeFileSync(devConfigPath,JSON.stringify(devConfig,null,2),{flag:'wx',mode:0o600});
+const devArgs=['dev','--local','--config',devConfigPath,'--ip','127.0.0.1','--port','8788','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false'];
 if(process.env.PDV_WORKERD_STATE_PATH)devArgs.push('--persist-to',process.env.PDV_WORKERD_STATE_PATH);
 const child=spawn(wranglerCli?process.execPath:'npx',wranglerCli?[wranglerCli,...devArgs]:['--yes','wrangler@4.137.0',...devArgs],{
   stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32',env:{...process.env,CI:'true'}
@@ -157,4 +168,5 @@ try {
   stop('SIGTERM');
   await sleep(400);
   if(child.exitCode===null)stop('SIGKILL');
+  unlinkSync(devConfigPath);
 }
