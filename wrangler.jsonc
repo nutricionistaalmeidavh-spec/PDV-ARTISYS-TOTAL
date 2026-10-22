@@ -6,6 +6,12 @@
   "compatibility_date": "2026-09-28",
   "compatibility_flags": ["global_fetch_strictly_public"],
   "workers_dev": true,
+  // Additive hostname: same Worker, same D1 and API routes. Keep workers.dev
+  // enabled because the ArtiSys Payments bridge still calls that URL.
+  // Cloudflare provisions this hostname's proxied DNS and TLS at deploy.
+  "routes": [
+    { "pattern": "pdv.artisys.dev", "custom_domain": true }
+  ],
   // Workers Logs persist invocation metadata/errors; never emit passwords, tokens or customer payloads.
   "observability": {
     "enabled": true,
