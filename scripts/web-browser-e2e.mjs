@@ -1,6 +1,7 @@
 import {spawn} from 'node:child_process';
 import {setTimeout as sleep} from 'node:timers/promises';
-import {mkdirSync} from 'node:fs';
+import {mkdirSync,readFileSync,writeFileSync,unlinkSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import {readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import assert from 'node:assert/strict';
@@ -9,7 +10,15 @@ const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const origin='http://127.0.0.1:8789';
 let wranglerCli=process.env.PDV_WRANGLER_CLI;
 if(!wranglerCli){try{wranglerCli=require.resolve('wrangler/bin/wrangler.js');}catch{}}
-const devArgs=['dev','--local','--ip','127.0.0.1','--port','8789','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false','--var','EMAIL_FROM:disabled-in-local-e2e'];
+// Local browser QA needs localhost cookie semantics, not the production
+// custom-domain origin. Preserve everything except the public route in a
+// temporary Wrangler config; never change the deploy configuration.
+const devConfig=JSON.parse(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8')
+ .split(String.fromCharCode(10)).filter(line=>!line.trimStart().startsWith('//')).join(String.fromCharCode(10)));
+delete devConfig.routes;
+const devConfigPath=fileURLToPath(new URL('../.wrangler-browser-'+process.pid+'.json',import.meta.url));
+writeFileSync(devConfigPath,JSON.stringify(devConfig,null,2),{flag:'wx',mode:0o600});
+const devArgs=['dev','--local','--config',devConfigPath,'--ip','127.0.0.1','--port','8789','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false','--var','EMAIL_FROM:disabled-in-local-e2e'];
 if(process.env.PDV_WORKERD_STATE_PATH)devArgs.push('--persist-to',process.env.PDV_WORKERD_STATE_PATH);
 const worker=spawn(wranglerCli?process.execPath:'npx',wranglerCli?[wranglerCli,...devArgs]:['--yes','wrangler@4.137.0',...devArgs],{
   stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32',
@@ -1125,4 +1134,5 @@ try{
   await browser?.close();
   const stop=signal=>{try{if(process.platform==='win32')worker.kill(signal);else process.kill(-worker.pid,signal);}catch{}};
   stop('SIGTERM');await sleep(400);if(worker.exitCode===null)stop('SIGKILL');
+  unlinkSync(devConfigPath);
 }
