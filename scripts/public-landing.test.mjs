@@ -175,4 +175,8 @@ test('local workerd smoke uses a temporary config without production routes',()=
  assert.ok(smoke.includes("'--config',devConfigPath"));
  assert.ok(smoke.includes('unlinkSync(devConfigPath)'));
  assert.ok(!smoke.includes('--infer-origin-from-routes=false'));
+ const browserSmoke=source('scripts/web-browser-e2e.mjs');
+ assert.ok(browserSmoke.includes('delete devConfig.routes'));
+ assert.ok(browserSmoke.includes("'--config',devConfigPath"));
+ assert.ok(browserSmoke.includes('unlinkSync(devConfigPath)'));
 });
