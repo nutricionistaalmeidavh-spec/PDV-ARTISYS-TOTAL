@@ -12,7 +12,9 @@ if(!wranglerCli){try{wranglerCli=require.resolve('wrangler/bin/wrangler.js');}ca
 // Wrangler 4.137 rewrites the request host to the production Custom Domain
 // in local dev. Keep the exact Worker/D1/assets configuration, but omit only
 // route declarations from a temporary file; never mutate production config.
-const devConfig=JSON.parse(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8').replace(/^\\s*\\/\\/.*$/gm,''));
+const rawConfig=readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8');
+const devConfig=JSON.parse(rawConfig.split(String.fromCharCode(10))
+ .filter(line=>!line.trimStart().startsWith('//')).join(String.fromCharCode(10)));
 delete devConfig.routes;
 const devConfigPath=fileURLToPath(new URL('../.wrangler-smoke-'+process.pid+'.json',import.meta.url));
 writeFileSync(devConfigPath,JSON.stringify(devConfig,null,2),{flag:'wx',mode:0o600});
