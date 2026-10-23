@@ -52,7 +52,7 @@ jobs:
         run: node --experimental-sqlite --test apps/api/test/r2-deployment-profiles.test.mjs
   identity-and-cloudflare:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -167,10 +167,21 @@ jobs:
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0040_wallet_operations.sql
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0041_central_owner_licenses.sql
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0042_finance_query_indexes.sql
+      - name: Cache Chromium used by browser regression gates
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-1.63.0-${{ runner.os }}-${{ runner.arch }}
       - name: Install one Chromium for all browser regression gates
         run: |
-          npm install --no-save --ignore-scripts --no-package-lock playwright@1.63.0
-          npx playwright install --with-deps chromium
+          npm install --no-save --ignore-scripts --no-package-lock --no-audit --no-fund playwright@1.63.0
+          npx playwright install chromium
+          # Hosted runners usually have Chromium's system libraries already.
+          # Avoid an unconditional apt update against unrelated package feeds.
+          if ! node --input-type=module -e "import {chromium} from 'playwright'; const browser=await chromium.launch({headless:true}); await browser.close();"; then
+            npx playwright install-deps chromium
+            node --input-type=module -e "import {chromium} from 'playwright'; const browser=await chromium.launch({headless:true}); await browser.close();"
+          fi
       - name: Smoke real Cloudflare Workerd with local D1 and 100k PBKDF2
         env:
           RUN_BROWSER_SMOKE: 'true'
