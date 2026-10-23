@@ -1,4 +1,4 @@
-import {readFileSync,writeFileSync,mkdirSync,chmodSync,mkdtempSync,rmSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,chmodSync,mkdtempSync,rmSync,renameSync} from 'node:fs';
 import {randomBytes} from 'node:crypto';
 import {homedir,tmpdir} from 'node:os';
 import {resolve,join,dirname} from 'node:path';
@@ -11,19 +11,52 @@ const exec=promisify(execFile);
 const here=dirname(fileURLToPath(import.meta.url));
 const configDir=resolve(process.env.PDV_BRIDGE_HOME||join(homedir(),'.pdv-total-bridge'));
 const confFile=join(configDir,'bridge.json');
-const origin=String(process.env.PDV_BRIDGE_ORIGIN||'').trim();
-const printer=String(process.env.PDV_BRIDGE_PRINTER||'').trim();
-const drawer=String(process.env.PDV_BRIDGE_DRAWER_PORT||'').trim();
-if(!origin)throw new Error('Defina PDV_BRIDGE_ORIGIN com a origem HTTPS exata do seu PDV Total.');
-if(printer.length>128)throw new Error('Nome da impressora muito longo.');
 mkdirSync(configDir,{recursive:true,mode:0o700});
-let conf;
-try{conf=JSON.parse(readFileSync(confFile,'utf8'));}catch{}
-if(!conf?.token||!/^[a-f0-9]{64}$/.test(conf.token)){
-  conf={token:randomBytes(32).toString('hex')};
-  writeFileSync(confFile,JSON.stringify(conf),{encoding:'utf8',mode:0o600,flag:'wx'});
+let conf={};
+try{conf=JSON.parse(readFileSync(confFile,'utf8'))||{};}catch{}
+const fixedPrinter=String(process.env.PDV_BRIDGE_PRINTER||'').trim();
+const origin=String(process.env.PDV_BRIDGE_ORIGIN||conf.origin||'').trim();
+let printer=String(fixedPrinter||conf.printer||'').trim();
+const drawer=String(process.env.PDV_BRIDGE_DRAWER_PORT||'').trim();
+if(!origin)throw new Error('Configure a origem HTTPS do PDV Total durante a instalação ou em PDV_BRIDGE_ORIGIN.');
+if(printer.length>128)throw new Error('Nome da impressora muito longo.');
+function persist(){
+  const tmp=confFile+'.tmp-'+process.pid+'-'+randomBytes(5).toString('hex');
+  writeFileSync(tmp,JSON.stringify(conf),{encoding:'utf8',mode:0o600,flag:'wx'});
+  try{renameSync(tmp,confFile);}finally{try{rmSync(tmp,{force:true});}catch{}}
+  try{chmodSync(confFile,0o600);}catch{}
 }
-try{chmodSync(confFile,0o600);}catch{}
+if(!/^[a-f0-9]{64}$/.test(conf.token||''))conf.token=randomBytes(32).toString('hex');
+if(conf.origin!==origin||!conf.token||conf.printer===undefined){conf.origin=origin;conf.printer=printer;persist();}
+else{try{chmodSync(confFile,0o600);}catch{}}
+async function listPrinters(){
+  if(process.platform!=='win32')return {printers:[],selected:printer,note:'Detecção automática disponível nesta versão para Windows.'};
+  const {stdout}=await exec('powershell.exe',['-NoLogo','-NoProfile','-NonInteractive','-Command',
+    'Get-CimInstance Win32_Printer | Select-Object Name,Default | ConvertTo-Json -Compress'],{windowsHide:true,timeout:12000,maxBuffer:1024*1024});
+  const parsed=stdout.trim()?JSON.parse(stdout):[];
+  const entries=(Array.isArray(parsed)?parsed:[parsed]).filter(x=>typeof x?.Name==='string'&&x.Name.length>0&&x.Name.length<=128)
+    .map(x=>({name:x.Name,isDefault:x.Default===true}));
+  return {printers:entries,selected:printer};
+}
+async function selectPrinter(name){
+  if(fixedPrinter)throw Object.assign(Error('A impressora foi fixada pela configuração avançada deste computador.'),{status:409});
+  const inventory=await listPrinters();
+  if(name!==''&&!inventory.printers.some(p=>p.name===name))
+    throw Object.assign(Error('Impressora não encontrada.'),{status:400});
+  printer=name;conf.printer=name;persist();
+  return {selected:printer};
+}
+async function authorizeOnWindows(){
+  if(process.platform!=='win32')return false;
+  const command='$ErrorActionPreference="Stop"; Add-Type -AssemblyName System.Windows.Forms; '+
+    '$answer=[System.Windows.Forms.MessageBox]::Show('+
+    '("Permitir que o PDV Total ("+$env:PDV_PAIRING_ORIGIN+") use a impressora deste computador?"),'+
+    '"Autorizar impressão local",[System.Windows.Forms.MessageBoxButtons]::YesNo,'+
+    '[System.Windows.Forms.MessageBoxIcon]::Question); if($answer -eq "Yes"){"AUTHORIZED"}else{"DENIED"}';
+  const {stdout}=await exec('powershell.exe',['-NoLogo','-NoProfile','-STA','-Command',command],{
+    env:{...process.env,PDV_PAIRING_ORIGIN:origin},windowsHide:false,timeout:45000,maxBuffer:65536});
+  return stdout.trim()==='AUTHORIZED';
+}
 async function spool({text}){
   const folder=mkdtempSync(join(tmpdir(),'pdv-total-print-'));
   const filename=join(folder,'comprovante.txt');
@@ -53,7 +86,9 @@ async function openDrawer(){
   }
 }
 const queue=createSpoolQueue(join(configDir,'jobs.sqlite'),{spool});
-const server=createBridgeServer({queue,origin,token:conf.token,drawerOpener:drawer?openDrawer:null});
+const server=createBridgeServer({queue,origin,token:conf.token,drawerOpener:drawer?openDrawer:null,
+  pairAuthorizer:process.platform==='win32'?authorizeOnWindows:null,
+  printerControl:{list:listPrinters,select:selectPrinter}});
 server.listen(8765,'127.0.0.1',()=>{
   console.log('PDV Total: conector local disponível somente em http://127.0.0.1:8765');
   console.log('Origem autorizada:',origin);
