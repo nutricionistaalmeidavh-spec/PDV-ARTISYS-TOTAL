@@ -55,6 +55,11 @@ export async function offlineGatewayMachineRoute(request,db){
   const branches=await rows(db,'SELECT id,tenant_id,code,name,active,created_at FROM branches WHERE tenant_id=? AND id=?',tenantId,branchId);
   const memberships=await rows(db,'SELECT tenant_id,user_id,profile_key,active,created_at FROM tenant_memberships WHERE tenant_id=?',tenantId);
   // Only associated users. Password hashes are machine-only and never logged.
+  // Enrolled MFA is not safely portable without TOTP key material. Fail closed:
+  // never convert an MFA-protected SaaS account into password-only local login.
+  const protectedUsers=await db.prepare('SELECT COUNT(*) AS n FROM saas_mfa_totp t JOIN tenant_memberships m ON m.user_id=t.user_id WHERE m.tenant_id=? AND t.enrolled_at IS NOT NULL')
+    .bind(tenantId).first();
+  if(protectedUsers?.n>0)return bad(412,'Há conta com MFA ativo. Autenticação MFA local ainda não homologada.');
   const users=await rows(db,'SELECT u.id,u.email_norm,u.display_name,u.password_hash,u.active,u.created_at FROM users u JOIN tenant_memberships m ON m.user_id=u.id WHERE m.tenant_id=?',tenantId);
   const productCategories=await rows(db,'SELECT * FROM product_categories WHERE tenant_id=?',tenantId);
   const products=await rows(db,'SELECT * FROM products WHERE tenant_id=? ORDER BY CASE WHEN parent_product_id IS NULL THEN 0 ELSE 1 END,id',tenantId);
