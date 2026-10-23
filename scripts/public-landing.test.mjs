@@ -232,6 +232,18 @@ test('self-hosted landing serves MP4 with a video content type',async()=>{
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
+test('both video demonstrations autoplay in continuous loop',()=>{
+  const html=source('apps/landing/index.html');
+  const players=Array.from(html.matchAll(/<video\\s[^>]*data-video="(mesas|estoque)"[^>]*>/g));
+  assert.equal(players.length,2);
+  for(const [,name] of players){
+    const tag=players.find(match=>match[1]===name)[0];
+    assert.match(tag,/\\sloop(?:\\s|>)/,'missing continuous loop for '+name);
+    assert.match(tag,/\\smuted\\s/);
+    assert.match(tag,/\\splaysinline\\s/);
+  }
+});
+
 test('video posters match their respective portrait clips',()=>{
   const html=source('apps/landing/index.html');
   for(const name of ['mesas','estoque']){
