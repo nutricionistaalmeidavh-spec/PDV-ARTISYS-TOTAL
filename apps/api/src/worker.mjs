@@ -20,7 +20,7 @@ import {r3DocumentRoute} from './r3-document-route.mjs';
 import {r2LanRoute,authorizeLanBusinessRequest,authorizeLanModule} from './r2-lan-router.mjs';
 import {offlineGatewayAdminRoute,offlineGatewayMachineRoute} from './offline-gateway.mjs';
 import {offlineReplayRoute,offlineReleaseRoute,offlineBranchCloudWriteDenied} from './offline-sync.mjs';
-import {stageOfflineMutation} from './offline-outbox.mjs';
+import {stageOfflineMutation,finishOfflineAuthority} from './offline-outbox.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import legacyProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
 import legacyPrincipals from '../../../packages/core/js/core/auth/principal-resolver.js';
@@ -299,6 +299,12 @@ export function createApi(env,{now=()=>Date.now()}={}){
         if(!membership)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
         if(!['GET','HEAD'].includes(method)&&!await tenantWriteAllowed(db,tenantId,env,now()))
           return failure(402,'Assinatura inativa ou vencida. Operações de escrita suspensas.');
+        if(commerceMatch[2]==='offline/finish'&&method==='POST'){
+          if(env.LAN_MODE!=='true'||env.OFFLINE_REPLICA_ENABLED!=='true'||membership.profileKey!=='OWNER')
+            return failure(403,'Somente o proprietário encerra a contingência no PC.');
+          try{return response(await finishOfflineAuthority(db,env));}
+          catch(error){return failure(error.status||503,error.message||'Falha de reconciliação.');}
+        }
         if(/^offline\/gateways(?:\/[0-9a-zA-Z-]+(?:\/activate)?)?$/.test(commerceMatch[2])){
           if(env.LAN_MODE==='true'||env.OFFLINE_SYNC_ENABLED!=='true')return failure(404,'Integração offline não habilitada.');
           return offlineGatewayAdminRoute(request,db,membership,session,tenantId,commerceMatch[2],now());
