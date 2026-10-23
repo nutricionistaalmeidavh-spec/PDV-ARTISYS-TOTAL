@@ -38,7 +38,7 @@ export async function offlineGatewayAdminRoute(request,db,member,session,tenantI
  }
  return bad(405,'Método não permitido.');
 }
-export async function offlineGatewayMachineRoute(request,db){
+export async function offlineGatewayMachineRoute(request,db,env={}){
  if(request.method!=='GET'||new URL(request.url).pathname!=='/api/v1/offline/gateway/snapshot')
   return bad(405,'Operação não disponível.');
  const gatewayId=request.headers.get('x-pdv-offline-gateway-id')||'';
@@ -60,7 +60,12 @@ export async function offlineGatewayMachineRoute(request,db){
   const protectedUsers=await db.prepare('SELECT COUNT(*) AS n FROM saas_mfa_totp t JOIN tenant_memberships m ON m.user_id=t.user_id WHERE m.tenant_id=? AND t.enrolled_at IS NOT NULL')
     .bind(tenantId).first();
   if(protectedUsers?.n>0)return bad(412,'Há conta com MFA ativo. Autenticação MFA local ainda não homologada.');
-  const users=await rows(db,'SELECT u.id,u.email_norm,u.display_name,u.password_hash,u.active,u.created_at FROM users u JOIN tenant_memberships m ON m.user_id=u.id WHERE m.tenant_id=?',tenantId);
+  if(env.EMAIL_VERIFICATION_REQUIRED==='true'){
+    const unverified=await db.prepare('SELECT COUNT(*) AS n FROM users u JOIN tenant_memberships m ON m.user_id=u.id WHERE m.tenant_id=? AND u.active=1 AND u.email_verified_at IS NULL')
+      .bind(tenantId).first();
+    if(unverified?.n>0)return bad(412,'Há conta não verificada. Habilitação offline requer verificação de e-mail antes da cópia.');
+  }
+  const users=await rows(db,'SELECT u.id,u.email_norm,u.display_name,u.password_hash,u.active,u.created_at,u.email_verified_at FROM users u JOIN tenant_memberships m ON m.user_id=u.id WHERE m.tenant_id=?',tenantId);
   const productCategories=await rows(db,'SELECT * FROM product_categories WHERE tenant_id=?',tenantId);
   const products=await rows(db,'SELECT * FROM products WHERE tenant_id=? ORDER BY CASE WHEN parent_product_id IS NULL THEN 0 ELSE 1 END,id',tenantId);
   const stockPositions=await rows(db,'SELECT * FROM stock_positions WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
