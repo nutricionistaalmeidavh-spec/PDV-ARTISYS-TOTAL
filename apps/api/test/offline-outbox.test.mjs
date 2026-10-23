@@ -5,7 +5,7 @@ import {applyLocalMigrations} from '../src/local-migrations.mjs';
 import {hashPassword} from '../src/password.mjs';
 import {createApi} from '../src/worker.mjs';
 import {applyOfflineBaseline} from '../src/offline-replica.mjs';
-import {pushOfflineOutbox} from '../src/offline-outbox.mjs';
+import {pushOfflineOutbox,finishOfflineAuthority} from '../src/offline-outbox.mjs';
 
 test('offline inventory receipt is captured atomically, replayed with same idempotency key and no double stock',async t=>{
  const cloud=openLocalDatabase(),local=openLocalDatabase();t.after(()=>{cloud.close();local.close();});
@@ -71,4 +71,28 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
  assert.equal(again.acknowledged,0);
  assert.equal((await cloud.prepare('SELECT COUNT(*) AS n FROM inventory_movements WHERE tenant_id=?').bind('a').first()).n,1);
  assert.equal((await cloud.prepare('SELECT COUNT(*) AS n FROM inventory_movements WHERE tenant_id=?').bind('b').first()).n,0);
+ // The D1 write succeeds, but network drops its ACK: retry cannot add stock again.
+ const second=await call(localApi,'/api/v1/tenants/a/inventory/receipts',{
+  ...request,headers:{...deviceHeaders,'x-mutation-id':'offline-receipt-002'},
+  body:{branchId:'a-branch',productId:'a-product',quantity:4}});
+ assert.equal(second.status,201,JSON.stringify(second.data));
+ let dropped=false;
+ await assert.rejects(pushOfflineOutbox(local,{OFFLINE_CLOUD_ORIGIN:origin+'/',OFFLINE_GATEWAY_ID:gateway.id,
+  OFFLINE_GATEWAY_TOKEN:credential},{fetcher:async(url,options)=>{
+   const res=await fetcher(url,options);
+   if(!dropped){dropped=true;throw Error('ACK_LOST');}
+   return res;
+  }}),/ACK_LOST/);
+ assert.equal((await cloud.prepare('SELECT COUNT(*) AS n FROM inventory_movements WHERE tenant_id=?').bind('a').first()).n,2);
+ await pushOfflineOutbox(local,{OFFLINE_CLOUD_ORIGIN:origin+'/',OFFLINE_GATEWAY_ID:gateway.id,
+  OFFLINE_GATEWAY_TOKEN:credential},{fetcher});
+ assert.equal((await cloud.prepare('SELECT COUNT(*) AS n FROM inventory_movements WHERE tenant_id=?').bind('a').first()).n,2);
+ assert.equal((await cloud.prepare('SELECT balance_milli AS n FROM stock_positions WHERE tenant_id=? AND branch_id=? AND product_id=?').bind('a','a-branch','a-product').first()).n,7000);
+ const released=await finishOfflineAuthority(local,{OFFLINE_CLOUD_ORIGIN:origin+'/',OFFLINE_GATEWAY_ID:gateway.id,
+  OFFLINE_GATEWAY_TOKEN:credential},{fetcher});
+ assert.equal(released.released,true);
+ assert.equal((await local.prepare('SELECT mode FROM offline_local_authority LIMIT 1').bind().first()).mode,'CLOUD');
+ const resumed=await call(cloudApi,'/api/v1/tenants/a/inventory/receipts',{method:'POST',cookie:owner,
+  headers:{'x-mutation-id':'cloud-after-handoff-001'},body:{branchId:'a-branch',productId:'a-product',quantity:1}});
+ assert.equal(resumed.status,201,'normal SaaS writers resume only after complete release');
 });
