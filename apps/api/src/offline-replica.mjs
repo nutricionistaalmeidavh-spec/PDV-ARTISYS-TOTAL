@@ -1,11 +1,12 @@
 // Node-only Cloudflare -> SQLite baseline replicator.
 // No bidirectional sales synchronization exists; local business writes MUST stay blocked.
-const ORDER=['tenants','branches','users','tenant_memberships','product_categories','products','stock_positions'];
+const ORDER=['tenants','branches','users','tenant_memberships','saas_mfa_totp','product_categories','products','stock_positions'];
 function verify(snapshot,scope){
  if(snapshot?.version!==1||snapshot.baselineOnly!==true||!snapshot.tables||
     snapshot.scope?.tenantId!==scope.tenantId||snapshot.scope?.branchId!==scope.branchId||
     snapshot.scope?.gatewayId!==scope.gatewayId)throw Error('Snapshot fora do escopo autorizado.');
  const tables=snapshot.tables;
+ if(!tables.saas_mfa_totp)tables.saas_mfa_totp=[]; // pre-MFA v1 snapshots had no enrolled factors
  if(snapshot.authority&&(!['CLOUD','LOCAL','RECONCILING'].includes(snapshot.authority.mode)||
    !Number.isSafeInteger(snapshot.authority.epoch)||snapshot.authority.epoch<0))throw Error('Autoridade offline inválida.');
  for(const key of ORDER)if(!Array.isArray(tables[key])||tables[key].length>2500)
@@ -43,13 +44,24 @@ export async function applyOfflineBaseline(db,snapshot,scope){
    const columns=(await db.prepare('PRAGMA table_info('+table+')').bind().all()).results.map(x=>x.name);
    if(!columns.length)throw Error('Tabela inexistente: '+table);
    const allowed=new Set(columns);
+   if(table==='saas_mfa_totp'){
+    const allowedUsers=new Set(tables.users.map(u=>u.id));
+    for(const record of tables[table])if(!allowedUsers.has(record.user_id)||
+      typeof record.cipher!=='string'||typeof record.iv!=='string'||!record.enrolled_at)
+      throw Error('Fator MFA fora do escopo ou inválido.');
+    await db.prepare('DELETE FROM saas_mfa_totp WHERE user_id IN (SELECT user_id FROM tenant_memberships WHERE tenant_id=?) AND enrolled_at IS NOT NULL AND user_id NOT IN ('+
+      (tables[table].length?tables[table].map(()=>'?').join(','):'NULL')+')')
+      .bind(scope.tenantId,...tables[table].map(u=>u.user_id)).run();
+   }
    for(const record of tables[table]){
     if(!record||Array.isArray(record)||typeof record!=='object')throw Error('Linha inválida.');
     const names=Object.keys(record);
     if(!names.length||names.some(name=>!allowed.has(name)))throw Error('Schema incompatível em '+table);
     const placeholders=names.map(()=>'?').join(',');
     const sql='INSERT INTO '+table+'('+names.join(',')+') VALUES('+placeholders+') ON CONFLICT DO UPDATE SET '+
-      names.filter(k=>!['id','tenant_id','branch_id','user_id','product_id'].includes(k)).map(k=>k+'=excluded.'+k).join(',');
+      names.filter(k=>!['id','tenant_id','branch_id','user_id','product_id'].includes(k)).map(k=>
+        k==='last_counter'&&table==='saas_mfa_totp'?'last_counter=MAX(saas_mfa_totp.last_counter,excluded.last_counter)':k+'=excluded.'+k
+      ).join(',');
     // A primary-key-only record needs DO NOTHING; all supported rows have mutable columns.
     await db.prepare(sql).bind(...names.map(n=>record[n]===undefined?null:record[n])).run();
    }
