@@ -89,6 +89,9 @@ try{
   assert.ok(state.documentWidth<=state.width+12,
     'cap-047 mobile PWA must avoid horizontal overflow: '+JSON.stringify(state));
   assert.ok(state.manifest?.includes('manifest.webmanifest'));
+  // The route flag may update before the async settings panel mounts in Chromium.
+  // Keep this a real UI assertion, but wait for the expected element to be attached.
+  await page.locator('#r2-settings').waitFor({state:'attached',timeout:12000});
   assert.equal(await page.locator('#r2-settings').count(),1,
     'cap-047 first LAN login must open pairing UI before blocked business requests');
   const live=await page.evaluate(async()=>{
