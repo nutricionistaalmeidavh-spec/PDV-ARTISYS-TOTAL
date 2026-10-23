@@ -461,7 +461,7 @@ const p5ReportCoreFixture=JSON.parse(readFileSync(
  new URL('./fixtures/regression/fixtures/p5-report-core-desktop-pinned.json',import.meta.url),'utf8'));
 function p5OriginalReport(){
  const {input:p,expected,desktop}=p5ReportCoreFixture;
- const source=readFileSync(new URL('../../../packages/core/js/domains/reports/reporting-service.js',import.meta.url));
+ const source=Buffer.from(readFileSync(new URL('../../../packages/core/js/domains/reports/reporting-service.js',import.meta.url),'utf8').replace(/\r\n/g,'\n'));
  const sha=createHash('sha1').update('blob '+source.length+'\0').update(source).digest('hex');
  assert.equal(sha,desktop.blobSha,'P5 original desktop report algorithm was modified');
  const db={prepare(sql){
@@ -1068,7 +1068,7 @@ test('P4 stock coverage derives reserved availability and demand from immutable 
 test('P5 differential: reports-066/nominal runs exact published desktop inventory algorithm against web stock API',async()=>{
  const fixture=desktopStockFixture;
  assert.equal(fixture.desktop.commit,'7efea9c61f75be1536a1e516e917218f2b8bf2bf');
- const pinnedSource=readFileSync(new URL('../../../packages/core/js/domains/reports/reporting-service.js',import.meta.url));
+ const pinnedSource=Buffer.from(readFileSync(new URL('../../../packages/core/js/domains/reports/reporting-service.js',import.meta.url),'utf8').replace(/\r\n/g,'\n'));
  const blob=createHash('sha1').update('blob '+pinnedSource.length+'\0').update(pinnedSource).digest('hex');
  assert.equal(blob,fixture.desktop.sourceGitBlob,'Original desktop report source drifted from pinned published Git blob');
  const mockDb={prepare(sql){
@@ -1678,7 +1678,8 @@ function assertCheckoutDesktopSourcePinned(){
   assert.equal(certifiedCheckoutFixture.desktop.commit,'7efea9c61f75be1536a1e516e917218f2b8bf2bf');
   assert.equal(certifiedCheckoutFixture.desktop.repo,'nutricionistaalmeidavh-spec/PDV-ARTISYS');
   for(const [file,expectedHash] of Object.entries(certifiedCheckoutFixture.desktop.sourceBlobs)){
-    const bytes=readFileSync(new URL('../../../packages/core/'+file,import.meta.url));
+    // Git stores LF text blobs even when Windows checks out CRLF.
+    const bytes=Buffer.from(readFileSync(new URL('../../../packages/core/'+file,import.meta.url),'utf8').replace(/\r\n/g,'\n'));
     const sha=createHash('sha1').update('blob '+bytes.length+'\0').update(bytes).digest('hex');
     assert.equal(sha,expectedHash,'Original desktop blob drifted: '+file);
   }
