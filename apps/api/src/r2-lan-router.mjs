@@ -111,7 +111,11 @@ export async function r2LanRoute(request,db,session,member,tenantId,path,{now=()
       return json({url:url.origin+'/',origin:url.origin,secure:true,
         // The self-hosted SQLite instance is NOT a D1 mirror until a signed
         // tenant-scoped bootstrap + two-way reconciliation have been enabled.
-        replication:{state:'NOT_CONFIGURED',cloudLinked:false,lastCloudSyncAt:null},
+        replication:await (async()=>{
+          const state=await db.prepare('SELECT state,last_pull_at AS lastPull FROM offline_replica_state WHERE tenant_id=? LIMIT 1').bind(tenantId).first();
+          return state?{state:state.state,cloudLinked:true,lastCloudSyncAt:state.lastPull,commercialWritesEnabled:false}:
+            {state:'NOT_CONFIGURED',cloudLinked:false,lastCloudSyncAt:null,commercialWritesEnabled:false};
+        })(),
         note:'O QR vincula o aparelho, mas cada funcionário entra com suas próprias credenciais. Sem replicação ativa, os usuários e dados da nuvem não estão disponíveis neste servidor.'});
     }
     if(path==='lan/devices'&&method==='GET'){

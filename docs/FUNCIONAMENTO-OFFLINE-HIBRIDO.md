@@ -3,7 +3,7 @@
 ## Objetivo
 PDV TOTAL continua SaaS Cloudflare Worker + D1. Um PC autorizado na loja mantém dados locais sincronizados com a **mesma empresa e filial**. Ao cair apenas a internet externa, as PWAs no Wi-Fi da loja continuam acessando o HTTPS local e operações são gravadas em SQLite, com reconciliação segura quando a internet retornar. Queda do Wi-Fi ou do PC local não é coberta.
 
-**Status desta branch:** QR temporário com link seguro, login e pareamento do aparelho local, nomenclatura revisada e indicação explícita de sincronização não configurada. Não existe ainda replicação D1 ↔ SQLite; contas SaaS não são automaticamente copiadas para o PC. Não habilitar para operação híbrida em produção antes dos gates seguintes.
+**Status atual:** QR temporário, login e pareamento local estão integrados. Existe uma cópia inicial autenticada D1 → SQLite, limitada a contas/roles, catálogo e saldos, documentada em [Gateway de cópia inicial](OFFLINE-GATEWAY-BASELINE.md). A réplica é **somente leitura**, bloqueia operações comerciais e não equivale à replicação bidirecional completa. Não habilitar contingência de vendas em produção.
 
 ## Jornada do garçom
 

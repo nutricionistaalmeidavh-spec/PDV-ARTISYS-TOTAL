@@ -47,7 +47,7 @@ test('cap-003 cap-044 cap-045 cap-046 R2: independently paired terminal, waiter 
   const base='/api/v1/tenants/a/lan';
   const linkStatus=await call(base+'/access','GET',null,owner);
   assert.equal(linkStatus.status,200);
-  assert.deepEqual(linkStatus.data.replication,{state:'NOT_CONFIGURED',cloudLinked:false,lastCloudSyncAt:null},
+  assert.deepEqual(linkStatus.data.replication,{state:'NOT_CONFIGURED',cloudLinked:false,lastCloudSyncAt:null,commercialWritesEnabled:false},
     'offline LAN alone is not proof of Cloudflare D1 replication');
   assert.equal((await call(base+'/devices','GET',null,cashier)).status,403);
   assert.equal((await call(base+'/devices','GET',null,other)).status,404);

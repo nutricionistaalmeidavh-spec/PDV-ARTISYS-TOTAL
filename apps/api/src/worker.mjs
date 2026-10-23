@@ -18,6 +18,7 @@ import {receiptRoute} from './receipt-route.mjs';
 import {browserPrintRelayRoute,machinePrintRelayRoute} from './print-relay-route.mjs';
 import {r3DocumentRoute} from './r3-document-route.mjs';
 import {r2LanRoute,authorizeLanBusinessRequest,authorizeLanModule} from './r2-lan-router.mjs';
+import {offlineGatewayAdminRoute,offlineGatewayMachineRoute} from './offline-gateway.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import legacyProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
 import legacyPrincipals from '../../../packages/core/js/core/auth/principal-resolver.js';
@@ -61,7 +62,17 @@ async function verifiedEmailFor(db,userId,env){
     return null; // Older schema fixtures remain usable when the feature is explicitly off.
   }
 }
+async function offlineIdentityAllowed(db,env,now){
+  if(env.LAN_MODE!=='true')return true;
+  let replica;
+  try{replica=await db.prepare('SELECT state,last_pull_at AS lastPull FROM offline_replica_state LIMIT 1').bind().first();}
+  catch{return true;} // Legacy standalone LAN databases have no replica.
+  if(!replica)return true;
+  return replica.state!=='ERROR'&&Number.isFinite(Date.parse(replica.lastPull))&&
+    now-Date.parse(replica.lastPull)<=24*60*60*1000;
+}
 async function sessionFor(request,db,now,env){
+  if(!await offlineIdentityAllowed(db,env,now))return null;
   const raw=findCookie(request,env);
   if(!raw||!/^[a-f0-9]{64}$/.test(raw))return null;
   const tokenHash=await sha256(raw);
@@ -104,6 +115,8 @@ async function parseCredentials(request) {
   }catch{return null;}
 }
 async function login(request,env,db,now){
+  if(!await offlineIdentityAllowed(db,env,now))
+    return failure(503,'Política offline vencida ou revogada. Reconecte o servidor da loja para atualizar acessos.');
   const data=await parseCredentials(request);
   if(!data)return failure(400,'Informe e-mail e senha válidos.');
   if(await loginIpThrottled(request,db,env,now))return failure(429,'Muitas tentativas. Tente novamente mais tarde.');
@@ -184,6 +197,10 @@ export function createApi(env,{now=()=>Date.now()}={}){
       }
       if(env.AUTH_ENABLED==='false')return failure(503,'Acesso ainda não habilitado para clientes.');
        if(path.startsWith('/api/v1/print-relay/agent/'))return await machinePrintRelayRoute(request,db,now());
+      if(path.startsWith('/api/v1/offline/gateway/')){
+        if(env.OFFLINE_SYNC_ENABLED!=='true'||env.LAN_MODE==='true')return failure(404,'Sincronização offline não habilitada.');
+        return offlineGatewayMachineRoute(request,db,env);
+      }
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
       if(!['GET','HEAD'].includes(method)&&!originAllowed(request))return failure(403,'Origem da solicitação inválida.');
       if(method==='POST'&&path==='/api/v1/auth/register')return await registerPublicAccount(request,env,db,now());
@@ -275,6 +292,16 @@ export function createApi(env,{now=()=>Date.now()}={}){
         if(!membership)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
         if(!['GET','HEAD'].includes(method)&&!await tenantWriteAllowed(db,tenantId,env,now()))
           return failure(402,'Assinatura inativa ou vencida. Operações de escrita suspensas.');
+        if(/^offline\/gateways(?:\/[0-9a-zA-Z-]+)?$/.test(commerceMatch[2])){
+          if(env.LAN_MODE==='true'||env.OFFLINE_SYNC_ENABLED!=='true')return failure(404,'Integração offline não habilitada.');
+          return offlineGatewayAdminRoute(request,db,membership,session,tenantId,commerceMatch[2],now());
+        }
+        if(env.LAN_MODE==='true'&&!['GET','HEAD'].includes(method) &&
+           !commerceMatch[2].startsWith('lan/')){
+          const replica=await db.prepare('SELECT state FROM offline_replica_state WHERE tenant_id=? LIMIT 1')
+            .bind(tenantId).first();
+          if(replica)return failure(503,'Cópia local somente para consulta: reconciliação de vendas, caixa e estoque com D1 ainda não habilitada.');
+        }
         // Business areas are available in the hosted app too. Reuse the same
         // tenant-scoped policy without exposing device pairing or LAN controls.
         if(/^modules(?:\/[A-Z_]+)?$/.test(commerceMatch[2])){

@@ -4,6 +4,7 @@ import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {openLocalDatabase} from './local-db.mjs';
 import {applyLocalMigrations} from './local-migrations.mjs';
+import {pullOfflineBaseline} from './offline-replica.mjs';
 import {createApi} from './worker.mjs';
 import {serveLocalPwa} from './local-static.mjs';
 
@@ -122,13 +123,35 @@ async function start(){
   const db=openLocalDatabase(config.databasePath);
   try{
     const migrated=await applyLocalMigrations(db);
+    const enabled=process.env.PDV_OFFLINE_REPLICA_ENABLED==='true';
+    if(enabled){
+      try{await pullOfflineBaseline(db,process.env);}
+      catch(error){
+        const previous=await db.prepare('SELECT last_pull_at FROM offline_replica_state LIMIT 1').bind().first();
+        if(!previous)throw Error('A cópia inicial falhou. Não há dados locais de contingência.');
+        db.exec("UPDATE offline_replica_state SET state='"+([401,403,412].includes(error.status)?'ERROR':'STALE')+"'");
+        console.error('[PDV Offline] Atualização indisponível; dados locais somente para consulta. '+error.name);
+      }
+    }
     const server=createLanServer({...config,db});
+    let syncInterval=null;
+    if(enabled){
+      let syncing=false;
+      syncInterval=setInterval(async()=>{
+        if(syncing)return;syncing=true;
+        try{await pullOfflineBaseline(db,process.env);}
+        catch(error){
+          try{db.exec("UPDATE offline_replica_state SET state='"+([401,403,412].includes(error.status)?'ERROR':'STALE')+"'");}catch{}
+          console.error('[PDV Offline] Sincronização indisponível; operações comerciais locais bloqueadas. '+error.name);
+        }finally{syncing=false;}
+      },60000);
+    }
     server.listen(config.port,config.bindHost,()=>{
       console.log('PDV TOTAL HTTPS LAN pronto em '+config.origin+
         ' (bind '+config.bindHost+':'+config.port+', '+migrated.applied+' migrações novas)');
     });
     for(const signal of ['SIGINT','SIGTERM'])
-      process.once(signal,()=>server.close(()=>{db.close();process.exit(0);}));
+      process.once(signal,()=>server.close(()=>{if(syncInterval)clearInterval(syncInterval);db.close();process.exit(0);}));
   }catch(error){db.close();throw error;}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href)

@@ -59,8 +59,13 @@
       '<button type="button" class="primary-button" data-settings-devices>Configurar dispositivos</button></section>'+
       '<section class="data-card" role="tabpanel" id="web-settings-panel-offline" aria-labelledby="web-settings-tab-offline" hidden><h2>Funcionamento offline</h2>'+
       '<p>Seu PDV continuará na Cloudflare. A opção de contingência usará um PC autorizado como servidor local para os aparelhos no Wi-Fi quando a internet externa cair.</p>'+
-      '<p role="status"><strong>A sincronização D1 ↔ servidor local ainda não está disponível.</strong> Nenhum dado ou login é copiado automaticamente nesta versão. Não configure este modo para vendas reais até a replicação e a reconciliação terem sido homologadas.</p>'+
-      '<p>Quando habilitado, o administrador poderá gerar um QR Code para cada garçom ou terminal, vinculando o dispositivo à filial sem criar uma segunda conta.</p></section>'+ 
+      '<p role="status"><strong>Etapa disponível: cópia inicial controlada de usuários, perfis e catálogo para consulta.</strong> A autorização depende da configuração no servidor Cloudflare. Sincronização de vendas, caixa e estoque ainda não disponível; nenhuma venda offline pode ser considerada sincronizada.</p>'+
+      '<p>O QR Code de garçom é gerado pelo PC local quando o servidor HTTPS e a conta do funcionário estiverem configurados.</p>'+
+      (context.profileKey==='OWNER'?'<form data-settings-offline-gateway class="field-grid"><h3>Autorizar PC para cópia inicial (sem vendas)</h3>'+
+      '<label>Filial<select name="branchId" required>'+branches.map(b=>'<option value="'+esc(b.id)+'">'+esc(b.name)+'</option>').join('')+'</select></label>'+
+      '<label>Identificação do PC<input name="label" maxlength="80" required placeholder="PC principal da loja"></label>'+
+      '<button class="secondary-button" type="submit">Gerar autorização da cópia inicial</button>'+
+      '<p data-settings-offline-feedback role="status" class="ops-muted">O segredo aparecerá apenas uma vez. Guarde-o somente no PC da loja.</p></form>':'<p>Somente o proprietário autoriza PCs para cópia local.</p>')+'</section>'+ 
       '<section class="data-card" role="tabpanel" id="web-settings-panel-modules" aria-labelledby="web-settings-tab-modules" hidden><h2>Áreas da operação</h2>'+
       '<p>Balcão, Caixa, Cardápio, Estoque, Clientes e Gestão usam a mesma base. Alimentação acrescenta mesas, comandas, pedidos e cozinha. Personalizações, fichas técnicas e unidade de venda pertencem ao produto. Ative as áreas que utilizar; esta escolha não cria outra empresa nem uma cobrança.</p>'+errorMarkup(resultError(modulesResult))+
       modules.map(item=>'<article class="module-family"><h3>'+esc(item.name)+'</h3><p>'+esc(item.description)+'</p><label><input type="checkbox" data-settings-module="'+esc(item.id)+'" '+(item.enabled?'checked ':'')+(!can('modules.manage')?'disabled':'')+'> Área ativa</label></article>').join('')+
@@ -68,6 +73,20 @@
       '<section class="data-card" role="tabpanel" id="web-settings-panel-security" aria-labelledby="web-settings-tab-security" hidden><h2>Sua conta e segurança</h2>'+
       '<p>Consulte suas sessões e encerre o acesso de outros navegadores em Acessos. Senha e autenticação em duas etapas são gerenciadas na sua conta.</p>'+
       '<button class="secondary-button" type="button" data-settings-route="access">Ver sessões</button> <a class="secondary-button" href="/conta/">Abrir segurança da conta</a></section></section>';
+    host.querySelector('[data-settings-offline-gateway]')?.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const form=event.currentTarget,feedback=form.querySelector('[data-settings-offline-feedback]');
+      const submit=form.querySelector('[type="submit"]');
+      submit.disabled=true;
+      try{
+        if(context.profileKey!=='OWNER')throw Error('Somente o proprietário autoriza o PC.');
+        const values=Object.fromEntries(new FormData(form));
+        const result=await api.request(path+'/offline/gateways',{method:'POST',body:values});
+        feedback.textContent='ID do gateway: '+result.gateway.id+' | Credencial (exibida uma única vez): '+result.credential+
+          '. Salve em segredo no servidor HTTPS local. Nenhuma venda offline está habilitada.';
+      }catch(error){feedback.textContent='Não foi possível autorizar cópia: '+error.message;}
+      finally{submit.disabled=false;}
+    });
     routeButtons(host,options);
     host.querySelector('[data-settings-profile]')?.addEventListener('click',()=>void root.PdvR4AdvancedUi?.show?.({section:'segments'}));
     host.querySelector('[data-settings-refresh]')?.addEventListener('click',()=>void render(host,api,options));
