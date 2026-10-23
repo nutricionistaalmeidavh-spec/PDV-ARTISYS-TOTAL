@@ -103,11 +103,23 @@ function originHeader(origin){
     'access-control-max-age':'600'
   };
 }
-export function createBridgeServer({queue,origin,token,drawerOpener=null}={}){
+export function createBridgeServer({queue,origin,token,drawerOpener=null,pairAuthorizer=null,printerControl=null}={}){
   if(!queue||!origin||!token||token.length<32)throw new Error('Fila, origem HTTPS e token forte obrigatórios.');
   const u=new URL(origin);
   if(u.origin!==origin||!(u.protocol==='https:'||(u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname))))
     throw new Error('Origem do PDV inválida; use HTTPS.');
+  let authorizing=false,lastDeniedAt=0;
+  async function readBody(req){
+    if(!String(req.headers['content-type']||'').startsWith('application/json'))
+      throw Object.assign(new Error('JSON obrigatório.'),{status:415});
+    let count=0,raw='';
+    for await(const chunk of req){
+      count+=chunk.length;
+      if(count>20000)throw Object.assign(new Error('Pedido muito grande.'),{status:413});
+      raw+=chunk.toString('utf8');
+    }
+    try{return JSON.parse(raw);}catch{throw Object.assign(new Error('JSON inválido.'),{status:400});}
+  }
   const server=createServer(async(req,res)=>{
     // Bind only 127.0.0.1 in the entrypoint; Host check mitigates DNS rebinding.
     const host=req.headers.host||'';
@@ -115,11 +127,42 @@ export function createBridgeServer({queue,origin,token,drawerOpener=null}={}){
     if(req.headers.origin!==origin)return json(res,403,{error:'Origem não autorizada.'});
     const cors=originHeader(origin);
     if(req.method==='OPTIONS'){res.writeHead(204,cors);res.end();return;}
+    // One-click pairing is granted only after an on-device Windows confirmation.
+    // The browser can never silently authorize itself from a new origin.
+    if(req.method==='POST'&&req.url==='/v1/pair'){
+      if(typeof pairAuthorizer!=='function')return json(res,501,{error:'Pareamento assistido indisponível neste computador.'},cors);
+      if(!String(req.headers['content-type']||'').startsWith('application/json'))
+        return json(res,415,{error:'JSON obrigatório.'},cors);
+      if(authorizing)return json(res,409,{error:'Uma autorização já está em andamento no computador.'},cors);
+      if(Date.now()-lastDeniedAt<10000)return json(res,429,{error:'Tente novamente após alguns segundos.'},cors);
+      authorizing=true;
+      try{
+        const approved=await pairAuthorizer({origin})===true;
+        if(!approved){lastDeniedAt=Date.now();return json(res,403,{error:'O pareamento não foi autorizado no computador.'},cors);}
+        return json(res,200,{token},cors);
+      }catch{return json(res,500,{error:'Não foi possível confirmar o pareamento neste computador.'},cors);}
+      finally{authorizing=false;}
+    }
     if(!matchesToken(req.headers.authorization,token))return json(res,401,{error:'Dispositivo não pareado.'},cors);
     const url=new URL(req.url,'http://127.0.0.1');
     try{
       if(req.method==='GET'&&url.pathname==='/v1/status')
         return json(res,200,{service:'pdv-total-local',ready:true,version:1},cors);
+      if(req.method==='GET'&&url.pathname==='/v1/printers'){
+        if(typeof printerControl?.list!=='function')return json(res,501,{error:'Detecção local indisponível.'},cors);
+        return json(res,200,await printerControl.list(),cors);
+      }
+      if(req.method==='POST'&&url.pathname==='/v1/printers/select'){
+        if(typeof printerControl?.list!=='function'||typeof printerControl?.select!=='function')
+          return json(res,501,{error:'Seleção de impressora indisponível.'},cors);
+        const body=await readBody(req),name=body?.name;
+        if(typeof name!=='string'||name.length>128)
+          return json(res,400,{error:'Nome da impressora inválido.'},cors);
+        const available=await printerControl.list();
+        if(name!==''&&!(available.printers||[]).some(item=>item.name===name))
+          return json(res,400,{error:'Impressora não encontrada neste computador.'},cors);
+        return json(res,200,await printerControl.select(name),cors);
+      }
       if(req.method==='GET'&&url.pathname==='/v1/jobs')
         return json(res,200,{jobs:queue.list()},cors);
       const retry=url.pathname.match(/^\/v1\/jobs\/([A-Za-z0-9_-]{8,100})\/retry$/);

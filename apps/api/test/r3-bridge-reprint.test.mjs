@@ -22,3 +22,23 @@ test('cap-025 first spool receipt is idempotent while manual reprint has a fresh
   assert.match(jobs[2].id,/^reprint-/);
   assert.equal(jobs.every(j=>j.saleId===sale.id&&j.text==='CUPOM'),true);
 });
+
+
+test('P3: browser pede consentimento local e recebe segredo sem digitação manual',async()=>{
+ const stored=new Map(),attempts=[];
+ const root={
+   sessionStorage:{getItem:k=>stored.get(k)||null,setItem:(k,v)=>stored.set(k,v)},
+   fetch:async(url,init)=>{
+     attempts.push({url,init});
+     if(url.endsWith('/v1/pair'))return {ok:true,json:async()=>({token:'e'.repeat(64)})};
+     if(url.endsWith('/v1/status'))return {ok:true,json:async()=>({ready:true,service:'pdv-total-local'})};
+     throw Error('unexpected');
+   }
+ };
+ runInNewContext(source,{window:root});
+ const result=await root.PdvLocalBridge.pairAutomatically();
+ assert.equal(result.ready,true);
+ assert.equal(root.PdvLocalBridge.pairedToken(),'e'.repeat(64));
+ assert.equal(attempts[0].init.method,'POST');
+ assert.equal(attempts[1].init.headers.authorization,'Bearer '+'e'.repeat(64));
+});

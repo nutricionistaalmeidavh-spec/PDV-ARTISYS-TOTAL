@@ -24,6 +24,19 @@
     if(!response.ok)throw new Error(result.error||'Falha na impressão local.');
     return result;
   }
+  async function pairAutomatically(){
+    let res;
+    try{
+      res=await root.fetch(url+'/v1/pair',{method:'POST',cache:'no-store',
+        headers:{'content-type':'application/json'},body:'{}'});
+    }catch{throw new Error('Conector local não encontrado. Instale e inicie o conector no computador.');}
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.error||'Pareamento não autorizado. Confira o computador.');
+    pair(data.token);
+    return getStatus();
+  }
+  const getPrinters=()=>request('/v1/printers');
+  const selectPrinter=name=>request('/v1/printers/select',{name});
   const getStatus=()=>request('/v1/status');
   const jobs=()=>request('/v1/jobs');
   const retry=id=>request('/v1/jobs/'+encodeURIComponent(id)+'/retry',{});
@@ -42,5 +55,5 @@
     if(result.job?.status==='UNCERTAIN')throw new Error('Resultado incerto. Confira o equipamento antes de reimprimir.');
     return result.job;
   }
-  root.PdvLocalBridge=Object.freeze({pair,pairedToken,request,getStatus,jobs,retry,drawer,print});
+  root.PdvLocalBridge=Object.freeze({pair,pairAutomatically,pairedToken,request,getStatus,getPrinters,selectPrinter,jobs,retry,drawer,print});
 })();
