@@ -37,6 +37,7 @@
     "TRUST_CF_CONNECTING_IP": "true",
     "MFA_ENABLED": "false",
     "EMAIL_VERIFICATION_REQUIRED": "false",
+    "TELEMETRY_ANALYTICS_ENABLED": "false",
     "ARTISYS_BILLING_ENABLED": "true",
     "ARTISYS_PLATFORM_CENTRAL_ENABLED": "false",
     "ARTISYS_PLATFORM_BRIDGE_ENABLED": "true",
@@ -48,6 +49,9 @@
   // Do not ever bind the desktop licensing D1 database here.
   "send_email": [
     { "name": "EMAIL" }
+  ],
+  "analytics_engine_datasets": [
+    { "binding": "PDV_TELEMETRY_ANALYTICS", "dataset": "pdv_total_optin_telemetry" }
   ],
   "d1_databases": [
     {
