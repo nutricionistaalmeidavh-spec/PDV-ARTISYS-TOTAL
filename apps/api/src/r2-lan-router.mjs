@@ -113,7 +113,14 @@ export async function r2LanRoute(request,db,session,member,tenantId,path,{now=()
         // tenant-scoped bootstrap + two-way reconciliation have been enabled.
         replication:await (async()=>{
           const state=await db.prepare('SELECT state,last_pull_at AS lastPull FROM offline_replica_state WHERE tenant_id=? LIMIT 1').bind(tenantId).first();
-          return state?{state:state.state,cloudLinked:true,lastCloudSyncAt:state.lastPull,commercialWritesEnabled:false}:
+          if(state){
+            const writer=await db.prepare('SELECT epoch,mode FROM offline_local_authority WHERE tenant_id=? LIMIT 1').bind(tenantId).first();
+            const backlog=await db.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE tenant_id=? AND status IN('PENDING','CONFLICT')").bind(tenantId).first();
+            return {state:state.state,cloudLinked:true,lastCloudSyncAt:state.lastPull,
+              commercialWritesEnabled:false,inventoryOfflineEnabled:writer?.mode==='LOCAL',
+              writerMode:writer?.mode||'CLOUD',epoch:writer?.epoch||0,pendingOperations:backlog.n};
+          }
+          return 
             {state:'NOT_CONFIGURED',cloudLinked:false,lastCloudSyncAt:null,commercialWritesEnabled:false};
         })(),
         note:'O QR vincula o aparelho, mas cada funcionário entra com suas próprias credenciais. Sem replicação ativa, os usuários e dados da nuvem não estão disponíveis neste servidor.'});
