@@ -25,6 +25,8 @@ on:
       - 'apps/web/offline-pairing.js'
       - 'docs/FUNCIONAMENTO-OFFLINE-HIBRIDO.md'
       - 'scripts/qa-variant-contracts.mjs'
+      - 'apps/api/src/offline-gateway.mjs'
+      - 'apps/api/src/offline-replica.mjs'
       - 'docs/QA-HOMOLOGACAO-FISICA.md'
       - 'scripts/qa-05-transaction-proofs.mjs'
       - 'scripts/web-navigation.test.mjs'
@@ -175,6 +177,7 @@ jobs:
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0041_central_owner_licenses.sql
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0042_finance_query_indexes.sql
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0043_print_relay.sql
+          npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0044_offline_gateway.sql
       - name: Cache Chromium used by browser regression gates
         uses: actions/cache@v4
         with:
