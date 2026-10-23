@@ -8,9 +8,10 @@ import {platformTelemetrySummary} from '../src/telemetry.mjs';
 
 const NOW=Date.parse('2026-10-23T15:00:00Z');
 const origin='https://pdv.example.test';
+const tokens={'owner-a':'a'.repeat(64),'owner-b':'b'.repeat(64),'cashier':'c'.repeat(64)};
 async function fixture(){
  const db=openLocalDatabase();
- for(const file of ['0001_identity.sql','0031_saas_access.sql','0043_telemetry_events.sql'])
+ for(const file of ['0001_identity.sql','0031_saas_access.sql','0044_telemetry_events.sql'])
   db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
  const created=new Date(NOW).toISOString();
  for(const [id,slug] of [['a','store-a'],['b','store-b']]){
@@ -20,13 +21,13 @@ async function fixture(){
  for(const [id,t,role] of [['owner-a','a','OWNER'],['owner-b','b','OWNER'],['cashier','a','CASHIER']]){
   await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)').bind(id,id+'@example.test',id,'unused',created).run();
   await db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)').bind(t,id,role,created).run();
-  const raw=id.padEnd(64,'0');const hash=createHash('sha256').update(raw).digest('hex');
+  const raw=tokens[id];const hash=createHash('sha256').update(raw).digest('hex');
   await db.prepare('INSERT INTO auth_sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)').bind(hash,id,NOW,NOW+3600000).run();
  }
  const recorded=[];
  const api=createApi({DB:db,AUTH_ENABLED:'true',TELEMETRY_ANALYTICS_ENABLED:'true',PDV_TELEMETRY_ANALYTICS:{writeDataPoint:x=>recorded.push(x)}},{now:()=>NOW});
  const request=(person,tenant,path,method='GET',body=null)=>{
-  const headers={cookie:'__Host-pdvtotal_session='+person.padEnd(64,'0')};
+  const headers={cookie:'__Host-pdvtotal_session='+tokens[person]};
   if(method!=='GET')headers.origin=origin;
   if(body!==null)headers['content-type']='application/json';
   return api.fetch(new Request(origin+'/api/v1/tenants/'+tenant+'/telemetry/'+path,{
@@ -49,7 +50,6 @@ test('telemetry is opt-in, consent is tenant-scoped and only owner can change it
   assert.equal((await x.request('owner-a','a','events','POST',event)).status,202);
   assert.equal(x.recorded.length,1);
   assert.equal((await x.request('owner-b','b','preferences')).status,200);
-  assert.equal((await x.request('owner-b','b','preferences')).json instanceof Function,true);
   const count=await x.db.prepare('SELECT COUNT(*) AS n FROM saas_telemetry_events').bind().first();
   assert.equal(count.n,1);
  }finally{x.close();}
