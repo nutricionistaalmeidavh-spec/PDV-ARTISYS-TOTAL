@@ -180,6 +180,7 @@ jobs:
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0044_telemetry_events.sql
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0045_telemetry_analytics_budget.sql
           npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0046_offline_gateway.sql
+          npx --yes wrangler@4.137.0 d1 execute pdv-artisys-total --local --file apps/api/migrations/0047_offline_outbox.sql
       - name: Cache Chromium used by browser regression gates
         uses: actions/cache@v4
         with:
