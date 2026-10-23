@@ -31,7 +31,7 @@ export async function offlineGatewayAdminRoute(request,db,member,session,tenantI
   return json({gateway:{id,tenantId,branchId,label},credential,
    note:'Guarde o segredo somente no servidor local. A cópia atual é somente leitura; operações comerciais não são sincronizadas.'},201);
  }
- const activate=/^offline\\/gateways\\/([0-9a-zA-Z-]{1,128})\\/activate$/.exec(path);
+ const activate=/^offline\/gateways\/([0-9a-zA-Z-]{1,128})\/activate$/.exec(path);
  if(activate&&request.method==='POST')return activateOfflineBranch(db,tenantId,activate[1],now);
  const revoke=/^offline\/gateways\/([0-9a-zA-Z-]{1,128})$/.exec(path);
  if(revoke&&request.method==='DELETE'){
