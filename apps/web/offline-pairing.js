@@ -45,7 +45,7 @@
       throw Error('O QR Code precisa de uma origem HTTPS confiável.');
     url.pathname='/app/';
     url.hash='p='+value;
-    if(new TextEncoder().encode(url.toString()).length>78)
+    if(url.toString().length>78)
       throw Error('Endereço HTTPS longo demais para o QR interno. Use o endereço e código separados.');
     return url.toString();
   }
