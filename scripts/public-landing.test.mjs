@@ -19,6 +19,16 @@ test('marketing is a distinct public entry, not a duplicate operating renderer',
   assert.doesNotMatch(html,/src="\/app\.js"/);
   assert.match(source('scripts/build-web.mjs'),/app\/index\.html/);
 });
+test('trial messaging points to the existing approval-gated registration form',()=>{
+  const html=source('apps/landing/index.html');
+  assert.match(html,/data-open-register>Teste grátis/);
+  assert.match(html,/data-open-register>Solicitar teste grátis/);
+  assert.match(html,/id="registration-title">Solicite seu teste grátis/);
+  assert.match(html,/Os 14 dias começam após a aprovação do cadastro pela ArtiSys/);
+  assert.match(html,/id="registration-form"/);
+  assert.equal((html.match(/data-open-register/g)||[]).length,3);
+});
+
 test('registration sends only to the same-origin API and has no external dependencies',()=>{
   const js=source('apps/landing/landing.js');
   assert.match(js,/fetch\('\/api\/v1\/auth\/register'/);
