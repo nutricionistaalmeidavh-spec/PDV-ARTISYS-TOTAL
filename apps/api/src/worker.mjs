@@ -187,7 +187,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
        if(path.startsWith('/api/v1/print-relay/agent/'))return await machinePrintRelayRoute(request,db,now());
       if(path.startsWith('/api/v1/offline/gateway/')){
         if(env.OFFLINE_SYNC_ENABLED!=='true'||env.LAN_MODE==='true')return failure(404,'Sincronização offline não habilitada.');
-        return offlineGatewayMachineRoute(request,db);
+        return offlineGatewayMachineRoute(request,db,env);
       }
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
       if(!['GET','HEAD'].includes(method)&&!originAllowed(request))return failure(403,'Origem da solicitação inválida.');
