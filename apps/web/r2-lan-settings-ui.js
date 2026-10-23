@@ -48,6 +48,7 @@
       '<p><code id="r2-lan-origin">'+safe(access.url)+'</code></p><button class="ops-secondary" id="r2-copy-address">Copiar endereço</button>'+
       '<div id="r2-lan-qr" role="img" aria-label="Código QR para endereço HTTPS da rede local" style="max-width:180px"></div>'+
       '<p class="ops-muted">Ao perder conexão com o servidor, nenhuma venda nova deve ser considerada confirmada.</p></section>'+
+      '<section class="ops-card"><h2>Sincronização com a nuvem</h2><p role="status">'+(access.replication?.state==='READY'?'Sincronização ativa (confira data do último envio e recebimento).':'Ainda não configurada. Este servidor local não recebeu uma cópia automática do D1 e as contas SaaS não estão disponíveis até configurar a replicação.')+'</p></section>'+ 
       '<section class="ops-card"><h2>Estado da rede</h2><p>'+(isAdmin?('Dispositivos ativos: '+Number(health.devices.active)+' de '+Number(health.devices.total)+' · Códigos pendentes: '+Number(health.pendingPairings)):'Identifique-se como administrador para consultar todos os dispositivos.')+'</p>'+
       '<p>Checklist: '+Number(readiness.readyCount)+' / '+Number(readiness.total)+' verificados.</p>'+
       (readiness.ready?'<p>Checklist operacional preenchido. A certificação de software é independente.</p>':'<p>Checklist operacional ainda não preenchido; isso não bloqueia código pronto.</p>')+'</section></div>'+
