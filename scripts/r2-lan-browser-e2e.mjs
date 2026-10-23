@@ -103,7 +103,7 @@ try{
   // Real UI: admin selects waiter, generates 5-minute QR, employee logs in
   // through that local HTTPS origin, and code is prefilled only after login.
   const pairingBranch=page.locator('#r2-new-pairing [name="branchId"]');
-  await page.locator('#r2-new-pairing [name="branchId"] option[value="branch-a"]').waitFor();
+  await page.locator('#r2-new-pairing [name="branchId"] option[value="branch-a"]').waitFor({state:'attached'});
   await pairingBranch.selectOption('branch-a');
   await page.locator('#r2-new-pairing [name="kind"]').selectOption('WAITER');
   await page.locator('#r2-new-pairing button[type="submit"]').click();
