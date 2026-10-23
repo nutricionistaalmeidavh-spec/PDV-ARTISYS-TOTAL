@@ -69,7 +69,7 @@ export async function pullOfflineBaseline(db,env,{fetcher=fetch}={}){
  const res=await fetcher(origin.origin+'/api/v1/offline/gateway/snapshot',{
   headers:{authorization:'Bearer '+token,'x-pdv-offline-gateway-id':gatewayId,accept:'application/json'},
   signal,redirect:'error',cache:'no-store'});
- if(!res.ok)throw Error('Cloudflare recusou a atualização da cópia ('+res.status+').');
+ if(!res.ok)throw Object.assign(Error('Cloudflare recusou atualização da cópia ('+res.status+').'),{status:res.status});
  const size=Number(res.headers.get('content-length')||0);
  if(size>4*1024*1024)throw Error('Snapshot excede limite seguro.');
  const raw=await res.text();
