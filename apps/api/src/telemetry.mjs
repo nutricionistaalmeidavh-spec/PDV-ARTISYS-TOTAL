@@ -25,6 +25,19 @@ function validate(data){
  if(data.eventName==='ui_error'&&data.outcome!=='failed')return null;
  return {id:data.id,eventName:data.eventName,branchId:data.branchId,route:data.route,module:data.module||'',outcome:data.outcome||'',durationMs:duration};
 }
+// Multiple Worker instances share this SQLite/D1 atomic daily counter.
+const ENGINE_DAILY_LIMIT=100000;
+const ENGINE_SAFE_CAP=80000;
+export async function reserveAnalyticsQuota(db,now=Date.now()){
+ const day=new Date(now).toISOString().slice(0,10),at=new Date(now).toISOString();
+ // ON CONFLICT ... WHERE is atomic across instances and never exceeds the safety cap.
+ const saved=await db.prepare(`INSERT INTO saas_telemetry_analytics_budget(utc_day,data_points,updated_at)
+  VALUES(?,1,?) ON CONFLICT(utc_day) DO UPDATE SET
+   data_points=saas_telemetry_analytics_budget.data_points+1,
+   updated_at=excluded.updated_at WHERE saas_telemetry_analytics_budget.data_points<?`)
+  .bind(day,at,ENGINE_SAFE_CAP).run();
+ return Number(saved.meta?.changes||0)===1;
+}
 export async function tenantTelemetryRoute(request,db,env,membership,tenantId,part,now=Date.now()){
  if(part==='preferences'&&request.method==='GET'){
   const item=await db.prepare('SELECT enabled,diagnostics FROM saas_telemetry_preferences WHERE tenant_id=?').bind(tenantId).first();
@@ -53,7 +66,9 @@ export async function tenantTelemetryRoute(request,db,env,membership,tenantId,pa
   const result=await db.prepare(`INSERT OR IGNORE INTO saas_telemetry_events(id,tenant_id,branch_id,event_name,route,module,outcome,duration_ms,occurred_at)
    VALUES(?,?,?,?,?,?,?,?,?)`).bind(event.id,tenantId,event.branchId,event.eventName,event.route,event.module,event.outcome,event.durationMs,stamp).run();
   if(Number(result.meta?.changes||0)>0&&env.TELEMETRY_ANALYTICS_ENABLED==='true'&&env.PDV_TELEMETRY_ANALYTICS?.writeDataPoint){
-   try{env.PDV_TELEMETRY_ANALYTICS.writeDataPoint({
+   // Reserve one datapoint atomically before calling Cloudflare. Never exceed our
+   // conservative subset of the 100k/day Free quota for this dataset.
+   if(await reserveAnalyticsQuota(db,now))try{env.PDV_TELEMETRY_ANALYTICS.writeDataPoint({
     indexes:[tenantId],
     blobs:[event.eventName,event.route,event.module,event.outcome,event.branchId],
     doubles:[1,event.durationMs]
@@ -65,7 +80,7 @@ export async function tenantTelemetryRoute(request,db,env,membership,tenantId,pa
 }
 export async function platformTelemetrySummary(db,now=Date.now()){
  const since=new Date(now-7*86400000).toISOString();
- const [all,byEvents,byTenants,byRoutes,enabled]=await Promise.all([
+ const [all,byEvents,byTenants,byRoutes,enabled,engineToday]=await Promise.all([
   db.prepare('SELECT COUNT(*) AS total FROM saas_telemetry_events WHERE occurred_at>=?').bind(since).first(),
   db.prepare(`SELECT event_name AS eventName,outcome,COUNT(*) AS count,CAST(AVG(duration_ms) AS INTEGER) AS avgDurationMs
    FROM saas_telemetry_events WHERE occurred_at>=? GROUP BY event_name,outcome ORDER BY count DESC LIMIT 40`).bind(since).all(),
@@ -74,8 +89,15 @@ export async function platformTelemetrySummary(db,now=Date.now()){
    WHERE e.occurred_at>=? GROUP BY e.tenant_id,t.name ORDER BY count DESC LIMIT 50`).bind(since).all(),
   db.prepare(`SELECT route,COUNT(*) AS count FROM saas_telemetry_events
    WHERE occurred_at>=? AND event_name='screen_opened' GROUP BY route ORDER BY count DESC LIMIT 20`).bind(since).all(),
-  db.prepare('SELECT COUNT(*) AS count FROM saas_telemetry_preferences WHERE enabled=1').bind().first()
+  db.prepare('SELECT COUNT(*) AS count FROM saas_telemetry_preferences WHERE enabled=1').bind().first(),
+  db.prepare('SELECT data_points AS dataPoints FROM saas_telemetry_analytics_budget WHERE utc_day=?')
+   .bind(new Date(now).toISOString().slice(0,10)).first()
  ]);
  return {periodDays:7,totalEvents:Number(all?.total||0),enabledTenants:Number(enabled?.count||0),
-  events:byEvents.results||[],tenants:byTenants.results||[],routes:byRoutes.results||[]};
+  events:byEvents.results||[],tenants:byTenants.results||[],routes:byRoutes.results||[],
+  analyticsWritesToday:Number(engineToday?.dataPoints||0),
+  analyticsDailyLimit:ENGINE_DAILY_LIMIT,
+  analyticsWriteCap:ENGINE_SAFE_CAP,
+  analyticsUtilizationPercent:Math.round(Number(engineToday?.dataPoints||0)*100/ENGINE_DAILY_LIMIT),
+  analyticsCapReached:Number(engineToday?.dataPoints||0)>=ENGINE_SAFE_CAP};
 }
