@@ -208,3 +208,26 @@ test('product videos are first-party lazy, accessible, and do not affect auth ro
   assert.match(html,/id="registration-dialog"/);
   assert.match(html,/id="login-dialog"/);
 });
+
+test('product showcase files are actual locally optimized MP4s',()=>{
+  const html=source('apps/landing/index.html');
+  for(const name of ['mesas','estoque']){
+    const path='apps/landing/media/pdv-demo-'+name+'.mp4';
+    const video=readFileSync(new URL('../'+path,import.meta.url));
+    assert.equal(video.toString('ascii',4,8),'ftyp',path+' MP4 file signature');
+    assert.ok(video.length>10000&&video.length<500000,path+' must be optimized for lightweight delivery');
+    assert.match(html,new RegExp('/media/pdv-demo-'+name+'\\.mp4'));
+  }
+});
+
+test('self-hosted landing serves MP4 with a video content type',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'pdv-video-'));
+  try{
+    mkdirSync(join(dir,'media'));
+    writeFileSync(join(dir,'media/pdv-demo-mesas.mp4'),Buffer.from('0000ftyp','ascii'));
+    const response=await serveLocalPwa('/media/pdv-demo-mesas.mp4',{rootDir:dir});
+    assert.equal(response.status,200);
+    assert.equal(response.headers.get('content-type'),'video/mp4');
+    assert.equal((await response.arrayBuffer()).byteLength,8);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
