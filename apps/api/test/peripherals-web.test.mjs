@@ -269,6 +269,9 @@ test('fase 1: impressao convencional usa documento formatado sem chave nem conec
   assert.equal(opened.length,1);
   assert.ok(opened[0].printed);
   assert.match(opened[0].html,/TESTE/);
+  w.PdvWebHardware.saveSettings({paperMm:58,printerMode:'browser'});
+  await w.PdvWebHardware.printTest();
+  assert.match(opened[1].html,/58mm auto/,'paper size must be retained by canonical HTML renderer');
 });
 
 test('fase 2: central de dispositivos agrupa recursos e nao exige pareamento para impressao comum',()=>{

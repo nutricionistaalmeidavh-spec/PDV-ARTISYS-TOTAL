@@ -309,7 +309,7 @@
       const warning=dialog.querySelector('[data-serial-warning="'+kind+'"]');
       if(!supportsSerial&&warning){
         warning.hidden=false;
-        warning.textContent='Conexão serial indisponível neste navegador. Use Chrome/Edge em um computador com HTTPS; para pesagem sem conexão, informe o peso manualmente quando permitido.';
+        warning.textContent='Conexão serial indisponível neste navegador. Use Chrome ou Edge em um computador com HTTPS.'+(kind==='scale'?' Quando permitido, informe o peso manualmente na venda.':'');
       }
       const button=dialog.querySelector('[data-device="'+kind+'"]');
       if(button&&!supportsSerial){button.disabled=true;button.title='Web Serial não está disponível neste navegador.';}

@@ -77,8 +77,8 @@
   }
   .pdv-peripherals-form {height:100dvh;max-height:100dvh;}
   .pdv-peripherals-header {padding:calc(18px + env(safe-area-inset-top)) 16px 12px;}
-  .pdv-peripherals-tabs {padding:0 12px 12px;}
-  .pdv-peripherals-tabs button { min-width:max-content;padding:11px 13px; }
+  .pdv-peripherals-tabs {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 12px 12px;overflow:visible;}
+  .pdv-peripherals-tabs button {min-width:0;white-space:normal;width:100%;padding:11px 10px;}
   .pdv-peripherals-content {padding:20px 16px;}
   .pdv-peripherals-footer {flex-direction:column;align-items:stretch;padding:12px 16px calc(12px + env(safe-area-inset-bottom));gap:10px;}
   .pdv-peripherals-footer-buttons {width:100%;}
