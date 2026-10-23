@@ -91,3 +91,58 @@ test('local serial drawer config works on macOS and Linux without sharing OS-spe
   assert.deepEqual(sttyArgs('/dev/ttyUSB0','linux'),['-F','/dev/ttyUSB0',...expected]);
   assert.throws(()=>sttyArgs('/dev/ttyUSB0','win32'),/não suportado|unsupported/i);
 });
+
+
+test('P3: pareamento assistido requer consentimento local e origem HTTPS autorizada',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'pdv-bridge-pair-'));
+  const queue=createSpoolQueue(join(dir,'jobs.sqlite'),{spool:async()=>{}});
+  const secret='0123456789abcdef'.repeat(4);
+  let consent=0;
+  const server=createBridgeServer({queue,origin:'https://pdv.example.test',token:secret,
+    pairAuthorizer:async()=>{consent++;return true;}});
+  try{
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const url='http://127.0.0.1:'+server.address().port+'/v1/pair';
+    const call=(origin)=>fetch(url,{method:'POST',headers:{origin,'content-type':'application/json'},body:'{}'});
+    assert.equal((await call('https://attacker.example.test')).status,403);
+    assert.equal(consent,0,'wrong origins must never cause local consent prompt');
+    const paired=await call('https://pdv.example.test');
+    assert.equal(paired.status,200);
+    assert.equal((await paired.json()).token,secret);
+    assert.equal(consent,1);
+  }finally{await new Promise(resolve=>server.close(resolve));queue.close();rmSync(dir,{recursive:true,force:true});}
+});
+
+test('P3: conector não expõe segredo quando consentimento é negado',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'pdv-bridge-deny-'));
+  const queue=createSpoolQueue(join(dir,'jobs.sqlite'),{spool:async()=>{}});
+  const server=createBridgeServer({queue,origin:'https://pdv.example.test',token:'a'.repeat(64),pairAuthorizer:async()=>false});
+  try{
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const res=await fetch('http://127.0.0.1:'+server.address().port+'/v1/pair',{method:'POST',
+      headers:{origin:'https://pdv.example.test','content-type':'application/json'},body:'{}'});
+    assert.equal(res.status,403);
+    assert.ok(!JSON.stringify(await res.json()).includes('a'.repeat(64)));
+  }finally{await new Promise(resolve=>server.close(resolve));queue.close();rmSync(dir,{recursive:true,force:true});}
+});
+
+test('P3: seleção de impressora só permite nomes retornados pelo computador autorizado',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'pdv-bridge-printer-'));
+  const queue=createSpoolQueue(join(dir,'jobs.sqlite'),{spool:async()=>{}});
+  const selected=[];
+  const server=createBridgeServer({queue,origin:'https://pdv.example.test',token:'f'.repeat(64),
+    printerControl:{list:async()=>({printers:[{name:'Cupom 80mm',isDefault:true}],selected:''}),
+      select:async name=>{selected.push(name);return {selected:name};}}});
+  try{
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const base='http://127.0.0.1:'+server.address().port;
+    const headers={origin:'https://pdv.example.test',authorization:'Bearer '+'f'.repeat(64),'content-type':'application/json'};
+    const listings=await fetch(base+'/v1/printers',{headers});
+    assert.equal(listings.status,200);assert.equal((await listings.json()).printers[0].name,'Cupom 80mm');
+    const invalid=await fetch(base+'/v1/printers/select',{method:'POST',headers,body:JSON.stringify({name:'Fake printer'})});
+    assert.equal(invalid.status,400);
+    assert.deepEqual(selected,[]);
+    const valid=await fetch(base+'/v1/printers/select',{method:'POST',headers,body:JSON.stringify({name:'Cupom 80mm'})});
+    assert.equal(valid.status,200);assert.deepEqual(selected,['Cupom 80mm']);
+  }finally{await new Promise(resolve=>server.close(resolve));queue.close();rmSync(dir,{recursive:true,force:true});}
+});
