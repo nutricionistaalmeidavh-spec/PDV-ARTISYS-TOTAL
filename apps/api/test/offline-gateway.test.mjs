@@ -80,6 +80,12 @@ test('Cloudflare branch gateway exports only approved tenant identity/catalog; l
  assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM products').bind().first()).n,1);
  await assert.rejects(applyOfflineBaseline(local,{...valid.data,scope:{...scope,tenantId:'b'}},scope),/escopo/);
  await assert.rejects(applyOfflineBaseline(local,valid.data,{...scope,tenantId:'b'}),/escopo/);
+ await cloud.prepare('INSERT INTO saas_mfa_totp(user_id,cipher,iv,enrolled_at) VALUES(?,?,?,?)')
+   .bind('a-owner','encrypted-do-not-copy','iv-do-not-copy',Date.now()).run();
+ assert.equal((await call(endpoint,{headers})).status,412,
+   'Password-only local sign-in must never bypass SaaS MFA');
+ await cloud.prepare('DELETE FROM saas_mfa_totp WHERE user_id=?').bind('a-owner').run();
+ assert.equal((await call(endpoint,{headers})).status,200);
  const revoked=await call('/api/v1/tenants/a/offline/gateways/'+gateway.id,{method:'DELETE',cookie:owner});
  assert.equal(revoked.status,200);
  assert.equal((await call(endpoint,{headers})).status,401);
