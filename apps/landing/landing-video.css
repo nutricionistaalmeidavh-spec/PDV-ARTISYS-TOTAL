@@ -1,0 +1,27 @@
+/* Scoped, first-party product video showcase. No external assets or services. */
+.video-showcase{position:relative;isolation:isolate;overflow:hidden;background:#0a0f1f;border-block:1px solid rgba(178,161,231,.16)}
+.video-showcase:before{content:"";position:absolute;z-index:-1;pointer-events:none;inset:0;background:radial-gradient(ellipse 65% 80% at 75% 30%,rgba(137,76,238,.13),transparent 80%)}
+.video-showcase-head{display:flex;align-items:end;justify-content:space-between;gap:28px;margin-bottom:42px}
+.video-showcase-head>div{max-width:680px}
+.video-eyebrow{margin:0 0 18px;color:#d5b3ff;font-size:11px;font-weight:850;letter-spacing:.15em}
+.video-showcase-head h2{margin:0;font-size:clamp(35px,4vw,56px);line-height:1.08;letter-spacing:-.045em;color:#fff}
+.video-showcase-head p:not(.video-eyebrow){max-width:630px;margin:18px 0 0;color:#bcc4db;line-height:1.7}
+.video-gallery-link{flex-shrink:0;color:#e6dcff;font-size:13px;font-weight:750;text-decoration:underline;text-underline-offset:6px}
+.video-gallery-link:hover{color:#fff}
+.video-showcase-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.video-showcase-card{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);align-items:center;gap:20px;min-width:0;min-height:445px;padding:28px 22px 22px 30px;border:1px solid rgba(186,175,230,.24);border-radius:25px;background:linear-gradient(147deg,#1b2139,#101629 73%);box-shadow:0 20px 58px rgba(0,0,0,.15);overflow:hidden}
+.video-card-number{display:block;color:#e4baff;font-size:11px;font-weight:850;letter-spacing:.13em}
+.video-showcase-card h3{font-size:clamp(22px,2.3vw,32px);line-height:1.19;letter-spacing:-.03em;margin:17px 0 12px;color:#fff}
+.video-showcase-card p{color:#c3c7db;font-size:14px;line-height:1.65;margin:0}
+.video-showcase-card .video-card-tag{display:inline-flex;align-items:center;margin-top:25px;border:1px solid #8168b8;color:#edddff;border-radius:999px;padding:8px 11px;font-size:11px;font-weight:750}
+.video-device-stage{display:grid;place-items:center;position:relative;min-width:0;min-height:385px;padding:5px 0}
+.video-device-stage:before{content:"";position:absolute;width:95%;height:75%;border-radius:50%;background:rgba(150,87,234,.18);filter:blur(43px);pointer-events:none}
+.video-device{position:relative;isolation:isolate;z-index:1;width:min(100%,221px);padding:8px;background:linear-gradient(145deg,#33364c,#090b13 48%,#30344a);border:1px solid #77758c;border-radius:26px;box-shadow:0 24px 42px #0009,0 0 0 2px #090d16;transform:rotate(2deg)}
+.video-showcase-card:nth-child(2) .video-device{transform:rotate(-2deg)}
+.video-device:before{content:"";position:absolute;z-index:2;top:11px;left:50%;transform:translateX(-50%);width:35px;height:4px;border-radius:8px;background:#0c1017;pointer-events:none}
+.video-device video{display:block;width:100%;height:auto;aspect-ratio:512/910;object-fit:cover;border-radius:19px;background:#12182d}
+.video-device-note{position:absolute;z-index:1;right:0;bottom:6px;padding:9px 12px;background:#211b39dc;color:#e9dcff;border:1px solid #826ac088;border-radius:11px;font-size:10px;font-weight:750;box-shadow:0 9px 20px #0005}
+.video-showcase-card video:focus-visible{outline:3px solid #edcbff;outline-offset:5px}
+@media(max-width:1120px){.video-showcase-card{grid-template-columns:1fr;text-align:center;padding:28px 20px 25px}.video-showcase-card h3{margin-top:10px}.video-device-stage{min-height:0}.video-showcase-card .video-card-tag{margin-top:15px}}
+@media(max-width:760px){.video-showcase{padding-block:78px}.video-showcase-head{display:block;margin-bottom:28px}.video-showcase-head h2{font-size:clamp(32px,9vw,42px)}.video-showcase-head p:not(.video-eyebrow){font-size:14px}.video-gallery-link{display:inline-block;margin-top:18px}.video-showcase-grid{grid-template-columns:1fr;gap:16px}.video-showcase-card{padding:24px 18px;gap:16px;border-radius:19px}.video-showcase-card h3{font-size:26px}.video-device{width:min(66vw,236px)}.video-device-note{right:max(0px,calc(50% - 170px))}}
+@media(prefers-reduced-motion:reduce){.video-device,.video-showcase-card:nth-child(2) .video-device{transform:none}}

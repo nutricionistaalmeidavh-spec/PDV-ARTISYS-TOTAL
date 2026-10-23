@@ -5,7 +5,7 @@ import {resolve,extname,sep} from 'node:path';
 const TYPES=Object.freeze({
   '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8',
   '.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png',
-  '.webp':'image/webp','.ico':'image/x-icon','.webmanifest':'application/manifest+json'
+  '.webp':'image/webp','.mp4':'video/mp4','.ico':'image/x-icon','.webmanifest':'application/manifest+json'
 });
 const headers=type=>({
   'content-type':type,'cache-control':'no-store','x-content-type-options':'nosniff',

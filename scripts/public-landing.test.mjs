@@ -180,3 +180,78 @@ test('local workerd smoke uses a temporary config without production routes',()=
  assert.ok(browserSmoke.includes("'--config',devConfigPath"));
  assert.ok(browserSmoke.includes('unlinkSync(devConfigPath)'));
 });
+
+
+test('product videos are first-party lazy, accessible, and do not affect auth routes',()=>{
+  const html=source('apps/landing/index.html');
+  const css=source('apps/landing/landing-video.css');
+  const js=source('apps/landing/landing-video.js');
+  const build=source('scripts/build-web.mjs');
+  assert.match(html,/id="videos-em-acao"/);
+  for(const name of ['mesas','estoque']){
+    assert.match(html,new RegExp('/media/pdv-demo-'+name+'\\.mp4'));
+    assert.match(html,new RegExp('data-video="'+name+'"'));
+  }
+  assert.match(html,/<video[^>]*muted[^>]*playsinline[^>]*controls[^>]*preload="none"/);
+  assert.match(html,/href="\/landing-video\.css"/);
+  assert.match(html,/src="\/landing-video\.js"/);
+  assert.match(build,/landing-video\.css/);
+  assert.match(build,/landing-video\.js/);
+  assert.match(build,/!path\.endsWith\('\.mp4'\)/);
+  assert.match(source('apps/api/src/local-static.mjs'),/'\.mp4':'video\/mp4'/);
+  assert.match(js,/IntersectionObserver/);
+  assert.match(js,/prefers-reduced-motion/);
+  assert.match(css,/@media\s*\(max-width:\s*760px\)/);
+  assert.doesNotMatch(js,/fetch\(|https?:\/\//);
+  assert.doesNotMatch(html,/src="https?:\/\//);
+  assert.match(html,/src="\/media\/pdv-integrado\.webp"/);
+  assert.match(html,/id="registration-dialog"/);
+  assert.match(html,/id="login-dialog"/);
+});
+
+test('product showcase files are actual locally optimized MP4s',()=>{
+  const html=source('apps/landing/index.html');
+  for(const name of ['mesas','estoque']){
+    const path='apps/landing/media/pdv-demo-'+name+'.mp4';
+    const video=readFileSync(new URL('../'+path,import.meta.url));
+    assert.equal(video.toString('ascii',4,8),'ftyp',path+' MP4 file signature');
+    assert.ok(video.length>10000&&video.length<500000,path+' must be optimized for lightweight delivery');
+    assert.match(html,new RegExp('/media/pdv-demo-'+name+'\\.mp4'));
+  }
+});
+
+test('self-hosted landing serves MP4 with a video content type',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'pdv-video-'));
+  try{
+    mkdirSync(join(dir,'media'));
+    writeFileSync(join(dir,'media/pdv-demo-mesas.mp4'),Buffer.from('0000ftyp','ascii'));
+    const response=await serveLocalPwa('/media/pdv-demo-mesas.mp4',{rootDir:dir});
+    assert.equal(response.status,200);
+    assert.equal(response.headers.get('content-type'),'video/mp4');
+    assert.equal((await response.arrayBuffer()).byteLength,8);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('both video demonstrations autoplay in continuous loop',()=>{
+  const html=source('apps/landing/index.html');
+  const players=Array.from(html.matchAll(/<video\s+[^>]*data-video="(mesas|estoque)"[^>]*>/g));
+  assert.equal(players.length,2);
+  for(const [,name] of players){
+    const tag=players.find(match=>match[1]===name)[0];
+    assert.match(tag,/\sloop(?:\s|>)/,'missing continuous loop for '+name);
+    assert.match(tag,/\smuted\s/);
+    assert.match(tag,/\splaysinline\s/);
+  }
+});
+
+test('video posters match their respective portrait clips',()=>{
+  const html=source('apps/landing/index.html');
+  for(const name of ['mesas','estoque']){
+    const filename='apps/landing/media/pdv-demo-'+name+'-poster.webp';
+    const poster=readFileSync(new URL('../'+filename,import.meta.url));
+    assert.equal(poster.toString('ascii',0,4),'RIFF');
+    assert.equal(poster.toString('ascii',8,12),'WEBP');
+    assert.ok(poster.length>5000&&poster.length<50000);
+    assert.match(html,new RegExp('poster="/media/pdv-demo-'+name+'-poster\\.webp"'));
+  }
+});
