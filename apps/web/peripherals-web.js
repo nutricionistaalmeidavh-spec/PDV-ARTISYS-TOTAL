@@ -251,7 +251,7 @@
       '<label class="pdv-peripherals-field">Como deseja imprimir?<select name="printerMode"><option value="browser">Impressão pelo navegador (recomendado)</option><option value="serial">Impressora serial ESC/POS (experimental)</option><option value="bridge">Conector local (sem janela de impressão)</option></select></label>',
       '<div class="pdv-peripherals-method" data-printer-mode="browser"><strong>Pronto para imprimir pelo navegador</strong><p>Sem instalação adicional ou chave. O sistema abre a janela de impressão do dispositivo para escolher a impressora ou salvar PDF.</p></div>',
       '<div class="pdv-peripherals-method" data-printer-mode="serial" hidden><strong>Impressora serial</strong><p>A conexão depende do suporte Web Serial do navegador e de autorização explícita. Este modo não foi homologado para todos os modelos.</p><p data-serial-warning="printer" class="pdv-peripherals-warning" hidden></p><div class="pdv-peripherals-field-grid"><label class="pdv-peripherals-field">Velocidade serial (bps)<input name="printerBaud" type="number" min="300" max="115200"></label></div><label class="pdv-peripherals-check"><input name="cut" type="checkbox"> Acionar corte ESC/POS somente quando compatível</label><button type="button" data-device="printer" class="pdv-peripherals-secondary">Conectar impressora serial</button><p class="pdv-peripherals-state" data-device-status="printer">Impressora serial não conectada.</p></div>',
-      '<div class="pdv-peripherals-method" data-printer-mode="bridge" hidden><strong>Impressão automática pelo computador</strong><p>Opção avançada: exige um conector open source executando no mesmo computador. O código de pareamento é exibido no terminal ao iniciar o conector — não é a licença do PDV.</p><p class="pdv-peripherals-warning" data-bridge-mobile-warning hidden>Este conector usa o próprio computador (127.0.0.1). Para imprimir pelo celular, use o diálogo de impressão do sistema; o pareamento com uma impressora de outro PC não está disponível neste modo.</p><label class="pdv-peripherals-field">Código do conector local<input name="bridgeToken" type="password" autocomplete="off" placeholder="Código gerado no computador (64 caracteres)"></label><div class="pdv-peripherals-actions"><button type="button" id="pdv-bridge-connect" class="pdv-peripherals-secondary">Conectar serviço local</button><button type="button" id="pdv-bridge-queue" class="pdv-peripherals-secondary">Consultar fila</button></div><label class="pdv-peripherals-check"><input name="autoPrint" type="checkbox"> Imprimir automaticamente após a conclusão da venda (apenas conector local)</label><div id="pdv-bridge-history" class="pdv-peripherals-history"></div></div>',
+      '<div class="pdv-peripherals-method" data-printer-mode="bridge" hidden><strong>Impressão automática pelo computador</strong><p>Instale o conector gratuito no computador e clique em Autorizar neste computador. Confirme o pedido na janela que será exibida no próprio PC.</p><p class="pdv-peripherals-warning" data-bridge-mobile-warning hidden>Este conector usa o próprio computador (127.0.0.1). Para imprimir pelo celular, use o diálogo de impressão do sistema; o pareamento com uma impressora de outro PC não está disponível neste modo.</p><div class="pdv-peripherals-actions"><button type="button" id="pdv-bridge-pair" class="pdv-peripherals-primary">Autorizar neste computador</button></div><details class="pdv-peripherals-advanced"><summary>Já tenho o código de pareamento (modo avançado)</summary><label class="pdv-peripherals-field">Código do conector local<input name="bridgeToken" type="password" autocomplete="off" placeholder="Código gerado no PC (64 caracteres)"></label></details><div id="pdv-bridge-printer-wrap" hidden><label class="pdv-peripherals-field">Impressora deste computador<select id="pdv-bridge-printer-select"><option value="">Impressora padrão do Windows</option></select></label><button type="button" id="pdv-bridge-printer-save" class="pdv-peripherals-secondary">Usar esta impressora</button></div><div class="pdv-peripherals-actions"><button type="button" id="pdv-bridge-connect" class="pdv-peripherals-secondary">Conectar serviço local</button><button type="button" id="pdv-bridge-queue" class="pdv-peripherals-secondary">Consultar fila</button></div><label class="pdv-peripherals-check"><input name="autoPrint" type="checkbox"> Imprimir automaticamente após a conclusão da venda (apenas conector local)</label><div id="pdv-bridge-history" class="pdv-peripherals-history"></div></div>',
       '<label class="pdv-peripherals-field">Largura do papel<select name="paperMm"><option value="58">58 mm</option><option value="80">80 mm</option></select></label><button type="button" id="pdv-test-printer" class="pdv-peripherals-secondary">Imprimir teste</button><p class="pdv-peripherals-note">O teste abre o diálogo ou envia uma solicitação; confirme a saída física na impressora.</p>',
       '</section>',
       '<section role="tabpanel" id="pdv-peripherals-panel-scale" aria-labelledby="pdv-peripherals-tab-scale" data-peripherals-panel="scale" hidden>',
@@ -316,7 +316,7 @@
     }
     const mobileWarning=dialog.querySelector('[data-bridge-mobile-warning]');
     if(mobileWarning)mobileWarning.hidden=!isMobile;
-    for(const id of ['pdv-bridge-connect','pdv-bridge-queue']){
+    for(const id of ['pdv-bridge-connect','pdv-bridge-queue','pdv-bridge-pair','pdv-bridge-printer-save']){
       const button=dialog.querySelector('#'+id);
       if(button&&isMobile){button.disabled=true;button.title='O conector local funciona no computador onde está instalado.';}
     }
@@ -362,6 +362,23 @@
           ' A identificação não pode ser alterada offline.';
       });
     }
+    async function refreshPrinters(){
+      const data=await root.PdvLocalBridge.getPrinters();
+      const select=dialog.querySelector('#pdv-bridge-printer-select');
+      select.replaceChildren();
+      const defaultOption=root.document.createElement('option');
+      defaultOption.value='';defaultOption.textContent='Impressora padrão do computador';
+      select.append(defaultOption);
+      for(const item of data.printers||[]){
+        if(typeof item.name!=='string')continue;
+        const option=root.document.createElement('option');
+        option.value=item.name;
+        option.textContent=item.name+(item.isDefault?' (padrão)':'');
+        select.append(option);
+      }
+      select.value=data.selected||'';
+      dialog.querySelector('#pdv-bridge-printer-wrap').hidden=false;
+    }
     async function refreshBridgeJobs(){
       const data=await root.PdvLocalBridge.jobs();
       const pane=dialog.querySelector('#pdv-bridge-history');
@@ -370,7 +387,9 @@
         const row=root.document.createElement('div');
         row.style.cssText='display:flex;gap:8px;align-items:center;padding:4px 0;';
         const text=root.document.createElement('span');
-        text.textContent=job.saleId+' · '+job.status+' · '+job.attempts+' tentativa(s)';
+        const labels={PENDING:'Na fila',SUBMITTING:'Enviando ao spooler',SUBMITTED:'Enviado ao spooler — confira o papel',FAILED:'Falha confirmada',UNCERTAIN:'Resultado incerto — confira antes de reimprimir'};
+        text.textContent=job.saleId+' · '+(labels[job.status]||job.status)+' · '+job.attempts+' tentativa(s)';
+        text.style.flex='1';text.style.minWidth='0';text.style.overflowWrap='anywhere';
         row.append(text);
         if(job.status==='FAILED'){
           const retry=root.document.createElement('button');
@@ -384,6 +403,11 @@
           });
           row.append(retry);
         }
+        if(job.status==='UNCERTAIN'){
+          const hint=root.document.createElement('small');
+          hint.textContent='Sem reenvio automático: a impressão pode ter saído antes da interrupção.';
+          hint.style.display='block';hint.style.color='#ffd7af';row.append(hint);
+        }
         pane.append(row);
       }
       if(!data.jobs?.length)pane.textContent='Fila vazia.';
@@ -391,7 +415,7 @@
     dialog.addEventListener('click',async e=>{
       const button=e.target?.closest?.('button');
       const kind=button?.dataset?.device;
-      const action=kind||['pdv-test-printer','pdv-bridge-connect','pdv-bridge-queue','pdv-test-drawer','pdv-peripherals-save'].includes(button?.id);
+      const action=kind||['pdv-test-printer','pdv-bridge-pair','pdv-bridge-connect','pdv-bridge-printer-save','pdv-bridge-queue','pdv-test-drawer','pdv-peripherals-save'].includes(button?.id);
       if(!action||button.disabled)return;
       button.disabled=true;
       let localSaved=false;
@@ -410,11 +434,23 @@
             :result?.status==='UNCERTAIN'?'Resultado incerto. Confira a impressora antes de tentar novamente.'
             :'Solicitação enviada à impressora. Confirme a saída física no equipamento.';
         }
+        if(button.id==='pdv-bridge-pair'){
+          status.textContent='Confirme a autorização na janela do computador…';
+          await root.PdvLocalBridge.pairAutomatically();
+          status.textContent='Computador autorizado. O conector pode receber impressões nesta sessão.';
+          try{await refreshPrinters();}catch(e){status.textContent+=' Não foi possível listar impressoras: '+e.message;}
+        }
         if(button.id==='pdv-bridge-connect'){
           const token=form.elements.namedItem('bridgeToken').value;
           if(token)root.PdvLocalBridge.pair(token);
           await root.PdvLocalBridge.getStatus();
-          status.textContent='Conector local pareado e autenticado.';
+          status.textContent='Conector local autenticado nesta sessão.';
+          try{await refreshPrinters();}catch(e){status.textContent+=' Listagem de impressoras indisponível: '+e.message;}
+        }
+        if(button.id==='pdv-bridge-printer-save'){
+          const selected=dialog.querySelector('#pdv-bridge-printer-select').value;
+          await root.PdvLocalBridge.selectPrinter(selected);
+          status.textContent='Impressora selecionada para este computador. Imprima um teste para conferir.';
         }
         if(button.id==='pdv-bridge-queue'){
           const token=form.elements.namedItem('bridgeToken').value;
