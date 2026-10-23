@@ -49,9 +49,14 @@ export async function applyOfflineBaseline(db,snapshot,scope){
     for(const record of tables[table])if(!allowedUsers.has(record.user_id)||
       typeof record.cipher!=='string'||typeof record.iv!=='string'||!record.enrolled_at)
       throw Error('Fator MFA fora do escopo ou inválido.');
-    await db.prepare('DELETE FROM saas_mfa_totp WHERE user_id IN (SELECT user_id FROM tenant_memberships WHERE tenant_id=?) AND enrolled_at IS NOT NULL AND user_id NOT IN ('+
-      (tables[table].length?tables[table].map(()=>'?').join(','):'NULL')+')')
-      .bind(scope.tenantId,...tables[table].map(u=>u.user_id)).run();
+    if(tables[table].length){
+      await db.prepare('DELETE FROM saas_mfa_totp WHERE user_id IN (SELECT user_id FROM tenant_memberships WHERE tenant_id=?) AND enrolled_at IS NOT NULL AND user_id NOT IN ('+
+        tables[table].map(()=>'?').join(',')+')')
+        .bind(scope.tenantId,...tables[table].map(u=>u.user_id)).run();
+    }else{
+      await db.prepare('DELETE FROM saas_mfa_totp WHERE enrolled_at IS NOT NULL AND user_id IN (SELECT user_id FROM tenant_memberships WHERE tenant_id=?)')
+        .bind(scope.tenantId).run();
+    }
    }
    for(const record of tables[table]){
     if(!record||Array.isArray(record)||typeof record!=='object')throw Error('Linha inválida.');
