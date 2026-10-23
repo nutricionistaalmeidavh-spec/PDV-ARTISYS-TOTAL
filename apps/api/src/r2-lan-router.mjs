@@ -120,8 +120,7 @@ export async function r2LanRoute(request,db,session,member,tenantId,path,{now=()
               commercialWritesEnabled:false,inventoryOfflineEnabled:writer?.mode==='LOCAL',
               writerMode:writer?.mode||'CLOUD',epoch:writer?.epoch||0,pendingOperations:backlog.n};
           }
-          return 
-            {state:'NOT_CONFIGURED',cloudLinked:false,lastCloudSyncAt:null,commercialWritesEnabled:false};
+          return {state:'NOT_CONFIGURED',cloudLinked:false,lastCloudSyncAt:null,commercialWritesEnabled:false};
         })(),
         note:'O QR vincula o aparelho, mas cada funcionário entra com suas próprias credenciais. Sem replicação ativa, os usuários e dados da nuvem não estão disponíveis neste servidor.'});
     }
