@@ -55,3 +55,26 @@ O navegador em HTTPS pode solicitar permissão de acesso à rede local dependend
 Registrar modelo/fabricante, sistema operacional, driver, USB/COM e configuração do equipamento; testar impressão em 58/80 mm, acentos, corte, desligamento, replug, porta ocupada, falta de papel, reinício durante a impressão, fila FAILED, fila UNCERTAIN e reenvio manual. Para balanças, validar pesos conhecidos (incluindo 1,250 kg) e unidade em balança real; testar quadro incompleto e timeout. Para gaveta, medir abertura no pulso e reação a cabo desconectado. Somente então classificar como FIELD_VERIFIED.
 
 **Limitação intencional:** a CI simula protocolo e spooler, não possui impressora, balança ou gaveta física. Nenhuma homologação física foi declarada. Impressão via driver do SO não significa garantia de suporte a todos os comandos de corte/ESC-POS.
+
+
+## Fase 3 — Windows sem digitar chave
+
+A versão Windows pode ser compilada gratuitamente com GitHub Actions, usando Node.js 22 e Inno Setup:
+\`.github/workflows/bridge-windows-installer.yml\`.
+O artefato \`PDVTotalBridgeSetup.exe\` inclui o runtime Node e todos os scripts locais. Na instalação por usuário, informe a **origem HTTPS exata** do PDV (somente esquema + domínio + porta, sem \`/app\`). A opção de iniciar com o Windows cria um atalho na pasta de inicialização do usuário. Não há assinatura paga nem serviços externos de impressão.
+
+No navegador do **mesmo computador**: **Configurações → Impressão e periféricos → Impressora → Conector local → Autorizar neste computador**. Confirme **Sim** na janela de segurança exibida no Windows. A API local retorna a credencial apenas depois desse consentimento; o navegador a guarda na sessão. Se a aba for fechada e a sessão for perdida, confirme novamente. O campo de 64 caracteres permanece somente como opção técnica para instalações legadas.
+
+A detecção de impressoras Windows permite selecionar uma fila instalada ou utilizar a padrão. A escolha é protegida por autorização e persistida no computador; o servidor rejeita nomes não presentes na enumeração do Windows. O conector continua ouvindo apenas em \`127.0.0.1:8765\` e validando origem, Host e Bearer. **Não exponha essa porta à rede.** No celular, utilize a impressão nativa; enviar a uma impressora de outro PC exige um recurso futuro específico de rede autorizada.
+
+## Fase 4 — emissão, fila e recuperação
+
+O modo **Imprimir automaticamente após a conclusão da venda** somente se aplica ao conector local pareado. O fluxo consulta o comprovante imutável da API e envia o documento da **venda concluída**; não substitui o registro canônico da venda nem o caixa.
+
+A fila SQLite usa IDs idempotentes para a primeira via. Reabrir o pedido/recarregar a página não reenvia a mesma via silenciosamente. O botão **Reimprimir comprovante** é uma ação explícita com novo identificador. Em **Consultar fila**, estados são visíveis: pendente, enviando, aceito pelo spooler, falhou ou resultado incerto. Apenas \`FAILED\` permite **Tentar novamente**; \`UNCERTAIN\` exige inspeção humana antes de qualquer nova via. A indicação \`SUBMITTED\` confirma somente que o sistema operacional aceitou o trabalho — **não** que o papel saiu.
+
+Pedidos de cozinha mantêm o contrato atual de ticket não fiscal, documento da API, claim/ack autorizado e ID fixo contra duplicações. A impressão em rede/serviço remoto não foi habilitada nesta etapa.
+
+### Homologação e limites
+
+Build e testes automatizados verificam código, fila, autorização, cenários simulados e renderização; não são homologação de impressora física. Antes de produção, conferir 58/80 mm, nome correto da fila, impressão após venda, pré-conta, ticket de cozinha, perda de rede, falta de papel, desligamento, religamento e tentativa manual após falha. O instalador Windows gerado via CI não é assinado digitalmente.
