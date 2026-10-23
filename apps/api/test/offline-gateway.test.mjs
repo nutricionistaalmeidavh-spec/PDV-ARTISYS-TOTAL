@@ -75,6 +75,17 @@ test('Cloudflare branch gateway exports only approved tenant identity/catalog; l
  }
  const localLogin=await localCall('/api/v1/auth/login','POST',{email:'waiter@qa.test',password});
  assert.equal(localLogin.status,200,JSON.stringify(localLogin.body));
+ const env={OFFLINE_CLOUD_ORIGIN:origin+'/',OFFLINE_TENANT_ID:'a',OFFLINE_BRANCH_ID:'a-main',
+   OFFLINE_GATEWAY_ID:gateway.id,OFFLINE_GATEWAY_TOKEN:credential};
+ const firstPull=await pullOfflineBaseline(local,env,{
+   fetcher:(url,options)=>api.fetch(new Request(url,{headers:options.headers}))
+ });
+ assert.equal(firstPull.state,'BASELINE_ONLY');
+ await assert.rejects(pullOfflineBaseline(local,env,{
+   fetcher:async()=>{throw Error('WAN_DOWN');}
+ }),/WAN_DOWN/);
+ assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM users').bind().first()).n,2,
+   'Network loss must not delete local identity');
  const blocked=await localCall('/api/v1/tenants/a/products','POST',{branchId:'a-main',sku:'NEW',name:'Nova',salePriceCents:2000},localLogin.cookie);
  assert.equal(blocked.status,503,'Do not claim offline commercial writes are synchronized before outbox is implemented');
  assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM products').bind().first()).n,1);
