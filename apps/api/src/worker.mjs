@@ -284,6 +284,12 @@ export function createApi(env,{now=()=>Date.now()}={}){
           if(env.LAN_MODE==='true'||env.OFFLINE_SYNC_ENABLED!=='true')return failure(404,'Integração offline não habilitada.');
           return offlineGatewayAdminRoute(request,db,membership,session,tenantId,commerceMatch[2],now());
         }
+        if(env.LAN_MODE==='true'&&!['GET','HEAD'].includes(method) &&
+           !commerceMatch[2].startsWith('lan/')){
+          const replica=await db.prepare('SELECT state FROM offline_replica_state WHERE tenant_id=? LIMIT 1')
+            .bind(tenantId).first();
+          if(replica)return failure(503,'Cópia local somente para consulta: reconciliação de vendas, caixa e estoque com D1 ainda não habilitada.');
+        }
         // Business areas are available in the hosted app too. Reuse the same
         // tenant-scoped policy without exposing device pairing or LAN controls.
         if(/^modules(?:\/[A-Z_]+)?$/.test(commerceMatch[2])){
