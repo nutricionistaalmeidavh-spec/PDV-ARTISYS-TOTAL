@@ -6,6 +6,8 @@ function verify(snapshot,scope){
     snapshot.scope?.tenantId!==scope.tenantId||snapshot.scope?.branchId!==scope.branchId||
     snapshot.scope?.gatewayId!==scope.gatewayId)throw Error('Snapshot fora do escopo autorizado.');
  const tables=snapshot.tables;
+ if(snapshot.authority&&(!['CLOUD','LOCAL','RECONCILING'].includes(snapshot.authority.mode)||
+   !Number.isSafeInteger(snapshot.authority.epoch)||snapshot.authority.epoch<0))throw Error('Autoridade offline inválida.');
  for(const key of ORDER)if(!Array.isArray(tables[key])||tables[key].length>2500)
    throw Error('Snapshot incompleto ou muito grande: '+key);
  if(tables.tenants.length!==1||tables.tenants[0].id!==scope.tenantId)throw Error('Empresa inválida.');
@@ -30,9 +32,14 @@ export async function applyOfflineBaseline(db,snapshot,scope){
    throw Error('Banco já provisionado: nunca sobrescrever uma loja local. Use um SQLite vazio e separado.');
  const count=await db.prepare('SELECT COUNT(*) AS n FROM sales').bind().first();
  if(count.n>0)throw Error('Vendas locais presentes: reconciliação obrigatória antes de atualizar cópia.');
+ const outstanding=(await db.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE status IN('PENDING','CONFLICT')").bind().first()).n;
  db.exec('BEGIN IMMEDIATE');
  try{
+  // Removed/cloud-revoked members cannot retain previously copied permission.
+  await db.prepare('UPDATE tenant_memberships SET active=0 WHERE tenant_id=?').bind(scope.tenantId).run();
+  await db.prepare('UPDATE users SET active=0 WHERE id IN(SELECT user_id FROM tenant_memberships WHERE tenant_id=?)').bind(scope.tenantId).run();
   for(const table of ORDER){
+   if(table==='stock_positions'&&outstanding>0)continue;
    const columns=(await db.prepare('PRAGMA table_info('+table+')').bind().all()).results.map(x=>x.name);
    if(!columns.length)throw Error('Tabela inexistente: '+table);
    const allowed=new Set(columns);
@@ -46,6 +53,10 @@ export async function applyOfflineBaseline(db,snapshot,scope){
     // A primary-key-only record needs DO NOTHING; all supported rows have mutable columns.
     await db.prepare(sql).bind(...names.map(n=>record[n]===undefined?null:record[n])).run();
    }
+  }
+  if(snapshot.authority){
+   await db.prepare('INSERT INTO offline_local_authority(tenant_id,branch_id,gateway_id,epoch,mode,refreshed_at) VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id) DO UPDATE SET epoch=excluded.epoch,mode=excluded.mode,refreshed_at=excluded.refreshed_at')
+    .bind(scope.tenantId,scope.branchId,scope.gatewayId,snapshot.authority.epoch,snapshot.authority.mode,Date.now()).run();
   }
   const damaged=(await db.prepare('PRAGMA foreign_key_check').bind().all()).results;
   if(damaged.length)throw Error('Snapshot falhou na integridade referencial.');
