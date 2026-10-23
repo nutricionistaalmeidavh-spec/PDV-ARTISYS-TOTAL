@@ -1,6 +1,7 @@
 import { sha256, verifyPassword, newSessionToken } from './password.mjs';
 import {registerPublicAccount} from './public-registration.mjs';
 import {platformBridgeRoute} from './platform-bridge.mjs';
+import {tenantTelemetryRoute} from './telemetry.mjs';
 import {billingConnectorRoute,billingCustomerRoute} from './artisys-billing.mjs';
 import {beginMfaLogin,finishMfaLogin,emailVerifyPublic,accountSecurityRoute} from './account-security.mjs';
 import {passwordResetRoute} from './password-reset.mjs';
@@ -238,6 +239,14 @@ export function createApi(env,{now=()=>Date.now()}={}){
           FROM tenant_memberships m JOIN users u ON u.id=m.user_id
           WHERE m.tenant_id=? AND m.active=1 AND u.active=1 ORDER BY u.display_name,u.id`).bind(membership.tenantId).all();
         return response({tenantId:membership.tenantId,members:results});
+      }
+      // Optional metrics are independent of paid entitlement and never mutate business ledgers.
+      const telemetryMatch=path.match(/^\/api\/v1\/tenants\/([^/]+)\/telemetry\/(preferences|events)$/);
+      if(telemetryMatch){
+        const tenantId=decodeURIComponent(telemetryMatch[1]);
+        const member=await requireMembership(db,session.userId,tenantId);
+        if(!member)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
+        return tenantTelemetryRoute(request,db,env,member,tenantId,telemetryMatch[2],now());
       }
       const billingMatch=path.match(/^\/api\/v1\/tenants\/([^/]+)\/(billing\/(?:plans|checkout|orders))$/);
       if(billingMatch){

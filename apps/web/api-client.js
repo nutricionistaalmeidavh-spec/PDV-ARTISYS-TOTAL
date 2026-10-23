@@ -123,9 +123,23 @@
         headers['x-mutation-id']=key;
       }
       let response;
+      const startedAt=Date.now();
+      const isTelemetry=target.pathname.includes('/telemetry/');
       try{response=await root.fetch(target,{method,credentials:'same-origin',headers,
         ...(['GET','HEAD'].includes(method)?{}:{body:JSON.stringify(payload)})});}
-      catch{throw new Error('Sem conexão. Seus dados permanecem na tela; tente novamente.');}
+      catch{
+        if(!isTelemetry)root.PdvTelemetryUi?.observeRequest({operation,status:0,durationMs:Date.now()-startedAt});
+        throw new Error('Sem conexão. Seus dados permanecem na tela; tente novamente.');
+      }
+      if(!isTelemetry){
+        const durationMs=Date.now()-startedAt;
+        root.PdvTelemetryUi?.observeRequest({operation,status:response.status,durationMs});
+        // A completed server response is the success signal, never the button click.
+        if(response.ok&&method==='POST'&&/^sales\/[^/]+\/complete$/.test(operation))
+          void root.PdvTelemetryUi?.send('sale_completed',{dimensions:{module:'sales',outcome:'success'},measurements:{duration_ms:durationMs}});
+        if(response.ok&&method==='POST'&&/^sales\/[^/]+\/returns$/.test(operation))
+          void root.PdvTelemetryUi?.send('return_completed',{dimensions:{module:'returns',outcome:'success'},measurements:{duration_ms:durationMs}});
+      }
       const isCsv=response.headers.get('content-type')?.includes('text/csv');
       let value;try{value=isCsv?await response.text():await response.json();}catch{value={};}
       if(!response.ok){
