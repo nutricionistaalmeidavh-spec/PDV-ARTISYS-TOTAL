@@ -42,7 +42,8 @@ test('hosted settings show business, receipts, equipment and areas without loadi
   assert.match(host.innerHTML,/Identificação nos comprovantes/);
   assert.match(host.innerHTML,/Impressão e periféricos/);
   assert.match(host.innerHTML,/Funcionamento offline/);
-  assert.match(host.innerHTML,/ainda não está disponível/i);
+  assert.match(host.innerHTML,/vendas, caixa e estoque ainda não disponível/i);
+  assert.match(host.innerHTML,/data-settings-offline-gateway/);
   assert.doesNotMatch(host.innerHTML,/data-settings-offline-enable/);
 
   assert.match(host.innerHTML,/Alimentação/);
@@ -51,6 +52,14 @@ test('hosted settings show business, receipts, equipment and areas without loadi
   assert.ok(calls.every(call=>!call.path?.includes('/lan/')));
 });
 
+test('nonowner hosted settings never expose offline gateway secrets or enrollment form',async()=>{
+ const {window,api,host}=setup({permissions:[]});
+ api.request=async path=>path.endsWith('/context')?{name:'Loja',profileKey:'WAITER'}:
+  path.endsWith('/branches')?{branches:[{id:'branch-a',name:'Matriz',code:'MAIN'}]}:{};
+ await window.PdvWebSettings.render(host,api);
+ assert.match(host.innerHTML,/Funcionamento offline/);
+ assert.doesNotMatch(host.innerHTML,/data-settings-offline-gateway/);
+});
 test('receipt settings save to the selected branch and retain its current logo',async()=>{
   const feedback=element(),submit=element();
   const fields={name:{value:'Burguerzão'},address:{value:'Rua nova'},phone:{value:'(11) 1234'},removeLogo:{checked:false},logo:{files:[]}};
