@@ -13,6 +13,11 @@ try{
  await page.addStyleTag({content:css});
  await page.evaluate(()=>{
   window.remoteCalls=[];
+  // setContent runs on about:blank; simulate the secure-origin Web Crypto UUID
+  // exposed by the real HTTPS PDV, without replacing production code.
+  if(typeof window.crypto?.randomUUID!=='function'){
+    Object.defineProperty(window.crypto,'randomUUID',{configurable:true,value:()=> '23a120d4-9406-4c14-8f4b-678a82b9ba10'});
+  }
   class Client{
    constructor(){this.tenantId='t-demo';this.branchId='b-demo';}
    async request(path,opts={}){
@@ -47,6 +52,7 @@ try{
  await page.getByText(/Aceito pelo spooler/).waitFor();
  await page.screenshot({path:'qa-artifacts/mobile-print-relay/iphone-remote-queued.png',fullPage:true});
  await page.locator('#post-sale-remote-send').click();
+ await page.waitForFunction(()=>window.remoteCalls.filter(c=>c.opts.method==='POST'&&c.path.includes('printing/remote/jobs')).length===2);
  const calls=await page.evaluate(()=>window.remoteCalls);
  const posted=calls.filter(c=>c.opts.method==='POST'&&c.path.includes('printing/remote/jobs'));
  assert.equal(posted.length,2);
