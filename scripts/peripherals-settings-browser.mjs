@@ -56,6 +56,17 @@ try{
   assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),true,'mobile page must not overflow horizontally');
   await mobile.close();
 
+  // Existing users who selected the optional bridge must see their saved method, not the default pane.
+  const persisted=await setup({width:390,height:844},iphoneUA);
+  await persisted.evaluate(()=>{window.PdvWebHardware.saveSettings({printerMode:'bridge',paperMm:58});});
+  await persisted.evaluate(()=>{document.getElementById('pdv-peripherals-dialog').close();});
+  await persisted.locator('#pdv-peripherals-dialog').waitFor({state:'detached'});
+  await persisted.evaluate(()=>window.PdvWebHardware.showSettings());
+  assert.equal(await persisted.locator('[name="printerMode"]').inputValue(),'bridge');
+  assert.equal(await persisted.locator('[name="bridgeToken"]').isVisible(),true);
+  assert.equal(await persisted.locator('#pdv-test-printer').isDisabled(),true);
+  await persisted.close();
+
   const desktop=await setup({width:1280,height:900},'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36');
   await desktop.locator('[data-peripherals-tab="receipt"]').click();
   assert.equal(await desktop.locator('[name="receiptName"]').inputValue(),'Loja Exemplo');
