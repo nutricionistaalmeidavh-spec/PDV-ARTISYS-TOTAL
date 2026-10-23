@@ -57,6 +57,23 @@ test('Balcão lists table sessions and delivered pickup documents, filtering by 
   }finally{x.close();}
 });
 
+test('cashier can settle a delivered table without gaining restaurant management; operator cannot',async()=>{
+  const x=await setup();try{
+    const {session}=await deliveredTable(x,{stock:true});
+    await x.db.prepare("UPDATE tenant_memberships SET profile_key='CASHIER' WHERE tenant_id='t' AND user_id='u'").bind().run();
+    const list=await x.request('checkout/documents?branchId=b&query=comanda');
+    assert.equal(list.status,200);assert.ok(list.body.documents.some(d=>d.id===session.id));
+    assert.equal((await x.request('restaurant/tables','POST',{label:'Unauthorized'})).status,403);
+    assert.equal((await x.request('cash/open','POST',{terminalId:'WEB-QA',openingCents:0})).status,201);
+    const open=await x.request('checkout/documents/command/'+session.id+'/open','POST',{terminalId:'WEB-QA'});
+    assert.equal(open.status,200,JSON.stringify(open.body));
+    const paid=await x.request('sales/'+open.body.sale.id+'/complete','POST',{terminalId:'WEB-QA',payments:[{method:'PIX',amountCents:2500}]});
+    assert.equal(paid.status,200,JSON.stringify(paid.body));
+    await x.db.prepare("UPDATE tenant_memberships SET profile_key='OPERATOR' WHERE tenant_id='t' AND user_id='u'").bind().run();
+    assert.equal((await x.request('checkout/documents/command/'+session.id+'/open','POST',{terminalId:'WEB-QA'})).status,403);
+  }finally{x.close();}
+});
+
 test('document search filters names, accents and fulfillment before applying the pending-document limit',async()=>{
   const x=await setup();try{
     const at='2026-10-20T12:00:00.000Z';
@@ -83,7 +100,8 @@ test('hosted settings manages optional areas without exposing LAN device routes 
     assert.equal((await x.request('lan/devices')).status,404);
     await x.db.prepare("UPDATE tenant_memberships SET profile_key='CASHIER'").bind().run();
     assert.equal((await x.request('modules/FOOD','PATCH',{enabled:false})).status,403);
-    assert.equal((await x.request('checkout/documents/command/session/open','POST',{terminalId:'WEB-TEST'})).status,403);
+    assert.equal((await x.request('checkout/documents/command/session/open','POST',{terminalId:'WEB-TEST'})).status,404,
+      'cashier can request settlement, but an unknown session must not open');
   }finally{x.close();}
 });
 

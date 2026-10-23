@@ -45,7 +45,9 @@ export async function checkoutDocumentsRoute(request,db,session,member,tenant,pa
       }
       return json({settlement:{prepaidCents,amountDueCents:Math.max(0,sale.totalCents-prepaidCents),shares}});
     }
-    const food=allowed(member,'restaurant.access')&&allowed(member,'restaurant.orders.view');
+    // Settlement is a cashier task; it does not grant restaurant management.
+    const food=(allowed(member,'restaurant.access')&&allowed(member,'restaurant.orders.view'))||
+      (allowed(member,'sales.create')&&allowed(member,'cash.view'));
     const wholesale=allowed(member,'wholesale.access');
     if(parts.length===2&&method==='GET'){
       const query=String(url.searchParams.get('query')||'').trim().slice(0,120);

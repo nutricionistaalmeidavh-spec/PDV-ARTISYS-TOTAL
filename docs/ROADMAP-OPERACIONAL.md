@@ -31,6 +31,16 @@ Cada jornada recebe um estado: não verificado, funciona, funciona com problema 
 
 A CI do commit 9577416 foi aprovada, incluindo navegador desktop/mobile. Isso é evidência histórica dos cenários daquela execução; as jornadas abaixo ainda precisam de revisão operacional própria.
 
+## Atualização de QA hospedado — 23/10/2026
+
+**Bloqueadores do complemento por perfil corrigidos e validados:** KITCHEN entra sem exigir leitura de catálogo; CASHIER recupera e recebe a comanda no Balcão sem ganhar gestão de restaurante. Novo corte por UI em réplica limpa passou: garçom → cozinha → entrega → caixa → mesa livre → fechamento com divergência zero. Cobertura permanente no gate de navegador e teste de autorização de documentos. Nenhum novo bloqueador no recorte; homologação por perfil em produção, Safari físico/PWA e evento real Asaas continuam pendentes.
+
+Recuperação sintética em D1 privado aprovada: 122 tabelas, 47 registros, comparação integral, chaves estrangeiras sem violações e integridade `ok`. A primeira montagem de snapshot reprovou por disparar gatilhos durante carga; procedimento corrigido e repetido em destino vazio. Asaas permanece em produção, sem sandbox disponível: planos reais consultados e contratos locais passaram, mas evento real de pagamento não foi homologado.
+
+Evidência: [QA hospedado](QA-PRODUCAO-20261023.md). Empresa/conta QA criada em produção com trial; preparação, balcão/troco/retry, mesa → KDS por estação → PIX registrado → fechamento, cancelamento/restituição, estoque e caixa reconciliados pela API e D1. Caixa terminou fechado com divergência zero. Isolamento da empresa real confirmado em consultas negadas.
+
+Chromium e WebKit em 390×844 passaram em login/navegação nas quatro telas verificadas. Isso não fecha Safari físico/PWA, nem todos os fluxos por cliques ou por perfil. 26 testes focados locais de SaaS, cobrança e recuperação passaram; pagamento real e recuperação do D1 em destino separado continuam pendentes. Próximo corte: jornada completa por UI/perfil, interrupção, iPhone/PWA e integração comercial da central. A tabela abaixo continua sendo o escopo amplo; o relatório define precisamente as variantes já executadas.
+
 ## Ordem de execução
 
 | Prioridade | Jornada | Resultado a conferir | Estado da auditoria operacional |

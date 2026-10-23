@@ -194,8 +194,69 @@ try{
   await reader.locator('#sidebar-nav [data-route=access]').click();await reader.getByRole('heading',{name:'Suas sessões',exact:true}).waitFor();
   assert.equal(await reader.getByRole('heading',{name:'Equipe e perfis',exact:true}).count(),0);
   assert.deepEqual(readerErrors,[]);await readerContext.close();
+  await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) SELECT ?,?,?,password_hash,? FROM users WHERE id=?').bind('kitchen','kitchen@example.com','Cozinha teste',stamp,'owner').run();
+  await db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)').bind('audit','kitchen','KITCHEN',stamp).run();
+  const kitchenContext=await browser.newContext({viewport:{width:390,height:844}}),kitchen=await kitchenContext.newPage(),kitchenReads=[];
+  kitchen.on('response',response=>{const path=new URL(response.url()).pathname;if(path.includes('/api/v1/tenants/')&&(/\/(products|categories|cash)(\?|$|\/)/.test(path)))kitchenReads.push({path,status:response.status()});});
+  await kitchen.goto('http://127.0.0.1:'+server.address().port+'/app/');
+  await kitchen.locator('#web-email').fill('kitchen@example.com');await kitchen.locator('#web-password').fill(password);
+  await kitchen.locator('#web-login-form button[type=submit]').click();await kitchen.locator('#auth-overlay').waitFor({state:'hidden'});
+  await kitchen.locator('#route-content').getByRole('heading',{name:'Início',exact:true}).waitFor();
+  assert.deepEqual(kitchenReads,[],'kitchen login must not request catalog or cash permissions');
+  assert.equal(await kitchen.locator('#sidebar-nav [data-route=checkout]').count(),0);
+  await kitchen.locator('#sidebar-nav [data-route=FOOD]').click();await kitchen.locator('[data-r4-action=tab][data-id=kitchen]').click();
+  await kitchen.getByRole('heading',{name:'KDS · Estações e pedidos',exact:true}).waitFor();
+  // Full handoff through visible controls, with three distinct identities.
+  for(const role of ['WAITER','CASHIER']){
+    const id=role.toLowerCase();
+    await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) SELECT ?,?,?,password_hash,? FROM users WHERE id=?').bind(id,id+'@example.com','QA '+role,stamp,'owner').run();
+    await db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)').bind('audit',id,role,stamp).run();
+  }
+  const roleOrigin=new URL(page.url()).origin;
+  const prepare=async(path,body)=>{
+    const response=await page.request.post(roleOrigin+'/api/v1/tenants/audit/'+path,{headers:{origin:roleOrigin,'x-mutation-id':crypto.randomUUID()},data:{branchId:'branch',...body}});
+    assert.equal(response.status(),201,await response.text());return response.json();
+  };
+  const roleProduct=(await prepare('products',{name:'Prato jornada por perfil',sku:'QA-ROLE',salePriceCents:1000,trackStock:true,menuEnabled:true})).product;
+  await prepare('inventory/receipts',{productId:roleProduct.id,quantity:10,type:'opening'});
+  const roleStation=(await prepare('restaurant/kitchen/stations',{name:'Cozinha jornada',printEnabled:false})).station;
+  await prepare('restaurant/kitchen/routes',{productId:roleProduct.id,mode:'PRODUCTION',stationId:roleStation.id});
+  const roleTable=(await prepare('restaurant/tables',{label:'Mesa jornada por perfil',seats:4})).table;
+  const rolePages={};
+  for(const role of ['WAITER','CASHIER']){
+    const context=await browser.newContext({viewport:{width:390,height:844}}),staff=await context.newPage();
+    await staff.goto(roleOrigin+'/app/');await staff.locator('#web-email').fill(role.toLowerCase()+'@example.com');await staff.locator('#web-password').fill(password);
+    await staff.locator('#web-login-form button[type=submit]').click();await staff.locator('#auth-overlay').waitFor({state:'hidden'});rolePages[role]={context,page:staff};
+  }
+  const waiter=rolePages.WAITER.page,cashier=rolePages.CASHIER.page;
+  await cashier.locator('#sidebar-nav [data-route=cash]').click();await cashier.locator('#web-cash-open [name=amount]').fill('100,00');await cashier.locator('#web-cash-open button[type=submit]').click();await cashier.locator('[data-cash-web=close]').waitFor();
+  await waiter.locator('#sidebar-nav [data-route=FOOD]').click();await waiter.locator('[data-r4-action=open][data-id="'+roleTable.id+'"]').click();await waiter.locator('[data-r4-action=select]').waitFor();
+  await waiter.locator('[data-r4-action=tab][data-id=orders]').click();const roleOrderForm=waiter.locator('[data-r4-form=order]');
+  await roleOrderForm.locator('[name=tableSessionId]').selectOption({label:'Mesa jornada por perfil'});await roleOrderForm.locator('[name=productId]').selectOption(roleProduct.id);
+  await waiter.waitForFunction(()=>document.querySelector('[data-r4-order-item]')?.dataset.r4PizzaState==='none');
+  const orderCreated=waiter.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.endsWith('/restaurant/orders'));
+  await roleOrderForm.locator('button[type=submit]').click();const orderResponse=await orderCreated;assert.equal(orderResponse.status(),201);const roleOrder=(await orderResponse.json()).order;
+  await kitchen.locator('[data-r4-action=refresh]').click();
+  const kitchenRow=kitchen.locator('.restaurant-row').filter({hasText:roleOrder.id.slice(0,8)});
+  await kitchenRow.locator('[data-r4-action=preparing-station]').click();await kitchenRow.locator('[data-r4-action=ready-station]').click();
+  await kitchenRow.getByText(/Pronto/).waitFor();
+  await waiter.locator('[data-r4-action=refresh]').click();await waiter.locator('[data-r4-action=deliver][data-id="'+roleOrder.id+'"]').click();await waiter.getByText(/Entregue/).first().waitFor();
+  await cashier.locator('#sidebar-nav [data-route=checkout]').click();await cashier.locator('#checkout-documents').click();
+  await cashier.locator('#checkout-document-results .data-row').filter({hasText:'Mesa jornada por perfil'}).locator('[data-open-checkout-document]').click();
+  await cashier.locator('[data-checkout-document-context]').waitFor();await cashier.locator('#finalize-sale').click();await cashier.locator('#confirm-payment').waitFor();
+  await cashier.locator('[data-remove-payment]').first().click();await cashier.locator('#new-payment-method').selectOption('PIX');await cashier.locator('#add-payment').click();
+  const rolePaid=cashier.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.endsWith('/complete'));await cashier.locator('#confirm-payment').click();
+  const paidResponse=await rolePaid;assert.equal(paidResponse.status(),200);const roleSale=(await paidResponse.json()).sale;assert.equal(roleSale.totalCents,1000);
+  await waiter.locator('[data-r4-action=tab][data-id=tables]').click();await waiter.locator('[data-r4-action=refresh]').click();
+  await waiter.locator('.restaurant-table').filter({hasText:'Mesa jornada por perfil'}).locator('[data-r4-action=select]').click();await waiter.locator('[data-r4-action=close]').click();
+  await waiter.locator('.restaurant-table').filter({hasText:'Mesa jornada por perfil'}).getByText('Livre',{exact:true}).waitFor();
+  await cashier.locator('#sidebar-nav [data-route=cash]').click();await cashier.locator('[data-cash-web=close]').click();
+  await cashier.locator('.ux-dialog [name=amount]').fill('100,00');await cashier.getByRole('button',{name:'Confirmar fechamento',exact:true}).click();await cashier.locator('#web-cash-open').waitFor();
+  assert.equal((await db.prepare('SELECT balance_milli AS balance FROM stock_positions WHERE product_id=?').bind(roleProduct.id).first()).balance,9000);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM cash_sessions WHERE operator_id='cashier' AND status='CLOSED' AND divergence_cents=0").bind().first()).n,1);
+  await rolePages.WAITER.context.close();await rolePages.CASHIER.context.close();await kitchenContext.close();
   assert.deepEqual(errors,[]);assert.deepEqual(badRequests,[]);
-  console.log('Audit fixes browser: navigation, contrast, master -> recipe -> menu -> canonical sale/stock, returns, settings, access, purchases and logistics passed.');
+  console.log('Audit fixes browser: navigation, catalog, sale/stock, returns, settings, access, purchases, logistics and waiter -> kitchen -> cashier -> free table -> closed cash passed.');
 }catch(error){
   await page.screenshot({path:resolve(artifacts,'failure.png')}).catch(()=>{});
   console.error('UI heading:',await main.locator('h1').allTextContents());console.error('Browser errors:',errors);console.error('API failures:',badRequests);throw error;

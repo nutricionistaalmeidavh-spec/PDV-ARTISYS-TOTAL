@@ -24,7 +24,7 @@ const {homeForUser}=loadPinnedDesktopCommonJs('../../web/home-role-model.js',{
 });
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/regression/fixtures/p5-home-roles-desktop-pinned.json',import.meta.url)));
 function gitBlobSha(file){
- const body=readFileSync(new URL(file,import.meta.url));
+ const body=Buffer.from(readFileSync(new URL(file,import.meta.url),'utf8').replace(/\r\n/g,'\n'));
  return createHash('sha1').update('blob '+body.length+'\0').update(body).digest('hex');
 }
 function user(entry,tenant='tenant-a'){

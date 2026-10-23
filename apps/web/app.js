@@ -255,12 +255,13 @@
 
   async function loadCommonData() {
     if(api.webMode){
-      state.products=await api.products();
-      state.categories=await api.categories();state.users=[];
+      const references=window.PdvAccessPolicy?.commonDataLoadPlan?.(state.user)||{};
+      state.products=references.products?await api.products():[];
+      state.categories=references.categories?await api.categories():[];state.users=[];
       state.customers=window.PdvAccessPolicy?.hasCapability(state.user,'customers.view')?await api.customers():[];
       state.sellers=window.PdvAccessPolicy?.hasCapability(state.user,'sellers.view')?await api.sellers():[{id:state.user.id,name:state.user.name}];
       state.selectedSellerId=state.user.id;
-      state.cashSession=await api.openCash(state.config.terminalId).catch(()=>null);
+      state.cashSession=references.cash?await api.openCash(state.config.terminalId).catch(()=>null):null;
       return;
     }
     const plan=window.PdvAccessPolicy?.commonDataLoadPlan?.(state.user)||{
