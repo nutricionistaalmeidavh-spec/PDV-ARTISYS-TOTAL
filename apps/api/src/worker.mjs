@@ -19,7 +19,7 @@ import {browserPrintRelayRoute,machinePrintRelayRoute} from './print-relay-route
 import {r3DocumentRoute} from './r3-document-route.mjs';
 import {r2LanRoute,authorizeLanBusinessRequest,authorizeLanModule} from './r2-lan-router.mjs';
 import {offlineGatewayAdminRoute,offlineGatewayMachineRoute} from './offline-gateway.mjs';
-import {offlineReplayRoute,offlineBranchCloudWriteDenied} from './offline-sync.mjs';
+import {offlineReplayRoute,offlineReleaseRoute,offlineBranchCloudWriteDenied} from './offline-sync.mjs';
 import {stageOfflineMutation} from './offline-outbox.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import legacyProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
@@ -202,6 +202,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
       if(path.startsWith('/api/v1/offline/gateway/')){
         if(env.OFFLINE_SYNC_ENABLED!=='true'||env.LAN_MODE==='true')return failure(404,'Sincronização offline não habilitada.');
         if(path==='/api/v1/offline/gateway/replay')return offlineReplayRoute(request,db,env,now());
+        if(path==='/api/v1/offline/gateway/release')return offlineReleaseRoute(request,db);
         return offlineGatewayMachineRoute(request,db,env);
       }
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
