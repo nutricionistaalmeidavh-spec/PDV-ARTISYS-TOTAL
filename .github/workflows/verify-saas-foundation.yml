@@ -21,6 +21,8 @@ on:
       - 'scripts/web-browser-e2e.mjs'
       - 'scripts/*browser.mjs'
       - 'scripts/qa-journey-report.mjs'
+      - 'scripts/qa-variant-contracts.mjs'
+      - 'docs/QA-HOMOLOGACAO-FISICA.md'
       - 'scripts/qa-05-transaction-proofs.mjs'
       - 'scripts/web-navigation.test.mjs'
       - 'scripts/enterprise-web-routes.test.mjs'
@@ -207,6 +209,8 @@ jobs:
         run: node --experimental-sqlite scripts/qa-role-matrix-browser.mjs
       - name: QA-05 targeted transaction integrity (transfer, split, prepayment, retries)
         run: node --experimental-sqlite scripts/qa-05-transaction-proofs.mjs
+      - name: Validate positive, denied and retry contracts for every QA-00 to QA-12 journey
+        run: node --experimental-sqlite scripts/qa-variant-contracts.mjs
       - name: Write QA-00 through QA-12 coverage manifest and Actions summary
         if: always()
         run: node scripts/qa-journey-report.mjs
@@ -230,3 +234,33 @@ jobs:
           test -f apps/web/index.html
           test ! -f apps/api/src/renderer.js
           ! grep -R "legacy/pdv-artisys" apps/api/src scripts/verify-cloudflare-build.mjs
+
+  mobile-webkit-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build the same PWA assets locally without publishing
+        run: npm run build
+      - name: Install open-source WebKit test browser
+        run: |
+          npm install --no-save --ignore-scripts --no-package-lock --no-audit --no-fund playwright@1.63.0
+          npx playwright install webkit
+          if ! node --input-type=module -e "import {webkit} from 'playwright'; const browser=await webkit.launch({headless:true}); await browser.close();"; then
+            npx playwright install-deps webkit
+            node --input-type=module -e "import {webkit} from 'playwright'; const browser=await webkit.launch({headless:true}); await browser.close();"
+          fi
+      - name: WebKit mobile 390px login authorization revocation offline recovery for seven roles
+        env:
+          PDV_TEST_BROWSER: webkit
+        run: node --experimental-sqlite scripts/qa-role-matrix-browser.mjs
+      - name: Upload WebKit mobile evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdv-total-webkit-qa
+          path: qa-artifacts/journeys-webkit/
+          if-no-files-found: ignore
