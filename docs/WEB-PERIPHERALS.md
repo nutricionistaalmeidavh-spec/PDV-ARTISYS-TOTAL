@@ -4,12 +4,14 @@ A implementação opera no navegador do terminal e, quando selecionado, em um **
 
 ## Operação gratuita
 
-1. Abra **Balcão → Dispositivos locais** no Chrome/Edge desktop servido por HTTPS. As opções são locais ao navegador (sem segredos, sem venda offline).
-2. **Impressão:** escolha o diálogo nativo (Windows/macOS/Linux). Clique em **Imprimir comprovante** depois da venda. Use a impressora instalada no SO, escolhendo papel 58/80 mm conforme o driver. Para PDF, use **Salvar como PDF** no diálogo.
-3. **Leitor de código de barras:** leitor HID que funciona como teclado, foco em **Buscar produto** (F2). Não requer driver de integração na nuvem.
-4. **Balança serial genérica:** selecione perfil, velocidade e **Conectar balança** (permissão explícita Web Serial). Use **Ler balança** ao adicionar item por peso. Peso inválido, resposta incompleta e desconexão não fabricam leitura; informe peso manualmente onde a regra de negócio permitir.
-5. **Gaveta serial:** **Conectar gaveta → Abrir gaveta**, com ESC/POS apenas em modelo explicitamente compatível. Não abre automaticamente por venda sem consentimento.
-6. **Impressora serial:** modo ESC/POS opcional e experimental, com **Conectar impressora serial**. Comandos de corte só são enviados na opção local correspondente.
+1. Abra **Configurações → Impressão e periféricos → Configurar dispositivos**. A central separa Impressora, Balança, Gaveta e Comprovante. O modo padrão para novas instalações é **Impressão pelo navegador (recomendado)**.
+2. **Impressão comum:** clique em **Imprimir comprovante** após a venda. A função `PdvWebHardware.printSale()` utiliza o comprovante HTML formatado e o diálogo do navegador/sistema (Windows/macOS/Linux e navegadores móveis compatíveis). Ajuste papel 58/80 mm conforme o driver. Para PDF, escolha **Salvar como PDF** no diálogo. **Não exige conector local, pareamento ou senha adicional.**
+3. **Teste de impressão:** em Impressora, use **Imprimir teste**. O teste não cria venda e não confirma se o papel efetivamente saiu.
+4. **Conector local opcional:** somente se precisar imprimir sem diálogo no **próprio PC** que executa o conector. A chave aleatória é exibida no terminal ao iniciar o serviço Node.js; o campo de chave aparece apenas ao selecionar esse método. O conector escuta exclusivamente em `127.0.0.1`; não use o código no telefone para alcançar uma impressora em outro computador.
+5. **Leitor de código de barras:** leitor HID que funciona como teclado, foco em **Buscar produto** (F2). Não requer driver de integração na nuvem.
+6. **Balança serial genérica:** selecione perfil, velocidade e **Conectar balança** (permissão explícita Web Serial). Use **Ler balança** ao adicionar item por peso. Peso inválido, resposta incompleta e desconexão não fabricam leitura; informe peso manualmente onde a regra de negócio permitir.
+7. **Gaveta serial:** **Conectar gaveta → Abrir gaveta**, com ESC/POS apenas em modelo explicitamente compatível. Não abre automaticamente por venda sem consentimento.
+8. **Impressora serial:** modo ESC/POS opcional e experimental, com **Conectar impressora serial**. Comandos de corte só são enviados na opção local correspondente.
 
 Nenhum comando de periférico é emitido por alteração de banco ou job em background; impressão local requer ação humana e escolha do navegador. O navegador não fornece retorno confiável de sucesso físico do spooler. Não registrar como "impresso" com base apenas na abertura do diálogo.
 

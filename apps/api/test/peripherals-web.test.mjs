@@ -289,3 +289,12 @@ test('fase 2: central de dispositivos agrupa recursos e nao exige pareamento par
   assert.doesNotMatch(html,/window\.print\(/);
 });
 
+
+
+test('fase 2: arquivo css responsivo esta referenciado no PDV e protege paineis ocultos',()=>{
+  const html=readFileSync(new URL('../../web/index.html',import.meta.url),'utf8');
+  const css=readFileSync(new URL('../../web/peripherals-settings.css',import.meta.url),'utf8');
+  assert.match(html,/peripherals-settings\.css/);
+  assert.match(css,/@media \(max-width:680px\)/);
+  assert.match(css,/\.pdv-peripherals-dialog \[hidden\]/);
+});
