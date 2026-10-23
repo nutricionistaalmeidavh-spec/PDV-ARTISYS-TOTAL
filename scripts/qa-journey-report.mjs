@@ -57,6 +57,8 @@ try{roleRun=JSON.parse(readFileSync(resolve(target,'qa-roles-results.json'),'utf
 const proof=resolve(root,'audit-fixes/QA-03-04-06-sqlite-proof.json');
 let sqliteProof=null;
 try{sqliteProof=JSON.parse(readFileSync(proof,'utf8'));}catch{}
+let variantManifest=null;
+try{variantManifest=JSON.parse(readFileSync(resolve(root,'journey-variants/qa-00-12-variants.json'),'utf8'));}catch{}
 const scored=requirements.map(entry=>{
   const present=entry.files.filter(f=>existsSync(resolve(root,f)));
   const missingFiles=entry.files.filter(f=>!existsSync(resolve(root,f)));
@@ -73,7 +75,12 @@ const scored=requirements.map(entry=>{
            &&sqliteProof?.closedCashSessionsZeroDivergence===1
            &&sqliteProof?.paidSaleTotalCents===1000)
         :true;
+  const variantGroups=variantManifest?.results?.filter(x=>x.id===entry.id)||[];
+  const apiVariantsPassed=variantGroups.length>0&&variantGroups.every(x=>x.status==='PASS');
   return {...entry,observed:checksOk&&missingFiles.length===0&&entry.files.length>0,
+    apiVariantContracts:{tested:variantGroups.length,passed:apiVariantsPassed,
+      totalNamedCases:variantGroups.reduce((sum,x)=>sum+x.passed,0),
+      scope:'Isolated API/domain contracts, not physical or complete browser E2E'},
     evidenceFiles:present,missingFiles,
     status:checksOk&&missingFiles.length===0&&entry.files.length>0?entry.level:'NOT_PROVED'};
 });
@@ -86,6 +93,7 @@ writeFileSync(resolve(target,'qa-00-12-coverage.json'),JSON.stringify(report,nul
 const md=['# PDV TOTAL — QA 00–12', '',
   'CI revision: '+report.revision,
   'Nominal/partial evidence: '+completed+'/13. Full end-to-end certification: **0/13**.',
+  'API variants pass for '+scored.filter(x=>x.apiVariantContracts.passed).length+'/13 journey groups. These cannot certify physical devices or complete browser flows.',
   'An existing screenshot alone does not prove retries, negative and recovery variants.',
   '', '| Case | Evidence | Assessment | Not yet validated |',
   '|---|---|---|---|',
