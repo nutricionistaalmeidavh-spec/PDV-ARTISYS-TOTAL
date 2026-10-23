@@ -109,7 +109,10 @@ export async function r2LanRoute(request,db,session,member,tenantId,path,{now=()
       const url=new URL(request.url);
       if(url.protocol!=='https:')return err(403,'Acesso LAN exige HTTPS.');
       return json({url:url.origin+'/',origin:url.origin,secure:true,
-        note:'Utilize a mesma PWA em cada aparelho; o código de pareamento não substitui login.'});
+        // The self-hosted SQLite instance is NOT a D1 mirror until a signed
+        // tenant-scoped bootstrap + two-way reconciliation have been enabled.
+        replication:{state:'NOT_CONFIGURED',cloudLinked:false,lastCloudSyncAt:null},
+        note:'O QR vincula o aparelho, mas cada funcionário entra com suas próprias credenciais. Sem replicação ativa, os usuários e dados da nuvem não estão disponíveis neste servidor.'});
     }
     if(path==='lan/devices'&&method==='GET'){
       if(!owner)return err(403,'Somente o administrador consulta dispositivos.');
