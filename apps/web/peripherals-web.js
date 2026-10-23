@@ -338,7 +338,6 @@
       if(target===null)return;
       event.preventDefault();selectPanel(tabButtons[target].dataset.peripheralsTab);tabButtons[target].focus();
     });
-    updatePrinterMode();
     const brandingFields=dialog.querySelector('fieldset');
     brandingFields.disabled=true;
     if(!canReadBranding())brandingFields.hidden=true;
@@ -348,6 +347,7 @@
     for(const key of ['paperMm','printerMode','scaleProfile','scaleBaud','uranoCommand','printerBaud','drawerBaud'])form.elements.namedItem(key).value=String(saved[key]);
     form.elements.namedItem('cut').checked=saved.cut;
     form.elements.namedItem('autoPrint').checked=saved.autoPrint;
+    updatePrinterMode(); // Apply after restoring the stored printer mode.
     const status=dialog.querySelector('#pdv-peripherals-status');
     if(canReadBranding()&&root.PdvReceiptBranding?.load){
       status.textContent='Carregando identificação da filial…';
