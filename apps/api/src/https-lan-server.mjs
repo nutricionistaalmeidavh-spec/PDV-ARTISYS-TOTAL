@@ -129,7 +129,7 @@ async function start(){
       catch(error){
         const previous=await db.prepare('SELECT last_pull_at FROM offline_replica_state LIMIT 1').bind().first();
         if(!previous)throw Error('A cópia inicial falhou. Não há dados locais de contingência.');
-        db.exec("UPDATE offline_replica_state SET state='STALE'");
+        db.exec("UPDATE offline_replica_state SET state='"+([401,403,412].includes(error.status)?'ERROR':'STALE')+"'");
         console.error('[PDV Offline] Atualização indisponível; dados locais somente para consulta. '+error.name);
       }
     }
@@ -141,7 +141,7 @@ async function start(){
         if(syncing)return;syncing=true;
         try{await pullOfflineBaseline(db,process.env);}
         catch(error){
-          try{db.exec("UPDATE offline_replica_state SET state='STALE'");}catch{}
+          try{db.exec("UPDATE offline_replica_state SET state='"+([401,403,412].includes(error.status)?'ERROR':'STALE')+"'");}catch{}
           console.error('[PDV Offline] Sincronização indisponível; operações comerciais locais bloqueadas. '+error.name);
         }finally{syncing=false;}
       },60000);
