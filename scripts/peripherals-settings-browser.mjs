@@ -43,6 +43,9 @@ try{
   assert.equal(await mobile.locator('#pdv-peripherals-panel-drawer').isVisible(),true);
   await mobile.locator('[data-peripherals-tab="printer"]').click();
   await mobile.locator('[name="printerMode"]').selectOption('bridge');
+  assert.equal(await mobile.locator('#pdv-bridge-pair').isVisible(),true,'one-click pairing is the primary action');
+  assert.equal(await mobile.locator('[name="bridgeToken"]').isVisible(),false,'manual token is hidden as an advanced option');
+  await mobile.locator('[data-printer-mode="bridge"] summary').click();
   assert.equal(await mobile.locator('[name="bridgeToken"]').isVisible(),true);
   assert.equal(await mobile.locator('[data-bridge-mobile-warning]').isVisible(),true);
   assert.equal(await mobile.locator('#pdv-bridge-connect').isDisabled(),true);
@@ -63,7 +66,8 @@ try{
   await persisted.locator('#pdv-peripherals-dialog').waitFor({state:'detached'});
   await persisted.evaluate(()=>window.PdvWebHardware.showSettings());
   assert.equal(await persisted.locator('[name="printerMode"]').inputValue(),'bridge');
-  assert.equal(await persisted.locator('[name="bridgeToken"]').isVisible(),true);
+  assert.equal(await persisted.locator('#pdv-bridge-pair').isVisible(),true);
+  assert.equal(await persisted.locator('[name="bridgeToken"]').isVisible(),false,'advanced code stays collapsed on reopen');
   assert.equal(await persisted.locator('#pdv-test-printer').isDisabled(),true);
   await persisted.close();
 
