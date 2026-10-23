@@ -26,7 +26,7 @@ const requirements=[
     files:['audit-fixes/QA-04-cozinha-pronto.png','audit-fixes/QA-03-04-06-sqlite-proof.json'],
     level:'NOMINAL',missing:'Two competing cooks, network timeout, multiple kitchens and station permissions'},
   {id:'QA-05',title:'Change, transfer, split and prepay table',
-    files:[],level:'NOT_PROVED',missing:'Full visible-UI transfer, split, prepayment, concurrency, permissions and retries'},
+    files:['journeys/QA-05-transaction-api.json'],level:'PARTIAL',missing:'Full visible-UI transfer, split, prepayment, concurrency, permissions and retries'},
   {id:'QA-06',title:'Cashier receives order and releases table',
     files:['audit-fixes/QA-06-caixa-pagamento.png','audit-fixes/QA-06-mesa-livre.png',
       'audit-fixes/QA-03-04-06-sqlite-proof.json'],
@@ -50,6 +50,8 @@ const requirements=[
     files:['journeys/QA-12-network-offline.png','journeys/QA-12-network-recovered.png'],
     level:'PARTIAL',missing:'Physical Safari/iPhone, installed PWA, VoiceOver, keyboard, cache after app update, p50/p95'}
 ];
+let transactions=null;
+try{transactions=JSON.parse(readFileSync(resolve(target,'QA-05-transaction-api.json'),'utf8'));}catch{}
 let roleRun=null;
 try{roleRun=JSON.parse(readFileSync(resolve(target,'qa-roles-results.json'),'utf8'));}catch{}
 const proof=resolve(root,'audit-fixes/QA-03-04-06-sqlite-proof.json');
@@ -62,7 +64,9 @@ const scored=requirements.map(entry=>{
     ?Boolean(roleRun?.results?.filter(x=>x.result==='PASS'&&x.variant.startsWith('signed-in-')).length===7
         &&roleRun?.results?.some(x=>x.variant==='cross-tenant-denied'&&x.result==='PASS')
         &&roleRun?.results?.some(x=>x.variant==='revoked-session-no-access'&&x.result==='PASS'))
-    :entry.id==='QA-12'
+    :entry.id==='QA-05'
+      ?Boolean(transactions?.groups?.length===2&&transactions.groups.every(g=>g.status==='PASS'&&g.passedTests>0))
+      :entry.id==='QA-12'
       ?Boolean(roleRun?.results?.some(x=>x.variant==='offline-failure-followed-by-recovery'&&x.result==='PASS'))
       :['QA-03','QA-04','QA-06'].includes(entry.id)
         ?Boolean(sqliteProof?.stockBalanceMilli===9000
