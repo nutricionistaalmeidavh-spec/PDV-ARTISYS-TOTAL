@@ -92,3 +92,31 @@ export async function offlineReplayRoute(request,db,env,now=Date.now()){
  }
  return reply({acknowledged:true,sequence,payloadHash});
 }
+
+/** Release a cloud writer lock only after the local gateway has received
+ * acknowledgments for every monotonically numbered outbox event. */
+export async function offlineReleaseRoute(request,db){
+ if(request.method!=='POST')return fail(405,'Método não permitido.');
+ const gatewayId=request.headers.get('x-pdv-offline-gateway-id')||'';
+ const secret=/^Bearer ([a-f0-9]{64})$/.exec(request.headers.get('authorization')||'');
+ if(!secret||!ID.test(gatewayId))return fail(401,'Servidor inválido.');
+ const hash=await sha256(secret[1]);
+ const gateway=await db.prepare('SELECT tenant_id AS tenantId,branch_id AS branchId FROM offline_gateways WHERE id=? AND active=1 AND credential_hash=?')
+   .bind(gatewayId,hash).first();
+ if(!gateway)return fail(401,'Servidor revogado.');
+ let data;try{data=await request.json();}catch{return fail(400,'JSON inválido.');}
+ if(!Number.isSafeInteger(data?.epoch)||!Number.isSafeInteger(data?.lastSequence)||data.lastSequence<0)
+   return fail(400,'Sequência inválida.');
+ const writer=await db.prepare('SELECT epoch,mode,gateway_id AS gatewayId FROM offline_branch_authority WHERE tenant_id=? AND branch_id=?')
+  .bind(gateway.tenantId,gateway.branchId).first();
+ if(!writer||writer.gatewayId!==gatewayId||writer.epoch!==data.epoch)return fail(409,'Autoridade alterada.');
+ if(writer.mode==='CLOUD')return reply({released:true,epoch:writer.epoch,repeated:true});
+ if(writer.mode!=='LOCAL')return fail(423,'Filial já em reconciliação.');
+ const progress=await db.prepare('SELECT COUNT(*) AS n,COALESCE(MAX(sequence),0) AS latest FROM offline_replay_receipts WHERE tenant_id=? AND branch_id=?')
+  .bind(gateway.tenantId,gateway.branchId).first();
+ if(progress.n!==data.lastSequence||progress.latest!==data.lastSequence)
+  return fail(409,'Há operações pendentes ou lacunas no histórico de confirmação.');
+ const result=await db.prepare("UPDATE offline_branch_authority SET mode='CLOUD' WHERE tenant_id=? AND branch_id=? AND gateway_id=? AND epoch=? AND mode='LOCAL'")
+  .bind(gateway.tenantId,gateway.branchId,gatewayId,writer.epoch).run();
+ return result.meta.changes?reply({released:true,epoch:writer.epoch}):fail(409,'Autoridade mudou durante a reconciliação.');
+}
