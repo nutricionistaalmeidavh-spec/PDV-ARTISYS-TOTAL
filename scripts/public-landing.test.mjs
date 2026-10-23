@@ -231,3 +231,15 @@ test('self-hosted landing serves MP4 with a video content type',async()=>{
     assert.equal((await response.arrayBuffer()).byteLength,8);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('video posters match their respective portrait clips',()=>{
+  const html=source('apps/landing/index.html');
+  for(const name of ['mesas','estoque']){
+    const filename='apps/landing/media/pdv-demo-'+name+'-poster.webp';
+    const poster=readFileSync(new URL('../'+filename,import.meta.url));
+    assert.equal(poster.toString('ascii',0,4),'RIFF');
+    assert.equal(poster.toString('ascii',8,12),'WEBP');
+    assert.ok(poster.length>5000&&poster.length<50000);
+    assert.match(html,new RegExp('poster="/media/pdv-demo-'+name+'-poster\\.webp"'));
+  }
+});
