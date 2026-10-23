@@ -20,6 +20,8 @@ on:
       - 'scripts/smoke-selfhosted.mjs'
       - 'scripts/web-browser-e2e.mjs'
       - 'scripts/*browser.mjs'
+      - 'scripts/qa-journey-report.mjs'
+      - 'scripts/qa-05-transaction-proofs.mjs'
       - 'scripts/web-navigation.test.mjs'
       - 'scripts/enterprise-web-routes.test.mjs'
       - 'scripts/web-settings-ui.test.mjs'
@@ -201,6 +203,13 @@ jobs:
         run: node scripts/web-browser-e2e.mjs
       - name: R2 self-hosted HTTPS LAN mobile pairing, revocation, offline/reconnection E2E
         run: node --experimental-sqlite scripts/r2-lan-browser-e2e.mjs
+      - name: QA role matrix — seven real browser profiles, denied writes, SQLite and offline recovery
+        run: node --experimental-sqlite scripts/qa-role-matrix-browser.mjs
+      - name: QA-05 targeted transaction integrity (transfer, split, prepayment, retries)
+        run: node --experimental-sqlite scripts/qa-05-transaction-proofs.mjs
+      - name: Write QA-00 through QA-12 coverage manifest and Actions summary
+        if: always()
+        run: node scripts/qa-journey-report.mjs
       - name: Save browser visual QA evidence
         if: always()
         uses: actions/upload-artifact@v4
