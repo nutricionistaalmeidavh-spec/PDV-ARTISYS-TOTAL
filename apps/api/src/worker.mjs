@@ -62,7 +62,17 @@ async function verifiedEmailFor(db,userId,env){
     return null; // Older schema fixtures remain usable when the feature is explicitly off.
   }
 }
+async function offlineIdentityAllowed(db,env,now){
+  if(env.LAN_MODE!=='true')return true;
+  let replica;
+  try{replica=await db.prepare('SELECT state,last_pull_at AS lastPull FROM offline_replica_state LIMIT 1').bind().first();}
+  catch{return true;} // Legacy standalone LAN databases have no replica.
+  if(!replica)return true;
+  return replica.state!=='ERROR'&&Number.isFinite(Date.parse(replica.lastPull))&&
+    now-Date.parse(replica.lastPull)<=24*60*60*1000;
+}
 async function sessionFor(request,db,now,env){
+  if(!await offlineIdentityAllowed(db,env,now))return null;
   const raw=findCookie(request,env);
   if(!raw||!/^[a-f0-9]{64}$/.test(raw))return null;
   const tokenHash=await sha256(raw);
@@ -105,6 +115,8 @@ async function parseCredentials(request) {
   }catch{return null;}
 }
 async function login(request,env,db,now){
+  if(!await offlineIdentityAllowed(db,env,now))
+    return failure(503,'Política offline vencida ou revogada. Reconecte o servidor da loja para atualizar acessos.');
   const data=await parseCredentials(request);
   if(!data)return failure(400,'Informe e-mail e senha válidos.');
   if(await loginIpThrottled(request,db,env,now))return failure(429,'Muitas tentativas. Tente novamente mais tarde.');
