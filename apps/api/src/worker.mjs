@@ -18,6 +18,7 @@ import {receiptRoute} from './receipt-route.mjs';
 import {browserPrintRelayRoute,machinePrintRelayRoute} from './print-relay-route.mjs';
 import {r3DocumentRoute} from './r3-document-route.mjs';
 import {r2LanRoute,authorizeLanBusinessRequest,authorizeLanModule} from './r2-lan-router.mjs';
+import {offlineGatewayAdminRoute,offlineGatewayMachineRoute} from './offline-gateway.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import legacyProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
 import legacyPrincipals from '../../../packages/core/js/core/auth/principal-resolver.js';
@@ -184,6 +185,10 @@ export function createApi(env,{now=()=>Date.now()}={}){
       }
       if(env.AUTH_ENABLED==='false')return failure(503,'Acesso ainda não habilitado para clientes.');
        if(path.startsWith('/api/v1/print-relay/agent/'))return await machinePrintRelayRoute(request,db,now());
+      if(path.startsWith('/api/v1/offline/gateway/')){
+        if(env.OFFLINE_SYNC_ENABLED!=='true'||env.LAN_MODE==='true')return failure(404,'Sincronização offline não habilitada.');
+        return offlineGatewayMachineRoute(request,db);
+      }
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
       if(!['GET','HEAD'].includes(method)&&!originAllowed(request))return failure(403,'Origem da solicitação inválida.');
       if(method==='POST'&&path==='/api/v1/auth/register')return await registerPublicAccount(request,env,db,now());
@@ -275,6 +280,10 @@ export function createApi(env,{now=()=>Date.now()}={}){
         if(!membership)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
         if(!['GET','HEAD'].includes(method)&&!await tenantWriteAllowed(db,tenantId,env,now()))
           return failure(402,'Assinatura inativa ou vencida. Operações de escrita suspensas.');
+        if(/^offline\/gateways(?:\/[0-9a-zA-Z-]+)?$/.test(commerceMatch[2])){
+          if(env.LAN_MODE==='true'||env.OFFLINE_SYNC_ENABLED!=='true')return failure(404,'Integração offline não habilitada.');
+          return offlineGatewayAdminRoute(request,db,membership,session,tenantId,commerceMatch[2],now());
+        }
         // Business areas are available in the hosted app too. Reuse the same
         // tenant-scoped policy without exposing device pairing or LAN controls.
         if(/^modules(?:\/[A-Z_]+)?$/.test(commerceMatch[2])){
