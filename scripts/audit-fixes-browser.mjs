@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
-import {readFileSync,readdirSync,mkdirSync} from 'node:fs';
+import {readFileSync,readdirSync,mkdirSync,writeFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {openLocalDatabase} from '../apps/api/src/local-db.mjs';
 import {createApi} from '../apps/api/src/worker.mjs';
@@ -236,10 +236,12 @@ try{
   await waiter.waitForFunction(()=>document.querySelector('[data-r4-order-item]')?.dataset.r4PizzaState==='none');
   const orderCreated=waiter.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.endsWith('/restaurant/orders'));
   await roleOrderForm.locator('button[type=submit]').click();const orderResponse=await orderCreated;assert.equal(orderResponse.status(),201);const roleOrder=(await orderResponse.json()).order;
+  await waiter.screenshot({path:resolve(artifacts,'QA-03-garcom-comanda.png'),fullPage:true});
   await kitchen.locator('[data-r4-action=refresh]').click();
   const kitchenRow=kitchen.locator('.restaurant-row').filter({hasText:roleOrder.id.slice(0,8)});
   await kitchenRow.locator('[data-r4-action=preparing-station]').click();await kitchenRow.locator('[data-r4-action=ready-station]').click();
   await kitchenRow.getByText(/Pronto/).waitFor();
+  await kitchen.screenshot({path:resolve(artifacts,'QA-04-cozinha-pronto.png'),fullPage:true});
   await waiter.locator('[data-r4-action=refresh]').click();await waiter.locator('[data-r4-action=deliver][data-id="'+roleOrder.id+'"]').click();await waiter.getByText(/Entregue/).first().waitFor();
   await cashier.locator('#sidebar-nav [data-route=checkout]').click();await cashier.locator('#checkout-documents').click();
   await cashier.locator('#checkout-document-results .data-row').filter({hasText:'Mesa jornada por perfil'}).locator('[data-open-checkout-document]').click();
@@ -247,13 +249,21 @@ try{
   await cashier.locator('[data-remove-payment]').first().click();await cashier.locator('#new-payment-method').selectOption('PIX');await cashier.locator('#add-payment').click();
   const rolePaid=cashier.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.endsWith('/complete'));await cashier.locator('#confirm-payment').click();
   const paidResponse=await rolePaid;assert.equal(paidResponse.status(),200);const roleSale=(await paidResponse.json()).sale;assert.equal(roleSale.totalCents,1000);
+  await cashier.screenshot({path:resolve(artifacts,'QA-06-caixa-pagamento.png'),fullPage:true});
   await waiter.locator('[data-r4-action=tab][data-id=tables]').click();await waiter.locator('[data-r4-action=refresh]').click();
   await waiter.locator('.restaurant-table').filter({hasText:'Mesa jornada por perfil'}).locator('[data-r4-action=select]').click();await waiter.locator('[data-r4-action=close]').click();
   await waiter.locator('.restaurant-table').filter({hasText:'Mesa jornada por perfil'}).getByText('Livre',{exact:true}).waitFor();
+  await waiter.screenshot({path:resolve(artifacts,'QA-06-mesa-livre.png'),fullPage:true});
   await cashier.locator('#sidebar-nav [data-route=cash]').click();await cashier.locator('[data-cash-web=close]').click();
   await cashier.locator('.ux-dialog [name=amount]').fill('100,00');await cashier.getByRole('button',{name:'Confirmar fechamento',exact:true}).click();await cashier.locator('#web-cash-open').waitFor();
   assert.equal((await db.prepare('SELECT balance_milli AS balance FROM stock_positions WHERE product_id=?').bind(roleProduct.id).first()).balance,9000);
   assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM cash_sessions WHERE operator_id='cashier' AND status='CLOSED' AND divergence_cents=0").bind().first()).n,1);
+  writeFileSync(resolve(artifacts,'QA-03-04-06-sqlite-proof.json'),JSON.stringify({
+    environment:'isolated SQLite and Chromium',cases:['QA-03 nominal','QA-04 nominal','QA-06 nominal'],
+    stockBalanceMilli:(await db.prepare('SELECT balance_milli AS balance FROM stock_positions WHERE product_id=?').bind(roleProduct.id).first()).balance,
+    closedCashSessionsZeroDivergence:(await db.prepare("SELECT COUNT(*) AS n FROM cash_sessions WHERE operator_id='cashier' AND status='CLOSED' AND divergence_cents=0").bind().first()).n,
+    paidSaleId:roleSale.id,paidSaleTotalCents:roleSale.totalCents
+  },null,2)+'\n');
   await rolePages.WAITER.context.close();await rolePages.CASHIER.context.close();await kitchenContext.close();
   assert.deepEqual(errors,[]);assert.deepEqual(badRequests,[]);
   console.log('Audit fixes browser: navigation, catalog, sale/stock, returns, settings, access, purchases, logistics and waiter -> kitchen -> cashier -> free table -> closed cash passed.');
