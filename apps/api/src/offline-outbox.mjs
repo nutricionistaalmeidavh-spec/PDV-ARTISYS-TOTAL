@@ -63,3 +63,32 @@ export async function pushOfflineOutbox(db,env,{fetcher=fetch,maxBatch=25}={}){
  }
  return {acknowledged,conflicts:0,blocked:false};
 }
+
+/** Explicit owner-requested handoff back to Cloudflare.
+ * Stops new local mutations before sending outstanding events to D1. */
+export async function finishOfflineAuthority(db,env,{fetcher=fetch}={}){
+ const scope=await db.prepare('SELECT tenant_id AS tenantId,branch_id AS branchId,gateway_id AS gatewayId,epoch,mode FROM offline_local_authority LIMIT 1').bind().first();
+ if(!scope||!['LOCAL','RECONCILING'].includes(scope.mode))
+   throw Object.assign(Error('O PC não está na autoridade local.'),{status:409});
+ if(scope.gatewayId!==env.OFFLINE_GATEWAY_ID)throw Error('O gateway local não corresponde à autorização.');
+ await db.prepare("UPDATE offline_local_authority SET mode='RECONCILING' WHERE tenant_id=? AND branch_id=?")
+  .bind(scope.tenantId,scope.branchId).run();
+ const result=await pushOfflineOutbox(db,env,{fetcher});
+ if(result.conflicts)throw Object.assign(Error('Conflitos precisam de revisão; não é seguro liberar a nuvem.'),{status:409});
+ const progress=await db.prepare("SELECT COUNT(*) AS pending,COALESCE(MAX(sequence),0) AS lastSequence FROM offline_outbox WHERE tenant_id=? AND branch_id=? AND status IN('PENDING','CONFLICT')").bind(scope.tenantId,scope.branchId).first();
+ if(progress.pending)throw Object.assign(Error('Há operações sem ACK do D1.'),{status:409});
+ const seq=await db.prepare('SELECT COALESCE(MAX(sequence),0) AS seq FROM offline_outbox WHERE tenant_id=? AND branch_id=?')
+  .bind(scope.tenantId,scope.branchId).first();
+ const origin=new URL(env.OFFLINE_CLOUD_ORIGIN);
+ const response=await fetcher(origin.origin+'/api/v1/offline/gateway/release',{
+  method:'POST',headers:{authorization:'Bearer '+env.OFFLINE_GATEWAY_TOKEN,
+    'x-pdv-offline-gateway-id':scope.gatewayId,'content-type':'application/json'},
+  body:JSON.stringify({epoch:scope.epoch,lastSequence:seq.seq}),
+  redirect:'error',signal:AbortSignal.timeout(15000),cache:'no-store'});
+ if(!response.ok)throw Object.assign(Error('D1 recusou encerrar o modo offline.'),{status:response.status});
+ const ack=await response.json();
+ if(ack.released!==true||ack.epoch!==scope.epoch)throw Error('Confirmação de liberação inválida.');
+ await db.prepare("UPDATE offline_local_authority SET mode='CLOUD',refreshed_at=? WHERE tenant_id=? AND branch_id=?")
+  .bind(Date.now(),scope.tenantId,scope.branchId).run();
+ return {released:true,epoch:scope.epoch,acknowledged:result.acknowledged};
+}
