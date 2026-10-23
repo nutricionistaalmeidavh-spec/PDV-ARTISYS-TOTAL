@@ -1,6 +1,7 @@
 // Opt-in Cloudflare -> local PC read-only baseline; never a sale-sync endpoint.
 // Machine credentials and password hashes must never enter browser JS or logs.
 import {newSessionToken,sha256} from './password.mjs';
+import {activateOfflineBranch} from './offline-sync.mjs';
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{
  'content-type':'application/json; charset=utf-8','cache-control':'no-store',
  'x-content-type-options':'nosniff','referrer-policy':'no-referrer'}});
@@ -30,6 +31,8 @@ export async function offlineGatewayAdminRoute(request,db,member,session,tenantI
   return json({gateway:{id,tenantId,branchId,label},credential,
    note:'Guarde o segredo somente no servidor local. A cópia atual é somente leitura; operações comerciais não são sincronizadas.'},201);
  }
+ const activate=/^offline\\/gateways\\/([0-9a-zA-Z-]{1,128})\\/activate$/.exec(path);
+ if(activate&&request.method==='POST')return activateOfflineBranch(db,tenantId,activate[1],now);
  const revoke=/^offline\/gateways\/([0-9a-zA-Z-]{1,128})$/.exec(path);
  if(revoke&&request.method==='DELETE'){
   const result=await db.prepare('UPDATE offline_gateways SET active=0,revoked_at=? WHERE id=? AND tenant_id=? AND active=1')
@@ -69,8 +72,10 @@ export async function offlineGatewayMachineRoute(request,db,env={}){
   const productCategories=await rows(db,'SELECT * FROM product_categories WHERE tenant_id=?',tenantId);
   const products=await rows(db,'SELECT * FROM products WHERE tenant_id=? ORDER BY CASE WHEN parent_product_id IS NULL THEN 0 ELSE 1 END,id',tenantId);
   const stockPositions=await rows(db,'SELECT * FROM stock_positions WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const authority=await db.prepare('SELECT epoch,mode,gateway_id AS gatewayId FROM offline_branch_authority WHERE tenant_id=? AND branch_id=?').bind(tenantId,branchId).first();
   // No auth sessions, SaaS license secrets, payments, cash or sales copied.
   return json({version:1,scope:{tenantId,branchId,gatewayId},baselineOnly:true,
+    authority:authority&&authority.gatewayId===gatewayId?{mode:authority.mode,epoch:authority.epoch}:{mode:'CLOUD',epoch:0},
     createdAt:new Date().toISOString(),tables:{tenants:[tenant],branches,users,
       tenant_memberships:memberships,product_categories:productCategories,products,stock_positions:stockPositions}});
  }catch(error){
