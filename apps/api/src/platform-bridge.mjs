@@ -1,6 +1,7 @@
 // Private central admin channel: signed, scoped and one-time.
 // The payments ADMIN_TOKEN is never copied into this Worker.
 import {platformManagementRoute} from './saas-control.mjs';
+import {platformTelemetrySummary} from './telemetry.mjs';
 
 const text=new TextEncoder();
 const reply=(error,status)=>new Response(JSON.stringify({error}),{status,headers:{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'}});
@@ -31,6 +32,7 @@ export async function platformBridgeRoute(request,db,env,now){
  const method=['bootstrap','approve','owner-license','revoke-license'].includes(payload.action)?'POST':'GET';
  let target;
  switch(payload.action){
+  case 'telemetry': target='/api/v1/platform/telemetry';break;
   case 'summary':case 'tenants':case 'audit':
    target='/api/v1/platform/'+payload.action;break;
   case 'approve':
@@ -55,6 +57,11 @@ export async function platformBridgeRoute(request,db,env,now){
   if(reserved.meta?.changes!==1)return reply('platform_request_replayed',409);
   await db.prepare('DELETE FROM saas_platform_bridge_nonces WHERE created_at<?').bind(now-86400000).run();
  }catch{return reply('platform_bridge_schema_unavailable',503);}
+ if(payload.action==='telemetry'){
+  // Only the signed ArtiSys Payments bridge can retrieve cross-tenant aggregates.
+  const metrics=await platformTelemetrySummary(db,now);
+  return new Response(JSON.stringify(metrics),{status:200,headers:{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'}});
+ }
  const proxy=new Request(new URL(target,request.url),{
   method,headers:method==='POST'?{'content-type':'application/json'}:{},
   ...(method==='POST'?{body:JSON.stringify(['bootstrap','owner-license'].includes(payload.action)?payload.data:{})}:{})
