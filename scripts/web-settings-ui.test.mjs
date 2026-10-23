@@ -41,6 +41,10 @@ test('hosted settings show business, receipts, equipment and areas without loadi
   assert.match(host.innerHTML,/Matriz/);
   assert.match(host.innerHTML,/Identificação nos comprovantes/);
   assert.match(host.innerHTML,/Impressão e periféricos/);
+  assert.match(host.innerHTML,/Funcionamento offline/);
+  assert.match(host.innerHTML,/ainda não está disponível/i);
+  assert.doesNotMatch(host.innerHTML,/data-settings-offline-enable/);
+
   assert.match(host.innerHTML,/Alimentação/);
   assert.ok(calls.some(call=>call.path==='/api/v1/tenants/shop-a/context'));
   assert.ok(calls.some(call=>call.path==='/api/v1/printing/branding?branchId=branch-a'));
