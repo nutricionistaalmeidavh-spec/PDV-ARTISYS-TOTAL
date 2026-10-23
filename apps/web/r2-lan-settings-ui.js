@@ -48,7 +48,8 @@
       '<p><code id="r2-lan-origin">'+safe(access.url)+'</code></p><button class="ops-secondary" id="r2-copy-address">Copiar endereço</button>'+
       '<div id="r2-lan-qr" role="img" aria-label="Código QR para endereço HTTPS da rede local" style="max-width:180px"></div>'+
       '<p class="ops-muted">Ao perder conexão com o servidor, nenhuma venda nova deve ser considerada confirmada.</p></section>'+
-      '<section class="ops-card"><h2>Sincronização com a nuvem</h2><p role="status">'+(access.replication?.state==='BASELINE_ONLY'?'Cópia inicial de consulta atualizada: '+safe(access.replication.lastCloudSyncAt||'sem data')+'. Vendas, caixa e estoque offline estão bloqueados até a reconciliação bidirecional.':access.replication?.state==='STALE'?'A cópia de consulta está desatualizada. Confira a internet do PC; vendas offline bloqueadas.':access.replication?.state==='ERROR'?'Autorização da cópia recusada ou incompatível. Login local bloqueado; reconfigure o gateway.':'Ainda não configurada. Este servidor local não recebeu uma cópia automática do D1 e as contas SaaS não estão disponíveis até configurar a replicação.')+'</p></section>'+ 
+      '<section class="ops-card"><h2>Sincronização com a nuvem</h2><p role="status">'+(access.replication?.state==='BASELINE_ONLY'?'Cópia local: '+safe(access.replication.lastCloudSyncAt||'sem data')+'. '+(access.replication.inventoryOfflineEnabled?'Entrada e ajuste de estoque podem operar com fila transacional local. Vendas, pagamentos, caixa e comandas continuam bloqueados.':'Operações comerciais offline ainda bloqueadas.')+' Pendências: '+Number(access.replication.pendingOperations||0)+'.':access.replication?.state==='STALE'?'A cópia de consulta está desatualizada. Confira a internet do PC; vendas offline bloqueadas.':access.replication?.state==='ERROR'?'Autorização da cópia recusada ou incompatível. Login local bloqueado; reconfigure o gateway.':'Ainda não configurada. Este servidor local não recebeu uma cópia automática do D1 e as contas SaaS não estão disponíveis até configurar a replicação.')+'</p></section>'+ 
+      (isAdmin&&['LOCAL','RECONCILING'].includes(access.replication?.writerMode)?'<section class="ops-card"><h2>Retomar modo online</h2><p>Esta ação interrompe novas operações locais, reenvia o estoque pendente e só desbloqueia a filial na Cloudflare se o D1 confirmar todos os movimentos.</p><button id="r2-offline-finish" type="button" class="ops-primary">Concluir sincronização e voltar ao online</button></section>':'')+
       '<section class="ops-card"><h2>Estado da rede</h2><p>'+(isAdmin?('Dispositivos ativos: '+Number(health.devices.active)+' de '+Number(health.devices.total)+' · Códigos pendentes: '+Number(health.pendingPairings)):'Identifique-se como administrador para consultar todos os dispositivos.')+'</p>'+
       '<p>Checklist: '+Number(readiness.readyCount)+' / '+Number(readiness.total)+' verificados.</p>'+
       (readiness.ready?'<p>Checklist operacional preenchido. A certificação de software é independente.</p>':'<p>Checklist operacional ainda não preenchido; isso não bloqueia código pronto.</p>')+'</section></div>'+
@@ -70,6 +71,15 @@
     const qrHost=content.querySelector('#r2-lan-qr');
     try{const svg=window.PdvLocalQr?.qrSvg(access.url,{scale:4});if(qrHost&&svg)qrHost.innerHTML=svg;}
     catch{if(qrHost)qrHost.textContent='Endereço longo demais para o QR local. Copie a URL acima.';}
+    content.querySelector('#r2-offline-finish')?.addEventListener('click',async event=>{
+      if(!window.confirm('Encerrar operação local? Novas gravações serão suspensas até o D1 confirmar todas as pendências.'))return;
+      const button=event.currentTarget;button.disabled=true;
+      try{
+        const result=await api.request('/api/v1/tenants/'+encodeURIComponent(tenantId)+'/offline/finish',{method:'POST',body:{}});
+        window.alert('Operações confirmadas pelo D1. A filial voltou ao modo online. Eventos enviados: '+Number(result.acknowledged||0));
+        await render(content,api);
+      }catch(error){window.alert('Reconciliação não concluída: '+error.message);button.disabled=false;}
+    });
     const status=content.querySelector('#r2-device-status');
     const notify=(message,error=false)=>{if(status){status.textContent=message;status.className=error?'ops-error':'ops-muted';}};
     content.querySelector('#r2-copy-address')?.addEventListener('click',async()=>{
