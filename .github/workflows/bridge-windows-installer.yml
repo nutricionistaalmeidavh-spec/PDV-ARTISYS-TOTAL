@@ -1,0 +1,44 @@
+name: Build free Windows print connector
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/local-hardware-bridge/**'
+      - '.github/workflows/bridge-windows-installer.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/local-hardware-bridge/**'
+      - '.github/workflows/bridge-windows-installer.yml'
+permissions:
+  contents: read
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test local queue and authorization
+        run: node --experimental-sqlite --test apps/api/test/local-bridge.test.mjs
+      - name: Install free Inno Setup compiler
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Stage bundled Node runtime
+        shell: pwsh
+        run: Copy-Item (Get-Command node).Source tools/local-hardware-bridge/windows/node.exe
+      - name: Compile user installer
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6\ISCC.exe'
+          if (!(Test-Path $iscc)) { throw 'Inno Setup compiler not installed' }
+          & $iscc tools/local-hardware-bridge/windows/PDVTotalBridge.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path dist/bridge-windows/PDVTotalBridgeSetup.exe)) { throw 'Installer missing' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdv-total-bridge-windows-installer
+          path: dist/bridge-windows/PDVTotalBridgeSetup.exe
+          if-no-files-found: error
