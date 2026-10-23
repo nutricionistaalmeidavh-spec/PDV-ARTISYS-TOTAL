@@ -5,15 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="PDV Total ArtiSys: cardápio, mesas, pedidos, cozinha, caixa e gestão do seu negócio em uma plataforma web.">
   <meta name="theme-color" content="#090d18">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; form-action 'self'">
   <title>PDV Total ArtiSys | Cardápio, mesas e gestão no mesmo lugar</title>
   <link rel="stylesheet" href="/landing.css">
   <link rel="stylesheet" href="/landing-auth.css">
   <link rel="stylesheet" href="/landing-premium.css">
   <link rel="stylesheet" href="/landing-gallery.css">
+  <link rel="stylesheet" href="/landing-video.css">
   <script defer src="/landing.js"></script>
   <script defer src="/landing-motion.js"></script>
   <script defer src="/landing-gallery.js"></script>
+  <script defer src="/landing-video.js"></script>
 </head>
 <body>
   <a class="skip" href="#conteudo">Pular para o conteúdo</a>
@@ -89,6 +91,54 @@
               <figcaption><strong>Comandas e caixa</strong><span>Encontre comandas e pedidos antes do fechamento no caixa.</span></figcaption>
             </figure>
           </div>
+        </div>
+      </div>
+    </section>
+    <section class="section video-showcase" id="videos-em-acao" aria-labelledby="video-showcase-title">
+      <div class="container">
+        <div class="video-showcase-head">
+          <div>
+            <p class="video-eyebrow">PDV TOTAL EM AÇÃO</p>
+            <h2 id="video-showcase-title">Veja como o atendimento ganha ritmo.</h2>
+            <p>Duas demonstrações visuais para conhecer o fluxo de mesas e o controle de produtos e estoque. Cenas ilustrativas da interface.</p>
+          </div>
+          <a class="video-gallery-link" href="#demonstracao">Explorar outras telas ↗</a>
+        </div>
+        <div class="video-showcase-grid">
+          <article class="video-showcase-card">
+            <div class="video-card-copy">
+              <span class="video-card-number">01 / ATENDIMENTO</span>
+              <h3>Mesas e comandas em poucos toques.</h3>
+              <p>Acompanhe uma navegação demonstrativa pelo mapa de mesas e o início de um atendimento.</p>
+              <span class="video-card-tag">Salão e atendimento</span>
+            </div>
+            <div class="video-device-stage">
+              <div class="video-device">
+                <video data-video="mesas" muted playsinline controls loop preload="none" poster="/media/pdv-demo-mesas-poster.webp" aria-label="Demonstração visual da abertura de uma mesa no PDV Total">
+                  <source src="/media/pdv-demo-mesas.mp4" type="video/mp4">
+                  <p>Vídeo indisponível neste navegador. <a href="/media/pdv-demo-mesas.mp4">Abrir demonstração de mesas</a>.</p>
+                </video>
+              </div>
+              <span class="video-device-note">Mapeamento de mesas ↗</span>
+            </div>
+          </article>
+          <article class="video-showcase-card">
+            <div class="video-card-copy">
+              <span class="video-card-number">02 / RETAGUARDA</span>
+              <h3>Produtos e estoque sob controle.</h3>
+              <p>Conheça a navegação pelo estoque e o fluxo ilustrativo de cadastro de um novo produto.</p>
+              <span class="video-card-tag">Cadastro de produtos</span>
+            </div>
+            <div class="video-device-stage">
+              <div class="video-device">
+                <video data-video="estoque" muted playsinline controls loop preload="none" poster="/media/pdv-demo-estoque-poster.webp" aria-label="Demonstração visual do cadastro de um produto no estoque do PDV Total">
+                  <source src="/media/pdv-demo-estoque.mp4" type="video/mp4">
+                  <p>Vídeo indisponível neste navegador. <a href="/media/pdv-demo-estoque.mp4">Abrir demonstração de estoque</a>.</p>
+                </video>
+              </div>
+              <span class="video-device-note">Cadastro de produto ↗</span>
+            </div>
+          </article>
         </div>
       </div>
     </section>
