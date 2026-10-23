@@ -26,3 +26,24 @@ test('phase 6: malicious or malformed remote job is never submitted to spooler',
  await assert.rejects(pollRemoteOnce({request,queue:{submit:async()=>{n++;}}}),/inválido/);
  assert.equal(n,0);
 });
+
+
+test('phase 6: uses the real existing SQLite spool with one submission despite duplicate cloud delivery',async()=>{
+ const {createSpoolQueue}=await import('../../../tools/local-hardware-bridge/bridge.mjs');
+ const {mkdtempSync,rmSync}=await import('node:fs');
+ const {tmpdir}=await import('node:os');
+ const {join}=await import('node:path');
+ const folder=mkdtempSync(join(tmpdir(),'pdv-print-relay-integrated-'));
+ let spooled=0;
+ const queue=createSpoolQueue(join(folder,'jobs.sqlite'),{spool:async()=>{spooled++;}});
+ const job={id:'b223cee3-4ca0-49ad-a999-4698284b04c9',saleId:'sale-remote-sqlite',leaseToken:'a'.repeat(64),text:'CUPOM NAO FISCAL\nTOTAL 25,00'};
+ const request=async(route,payload)=>route==='/next'?{job}:{job:{status:payload.status}};
+ try{
+  const first=await pollRemoteOnce({request,queue});
+  const duplicate=await pollRemoteOnce({request,queue});
+  assert.equal(first.status,'SUBMITTED');
+  assert.equal(duplicate.status,'SUBMITTED');
+  assert.equal(spooled,1,'same remote job must not submit twice to the physical spooler');
+  assert.equal(queue.get('relay-'+job.id).status,'SUBMITTED');
+ }finally{queue.close();rmSync(folder,{recursive:true,force:true});}
+});
