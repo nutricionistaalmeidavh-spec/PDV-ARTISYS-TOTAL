@@ -235,6 +235,40 @@
     }
     return openPrintDocument(receiptHtml(sale,{...settings(),branding:opts.branding}),opts.popup);
   }
+
+  function settingsMarkup(){
+    return [
+      '<form method="dialog" id="pdv-peripherals-form" class="pdv-peripherals-form">',
+      '<header class="pdv-peripherals-header"><div><p class="pdv-peripherals-eyebrow">Configurações deste terminal</p><h2 id="pdv-peripherals-title">Dispositivos e impressão</h2><p>Configure a impressão e os equipamentos conectados a este dispositivo.</p></div><button type="button" id="pdv-peripherals-close" class="pdv-peripherals-close" aria-label="Fechar configurações">×</button></header>',
+      '<nav class="pdv-peripherals-tabs" role="tablist" aria-label="Tipo de dispositivo">',
+      '<button type="button" role="tab" data-peripherals-tab="printer" id="pdv-peripherals-tab-printer" aria-controls="pdv-peripherals-panel-printer" aria-selected="true" tabindex="0">Impressora</button>',
+      '<button type="button" role="tab" data-peripherals-tab="scale" id="pdv-peripherals-tab-scale" aria-controls="pdv-peripherals-panel-scale" aria-selected="false" tabindex="-1">Balança</button>',
+      '<button type="button" role="tab" data-peripherals-tab="drawer" id="pdv-peripherals-tab-drawer" aria-controls="pdv-peripherals-panel-drawer" aria-selected="false" tabindex="-1">Gaveta</button>',
+      '<button type="button" role="tab" data-peripherals-tab="receipt" id="pdv-peripherals-tab-receipt" aria-controls="pdv-peripherals-panel-receipt" aria-selected="false" tabindex="-1">Comprovante</button>',
+      '</nav><div class="pdv-peripherals-content">',
+      '<section role="tabpanel" id="pdv-peripherals-panel-printer" aria-labelledby="pdv-peripherals-tab-printer" data-peripherals-panel="printer">',
+      '<h3>Impressão de comprovantes</h3><p class="pdv-peripherals-muted">Para imprimir normalmente, use o navegador. Não é necessário instalar um conector nem informar código de pareamento.</p>',
+      '<label class="pdv-peripherals-field">Como deseja imprimir?<select name="printerMode"><option value="browser">Impressão pelo navegador (recomendado)</option><option value="serial">Impressora serial ESC/POS (experimental)</option><option value="bridge">Conector local (sem janela de impressão)</option></select></label>',
+      '<div class="pdv-peripherals-method" data-printer-mode="browser"><strong>Pronto para imprimir pelo navegador</strong><p>Sem instalação adicional ou chave. O sistema abre a janela de impressão do dispositivo para escolher a impressora ou salvar PDF.</p></div>',
+      '<div class="pdv-peripherals-method" data-printer-mode="serial" hidden><strong>Impressora serial</strong><p>A conexão depende do suporte Web Serial do navegador e de autorização explícita. Este modo não foi homologado para todos os modelos.</p><p data-serial-warning="printer" class="pdv-peripherals-warning" hidden></p><div class="pdv-peripherals-field-grid"><label class="pdv-peripherals-field">Velocidade serial (bps)<input name="printerBaud" type="number" min="300" max="115200"></label></div><label class="pdv-peripherals-check"><input name="cut" type="checkbox"> Acionar corte ESC/POS somente quando compatível</label><button type="button" data-device="printer" class="pdv-peripherals-secondary">Conectar impressora serial</button><p class="pdv-peripherals-state" data-device-status="printer">Impressora serial não conectada.</p></div>',
+      '<div class="pdv-peripherals-method" data-printer-mode="bridge" hidden><strong>Impressão automática pelo computador</strong><p>Opção avançada: exige um conector open source executando no mesmo computador. O código de pareamento é exibido no terminal ao iniciar o conector — não é a licença do PDV.</p><p class="pdv-peripherals-warning" data-bridge-mobile-warning hidden>Este conector usa o próprio computador (127.0.0.1). Para imprimir pelo celular, use o diálogo de impressão do sistema; o pareamento com uma impressora de outro PC não está disponível neste modo.</p><label class="pdv-peripherals-field">Código do conector local<input name="bridgeToken" type="password" autocomplete="off" placeholder="Código gerado no computador (64 caracteres)"></label><div class="pdv-peripherals-actions"><button type="button" id="pdv-bridge-connect" class="pdv-peripherals-secondary">Conectar serviço local</button><button type="button" id="pdv-bridge-queue" class="pdv-peripherals-secondary">Consultar fila</button></div><label class="pdv-peripherals-check"><input name="autoPrint" type="checkbox"> Imprimir automaticamente após a conclusão da venda (apenas conector local)</label><div id="pdv-bridge-history" class="pdv-peripherals-history"></div></div>',
+      '<label class="pdv-peripherals-field">Largura do papel<select name="paperMm"><option value="58">58 mm</option><option value="80">80 mm</option></select></label><button type="button" id="pdv-test-printer" class="pdv-peripherals-secondary">Imprimir teste</button><p class="pdv-peripherals-note">O teste abre o diálogo ou envia uma solicitação; confirme a saída física na impressora.</p>',
+      '</section>',
+      '<section role="tabpanel" id="pdv-peripherals-panel-scale" aria-labelledby="pdv-peripherals-tab-scale" data-peripherals-panel="scale" hidden>',
+      '<h3>Balança</h3><p class="pdv-peripherals-muted">Conecte uma balança serial compatível apenas quando for utilizar pesagem na venda.</p><label class="pdv-peripherals-field">Modelo da balança<select name="scaleProfile"><option value="generic">Serial numérica genérica</option><option value="urano-pop-s">Urano POP-S (requer homologação)</option></select></label><p data-serial-warning="scale" class="pdv-peripherals-warning" hidden></p><button type="button" data-device="scale" class="pdv-peripherals-secondary">Conectar balança</button><p class="pdv-peripherals-state" data-device-status="scale">Balança não conectada.</p><details class="pdv-peripherals-advanced"><summary>Configurações avançadas da balança</summary><div class="pdv-peripherals-field-grid"><label class="pdv-peripherals-field">Velocidade serial (bps)<input name="scaleBaud" type="number" min="300" max="115200"></label><label class="pdv-peripherals-field">Comando de leitura Urano<select name="uranoCommand"><option value="0x04">0x04 (padrão)</option><option value="0x05">0x05</option></select></label></div></details>',
+      '</section>',
+      '<section role="tabpanel" id="pdv-peripherals-panel-drawer" aria-labelledby="pdv-peripherals-tab-drawer" data-peripherals-panel="drawer" hidden>',
+      '<h3>Gaveta de dinheiro</h3><p class="pdv-peripherals-muted">Somente gavetas seriais compatíveis com o pulso ESC/POS. A abertura exige ação explícita.</p><p data-serial-warning="drawer" class="pdv-peripherals-warning" hidden></p><div class="pdv-peripherals-actions"><button type="button" data-device="drawer" class="pdv-peripherals-secondary">Conectar gaveta</button><button type="button" id="pdv-test-drawer" class="pdv-peripherals-secondary">Abrir gaveta (teste)</button></div><p class="pdv-peripherals-state" data-device-status="drawer">Gaveta não conectada.</p><details class="pdv-peripherals-advanced"><summary>Configurações avançadas da gaveta</summary><label class="pdv-peripherals-field">Velocidade serial (bps)<input name="drawerBaud" type="number" min="300" max="115200"></label></details>',
+      '</section>',
+      '<section role="tabpanel" id="pdv-peripherals-panel-receipt" aria-labelledby="pdv-peripherals-tab-receipt" data-peripherals-panel="receipt" hidden>',
+      '<h3>Identificação do comprovante não fiscal</h3><p class="pdv-peripherals-muted">Estes dados pertencem à filial e são compartilhados. Comprovantes de vendas anteriores preservam a identificação da venda.</p>',
+      '<fieldset class="pdv-peripherals-branding"><legend>Dados da filial</legend><label class="pdv-peripherals-field">Nome da loja<input name="receiptName" maxlength="80" autocomplete="organization"></label><label class="pdv-peripherals-field">Endereço<input name="receiptAddress" maxlength="160" autocomplete="street-address"></label><label class="pdv-peripherals-field">Telefone<input name="receiptPhone" maxlength="60" autocomplete="tel"></label><label class="pdv-peripherals-field">Logotipo PNG (até 512 KB; somente no PDF e no diálogo do navegador)<input type="file" name="receiptLogo" accept="image/png"></label><label class="pdv-peripherals-check"><input type="checkbox" name="receiptRemoveLogo"> Remover logotipo atual</label></fieldset>',
+      '<p class="pdv-peripherals-muted" data-branding-restricted hidden>Seu perfil não tem acesso à identificação do comprovante.</p>',
+      '</section>',
+      '</div><div class="pdv-peripherals-footer"><p role="status" id="pdv-peripherals-status" aria-live="polite"></p><div class="pdv-peripherals-footer-buttons"><button type="button" class="pdv-peripherals-secondary" data-peripherals-close>Fechar</button><button type="button" id="pdv-peripherals-save" class="pdv-peripherals-primary">Salvar configurações</button></div></div></form>'
+    ].join('');
+  }
+
   function showSettings() {
     const previous=root.document.getElementById('pdv-peripherals-dialog');
     if(previous){previous.close();previous.remove();}
@@ -242,12 +276,68 @@
     const canManageBranding=()=>root.PdvAccessPolicy?.hasCapability(root.PdvCurrentAccess,'settings.manage')===true;
     const dialog=root.document.createElement('dialog');
     dialog.id='pdv-peripherals-dialog';
-    dialog.setAttribute('aria-label','Dispositivos locais');
-    dialog.style.cssText='max-width:min(540px,95vw);border:1px solid #64748b;border-radius:16px;padding:24px;color:#e5e7eb;background:#13233e;box-shadow:0 18px 60px #0008';
-    dialog.innerHTML='<form method="dialog" id="pdv-peripherals-form"><h2>Dispositivos locais</h2><p>Preferências dos dispositivos para este navegador. A identificação dos comprovantes é compartilhada pela filial.</p><fieldset><legend>Identificação do comprovante não fiscal</legend><label>Nome da loja <input name="receiptName" maxlength="80" autocomplete="organization"></label><p><label>Endereço <input name="receiptAddress" maxlength="160" autocomplete="street-address"></label></p><p><label>Telefone <input name="receiptPhone" maxlength="60" autocomplete="tel"></label></p><p><label>Logotipo PNG (até 512 KB; somente no PDF e no diálogo do navegador) <input type="file" name="receiptLogo" accept="image/png"></label></p><p><label><input type="checkbox" name="receiptRemoveLogo"> Remover logotipo atual</label></p><p>A identificação é sincronizada com a filial. Preferências de papel, impressora e balança são salvas neste navegador.</p></fieldset><label>Papel <select name="paperMm"><option value="58">58 mm</option><option value="80">80 mm</option></select></label><p><label>Impressora <select name="printerMode"><option value="browser">Diálogo do sistema (recomendado)</option><option value="serial">ESC/POS serial compatível (experimental)</option><option value="bridge">Conector local (sem diálogo)</option></select></label></p><p><label>Perfil da balança <select name="scaleProfile"><option value="generic">Serial numérico genérico</option><option value="urano-pop-s">Urano POP-S (requer homologação)</option></select></label></p><p><label>Velocidade serial <input name="scaleBaud" type="number" min="300" max="115200"></label></p><p><label>Comando de leitura Urano <select name="uranoCommand"><option value="0x04">0x04 (padrão)</option><option value="0x05">0x05</option></select></label></p><p><label>Velocidade da impressora serial <input name="printerBaud" type="number" min="300" max="115200"></label></p><p><label>Velocidade da gaveta serial <input name="drawerBaud" type="number" min="300" max="115200"></label></p><p><label><input name="cut" type="checkbox"> Acionar corte ESC/POS (somente quando compatível)</label></p><p><label><input name="autoPrint" type="checkbox"> Impressão automática (somente conector local)</label></p><p><label>Chave do conector local <input name="bridgeToken" type="password" autocomplete="off" placeholder="Código de pareamento de 64 caracteres"></label></p><p><button type="button" id="pdv-bridge-connect">Conectar serviço local</button><button type="button" id="pdv-bridge-queue">Consultar fila</button></p><div id="pdv-bridge-history"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-device="scale">Conectar balança</button><button type="button" data-device="printer">Conectar impressora serial</button><button type="button" data-device="drawer">Conectar gaveta</button><button type="button" id="pdv-test-printer">Imprimir teste</button><button type="button" id="pdv-test-drawer">Abrir gaveta</button></div><p role="status" id="pdv-peripherals-status" aria-live="polite"></p><div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" id="pdv-peripherals-save">Salvar</button><button value="cancel">Fechar</button></div></form>';
+    dialog.setAttribute('aria-label','Dispositivos e impressão');
+    dialog.className='pdv-peripherals-dialog';
+    dialog.innerHTML=settingsMarkup();
     root.document.body.append(dialog);
     const form=dialog.querySelector('form');
     const saved=settings();
+
+    // A method selected for one peripheral must never expose unrelated credentials.
+    const tabButtons=Array.from(dialog.querySelectorAll('[data-peripherals-tab]'));
+    function selectPanel(selected){
+      for(const button of tabButtons){
+        const active=button.dataset.peripheralsTab===selected;
+        button.setAttribute('aria-selected',String(active));
+        button.tabIndex=active?0:-1;
+      }
+      for(const panel of dialog.querySelectorAll('[data-peripherals-panel]'))
+        panel.hidden=panel.dataset.peripheralsPanel!==selected;
+    }
+    function updatePrinterMode(){
+      const mode=form.elements.namedItem('printerMode').value;
+      for(const section of dialog.querySelectorAll('[data-printer-mode]'))
+        section.hidden=section.dataset.printerMode!==mode;
+      const unsupported=(mode==='serial'&&!supportsSerial)||(mode==='bridge'&&isMobile);
+      const test=dialog.querySelector('#pdv-test-printer');
+      test.disabled=unsupported;
+      test.title=unsupported?'Este método de impressão não está disponível neste dispositivo.':'';
+    }
+    const supportsSerial=Boolean(root.isSecureContext&&root.navigator?.serial);
+    const isMobile=/Android|iPhone|iPad|iPod/i.test(root.navigator?.userAgent||'');
+    for(const kind of ['printer','scale','drawer']){
+      const warning=dialog.querySelector('[data-serial-warning="'+kind+'"]');
+      if(!supportsSerial&&warning){
+        warning.hidden=false;
+        warning.textContent='Conexão serial indisponível neste navegador. Use Chrome ou Edge em um computador com HTTPS.'+(kind==='scale'?' Quando permitido, informe o peso manualmente na venda.':'');
+      }
+      const button=dialog.querySelector('[data-device="'+kind+'"]');
+      if(button&&!supportsSerial){button.disabled=true;button.title='Web Serial não está disponível neste navegador.';}
+    }
+    const mobileWarning=dialog.querySelector('[data-bridge-mobile-warning]');
+    if(mobileWarning)mobileWarning.hidden=!isMobile;
+    for(const id of ['pdv-bridge-connect','pdv-bridge-queue']){
+      const button=dialog.querySelector('#'+id);
+      if(button&&isMobile){button.disabled=true;button.title='O conector local funciona no computador onde está instalado.';}
+    }
+    dialog.querySelector('[data-branding-restricted]').hidden=canReadBranding();
+    form.addEventListener('submit',event=>event.preventDefault());
+    form.elements.namedItem('printerMode').addEventListener('change',updatePrinterMode);
+    dialog.addEventListener('click',event=>{
+      if(event.target?.closest?.('[data-peripherals-close]')||event.target?.id==='pdv-peripherals-close'){
+        dialog.close();return;
+      }
+      const tab=event.target?.closest?.('[data-peripherals-tab]');
+      if(tab)selectPanel(tab.dataset.peripheralsTab);
+    });
+    for(const button of tabButtons)button.addEventListener('keydown',event=>{
+      const index=tabButtons.indexOf(button);
+      const target=event.key==='Home'?0:event.key==='End'?tabButtons.length-1
+        :event.key==='ArrowRight'?(index+1)%tabButtons.length
+        :event.key==='ArrowLeft'?(index+tabButtons.length-1)%tabButtons.length:null;
+      if(target===null)return;
+      event.preventDefault();selectPanel(tabButtons[target].dataset.peripheralsTab);tabButtons[target].focus();
+    });
     const brandingFields=dialog.querySelector('fieldset');
     brandingFields.disabled=true;
     if(!canReadBranding())brandingFields.hidden=true;
@@ -257,6 +347,7 @@
     for(const key of ['paperMm','printerMode','scaleProfile','scaleBaud','uranoCommand','printerBaud','drawerBaud'])form.elements.namedItem(key).value=String(saved[key]);
     form.elements.namedItem('cut').checked=saved.cut;
     form.elements.namedItem('autoPrint').checked=saved.autoPrint;
+    updatePrinterMode(); // Apply after restoring the stored printer mode.
     const status=dialog.querySelector('#pdv-peripherals-status');
     if(canReadBranding()&&root.PdvReceiptBranding?.load){
       status.textContent='Carregando identificação da filial…';
@@ -298,31 +389,43 @@
       if(!data.jobs?.length)pane.textContent='Fila vazia.';
     }
     dialog.addEventListener('click',async e=>{
-      const kind=e.target?.dataset?.device;
+      const button=e.target?.closest?.('button');
+      const kind=button?.dataset?.device;
+      const action=kind||['pdv-test-printer','pdv-bridge-connect','pdv-bridge-queue','pdv-test-drawer','pdv-peripherals-save'].includes(button?.id);
+      if(!action||button.disabled)return;
+      button.disabled=true;
       let localSaved=false;
       try{
-        if(kind){await connect(kind);status.textContent='Dispositivo conectado: '+kind+'.';}
-        if(e.target?.id==='pdv-test-printer'){
-          saveSettings({...settings(),...Object.fromEntries(new FormData(form)),cut:form.elements.namedItem('cut').checked,autoPrint:form.elements.namedItem('autoPrint').checked});
-          await printTest();
-          status.textContent='Diálogo aberto ou comando enviado. Confirme o resultado no equipamento.';
+        status.textContent='Processando solicitação…';
+        if(kind){
+          await connect(kind);
+          const node=dialog.querySelector('[data-device-status="'+kind+'"]');
+          if(node)node.textContent='Dispositivo autorizado e conectado para uso nesta sessão.';
+          status.textContent='Dispositivo autorizado: '+kind+'.';
         }
-        if(e.target?.id==='pdv-bridge-connect'){
+        if(button.id==='pdv-test-printer'){
+          saveSettings({...settings(),...Object.fromEntries(new FormData(form)),cut:form.elements.namedItem('cut').checked,autoPrint:form.elements.namedItem('autoPrint').checked});
+          const result=await printTest();
+          status.textContent=result?.dialogOpened?'Janela de impressão solicitada. Confirme a saída no equipamento.'
+            :result?.status==='UNCERTAIN'?'Resultado incerto. Confira a impressora antes de tentar novamente.'
+            :'Solicitação enviada à impressora. Confirme a saída física no equipamento.';
+        }
+        if(button.id==='pdv-bridge-connect'){
           const token=form.elements.namedItem('bridgeToken').value;
           if(token)root.PdvLocalBridge.pair(token);
           await root.PdvLocalBridge.getStatus();
           status.textContent='Conector local pareado e autenticado.';
         }
-        if(e.target?.id==='pdv-bridge-queue'){
+        if(button.id==='pdv-bridge-queue'){
           const token=form.elements.namedItem('bridgeToken').value;
           if(token)root.PdvLocalBridge.pair(token);
           await refreshBridgeJobs();
           status.textContent='Fila local atualizada.';
         }
-        if(e.target?.id==='pdv-test-drawer'){await openDrawer();status.textContent='Pulso enviado; verifique a gaveta.';}
-        if(e.target?.id==='pdv-peripherals-save'){
+        if(button.id==='pdv-test-drawer'){await openDrawer();status.textContent='Pulso enviado; verifique a gaveta.';}
+        if(button.id==='pdv-peripherals-save'){
           const token=form.elements.namedItem('bridgeToken').value;
-          if(token)root.PdvLocalBridge.pair(token);
+          if(token&&form.elements.namedItem('printerMode').value==='bridge')root.PdvLocalBridge.pair(token);
           saveSettings({...settings(),...Object.fromEntries(new FormData(form)),cut:form.elements.namedItem('cut').checked,autoPrint:form.elements.namedItem('autoPrint').checked});
           localSaved=true;
           status.textContent='Preferências dos dispositivos salvas neste navegador.';
@@ -351,6 +454,7 @@
           status.textContent='Identificação sincronizada com a filial. Preferências dos dispositivos salvas neste navegador.';
         }
       }catch(error){status.textContent=(localSaved?'As preferências locais foram salvas. Falha ao sincronizar a identificação: ':'')+(error?.message||'Falha ao acessar dispositivo.');}
+      finally{button.disabled=false;}
     });
     dialog.showModal();
   }
@@ -358,7 +462,7 @@
     return printSale({id:('TESTE-'+(root.crypto?.randomUUID?.()||String(Date.now())+'-'+Math.random().toString(36).slice(2))),status:'COMPLETED',saleNumber:'TESTE',completedAt:new Date().toISOString(),items:[],payments:[],totalCents:0,changeCents:0});
   }
   root.PdvWebHardware=Object.freeze({settings,saveSettings,readWeight,connect,openDrawer,printSale,printPrebill,printTextDocument,printTest,showSettings});
-  root.PdvWebHardwareUtils=Object.freeze({parseWeight,parseUranoWeight,normalizeSettings,receiptHtml,receiptText,escpos,escapeHtml});
+  root.PdvWebHardwareUtils=Object.freeze({parseWeight,parseUranoWeight,normalizeSettings,receiptHtml,receiptText,escpos,escapeHtml,settingsMarkup});
   root.document?.addEventListener('click',e=>{
     if(e.target?.closest?.('#peripherals-settings'))showSettings();
   });

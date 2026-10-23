@@ -74,9 +74,9 @@ try{
   });
   await page.addScriptTag({content:readFileSync(new URL('../apps/web/peripherals-web.js',import.meta.url),'utf8')});
   await page.evaluate(()=>window.PdvWebHardware.showSettings());
-  const deviceDialog=page.getByRole('dialog',{name:'Dispositivos locais'});
+  const deviceDialog=page.getByRole('dialog',{name:'Dispositivos e impressão'});
   await deviceDialog.locator('select[name="paperMm"]').selectOption('58');
-  await deviceDialog.getByRole('button',{name:'Salvar',exact:true}).click();
+  await deviceDialog.getByRole('button',{name:'Salvar configurações',exact:true}).click();
   await deviceDialog.getByText('Preferências dos dispositivos salvas neste navegador.',{exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>window.PdvWebHardware.settings().paperMm),58);
   assert.equal(await page.evaluate(()=>window.brandingReads),0);
@@ -84,7 +84,7 @@ try{
   await deviceDialog.getByRole('button',{name:'Fechar',exact:true}).click();
   await page.evaluate(()=>{window.PdvCurrentAccess.permissions=['settings.view','settings.manage'];window.PdvWebHardware.showSettings();});
   await deviceDialog.getByText('Identificação carregada do servidor.',{exact:true}).waitFor();
-  await deviceDialog.getByRole('button',{name:'Salvar',exact:true}).click();
+  await deviceDialog.getByRole('button',{name:'Salvar configurações',exact:true}).click();
   await deviceDialog.getByText('As preferências locais foram salvas. Falha ao sincronizar a identificação: Conexão com servidor indisponível.',{exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>window.brandingWrites),1);
   assert.deepEqual(errors,[]);

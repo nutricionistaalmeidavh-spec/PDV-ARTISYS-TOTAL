@@ -259,3 +259,45 @@ test('cap-050 WebSerial never opens devices in an insecure context',async()=>{
  await assert.rejects(w.PdvWebHardware.connect('drawer'),/HTTPS/);
  await assert.rejects(w.PdvWebHardware.connect('scale'),/HTTPS/);
 });
+
+
+test('fase 1: impressao convencional usa documento formatado sem chave nem conector local',async()=>{
+  const {window:w,opened}=browser();
+  assert.equal(w.PdvWebHardware.settings().printerMode,'browser');
+  const result=await w.PdvWebHardware.printTest();
+  assert.equal(result.dialogOpened,true);
+  assert.equal(opened.length,1);
+  assert.ok(opened[0].printed);
+  assert.match(opened[0].html,/TESTE/);
+  w.PdvWebHardware.saveSettings({paperMm:58,printerMode:'browser'});
+  await w.PdvWebHardware.printTest();
+  assert.match(opened[1].html,/58mm auto/,'paper size must be retained by canonical HTML renderer');
+});
+
+test('fase 2: central de dispositivos agrupa recursos e nao exige pareamento para impressao comum',()=>{
+  const {window:w}=browser();
+  const html=w.PdvWebHardwareUtils.settingsMarkup();
+  for(const panel of ['printer','scale','drawer','receipt']){
+    assert.match(html,new RegExp('data-peripherals-tab="'+panel+'"'));
+    assert.match(html,new RegExp('id="pdv-peripherals-panel-'+panel+'"'));
+  }
+  assert.match(html,/Impressão pelo navegador/);
+  assert.match(html,/Sem instalação adicional/);
+  assert.match(html,/name="printerMode"/);
+  assert.match(html,/data-printer-mode="serial"/);
+  assert.match(html,/data-printer-mode="bridge"/);
+  assert.match(html,/name="bridgeToken"/);
+  assert.match(html,/id="pdv-test-printer"/);
+  assert.match(html,/id="pdv-peripherals-save"/);
+  assert.doesNotMatch(html,/window\.print\(/);
+});
+
+
+
+test('fase 2: arquivo css responsivo esta referenciado no PDV e protege paineis ocultos',()=>{
+  const html=readFileSync(new URL('../../web/index.html',import.meta.url),'utf8');
+  const css=readFileSync(new URL('../../web/peripherals-settings.css',import.meta.url),'utf8');
+  assert.match(html,/peripherals-settings\.css/);
+  assert.match(css,/@media \(max-width:680px\)/);
+  assert.match(css,/\.pdv-peripherals-dialog \[hidden\]/);
+});
