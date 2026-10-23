@@ -93,7 +93,7 @@ test('Cloudflare branch gateway exports only approved tenant identity/catalog; l
    'An existing local session cannot override revoked copy policy');
  await local.prepare("UPDATE offline_replica_state SET state='BASELINE_ONLY',last_pull_at=?").bind(new Date().toISOString()).run();
  const blocked=await localCall('/api/v1/tenants/a/products','POST',{branchId:'a-main',sku:'NEW',name:'Nova',salePriceCents:2000},localLogin.cookie);
- assert.equal(blocked.status,503,'Do not claim offline commercial writes are synchronized before outbox is implemented');
+ assert.equal(blocked.status,403,'Unpaired browser cannot access the local commercial API; new product creation is not part of the offline replay allowlist');
  assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM products').bind().first()).n,1);
  await assert.rejects(applyOfflineBaseline(local,{...valid.data,scope:{...scope,tenantId:'b'}},scope),/escopo/);
  await assert.rejects(applyOfflineBaseline(local,valid.data,{...scope,tenantId:'b'}),/escopo/);
