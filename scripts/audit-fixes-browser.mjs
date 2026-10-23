@@ -263,7 +263,7 @@ try{
     stockBalanceMilli:(await db.prepare('SELECT balance_milli AS balance FROM stock_positions WHERE product_id=?').bind(roleProduct.id).first()).balance,
     closedCashSessionsZeroDivergence:(await db.prepare("SELECT COUNT(*) AS n FROM cash_sessions WHERE operator_id='cashier' AND status='CLOSED' AND divergence_cents=0").bind().first()).n,
     paidSaleId:roleSale.id,paidSaleTotalCents:roleSale.totalCents
-  },null,2)+'\\n');
+  },null,2)+'\n');
   await rolePages.WAITER.context.close();await rolePages.CASHIER.context.close();await kitchenContext.close();
   assert.deepEqual(errors,[]);assert.deepEqual(badRequests,[]);
   console.log('Audit fixes browser: navigation, catalog, sale/stock, returns, settings, access, purchases, logistics and waiter -> kitchen -> cashier -> free table -> closed cash passed.');
