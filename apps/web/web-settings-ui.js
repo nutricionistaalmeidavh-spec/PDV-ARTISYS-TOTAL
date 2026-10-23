@@ -35,7 +35,7 @@
     const branding=brandingResult.value?.branding;
     const modules=modulesResult.value||[];
     const disabled=can('settings.manage')?'':' disabled';
-    const tabs=[['company','Empresa e comprovantes'],['team','Equipe e filiais'],['devices','Impressão e periféricos'],['modules','Áreas'],['security','Sua conta e segurança']];
+    const tabs=[['company','Empresa e comprovantes'],['team','Equipe e filiais'],['devices','Impressão e periféricos'],['offline','Funcionamento offline'],['modules','Áreas'],['security','Sua conta e segurança']];
     host.innerHTML='<section class="page web-settings"><header class="page-head"><div><h1>Configurações</h1><p>Empresa, atendimento, impressão e preferências de operação.</p></div><button class="secondary-button" type="button" data-settings-refresh>Atualizar</button></header>'+
       '<nav class="restaurant-view-switch" role="tablist" aria-label="Áreas de configuração">'+tabs.map(([id,label],index)=>'<button class="restaurant-btn '+(index?'secondary':'')+'" type="button" role="tab" id="web-settings-tab-'+id+'" aria-controls="web-settings-panel-'+id+'" aria-selected="'+!index+'" tabindex="'+(index?-1:0)+'" data-settings-tab="'+id+'">'+label+'</button>').join('')+'</nav>'+
       '<section class="data-card" role="tabpanel" id="web-settings-panel-company" aria-labelledby="web-settings-tab-company">'+
@@ -57,6 +57,10 @@
       '<section class="data-card" role="tabpanel" id="web-settings-panel-devices" aria-labelledby="web-settings-tab-devices" hidden><h2>Impressão e periféricos</h2>'+
       '<p>Configure papel, impressora, leitor, balança e gaveta para este navegador. A conexão com um equipamento só é solicitada quando você escolher conectá-lo.</p>'+
       '<button type="button" class="primary-button" data-settings-devices>Configurar dispositivos</button></section>'+
+      '<section class="data-card" role="tabpanel" id="web-settings-panel-offline" aria-labelledby="web-settings-tab-offline" hidden><h2>Funcionamento offline</h2>'+
+      '<p>Seu PDV continuará na Cloudflare. A opção de contingência usará um PC autorizado como servidor local para os aparelhos no Wi-Fi quando a internet externa cair.</p>'+
+      '<p role="status"><strong>A sincronização D1 ↔ servidor local ainda não está disponível.</strong> Nenhum dado ou login é copiado automaticamente nesta versão. Não configure este modo para vendas reais até a replicação e a reconciliação terem sido homologadas.</p>'+
+      '<p>Quando habilitado, o administrador poderá gerar um QR Code para cada garçom ou terminal, vinculando o dispositivo à filial sem criar uma segunda conta.</p></section>'+ 
       '<section class="data-card" role="tabpanel" id="web-settings-panel-modules" aria-labelledby="web-settings-tab-modules" hidden><h2>Áreas da operação</h2>'+
       '<p>Balcão, Caixa, Cardápio, Estoque, Clientes e Gestão usam a mesma base. Alimentação acrescenta mesas, comandas, pedidos e cozinha. Personalizações, fichas técnicas e unidade de venda pertencem ao produto. Ative as áreas que utilizar; esta escolha não cria outra empresa nem uma cobrança.</p>'+errorMarkup(resultError(modulesResult))+
       modules.map(item=>'<article class="module-family"><h3>'+esc(item.name)+'</h3><p>'+esc(item.description)+'</p><label><input type="checkbox" data-settings-module="'+esc(item.id)+'" '+(item.enabled?'checked ':'')+(!can('modules.manage')?'disabled':'')+'> Área ativa</label></article>').join('')+

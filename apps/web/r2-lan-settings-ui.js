@@ -9,19 +9,19 @@
   async function render(content,api=new ApiClient()){
     const tenantId=api.tenantId;
     if(!tenantId){
-      content.innerHTML='<section class="ops-page"><h1>Rede local</h1><p>Selecione o estabelecimento antes de administrar a rede.</p></section>';
+      content.innerHTML='<section class="ops-page"><h1>Funcionamento offline</h1><p>Selecione o estabelecimento antes de administrar a rede.</p></section>';
       return;
     }
     const base='/api/v1/tenants/'+encodeURIComponent(tenantId)+'/lan';
     const req=(suffix,options)=>api.request(base+suffix,options);
-    content.innerHTML='<section class="ops-page"><header class="ops-head"><h1>Rede local e segurança</h1><p>Consultando a configuração do servidor…</p></header></section>';
+    content.innerHTML='<section class="ops-page"><header class="ops-head"><h1>Funcionamento offline e segurança</h1><p>Consultando a configuração do servidor…</p></header></section>';
     let access,readiness,health,devices,modules,isAdmin=false;
     try{
       [access,readiness,modules]=await Promise.all([req('/access'),req('/readiness'),req('/modules')]);
       try{devices=await req('/devices');isAdmin=true;health=await req('/health');}
       catch(error){if(error.status!==403)throw error;devices={devices:[]};}
     }catch(error){
-      content.innerHTML='<section class="ops-page"><h1>Rede local</h1><p class="ops-error">'+(error.status===404?'Esta instalação não executa o servidor HTTPS da rede local. A gestão de dispositivos é exclusiva do modo gratuito self-hosted.':safe(error.message))+'</p></section>';
+      content.innerHTML='<section class="ops-page"><h1>Funcionamento offline</h1><p class="ops-error">'+(error.status===404?'O servidor offline ainda não foi ativado nesta instalação. Acesse esta configuração pelo endereço HTTPS local autorizado.':safe(error.message))+'</p></section>';
       return;
     }
     if(document.body.dataset.activeRoute!=='settings')return;
@@ -42,23 +42,24 @@
       '<label>Descrição do teste<input name="note" class="ops-input" maxlength="500" value="'+safe(item.note)+'" '+(isAdmin?'':'disabled')+'></label>'+
       '<label>Referência da evidência<input name="evidenceRef" class="ops-input" maxlength="250" placeholder="Ex.: QA/LAN/TEST-01" value="'+safe(item.evidenceRef)+'" '+(isAdmin?'':'disabled')+'></label>'+
       (isAdmin?'<button type="submit" class="ops-secondary">Salvar verificação</button>':'')+'</form>').join('');
-    content.innerHTML='<section class="ops-page" id="r2-settings"><header class="ops-head"><h1>Rede local, terminais e recuperação</h1>'+
-      '<p>O PC principal mantém os dados em SQLite; os demais aparelhos acessam a mesma interface por HTTPS. Nuvem e serviços pagos não são necessários.</p></header>'+
-      '<div class="ops-grid two"><section class="ops-card"><h2>Acesso por HTTPS</h2><p>Use este endereço nos dispositivos da mesma rede. Instale o certificado confiável no próprio dispositivo.</p>'+
+    content.innerHTML='<section class="ops-page" id="r2-settings"><header class="ops-head"><h1>Funcionamento offline, terminais e recuperação</h1>'+
+      '<p>O PC local permite acesso pelo Wi-Fi mesmo sem internet, desde que esteja ligado. A sincronização D1 ↔ SQLite e o compartilhamento de contas SaaS ainda dependem da implantação segura da replicação; não presuma que os dados da nuvem já estão copiados.</p></header>'+
+      '<div class="ops-grid two"><section class="ops-card"><h2>Conectar ao servidor offline pelo Wi-Fi</h2><p>O garçom escaneia o QR, entra com sua conta autorizada e vincula o aparelho à filial. Acesse por HTTPS local com certificado confiável.</p>'+
       '<p><code id="r2-lan-origin">'+safe(access.url)+'</code></p><button class="ops-secondary" id="r2-copy-address">Copiar endereço</button>'+
       '<div id="r2-lan-qr" role="img" aria-label="Código QR para endereço HTTPS da rede local" style="max-width:180px"></div>'+
       '<p class="ops-muted">Ao perder conexão com o servidor, nenhuma venda nova deve ser considerada confirmada.</p></section>'+
+      '<section class="ops-card"><h2>Sincronização com a nuvem</h2><p role="status">'+(access.replication?.state==='READY'?'Sincronização ativa (confira data do último envio e recebimento).':'Ainda não configurada. Este servidor local não recebeu uma cópia automática do D1 e as contas SaaS não estão disponíveis até configurar a replicação.')+'</p></section>'+ 
       '<section class="ops-card"><h2>Estado da rede</h2><p>'+(isAdmin?('Dispositivos ativos: '+Number(health.devices.active)+' de '+Number(health.devices.total)+' · Códigos pendentes: '+Number(health.pendingPairings)):'Identifique-se como administrador para consultar todos os dispositivos.')+'</p>'+
       '<p>Checklist: '+Number(readiness.readyCount)+' / '+Number(readiness.total)+' verificados.</p>'+
       (readiness.ready?'<p>Checklist operacional preenchido. A certificação de software é independente.</p>':'<p>Checklist operacional ainda não preenchido; isso não bloqueia código pronto.</p>')+'</section></div>'+
-      (isAdmin?'<section class="ops-card"><h2>Autorizar novo dispositivo</h2><form id="r2-new-pairing" class="field-grid">'+
+      (isAdmin?'<section class="ops-card"><h2>Gerar QR de vínculo para garçom ou terminal</h2><form id="r2-new-pairing" class="field-grid">'+
       '<label>Filial<select name="branchId" class="ops-input" required><option value="">Selecione…</option></select></label>'+
       '<label>Tipo<select name="kind" class="ops-input"><option value="TERMINAL">Caixa / terminal</option><option value="WAITER">Salão / garçom</option><option value="KITCHEN">Cozinha / KDS</option></select></label>'+
       '<button type="submit" class="ops-primary">Gerar código temporário</button></form>'+
       '<p id="r2-code-output" class="ops-muted" role="status"></p></section>':'')+
-      '<section class="ops-card"><h2>Parear este aparelho</h2><p>Use o código que o administrador gerou na unidade. O login do operador continua obrigatório.</p>'+
+      '<section class="ops-card"><h2>Vincular este aparelho</h2><p>Escaneie o QR do administrador e entre com sua conta de funcionário. O vínculo não substitui o login nem permite operar outra filial.</p>'+
       '<form id="r2-pair-device" class="field-grid"><label>Nome do aparelho<input class="ops-input" name="name" maxlength="80" placeholder="Ex.: Tablet salão 01" required></label>'+
-      '<label>Código temporário<input class="ops-input" name="code" pattern="[a-f0-9]{64}" autocomplete="off" required></label>'+
+      '<label>Código temporário<input class="ops-input" name="code" pattern="[a-f0-9]{64}" autocomplete="off" value="'+safe(window.PdvOfflinePairing?.peek?.()||'')+'" required></label>'+
       '<button type="submit" class="ops-primary">Parear aparelho</button></form><p id="r2-device-status" role="status"></p>'+
       (previousId&&previousCredential?'<button class="ops-secondary" id="r2-check-device" type="button">Verificar vínculo deste aparelho</button>':'')+
       '<p class="ops-muted">A credencial técnica é específica deste navegador, estabelecimento e aparelho autorizado (uso depende do perfil do operador); não concede acesso sem sessão válida. Em computadores compartilhados, apague dados do site ao desativar o terminal.</p></section>'+
@@ -106,6 +107,21 @@
           const copy=document.createElement('button');copy.type='button';copy.className='ops-secondary';copy.textContent='Copiar código';
           copy.addEventListener('click',()=>navigator.clipboard.writeText(data.code).catch(()=>{}));
           output.append(text,copy);
+          // The QR carries the same one-use five-minute device approval code.
+          // Employee authentication still happens on the local HTTPS PWA.
+          const qr=document.createElement('div');
+          qr.setAttribute('role','img');
+          qr.setAttribute('aria-label','QR Code de vínculo temporário do aparelho');
+          qr.style.maxWidth='220px';
+          try{
+            const url=window.PdvOfflinePairing.link(access.url,data.code);
+            const svg=window.PdvLocalQr.qrSvg(url,{scale:3});
+            qr.innerHTML=svg;
+            const hint=document.createElement('p');
+            hint.className='ops-muted';
+            hint.textContent='Escaneie no celular conectado ao Wi-Fi, entre com a conta criada pelo administrador e vincule o aparelho. QR válido por 5 minutos.';
+            output.append(qr,hint);
+          }catch{qr.textContent='Não foi possível gerar o QR. Use o código temporário acima.';output.append(qr);}
         }catch(error){notify(error.message,true);}
       });
       content.querySelectorAll('[data-r2-module]').forEach(button=>button.addEventListener('click',async()=>{
@@ -142,6 +158,7 @@
         // Credential is useful only together with the authenticated operator session.
         window.localStorage?.setItem(currentKey+'-id',result.device.id);
         window.localStorage?.setItem(currentKey+'-credential',result.credential);
+        window.PdvOfflinePairing?.take?.();
         notify('Dispositivo pareado. Carregando o PDV autorizado…');
         // First login intentionally skipped business reads before pairing.
         // Re-enter the canonical web boot now that the terminal is authorized.

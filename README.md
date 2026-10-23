@@ -32,6 +32,7 @@ Migrações publicadas não devem ser removidas ou renumeradas. Estoque, caixa e
 - [Deploy Cloudflare](docs/DEPLOY-CLOUDFLARE.md)
 - [Segurança SaaS](docs/SAAS-SECURITY-OPERATIONS.md)
 - [Primeiro acesso](docs/SAAS-FIRST-ACCESS.md)
-- [HTTPS LAN opcional](docs/SELFHOST-LAN-HTTPS.md)
+- [Funcionamento offline integrado ao SaaS — arquitetura e estado](docs/FUNCIONAMENTO-OFFLINE-HIBRIDO.md)
+- [Servidor HTTPS local existente (sem sincronização D1)](docs/SELFHOST-LAN-HTTPS.md)
 - [Periféricos](docs/WEB-PERIPHERALS.md)
 - [Proveniência histórica](docs/IMPORT-MANIFEST.md)
