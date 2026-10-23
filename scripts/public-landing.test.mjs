@@ -180,3 +180,31 @@ test('local workerd smoke uses a temporary config without production routes',()=
  assert.ok(browserSmoke.includes("'--config',devConfigPath"));
  assert.ok(browserSmoke.includes('unlinkSync(devConfigPath)'));
 });
+
+
+test('product videos are first-party lazy, accessible, and do not affect auth routes',()=>{
+  const html=source('apps/landing/index.html');
+  const css=source('apps/landing/landing-video.css');
+  const js=source('apps/landing/landing-video.js');
+  const build=source('scripts/build-web.mjs');
+  assert.match(html,/id="videos-em-acao"/);
+  for(const name of ['mesas','estoque']){
+    assert.match(html,new RegExp('/media/pdv-demo-'+name+'\\.mp4'));
+    assert.match(html,new RegExp('data-video="'+name+'"'));
+  }
+  assert.match(html,/<video[^>]*muted[^>]*playsinline[^>]*controls[^>]*preload="none"/);
+  assert.match(html,/href="\/landing-video\.css"/);
+  assert.match(html,/src="\/landing-video\.js"/);
+  assert.match(build,/landing-video\.css/);
+  assert.match(build,/landing-video\.js/);
+  assert.match(build,/!path\.endsWith\('\.mp4'\)/);
+  assert.match(source('apps/api/src/local-static.mjs'),/'\.mp4':'video\/mp4'/);
+  assert.match(js,/IntersectionObserver/);
+  assert.match(js,/prefers-reduced-motion/);
+  assert.match(css,/@media\s*\(max-width:\s*760px\)/);
+  assert.doesNotMatch(js,/fetch\(|https?:\/\//);
+  assert.doesNotMatch(html,/src="https?:\/\//);
+  assert.match(html,/src="\/media\/pdv-integrado\.webp"/);
+  assert.match(html,/id="registration-dialog"/);
+  assert.match(html,/id="login-dialog"/);
+});
