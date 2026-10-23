@@ -103,7 +103,7 @@ function originHeader(origin){
     'access-control-max-age':'600'
   };
 }
-export function createBridgeServer({queue,origin,token,drawerOpener=null,pairAuthorizer=null,printerControl=null}={}){
+export function createBridgeServer({queue,origin,token,drawerOpener=null,pairAuthorizer=null,printerControl=null,remoteConfigurator=null}={}){
   if(!queue||!origin||!token||token.length<32)throw new Error('Fila, origem HTTPS e token forte obrigatórios.');
   const u=new URL(origin);
   if(u.origin!==origin||!(u.protocol==='https:'||(u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname))))
@@ -148,6 +148,18 @@ export function createBridgeServer({queue,origin,token,drawerOpener=null,pairAut
     try{
       if(req.method==='GET'&&url.pathname==='/v1/status')
         return json(res,200,{service:'pdv-total-local',ready:true,version:1},cors);
+      if(req.method==='POST'&&url.pathname==='/v1/remote/configure'){
+        if(typeof remoteConfigurator!=='function')return json(res,501,{error:'Encaminhamento remoto indisponível.'},cors);
+        const data=await readBody(req);
+        const originValue=String(data?.origin||'');
+        const target=new URL(originValue);
+        if(target.origin!==originValue||target.protocol!=='https:'||target.origin!==origin||
+          !/^[a-f0-9-]{36}$/i.test(String(data?.agentId||''))||
+          !/^[a-f0-9]{64}$/.test(String(data?.token||'')))
+          return json(res,400,{error:'Configuração remota inválida.'},cors);
+        await remoteConfigurator({origin:originValue,agentId:data.agentId,token:data.token});
+        return json(res,200,{configured:true},cors);
+      }
       if(req.method==='GET'&&url.pathname==='/v1/printers'){
         if(typeof printerControl?.list!=='function')return json(res,501,{error:'Detecção local indisponível.'},cors);
         return json(res,200,await printerControl.list(),cors);
