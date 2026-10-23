@@ -2,6 +2,7 @@
 // Machine credentials and password hashes must never enter browser JS or logs.
 import {newSessionToken,sha256} from './password.mjs';
 import {activateOfflineBranch} from './offline-sync.mjs';
+import {exportOfflineMfa} from './account-security.mjs';
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{
  'content-type':'application/json; charset=utf-8','cache-control':'no-store',
  'x-content-type-options':'nosniff','referrer-policy':'no-referrer'}});
@@ -57,12 +58,10 @@ export async function offlineGatewayMachineRoute(request,db,env={}){
   const tenant=await db.prepare('SELECT id,slug,name,active,created_at FROM tenants WHERE id=?').bind(tenantId).first();
   const branches=await rows(db,'SELECT id,tenant_id,code,name,active,created_at FROM branches WHERE tenant_id=? AND id=?',tenantId,branchId);
   const memberships=await rows(db,'SELECT tenant_id,user_id,profile_key,active,created_at FROM tenant_memberships WHERE tenant_id=?',tenantId);
-  // Only associated users. Password hashes are machine-only and never logged.
-  // Enrolled MFA is not safely portable without TOTP key material. Fail closed:
-  // never convert an MFA-protected SaaS account into password-only local login.
-  const protectedUsers=await db.prepare('SELECT COUNT(*) AS n FROM saas_mfa_totp t JOIN tenant_memberships m ON m.user_id=t.user_id WHERE m.tenant_id=? AND t.enrolled_at IS NOT NULL')
-    .bind(tenantId).first();
-  if(protectedUsers?.n>0)return bad(412,'Há conta com MFA ativo. Autenticação MFA local ainda não homologada.');
+  // Rewrap enrolled MFA per authorized gateway; do not export platform keys.
+  let offlineMfa;
+  try{offlineMfa=await exportOfflineMfa(db,env,tenantId,match[1]);}
+  catch{return bad(412,'MFA não pode ser disponibilizado com segurança ao gateway.');}
   if(env.EMAIL_VERIFICATION_REQUIRED==='true'){
     const unverified=await db.prepare('SELECT COUNT(*) AS n FROM users u JOIN tenant_memberships m ON m.user_id=u.id WHERE m.tenant_id=? AND u.active=1 AND u.email_verified_at IS NULL')
       .bind(tenantId).first();
@@ -77,7 +76,7 @@ export async function offlineGatewayMachineRoute(request,db,env={}){
   return json({version:1,scope:{tenantId,branchId,gatewayId},baselineOnly:true,
     authority:authority&&authority.gatewayId===gatewayId?{mode:authority.mode,epoch:authority.epoch}:{mode:'CLOUD',epoch:0},
     createdAt:new Date().toISOString(),tables:{tenants:[tenant],branches,users,
-      tenant_memberships:memberships,product_categories:productCategories,products,stock_positions:stockPositions}});
+      tenant_memberships:memberships,saas_mfa_totp:offlineMfa,product_categories:productCategories,products,stock_positions:stockPositions}});
  }catch(error){
   return bad(error.status===413?413:503,'Não foi possível criar a cópia. Operações offline bloqueadas.');
  }
