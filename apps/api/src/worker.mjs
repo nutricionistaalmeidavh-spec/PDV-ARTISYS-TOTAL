@@ -223,6 +223,9 @@ export function createApi(env,{now=()=>Date.now()}={}){
       }
       const session=await sessionFor(request,db,now(),env);
       if(!session)return failure(401,'Sessão inválida ou expirada.');
+      if(env.OFFLINE_REPLICA_ENABLED==='true'&&method==='POST'&&
+        ['/api/v1/auth/mfa/enroll','/api/v1/auth/mfa/confirm','/api/v1/auth/mfa/disable'].includes(path))
+        return failure(403,'Altere autenticação MFA somente na conta da nuvem. O PC offline replica o fator de forma protegida.');
       const security=await accountSecurityRoute(request,db,env,session,now(),path);
       if(security)return security;
       if(env.EMAIL_VERIFICATION_REQUIRED==='true'&&!session.emailVerified&&path!=='/api/v1/auth/session')
