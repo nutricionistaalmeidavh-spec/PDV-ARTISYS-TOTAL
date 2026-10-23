@@ -7,6 +7,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {createSpoolQueue,createBridgeServer} from './bridge.mjs';
 import {sttyArgs} from './stty-args.mjs';
+import {pollRemoteOnce} from './remote-relay.mjs';
 const exec=promisify(execFile);
 const here=dirname(fileURLToPath(import.meta.url));
 const configDir=resolve(process.env.PDV_BRIDGE_HOME||join(homedir(),'.pdv-total-bridge'));
@@ -87,9 +88,42 @@ async function openDrawer(){
   }
 }
 const queue=createSpoolQueue(join(configDir,'jobs.sqlite'),{spool});
+async function remoteConfigurator(remote){
+  if(remote.origin!==origin||!/^https:\/\//.test(remote.origin))throw Error('Domínio remoto diferente do PDV local.');
+  if(!/^[a-f0-9]{64}$/.test(remote.token)||!/^[a-f0-9-]{36}$/i.test(remote.agentId))throw Error('Credencial remota inválida.');
+  conf.remote={origin:remote.origin,agentId:remote.agentId,token:remote.token};
+  persist();
+}
+async function relayRequest(path,payload){
+  const cfg=conf.remote;
+  if(!cfg?.token||cfg.origin!==origin)return {job:null};
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),14000);
+  try{
+    const response=await fetch(origin+'/api/v1/print-relay/agent'+path,{
+      method:'POST',cache:'no-store',signal:controller.signal,
+      headers:{authorization:'Bearer '+cfg.token,'content-type':'application/json'},
+      body:JSON.stringify(payload)});
+    const value=await response.json().catch(()=>({}));
+    if(!response.ok){
+      if(response.status===401){console.error('Credencial de impressão remota revogada. Autorize novamente no PC.');conf.remote=null;persist();}
+      throw Error('Servidor de impressão remoto indisponível ('+response.status+').');
+    }
+    return value;
+  }finally{clearTimeout(timeout);}
+}
+let remotePolling=false;
+async function pollRemote(){
+  if(remotePolling||!conf.remote?.token)return;
+  remotePolling=true;
+  try{await pollRemoteOnce({request:relayRequest,queue});}
+  catch(e){console.error('Impressão remota: '+String(e.message||e).slice(0,180));}
+  finally{remotePolling=false;}
+}
 const server=createBridgeServer({queue,origin,token:conf.token,drawerOpener:drawer?openDrawer:null,
   pairAuthorizer:process.platform==='win32'?authorizeOnWindows:null,
-  printerControl:{list:listPrinters,select:selectPrinter}});
+  printerControl:{list:listPrinters,select:selectPrinter},remoteConfigurator});
+const pollTimer=setInterval(()=>{void pollRemote();},8000);
+void pollRemote();
 server.listen(8765,'127.0.0.1',()=>{
   console.log('PDV Total: conector local disponível somente em http://127.0.0.1:8765');
   console.log('Origem autorizada:',origin);
@@ -97,6 +131,6 @@ server.listen(8765,'127.0.0.1',()=>{
   console.log('Impressora:',printer||'padrão do sistema','| Gaveta:',drawer?'configurada':'não configurada');
   console.log('Jobs enviados ao spooler não são confirmação física de impressão.');
 });
-function close(){server.close(()=>{queue.close();process.exit(0);});}
+function close(){clearInterval(pollTimer);server.close(()=>{queue.close();process.exit(0);});}
 process.on('SIGINT',close);
 process.on('SIGTERM',close);
