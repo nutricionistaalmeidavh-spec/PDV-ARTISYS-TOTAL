@@ -312,7 +312,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
         // Fence normal cloud writes throughout a local-authority outage.
         // Branch is resolved server side from the body/query, never from a
         // client flag claiming to be a gateway.
-        if(env.LAN_MODE!=='true'&&method!=='GET'&&method!=='HEAD'){
+        if(env.OFFLINE_SYNC_ENABLED==='true'&&env.LAN_MODE!=='true'&&method!=='GET'&&method!=='HEAD'){
           const branchId=url.searchParams.get('branchId')||
             (await request.clone().json().catch(()=>({})))?.branchId;
           if(branchId&&await offlineBranchCloudWriteDenied(db,tenantId,branchId))
