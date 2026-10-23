@@ -116,10 +116,10 @@
   async function credit(selectedCustomerId=''){
     const customers=await api.customers();
     root.innerHTML=section('Crediário','Limite e saldo por cliente vinculados às vendas reais.',
-      card('Consultar cliente',`<form data-credit-form class="ops-form-grid">${select('customerId','Cliente',customers)}<button class="ops-secondary" type="button" data-credit-new-customer>+ Cliente</button><button class="ops-primary" type="submit">Consultar saldo</button></form><div data-credit-result role="status"></div>`));
+      card('Consultar cliente',`<form data-credit-form class="ops-form-grid">${select('customerId','Cliente',customers)}${window.PdvAccessPolicy?.hasCapability(window.PdvCurrentAccess,"customers.manage")?'<button class="ops-secondary" type="button" data-credit-new-customer>+ Cliente</button>':''}<button class="ops-primary" type="submit">Consultar saldo</button></form><div data-credit-result role="status"></div>`));
     const customerSelect=root.querySelector('[data-credit-form] [name="customerId"]');
     if(selectedCustomerId)customerSelect.value=selectedCustomerId;
-    root.querySelector('[data-credit-new-customer]').addEventListener('click',openCreditCustomerCreate);
+    root.querySelector('[data-credit-new-customer]')?.addEventListener('click',openCreditCustomerCreate);
     root.querySelector('[data-credit-form]').addEventListener('submit',async event=>{
       event.preventDefault();const customerId=formData(event.currentTarget).customerId;if(!customerId)return;
       try{const result=await call('credit/'+id(customerId)),credit=result.credit;

@@ -80,6 +80,8 @@ export async function advancedFinanceRoute(request,db,session,member,tenant,path
   return json({error:'Rota financeira não encontrada.'},404);
  }catch(error){
   const status=Number.isInteger(error?.status)&&error.status>=400&&error.status<500?error.status:500;
-  return json({error:status===500?'Falha ao processar operação financeira.':error.message},status);
+  if(status===500)console.error('Advanced finance request failed',{method,path,error:String(error?.message||error)});
+  const local=['127.0.0.1','localhost'].includes(new URL(request.url).hostname);
+  return json({error:status===500&&!local?'Falha ao processar operação financeira.':error.message},status);
  }
 }

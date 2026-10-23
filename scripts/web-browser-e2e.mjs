@@ -1,6 +1,7 @@
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {setTimeout as sleep} from 'node:timers/promises';
-import {mkdirSync,readFileSync,writeFileSync,unlinkSync} from 'node:fs';
+import {existsSync,mkdirSync,readFileSync,writeFileSync,unlinkSync} from 'node:fs';
+import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
@@ -19,12 +20,17 @@ const devConfigPath=fileURLToPath(new URL('../.wrangler-browser-'+process.pid+'.
 writeFileSync(devConfigPath,JSON.stringify(devConfig,null,2),{flag:'wx',mode:0o600});
 const devArgs=['dev','--local','--config',devConfigPath,'--ip','127.0.0.1','--port','8789','--var','AUTH_ENABLED:true','--var','COOKIE_SECURE:false','--var','EMAIL_FROM:disabled-in-local-e2e'];
 if(process.env.PDV_WORKERD_STATE_PATH)devArgs.push('--persist-to',process.env.PDV_WORKERD_STATE_PATH);
-const worker=spawn(wranglerCli?process.execPath:'npx',wranglerCli?[wranglerCli,...devArgs]:['--yes','wrangler@4.137.0',...devArgs],{
+const windowsNpx=resolve(dirname(process.execPath),'node_modules','npm','bin','npx-cli.js');
+const useWindowsNpx=!wranglerCli&&process.platform==='win32'&&existsSync(windowsNpx);
+const packageRunner=useWindowsNpx?process.execPath:'npx';
+const packageArgs=useWindowsNpx?[windowsNpx,'--yes','wrangler@4.137.0',...devArgs]:['--yes','wrangler@4.137.0',...devArgs];
+const worker=spawn(wranglerCli?process.execPath:packageRunner,wranglerCli?[wranglerCli,...devArgs]:packageArgs,{
   stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32',
   env:{...process.env,CI:'true'}
 });
-let stderr='';
+let stderr='',stdout='';
 worker.stderr.on('data',v=>stderr=(stderr+v.toString()).slice(-6000));
+worker.stdout.on('data',v=>stdout=(stdout+v.toString()).slice(-6000));
 const errors=[];
 let browser;
 // Traverse the same visible hubs as an operator; never bypass permissions with
@@ -65,11 +71,13 @@ try{
   const navigationTrace=[];
   page.on('framenavigated',frame=>{if(frame===page.mainFrame())navigationTrace.push({url:frame.url(),at:Date.now()});});
   page.on('pageerror',error=>errors.push(error.message));
-  page.on('response',response=>{
+  page.on('response',async response=>{
     if(response.status()<400)return;
     const pathname=new URL(response.url()).pathname;
     if(response.status()===401&&pathname==='/api/v1/auth/session')return; // expected on initial unauthenticated render
     unexpectedHttp.push(response.status()+' '+pathname);
+    if(response.status()>=500)console.error('HTTP failure',response.status(),pathname,
+      await response.text().catch(()=>''));
   });
   page.on('console',message=>{
     if(message.type()!=='error')return;
@@ -316,22 +324,25 @@ try{
   await page.locator('[data-bank-page=previous]').waitFor();
   await page.locator('[data-bank-page=next]').waitFor();
   console.log('PASS: credit quick customer and finance navigation buttons.');
-  await page.locator('#cloud-bank-create [name=name]').fill('Carteira P4 QA');
+  const walletSuffix=Date.now().toString(36);
+  const primaryWalletName=`Carteira P4 QA ${walletSuffix}`;
+  const supportWalletName=`Carteira B P4 QA ${walletSuffix}`;
+  await page.locator('#cloud-bank-create [name=name]').fill(primaryWalletName);
   await page.locator('#cloud-bank-create [name=walletKind]').selectOption('CASH');
   const walletCreated=page.waitForResponse(response=>response.request().method()==='POST'&&
     new URL(response.url()).pathname.endsWith('/finance-advanced/accounts'),{timeout:20000});
   await page.locator('#cloud-bank-create button[type=submit]').click();
   const walletResponse=await walletCreated;
   assert.equal(walletResponse.status(),201,await walletResponse.text());
-  await page.locator('.ops-card').filter({hasText:'Carteira P4 QA'}).first().waitFor({timeout:20000});
+  await page.locator('.ops-card').filter({hasText:primaryWalletName}).first().waitFor({timeout:20000});
 
   // P0: two independent non-bank wallets, a genuine opening and atomic transfer.
-  await page.locator('#cloud-bank-create [name=name]').fill('Carteira B P4 QA');
+  await page.locator('#cloud-bank-create [name=name]').fill(supportWalletName);
   await page.locator('#cloud-bank-create [name=walletKind]').selectOption('OTHER');
   await page.locator('#cloud-bank-create button[type=submit]').click();
-  await page.locator('.ops-card strong').filter({hasText:'Carteira B P4 QA'}).first().waitFor({timeout:12000});
+  await page.locator('.ops-card strong').filter({hasText:supportWalletName}).first().waitFor({timeout:12000});
   await page.locator('#cloud-wallet-ops').waitFor({timeout:12000});
-  await page.locator('#cloud-wallet-adjust [name=accountId]').selectOption({label:'Carteira P4 QA'});
+  await page.locator('#cloud-wallet-adjust [name=accountId]').selectOption({label:primaryWalletName});
   await page.locator('#cloud-wallet-adjust [name=kind]').selectOption('OPENING');
   await page.locator('#cloud-wallet-adjust [name=amount]').fill('25,00');
   await page.locator('#cloud-wallet-adjust [name=reason]').fill('Fundo operacional contado');
@@ -342,14 +353,14 @@ try{
   assert.equal(openingResponse.status(),201,await openingResponse.text());
   await page.waitForFunction(()=>/R\$\s*25,00/.test(document.querySelector('#route-content')?.innerText||''),
     null,{timeout:12000});
-  await page.locator('#cloud-wallet-transfer [name=fromAccountId]').selectOption({label:'Carteira P4 QA'});
-  await page.locator('#cloud-wallet-transfer [name=toAccountId]').selectOption({label:'Carteira B P4 QA'});
+  await page.locator('#cloud-wallet-transfer [name=fromAccountId]').selectOption({label:primaryWalletName});
+  await page.locator('#cloud-wallet-transfer [name=toAccountId]').selectOption({label:supportWalletName});
   await page.locator('#cloud-wallet-transfer [name=amount]').fill('10,00');
   await page.locator('#cloud-wallet-transfer [name=reason]').fill('Transferência para carteira de apoio');
   await page.locator('#cloud-wallet-transfer button[type=submit]').click();
   await page.waitForFunction(()=>/R\$\s*15,00/.test(document.querySelector('#route-content')?.innerText||'')&&
     /R\$\s*10,00/.test(document.querySelector('#route-content')?.innerText||''),null,{timeout:12000});
-  await page.locator('#cloud-wallet-history-form [name=accountId]').selectOption({label:'Carteira P4 QA'});
+  await page.locator('#cloud-wallet-history-form [name=accountId]').selectOption({label:primaryWalletName});
   await page.locator('#cloud-wallet-history-form button[type=submit]').click();
   await page.locator('#cloud-wallet-history tr').filter({hasText:'Transferência para carteira de apoio'}).waitFor({timeout:12000});
   await page.screenshot({path:'qa-artifacts/pdv-p0-wallet-ledger-transfer.png',fullPage:true});
@@ -429,7 +440,10 @@ try{
   await page.locator('#web-catalog-master [data-master-product]').click();
   await page.locator('#web-product-name').fill('Produto Web QA');
   const sku='BROWSER-'+Date.now();
-  const barcode='7891780213442';
+  const barcodeBase=`789${String(Date.now()).slice(-9)}`;
+  const barcodeCheck=(10-(barcodeBase.split('').reduce((sum,digit,index)=>
+    sum+Number(digit)*(index%2===0?1:3),0)%10))%10;
+  const barcode=barcodeBase+barcodeCheck;
   await page.locator('#web-product-sku').fill(sku);
   await page.locator('#web-product-form [name=barcode]').fill(barcode);
   await page.locator('#web-product-price').fill('12,90');
@@ -469,22 +483,29 @@ try{
   await page.locator('#web-products-category-filter').selectOption('');
 
   const row=page.locator('.web-product-row').filter({hasText:sku});
+  const openProductOptions=async productRow=>{
+    const details=productRow.locator('.web-product-options');
+    if(!await details.evaluate(element=>element.open))await details.locator('summary').click();
+  };
   await row.locator('[data-web-edit]').click();
   await page.locator('#web-edit-product-form').waitFor({timeout:12000});
   await page.locator('#web-edit-product-name').fill('Produto Web QA');
   await page.locator('#web-edit-product-form button[type=submit]').click();
   await page.locator('#web-edit-product-form').waitFor({state:'detached',timeout:12000});
+  await openProductOptions(row);
   await row.locator('[data-web-transfer]').waitFor({state:'visible',timeout:12000});
   await row.locator('[data-web-stock]').click();
   await page.locator('#web-stock-qty').fill('2');
   await page.locator('#web-stock-form button[type=submit]').click();
   await page.locator('.web-product-row').filter({hasText:sku}).getByText('2',{exact:true}).waitFor();
   // Parity: signed stock adjustment and immutable movement audit in the SAME products UI.
+  await openProductOptions(row);
   await row.locator('[data-web-adjust]').click();
   await page.locator('#web-adjust-qty').fill('-0.5');
   await page.locator('#web-adjust-reason').fill('Contagem física QA no balcão');
   await page.locator('#web-adjust-form button[type=submit]').click();
   await page.locator('#web-adjust-form').waitFor({state:'detached',timeout:12000});
+  await openProductOptions(row);
   await row.locator('[data-web-moves]').click();
   await page.getByText('Contagem física QA no balcão').waitFor({timeout:12000});
   await page.screenshot({path:'qa-artifacts/pdv-parity-stock-history.png',fullPage:true});
@@ -731,6 +752,7 @@ try{
   // and verify the configured snapshot is present in the canonical sale row.
   await navigateUi(page,'products');
   const configuredProductRow=page.locator('.web-product-row').filter({hasText:'Produto Web QA'});
+  await openProductOptions(configuredProductRow);
   await configuredProductRow.locator('[data-web-customize]').click();
   await page.locator('#web-config-product-form [data-add-variant]').click();
   const variantRow=page.locator('#web-config-product-form [data-variant-row]').first();
@@ -1131,10 +1153,16 @@ try{
       feedback:document.querySelector('[data-module-feedback]')?.textContent,
       modules:[...document.querySelectorAll('[data-settings-module]')].map(n=>({id:n.dataset.settingsModule,checked:n.checked,disabled:n.disabled}))})).catch(()=>({})));
   }
+  const traces=await fetch(origin+'/cdn-cgi/local/explorer/api/local/observability/query',{
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({sql:'SELECT * FROM logs ORDER BY timestamp DESC LIMIT 20'})
+  }).then(response=>response.text()).catch(()=> '');
+  if(traces)console.error('Workerd observability:',traces);
+  if(stderr||stdout)console.error('Workerd failure log:',stderr+'\n'+stdout);
   throw error;
 }finally{
   await browser?.close();
-  const stop=signal=>{try{if(process.platform==='win32')worker.kill(signal);else process.kill(-worker.pid,signal);}catch{}};
+  const stop=signal=>{try{if(process.platform==='win32')spawnSync('taskkill',['/pid',String(worker.pid),'/T','/F'],{stdio:'ignore'});else process.kill(-worker.pid,signal);}catch{}};
   stop('SIGTERM');await sleep(400);if(worker.exitCode===null)stop('SIGKILL');
   unlinkSync(devConfigPath);
 }

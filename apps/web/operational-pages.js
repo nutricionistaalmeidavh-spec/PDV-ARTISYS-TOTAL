@@ -245,7 +245,7 @@
       <section class="ops-card"><h2>${open?'Caixa em operação':'Iniciar caixa'}</h2>
         ${open?`<dl class="ops-details"><div><dt>Abertura</dt><dd>${when(open.openedAt)}</dd></div>
           <div><dt>Fundo inicial</dt><dd>${money(open.openingCents)}</dd></div>
-          <div><dt>Operador</dt><dd>${escapeHtml(open.operatorId)}</dd></div><div><dt>Terminal</dt><dd>${escapeHtml(open.terminalId||cfg.terminalId)}</dd></div></dl>`:''}${cashControls}
+          <div><dt>Operador</dt><dd>${escapeHtml(cashFilters.operators.find(x=>x.id===open.operatorId)?.name||"Operador não identificado")}</dd></div><div><dt>Terminal</dt><dd>${escapeHtml((open.terminalId||cfg.terminalId)===cfg.terminalId?"Este navegador":cashFilters.terminals.find(x=>x.id===open.terminalId)?.name||"Outro terminal")}</dd></div></dl><details><summary>Identificadores de auditoria</summary><p>Operador: ${escapeHtml(open.operatorId)} · Terminal: ${escapeHtml(open.terminalId||cfg.terminalId)}</p></details>`:''}${cashControls}
       </section>
       <section class="ops-card"><h2>Movimentações</h2>
       <div class="ops-table-wrap"><table class="ops-table"><thead><tr>

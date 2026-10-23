@@ -2,6 +2,29 @@
 
 Atualizado em 22/10/2026. Este documento substitui a matriz de paridade como plano de trabalho. Não usa percentuais de funcionalidades herdadas como medida de prontidão.
 
+## Auditoria e plano vigente
+
+- [Auditoria estrutural, evidências e achados A01–A04](AUDITORIA-OPERACIONAL-20261022.md).
+- [Roteiros QA-00 a QA-12 por pessoa, objetivo e resultado](PLANO-QA-JORNADAS.md).
+- [Execução local de 23/10: licença ativa, cadastro, recebimento e venda nominal](QA-EXECUCAO-20261023.md). QA-00/01/02 parcialmente exercitados; nenhuma jornada inteira promovida a homologada.
+
+A inspeção inicial de produção ficou bloqueada por autenticação. Em 23/10 foi preparado ambiente local autenticado com licença TRIAL e iniciado QA visual; produção e Safari real continuam sem homologação nesta auditoria. Os achados de código indicam onde investigar, sem promover hipóteses a falhas de produção. Não há nota global de usabilidade.
+
+## Entrega por etapas de aceite
+
+| Etapa | Trabalho e responsável por função | Dependência | Critério de saída |
+| --- | --- | --- | --- |
+| 0 — Preparar QA | QA prepara empresa isolada, contas por perfil, dois terminais, massa e captura; proprietário confirma políticas | Acesso autenticado a ambiente de teste e e-mail de teste | QA-00 executável sem tocar em dados reais; regras de antecipação/estoque/cancelamento documentadas |
+| 1 — Fechar uma operação realista | QA + atendente + cozinha + caixa executam QA-01 a QA-07 | Etapa 0 | Pedido do cadastro ao fechamento com evidência persistida; sem bloqueador de venda, perda ou duplicação de movimentos |
+| 2 — Corrigir riscos encontrados | Desenvolvimento reproduz A01–A04; produto confirma responsabilidades; QA testa correções | Reproduções ou decisão de política registrada | Permissões coerentes, pendência/repetição seguras, filtros sem resposta obsoleta; regressões focais aprovadas |
+| 3 — Homologar no dispositivo de uso | QA + usuários executam QA-12 nas jornadas principais | Caminho principal estável | Safari real e PWA utilizáveis com teclado, interrupção, retorno e cache; medidas de desempenho registradas |
+| 4 — Completar retaguarda | Financeiro/estoque/expedição executam QA-08 a QA-11 | Venda e reversões consistentes | Dívida, entrega, conciliação e relatórios reconciliados com massa independente |
+| 5 — Liberar piloto controlado | Proprietário/QA revisam evidências, limitações e recuperação | Etapas anteriores sem bloqueadores | Aceite explícito das jornadas por papel; plano de suporte/backup/recuperação e limitações conhecidas |
+
+A01 (antecipação ligada a transferência) exige decisão de política antes de mudar acesso. A02 (cadastro oferecido a consulta) e A03 (envio de carteira sem bloqueio pendente) têm indicação direta de código. A04 (consultas de Bancos fora de ordem) exige reprodução controlada. Todos permanecem pendentes de validação/correção; esta entrega não altera o aplicativo.
+
+Não fixar datas antes de preparar ambiente e executar a primeira jornada. A lista de correções deve nascer das evidências, ordenada por bloqueio operacional e integridade; não por quantidade de telas ou percentuais herdados.
+
 ## Estados e evidência
 
 Cada jornada recebe um estado: não verificado, funciona, funciona com problema ou falha. Para registrar funciona, anotar ambiente, revisão Git, passos, resultado esperado/observado e evidência. Testes automatizados e homologação manual são evidências distintas.
