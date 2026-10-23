@@ -11,7 +11,7 @@ const origin='https://pdv.example.test';
 const tokens={'owner-a':'a'.repeat(64),'owner-b':'b'.repeat(64),'cashier':'c'.repeat(64)};
 async function fixture(){
  const db=openLocalDatabase();
- for(const file of ['0001_identity.sql','0031_saas_access.sql','0044_telemetry_events.sql'])
+ for(const file of ['0001_identity.sql','0031_saas_access.sql','0044_telemetry_events.sql','0045_telemetry_analytics_budget.sql'])
   db.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
  const created=new Date(NOW).toISOString();
  for(const [id,slug] of [['a','store-a'],['b','store-b']]){
@@ -79,5 +79,26 @@ test('telemetry remains available locally without Cloudflare and central reporti
   assert.equal(summary.totalEvents,1);
   assert.equal(summary.events[0].eventName,'sale_completed');
   assert.equal(summary.tenants[0].tenantId,'a');
+ }finally{x.close();}
+});
+
+test('Analytics Engine free-tier guard caps writes at 80000/day and shows utilization while retaining local events',async()=>{
+ const x=await fixture();try{
+  await x.request('owner-a','a','preferences','PUT',{enabled:true,diagnostics:false});
+  const day=new Date(NOW).toISOString().slice(0,10);
+  await x.db.prepare('INSERT INTO saas_telemetry_analytics_budget(utc_day,data_points,updated_at) VALUES(?,?,?)')
+   .bind(day,79999,new Date(NOW).toISOString()).run();
+  for(const id of ['12345678-1234-4234-8234-aaaaaaaaaaaa','12345678-1234-4234-8234-bbbbbbbbbbbb']){
+   const result=await x.request('owner-a','a','events','POST',{id,eventName:'screen_opened',route:'checkout',branchId:'br-a'});
+   assert.equal(result.status,202);
+  }
+  assert.equal(x.recorded.length,1,'only last permitted Analytics Engine datapoint sent');
+  const summary=await platformTelemetrySummary(x.db,NOW);
+  assert.equal(summary.totalEvents,2,'SQLite stays available after cloud limit');
+  assert.equal(summary.analyticsWritesToday,80000);
+  assert.equal(summary.analyticsDailyLimit,100000);
+  assert.equal(summary.analyticsWriteCap,80000);
+  assert.equal(summary.analyticsUtilizationPercent,80);
+  assert.equal(summary.analyticsCapReached,true);
  }finally{x.close();}
 });
