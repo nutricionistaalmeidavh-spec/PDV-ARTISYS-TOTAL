@@ -64,7 +64,7 @@ try{
   await desktop.locator('[data-peripherals-tab="printer"]').click();
   await desktop.screenshot({path:'qa-artifacts/peripherals/desktop-browser-printing.png',fullPage:true});
   await desktop.locator('#pdv-peripherals-close').click();
-  assert.equal(await desktop.locator('#pdv-peripherals-dialog').count(),0);
+  await desktop.locator('#pdv-peripherals-dialog').waitFor({state:'detached'});
   await desktop.close();
 
   assert.deepEqual(errors,[],'peripheral settings must not produce browser errors');
