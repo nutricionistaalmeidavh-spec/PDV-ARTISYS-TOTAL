@@ -14,6 +14,7 @@ import {productMediaRoute} from './product-media.mjs';
 import {advancedFinanceRoute} from './advanced-finance-router.mjs';
 import {verticalRoute} from './vertical-router.mjs';
 import {receiptRoute} from './receipt-route.mjs';
+import {browserPrintRelayRoute,machinePrintRelayRoute} from './print-relay-route.mjs';
 import {r3DocumentRoute} from './r3-document-route.mjs';
 import {r2LanRoute,authorizeLanBusinessRequest,authorizeLanModule} from './r2-lan-router.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
@@ -181,6 +182,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
         return await platformManagementRoute(request,db,env,path,now());
       }
       if(env.AUTH_ENABLED==='false')return failure(503,'Acesso ainda não habilitado para clientes.');
+       if(path.startsWith('/api/v1/print-relay/agent/'))return await machinePrintRelayRoute(request,db,now());
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
       if(!['GET','HEAD'].includes(method)&&!originAllowed(request))return failure(403,'Origem da solicitação inválida.');
       if(method==='POST'&&path==='/api/v1/auth/register')return await registerPublicAccount(request,env,db,now());
@@ -289,6 +291,8 @@ export function createApi(env,{now=()=>Date.now()}={}){
         if(advanced)return advanced;
         const documents=await r3DocumentRoute(request,db,session,membership,tenantId,commerceMatch[2]);
         if(documents)return documents;
+        const relay=await browserPrintRelayRoute(request,db,session,membership,tenantId,commerceMatch[2],now());
+        if(relay)return relay;
         const receipts=await receiptRoute(request,db,session,membership,tenantId,commerceMatch[2]);
         if(receipts)return receipts;
         const commerce=await commerceRoute(request,db,session,membership,tenantId,commerceMatch[2],{
