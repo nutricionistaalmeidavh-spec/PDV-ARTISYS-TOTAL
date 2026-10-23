@@ -19,6 +19,8 @@ import {browserPrintRelayRoute,machinePrintRelayRoute} from './print-relay-route
 import {r3DocumentRoute} from './r3-document-route.mjs';
 import {r2LanRoute,authorizeLanBusinessRequest,authorizeLanModule} from './r2-lan-router.mjs';
 import {offlineGatewayAdminRoute,offlineGatewayMachineRoute} from './offline-gateway.mjs';
+import {offlineReplayRoute,offlineBranchCloudWriteDenied} from './offline-sync.mjs';
+import {stageOfflineMutation} from './offline-outbox.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import legacyProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
 import legacyPrincipals from '../../../packages/core/js/core/auth/principal-resolver.js';
@@ -199,6 +201,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
        if(path.startsWith('/api/v1/print-relay/agent/'))return await machinePrintRelayRoute(request,db,now());
       if(path.startsWith('/api/v1/offline/gateway/')){
         if(env.OFFLINE_SYNC_ENABLED!=='true'||env.LAN_MODE==='true')return failure(404,'Sincronização offline não habilitada.');
+        if(path==='/api/v1/offline/gateway/replay')return offlineReplayRoute(request,db,env,now());
         return offlineGatewayMachineRoute(request,db,env);
       }
       if(method==='OPTIONS')return failure(405,'Método não permitido.');
@@ -292,15 +295,18 @@ export function createApi(env,{now=()=>Date.now()}={}){
         if(!membership)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
         if(!['GET','HEAD'].includes(method)&&!await tenantWriteAllowed(db,tenantId,env,now()))
           return failure(402,'Assinatura inativa ou vencida. Operações de escrita suspensas.');
-        if(/^offline\/gateways(?:\/[0-9a-zA-Z-]+)?$/.test(commerceMatch[2])){
+        if(/^offline\/gateways(?:\/[0-9a-zA-Z-]+(?:\/activate)?)?$/.test(commerceMatch[2])){
           if(env.LAN_MODE==='true'||env.OFFLINE_SYNC_ENABLED!=='true')return failure(404,'Integração offline não habilitada.');
           return offlineGatewayAdminRoute(request,db,membership,session,tenantId,commerceMatch[2],now());
         }
-        if(env.LAN_MODE==='true'&&!['GET','HEAD'].includes(method) &&
-           !commerceMatch[2].startsWith('lan/')){
-          const replica=await db.prepare('SELECT state FROM offline_replica_state WHERE tenant_id=? LIMIT 1')
-            .bind(tenantId).first();
-          if(replica)return failure(503,'Cópia local somente para consulta: reconciliação de vendas, caixa e estoque com D1 ainda não habilitada.');
+        // Fence normal cloud writes throughout a local-authority outage.
+        // Branch is resolved server side from the body/query, never from a
+        // client flag claiming to be a gateway.
+        if(env.LAN_MODE!=='true'&&method!=='GET'&&method!=='HEAD'){
+          const branchId=url.searchParams.get('branchId')||
+            (await request.clone().json().catch(()=>({})))?.branchId;
+          if(branchId&&await offlineBranchCloudWriteDenied(db,tenantId,branchId))
+            return failure(423,'Filial em funcionamento offline; operação exclusiva do servidor da loja.');
         }
         // Business areas are available in the hosted app too. Reuse the same
         // tenant-scoped policy without exposing device pairing or LAN controls.
@@ -315,6 +321,17 @@ export function createApi(env,{now=()=>Date.now()}={}){
           if(deviceDenied)return deviceDenied;
           const moduleDenied=await authorizeLanModule(db,tenantId,commerceMatch[2]);
           if(moduleDenied)return moduleDenied;
+          if(method!=='GET'&&method!=='HEAD'&&!commerceMatch[2].startsWith('lan/')){
+            const replica=await db.prepare('SELECT state FROM offline_replica_state WHERE tenant_id=? LIMIT 1')
+              .bind(tenantId).first();
+            if(replica){
+              try{
+                await stageOfflineMutation(db,request,{tenantId,branchId:request.clone?(
+                  (await request.clone().json().catch(()=>({})))?.branchId||url.searchParams.get('branchId')
+                ):null,userId:session.userId,now:now()});
+              }catch(error){return failure(error.status||503,error.message||'Operação offline indisponível.');}
+            }
+          }
         }else if(/^(restaurant|wholesale)\//.test(commerceMatch[2])){
           const moduleDenied=await authorizeLanModule(db,tenantId,commerceMatch[2],{useDefaults:false});
           if(moduleDenied)return moduleDenied;
