@@ -26,8 +26,9 @@ function persist(){
   try{renameSync(tmp,confFile);}finally{try{rmSync(tmp,{force:true});}catch{}}
   try{chmodSync(confFile,0o600);}catch{}
 }
-if(!/^[a-f0-9]{64}$/.test(conf.token||''))conf.token=randomBytes(32).toString('hex');
-if(conf.origin!==origin||!conf.token||conf.printer===undefined){conf.origin=origin;conf.printer=printer;persist();}
+const needsNewToken=!/^[a-f0-9]{64}$/.test(conf.token||'');
+if(needsNewToken)conf.token=randomBytes(32).toString('hex');
+if(conf.origin!==origin||needsNewToken||conf.printer===undefined){conf.origin=origin;conf.printer=printer;persist();}
 else{try{chmodSync(confFile,0o600);}catch{}}
 async function listPrinters(){
   if(process.platform!=='win32')return {printers:[],selected:printer,note:'Detecção automática disponível nesta versão para Windows.'};

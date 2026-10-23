@@ -301,3 +301,15 @@ test('fase 2: arquivo css responsivo esta referenciado no PDV e protege paineis 
   assert.match(css,/@media \(max-width:680px\)/);
   assert.match(css,/\.pdv-peripherals-dialog \[hidden\]/);
 });
+
+
+test('P3 e P4: UI oferece autorização assistida, seleção de impressora e fila protegida',()=>{
+ const {window:w}=browser(),markup=w.PdvWebHardwareUtils.settingsMarkup();
+ assert.match(markup,/id="pdv-bridge-pair"/);
+ assert.match(markup,/id="pdv-bridge-printer-select"/);
+ assert.match(markup,/id="pdv-bridge-printer-save"/);
+ assert.match(markup,/id="pdv-bridge-queue"/);
+ assert.match(markup,/name="autoPrint"/);
+ assert.match(markup,/Já tenho o código de pareamento/);
+ assert.match(markup,/data-printer-mode="bridge" hidden/);
+});

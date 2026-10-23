@@ -44,7 +44,7 @@
       if(receipt?.sale?.status!=='COMPLETED')throw new Error('Venda não concluída ou indisponível.');
       const result=await root.PdvWebHardware.printSale(receipt.sale,{popup,forceBrowser:pdf,
         branding:receipt.branding,text:receipt.text,reprint:receiptSubmitted&&!pdf});
-      if(!pdf)receiptSubmitted=true;
+      if(!pdf){receiptSubmitted=true;button.textContent='Reimprimir comprovante';}
       notice(pdf?'No diálogo, escolha Salvar como PDF.':result?.queued?'Enviado ao spooler local. Confira a impressão no equipamento.':'Diálogo aberto ou comando enviado; confirme a impressão.');
     }catch(error){
       try{popup?.close();}catch{}
@@ -63,7 +63,10 @@
     host.querySelector('#post-sale-close').addEventListener('click',closePostSaleModal);
     host.querySelector('#post-sale-new-sale').addEventListener('click',closePostSaleModal);
     const prefs=root.PdvWebHardware.settings();
-    if(prefs.printerMode==='bridge'&&prefs.autoPrint)void doPrint(host.querySelector('#post-sale-print'));
+    if(prefs.printerMode==='bridge'&&prefs.autoPrint){
+      if(root.PdvLocalBridge?.pairedToken?.())void doPrint(host.querySelector('#post-sale-print'));
+      else notice('Impressão automática pendente: autorize o conector neste computador em Configurações → Impressora.',true);
+    }
   }
   if(!Client.prototype.__artisysWebReceiptPatched){
     const original=Client.prototype.completeSale;
