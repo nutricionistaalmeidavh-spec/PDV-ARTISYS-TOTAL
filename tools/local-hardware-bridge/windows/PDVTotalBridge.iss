@@ -17,6 +17,7 @@ DisableProgramGroupPage=yes
 Source: "node.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\main.mjs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\bridge.mjs"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\remote-relay.mjs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\stty-args.mjs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\print.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\drawer.ps1"; DestDir: "{app}"; Flags: ignoreversion

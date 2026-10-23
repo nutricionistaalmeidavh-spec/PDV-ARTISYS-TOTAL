@@ -22,6 +22,7 @@ must(existsSync(resolve(root,'apps/api/migrations/0004_advanced_finance.sql')),'
 must(existsSync(resolve(root,'apps/api/migrations/0039_p4_finance_operations.sql')),'P4 finance wallet schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0040_wallet_operations.sql')),'Immutable wallet ledger schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0042_finance_query_indexes.sql')),'Paginated finance query indexes missing');
+must(existsSync(resolve(root,'apps/api/migrations/0043_print_relay.sql')),'Mobile print relay schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0006_desktop_parity.sql')),'desktop parity additive schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0007_stock_transfers.sql')),'canonical cross-branch stock transfer schema missing');
 must(existsSync(resolve(root,'apps/api/migrations/0008_transaction_reversals.sql')),'atomic reversal schema missing');
