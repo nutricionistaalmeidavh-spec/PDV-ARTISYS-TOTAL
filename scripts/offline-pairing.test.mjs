@@ -23,13 +23,16 @@ test('offline waiter QR uses HTTPS local PWA and a five-minute one-use pairing f
  assert.equal(url.origin,'https://pdv.loja.local:8443');
  assert.equal(url.pathname,'/app/');
  assert.equal(url.search,'');
- assert.equal(url.hash,'#pdv-pair='+code);
+ assert.match(url.hash,/^#p=[A-Za-z0-9_-]{43}$/);
+ assert.ok(link.length<=78,'short local HTTPS link must fit the existing version-4 QR byte capacity');
  assert.equal(url.username,'');
+ assert.match(x.pairing.link('https://pdv.loja.local:8443/',code),/#p=/);
  assert.throws(()=>x.pairing.link('http://192.168.1.10/',code),/HTTPS/);
  assert.throws(()=>x.pairing.link('https://pdv.loja.local/', 'abc'),/código/i);
 });
 test('QR pairing fragment is removed from browser history before login; temporary code survives login without permanent storage',()=>{
- const x=create({hash:'#pdv-pair='+code});
+ const initial=create();const hash=new URL(initial.pairing.link('https://pdv.loja.local:8443/',code)).hash;
+ const x=create({hash});
  assert.equal(x.pairing.peek(),code);
  assert.deepEqual(x.navigations,['/app/']);
  assert.equal(x.pairing.take(),code);
@@ -37,7 +40,8 @@ test('QR pairing fragment is removed from browser history before login; temporar
  assert.equal(x.store.size,0);
 });
 test('expired pairing codes and arbitrary hash fragments do not authorize devices',()=>{
- const x=create({hash:'#pdv-pair='+code,clock:1000});
+ const initial=create();const hash=new URL(initial.pairing.link('https://pdv.loja.local:8443/',code)).hash;
+ const x=create({hash,clock:1000});
  assert.equal(x.pairing.peek(),code);
  x.window.Date.now=()=>302000;
  assert.equal(x.pairing.peek(),'');
