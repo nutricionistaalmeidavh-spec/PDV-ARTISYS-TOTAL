@@ -41,6 +41,8 @@ copyFileSync(resolve(root,'apps/landing/landing-premium.css'),resolve(output,'la
 copyFileSync(resolve(root,'apps/landing/landing-motion.js'),resolve(output,'landing-motion.js'));
 copyFileSync(resolve(root,'apps/landing/landing-gallery.css'),resolve(output,'landing-gallery.css'));
 copyFileSync(resolve(root,'apps/landing/landing-gallery.js'),resolve(output,'landing-gallery.js'));
+copyFileSync(resolve(root,'apps/landing/landing-video.css'),resolve(output,'landing-video.css'));
+copyFileSync(resolve(root,'apps/landing/landing-video.js'),resolve(output,'landing-video.js'));
 // Bundle all restaurant photos locally: no image CDN, runtime fetch or third-party dependency.
 cpSync(resolve(root,'apps/landing/media'),resolve(output,'media'),{recursive:true});
 copyFileSync(resolve(root,'apps/landing/landing.js'),resolve(output,'landing.js'));
@@ -64,7 +66,7 @@ const collect=(folder,relative='')=>{
   for(const entry of readdirSync(folder,{withFileTypes:true})){
     const path=relative+'/'+entry.name;
     if(entry.isDirectory())collect(resolve(folder,entry.name),path);
-    else if(path!=='/sw.js'&&!path.endsWith('.map'))publicAssets.push(path);
+    else if(path!=='/sw.js'&&!path.endsWith('.map')&&!path.endsWith('.mp4'))publicAssets.push(path);
   }
 };
 collect(output);
