@@ -140,7 +140,9 @@ try {
       await page.locator('#web-menu-select select[name="productId"]').selectOption({label:'Produto do navegador · BROWSER-TEST'});
       await page.locator('#web-menu-select [type="submit"]').click();
       await page.getByText('Produto do navegador').first().waitFor();
-      await page.locator('.web-product-row').filter({hasText:'Produto do navegador'}).getByRole('button',{name:'Registrar entrada',exact:true}).click();
+      const productRow=page.locator('.web-product-row').filter({hasText:'Produto do navegador'});
+      await productRow.locator('.web-product-options summary').click();
+      await productRow.getByRole('button',{name:'Registrar entrada',exact:true}).click();
       await page.getByLabel('Quantidade recebida').fill('3');
       await page.locator('#web-stock-form button[type=submit]').click();
       await page.locator('#sidebar-nav [data-route="checkout"]').click();
