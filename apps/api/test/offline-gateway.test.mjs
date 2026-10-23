@@ -86,6 +86,12 @@ test('Cloudflare branch gateway exports only approved tenant identity/catalog; l
  }),/WAN_DOWN/);
  assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM users').bind().first()).n,2,
    'Network loss must not delete local identity');
+ await local.prepare("UPDATE offline_replica_state SET state='ERROR'").bind().run();
+ assert.equal((await localCall('/api/v1/auth/login','POST',{email:'waiter@qa.test',password})).status,503,
+   'Cloud revocation/error must disable local login');
+ assert.equal((await localCall('/api/v1/auth/session','GET',null,localLogin.cookie)).status,401,
+   'An existing local session cannot override revoked copy policy');
+ await local.prepare("UPDATE offline_replica_state SET state='BASELINE_ONLY',last_pull_at=?").bind(new Date().toISOString()).run();
  const blocked=await localCall('/api/v1/tenants/a/products','POST',{branchId:'a-main',sku:'NEW',name:'Nova',salePriceCents:2000},localLogin.cookie);
  assert.equal(blocked.status,503,'Do not claim offline commercial writes are synchronized before outbox is implemented');
  assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM products').bind().first()).n,1);
