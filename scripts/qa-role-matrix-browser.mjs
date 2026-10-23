@@ -25,7 +25,7 @@ const record=(id,variant,result,detail={})=>{
 const count=async(sql,...params)=>(await db.prepare(sql).bind(...params).first()).n;
 try{
   // Real schema, real authoritative API, isolated in-memory SQLite.
-  for(const file of readdirSync(new URL('../apps/api/migrations/',import.meta.url)).filter(f=>/^\\d{4}.*\\.sql$/.test(f)).sort())
+  for(const file of readdirSync(new URL('../apps/api/migrations/',import.meta.url)).filter(f=>/^\d{4}.*\.sql$/.test(f)).sort())
     db.exec(readFileSync(new URL('../apps/api/migrations/'+file,import.meta.url),'utf8'));
   for(const [id,name] of [['qa','Restaurante QA Integracao'],['external','Empresa QA Externa']]){
     await db.prepare('INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)')
