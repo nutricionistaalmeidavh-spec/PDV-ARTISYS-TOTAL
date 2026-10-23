@@ -78,3 +78,20 @@ Pedidos de cozinha mantêm o contrato atual de ticket não fiscal, documento da 
 ### Homologação e limites
 
 Build e testes automatizados verificam código, fila, autorização, cenários simulados e renderização; não são homologação de impressora física. Antes de produção, conferir 58/80 mm, nome correto da fila, impressão após venda, pré-conta, ticket de cozinha, perda de rede, falta de papel, desligamento, religamento e tentativa manual após falha. O instalador Windows gerado via CI não é assinado digitalmente.
+
+
+## Fase 5 — impressão de comprovante pelo celular em um PC autorizado
+
+O celular continua podendo usar a **impressão nativa do navegador**, sem instalar conector. A alternativa **Enviar para o PC** aparece ao concluir uma venda somente se houver impressoras remotas cadastradas para a filial.
+
+No computador Windows que possui a impressora e o conector gratuito: abra **Configurações → Impressora → Conector local**, autorize o conector local e escolha **Autorizar recebimento de outros terminais**. Um usuário com \`settings.manage\` registra o PC para **a filial selecionada**. O PDV entrega uma credencial forte diretamente ao conector via localhost; ela não aparece na tela nem é guardada no D1 em texto simples.
+
+Em outro terminal (inclusive iPhone/Android), escolha o PC da lista em **Venda concluída → Enviar para o PC**. A API consulta a venda **concluída** e gera o comprovante com o snapshot original da marca. Não aceita texto arbitrário ou venda aberta. O computador consulta o servidor de 8 em 8 segundos por HTTPS **de saída**; nenhuma porta na LAN é exposta. Funciona com a mesma API autenticada em implantação SaaS ou servidor local HTTPS que suporte os endpoints.
+
+**PC desligado:** pedido fica como \`PENDING\`. Quando o conector autenticado retorna, entrega uma vez à fila SQLite local. A resposta \`SUBMITTED\` diz apenas que o spooler recebeu o trabalho. **Desconexão durante envio:** a reserva expira para \`UNCERTAIN\`, sem repetição automática. O operador deve verificar a impressora antes de solicitar uma nova via explícita. \`FAILED\` igualmente não é reenviado automaticamente; o operador pode solicitar uma nova via após avaliar a falha.
+
+**Administração:** cada PC é vinculado a uma empresa e filial, pode ser revogado, e não recebe tarefas de outras empresas/filiais. O histórico remoto da filial pode ser consultado; nenhum segredo de PC é incluído em listagens. Mantenha HTTPS e instale a migração aditiva \`0043_print_relay.sql\` antes de ativar o recurso em produção.
+
+## Fase 6 — verificação e evidências
+
+O fluxo CI executa testes SQLite reais de autorização por empresa/filial, permissões, idempotência de primeira via, reserva atômica, confirmação e revogação; testes do conector para job inválido e falha de spool; build Windows e testes Playwright desktop/mobile com prints em \`qa-artifacts/mobile-print-relay/\`. Nenhum teste de CI declara impressão física. Homologação de modelos USB/ESC-POS, papel, corte, Windows em máquinas reais e PWA iOS continua necessária antes de indicar suporte físico universal.

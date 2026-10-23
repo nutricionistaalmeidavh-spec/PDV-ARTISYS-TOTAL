@@ -44,6 +44,8 @@ test('temporary config retains original worker settings and applies only to dedi
   assert.throws(()=>configForRemoteSchema({...cfg,d1_databases:[{binding:'DB',database_name:'desktop-license'}]},'12345678-1234-1234-1234-123456789abc'),/dedicated/i);
 });
 test('healthy new D1 database has schema even when there are no users',()=>{
-  assert.equal(hasCompleteSchema([{name:'tenants'},{name:'users'},{name:'r4_table_prepayments'},{name:'d1_migrations'},{name:'public_signup_throttles'},{name:'saas_subscriptions'},{name:'saas_invitations'}]),true);
+  assert.equal(hasCompleteSchema([{name:'tenants'},{name:'users'},{name:'r4_table_prepayments'},{name:'d1_migrations'},{name:'public_signup_throttles'},{name:'saas_subscriptions'},{name:'saas_invitations'},{name:'print_relay_agents'},{name:'print_relay_jobs'}]),true);
   assert.equal(hasCompleteSchema([{name:'tenants'},{name:'users'},{name:'d1_migrations'}]),false);
+  assert.equal(hasCompleteSchema([{name:'tenants'},{name:'users'},{name:'r4_table_prepayments'},{name:'d1_migrations'},{name:'public_signup_throttles'},{name:'saas_subscriptions'},{name:'saas_invitations'},{name:'print_relay_agents'},{name:'print_relay_jobs'}].filter(row=>row.name!=='print_relay_agents')),false,'must not publish without PC credentials table');
+  assert.equal(hasCompleteSchema([{name:'tenants'},{name:'users'},{name:'r4_table_prepayments'},{name:'d1_migrations'},{name:'public_signup_throttles'},{name:'saas_subscriptions'},{name:'saas_invitations'},{name:'print_relay_agents'},{name:'print_relay_jobs'}].filter(row=>row.name!=='print_relay_jobs')),false,'must not publish without remote queue table');
 });

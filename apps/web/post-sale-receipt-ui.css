@@ -9,3 +9,11 @@
     max-width:calc(100vw - 16px)!important;
   }
 }
+
+/* P5 remote PC picker; never blocks the native browser print path. */
+.post-sale-remote{margin-top:14px;padding:14px;border:1px solid #dbe5f1;background:#f4f8ff;border-radius:12px;display:grid;gap:10px}
+.post-sale-remote[hidden]{display:none!important}
+.post-sale-remote label{font-size:13px;font-weight:700;color:#263c5b}
+.post-sale-remote select{width:100%;min-width:0;min-height:44px;padding:10px;border:1px solid #c3d4e9;border-radius:10px;background:white;color:#152c4c}
+.post-sale-remote p{font-size:12px;color:#4b627f;margin:0}
+@media(max-width:680px){.post-sale-remote{padding:12px}.post-sale-remote .post-sale-primary-actions{grid-template-columns:1fr}}

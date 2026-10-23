@@ -35,6 +35,7 @@
     pair(data.token);
     return getStatus();
   }
+  const configureRemote=details=>request('/v1/remote/configure',details);
   const getPrinters=()=>request('/v1/printers');
   const selectPrinter=name=>request('/v1/printers/select',{name});
   const getStatus=()=>request('/v1/status');
@@ -55,5 +56,5 @@
     if(result.job?.status==='UNCERTAIN')throw new Error('Resultado incerto. Confira o equipamento antes de reimprimir.');
     return result.job;
   }
-  root.PdvLocalBridge=Object.freeze({pair,pairAutomatically,pairedToken,request,getStatus,getPrinters,selectPrinter,jobs,retry,drawer,print});
+  root.PdvLocalBridge=Object.freeze({pair,pairAutomatically,pairedToken,request,getStatus,configureRemote,getPrinters,selectPrinter,jobs,retry,drawer,print});
 })();

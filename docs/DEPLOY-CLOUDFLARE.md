@@ -113,3 +113,39 @@ A migração `0017_inventory_minimum_levels.sql` deve ser aplicada **somente ap�
 
 **Compatibilidade:** sem a 0016, a API continua servindo estoque/cobertura e dashboard com mínimos não configurados, enquanto a escrita de política responde 503 e a UI explica a pendência. Isso evita interromper o relatório durante um deploy anterior à migração. Não interpretar esse comportamento de compatibilidade como homologação do recurso. Nenhum serviço pago é necessário para a instalação local Node + SQLite.
 
+
+
+## P5/P6 — publicação da fila remota de impressão (migration 0043)
+
+A funcionalidade de enviar um comprovante do celular para um PC requer as tabelas
+\`print_relay_agents\` e \`print_relay_jobs\`, adicionadas em
+\`apps/api/migrations/0043_print_relay.sql\`.
+
+**Sequência protegida de publicação:**
+
+1. Os workflows de PR executam o esquema SQLite local, testes de isolamento por tenant/filial,
+   idempotência/revogação, Chromium desktop/mobile e compilação do conector.
+2. Após o merge em \`main\`, **apenas o Cloudflare Workers Build de produção**
+   (\`WORKERS_CI=1\`, \`WORKERS_CI_BRANCH=main\`, ID de build e SHA confiáveis)
+   invoca \`scripts/cloudflare-d1-bootstrap.mjs\`.
+3. O bootstrap localiza exclusivamente o D1 \`pdv-artisys-total\`, aplica migrações pendentes
+   com \`wrangler d1 migrations apply --remote\` e **verifica também as duas tabelas da 0043**.
+   Se a migração ou a verificação falhar, o build deve falhar antes do deploy da API nova.
+   Não é necessário alterar \`wrangler.jsonc\` nem versionar secrets.
+4. Verificar o build do **SHA exato da main** em Workers & Pages → \`pdv-artisys-total\`
+   → Builds/Deployments. GitHub Actions verde **não comprova** deploy ou migração remota.
+5. Liberar um PC autorizado a uma filial em Impressora → Conector local →
+   Autorizar recebimento de outros terminais; o cliente móvel só verá PCs cadastrados
+   após a API reconhecer o schema e a sessão da empresa.
+
+**Rollback:** Se o build da Cloudflare falhar, não promover o Worker alterado.
+Em produção, manter a versão anterior do Worker e verificar os logs da execução.
+A migração \`0043\` é aditiva: não modifica vendas, registros de caixa, sessão,
+licenças, schema de recibos ou histórico de estoque. Reverter código não exige apagar
+as tabelas nem dados. Se houver uso real, não destruir filas pendentes ao reverter.
+
+**Impressão sem dispositivo físico:** Os testes cobrem apenas os contratos da API,
+driver local simulado, estado do spooler e páginas em Chromium. A versão preserva o
+mesmo código do conector que já imprimia localmente; o trabalho remoto usa essa fila.
+Isso não equivale a confirmação de saída de papel; tratar \`SUBMITTED\` como envio ao
+spooler, e \`UNCERTAIN\` como resultado que exige conferência manual.

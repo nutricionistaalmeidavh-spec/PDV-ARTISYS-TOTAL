@@ -10,11 +10,12 @@ import {openLocalDatabase} from '../apps/api/src/local-db.mjs';
 import {createApi} from '../apps/api/src/worker.mjs';
 import {serveLocalPwa} from '../apps/api/src/local-static.mjs';
 import {hashPassword} from '../apps/api/src/password.mjs';
-const {chromium}=createRequire(import.meta.url)('playwright');
+const {chromium,webkit}=createRequire(import.meta.url)('playwright');
+const engine=process.env.PDV_TEST_BROWSER==='webkit'?'webkit':'chromium';
 
 const roles=['OWNER','CASHIER','WAITER','KITCHEN','STOCKKEEPER','FINANCE','READ_ONLY'];
 const stamp='2026-10-23T12:00:00.000Z',password='OnlySyntheticTesting2026!';
-const artifacts=resolve('qa-artifacts/journeys');mkdirSync(artifacts,{recursive:true});
+const artifacts=resolve('qa-artifacts/'+(engine==='webkit'?'journeys-webkit':'journeys'));mkdirSync(artifacts,{recursive:true});
 const db=openLocalDatabase();
 const results=[];
 let server,browser;
@@ -68,7 +69,7 @@ try{
     const response=await fetch(origin+path,{method,headers,...(body===undefined?{}:{body:JSON.stringify(body)})});
     return {status:response.status,data:await response.json().catch(()=>null)};
   };
-  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  browser=await (engine==='webkit'?webkit:chromium).launch(engine==='webkit'?{headless:true}:{headless:true,args:['--no-sandbox']});
   const sessions=new Map();
   const pageErrors=[];
   // First prove the login form rejects a bad secret without creating a session.
@@ -109,6 +110,21 @@ try{
     record('QA-00','signed-in-'+id,'PASS',{httpStatus:current.status,viewport:'390x844'});
   }
   assert.equal(sessions.size,7);
+  // Verify revoked membership and disabled user cannot bypass server-side
+  // authorization with an existing cookie.
+  await db.prepare('UPDATE users SET active=0 WHERE id=?').bind('stockkeeper').run();
+  const inactiveUser=await request('/api/v1/auth/login',{method:'POST',
+    body:{email:'stockkeeper@example.test',password}});
+  assert.ok([401,403].includes(inactiveUser.status),'Inactive user must not log in');
+  await db.prepare('UPDATE users SET active=1 WHERE id=?').bind('stockkeeper').run();
+  record('QA-00','suspended-user-denied','PASS',{httpStatus:inactiveUser.status});
+  await db.prepare('UPDATE tenant_memberships SET active=0 WHERE tenant_id=? AND user_id=?')
+    .bind('qa','read_only').run();
+  const revokedMembership=await request('/api/v1/tenants/qa/context',{cookie:sessions.get('READ_ONLY').cookie});
+  assert.ok([403,404].includes(revokedMembership.status),'Revoked membership must lose tenant access');
+  await db.prepare('UPDATE tenant_memberships SET active=1 WHERE tenant_id=? AND user_id=?')
+    .bind('qa','read_only').run();
+  record('QA-00','revoked-membership-denied','PASS',{httpStatus:revokedMembership.status});
   assert.equal(await count('SELECT COUNT(*) AS n FROM users'),8);
   assert.equal(await count('SELECT COUNT(*) AS n FROM tenant_memberships WHERE tenant_id=?','qa'),7);
   record('QA-00','seven-independent-role-memberships','PASS',{sqliteUsers:8,qaMemberships:7});
@@ -165,7 +181,7 @@ try{
   // Explicitly exclude credentials, cookies, raw customer payloads and tokens.
   writeFileSync(resolve(artifacts,'qa-roles-results.json'),JSON.stringify({
     environment:'localhost / isolated in-memory SQLite / synthetic only',
-    browsers:['Chromium'],profiles:roles,results,
+    browsers:[engine],profiles:roles,results,
     limitations:['No physical Safari/iOS','No printer output','No external billing or transactional email']
   },null,2)+'\n');
   console.log('QA-00 and QA-12 role/negative/recovery evidence recorded.');
