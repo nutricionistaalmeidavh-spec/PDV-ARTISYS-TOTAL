@@ -44,6 +44,12 @@ try{
     .bind('branch-a','a','MAIN','Main',now).run();
   await db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)')
     .bind('a','owner','OWNER',now).run();
+  // A waiter has a distinct pre-provisioned local account in this fixture;
+  // Cloudflare-to-local account replication is NOT implemented yet.
+  await db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
+    .bind('waiter','r2-waiter@integration.test','Garçom QA',pw,now).run();
+  await db.prepare('INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,created_at) VALUES(?,?,?,?)')
+    .bind('a','waiter','WAITER',now).run();
   server=createLanServer({origin,tlsKey:await readFile(keyPath),
     tlsCert:await readFile(certPath),db,webRoot:resolve(root,'dist/web')});
   await new Promise((ok,reject)=>server.once('error',reject).listen(port,'127.0.0.1',ok));
@@ -94,6 +100,47 @@ try{
   await page.locator('#r2-settings').waitFor({state:'attached',timeout:12000});
   assert.equal(await page.locator('#r2-settings').count(),1,
     'cap-047 first LAN login must open pairing UI before blocked business requests');
+  // Real UI: admin selects waiter, generates 5-minute QR, employee logs in
+  // through that local HTTPS origin, and code is prefilled only after login.
+  const pairingBranch=page.locator('#r2-new-pairing [name="branchId"]');
+  await page.locator('#r2-new-pairing [name="branchId"] option[value="branch-a"]').waitFor();
+  await pairingBranch.selectOption('branch-a');
+  await page.locator('#r2-new-pairing [name="kind"]').selectOption('WAITER');
+  await page.locator('#r2-new-pairing button[type="submit"]').click();
+  await page.locator('#r2-code-output svg').waitFor({timeout:12000});
+  const qrMessage=await page.locator('#r2-code-output').innerText();
+  const qrCode=qrMessage.match(/\b[a-f0-9]{64}\b/)?.[0];
+  assert.ok(qrCode,'owner UI must generate one-time waiter pairing code and SVG QR');
+  const waiterContext=await browser.newContext({viewport:{width:390,height:844},
+    ignoreHTTPSErrors:true,deviceScaleFactor:1});
+  try{
+    const waiterPage=await waiterContext.newPage();
+    await waiterPage.goto(origin+'/app/#pdv-pair='+qrCode,{waitUntil:'domcontentloaded'});
+    await waiterPage.locator('#web-login-form').waitFor({timeout:15000});
+    assert.equal(new URL(waiterPage.url()).hash,'','QR code must leave browser history before login');
+    await waiterPage.locator('#web-email').fill('r2-waiter@integration.test');
+    await waiterPage.locator('#web-password').fill('R2-Browser-Strong-Password!2026');
+    await waiterPage.locator('#web-login-form button[type=submit]').click();
+    await waiterPage.locator('#r2-pair-device [name=code]').waitFor({timeout:16000});
+    assert.equal(await waiterPage.locator('#r2-pair-device [name=code]').inputValue(),qrCode,
+      'one-time QR code must survive the operator login handoff');
+    await waiterPage.locator('#r2-pair-device [name=name]').fill('Garçom QA salão');
+    await waiterPage.locator('#r2-pair-device button[type=submit]').click();
+    await waiterPage.waitForFunction(()=>{
+      const key='pdv-total-r2-device-a';
+      return Boolean(localStorage.getItem(key+'-id')&&localStorage.getItem(key+'-credential'));
+    },{timeout:16000});
+    const waiterApi=await waiterPage.evaluate(async()=>{
+      const key='pdv-total-r2-device-a';
+      const resp=await fetch('/api/v1/tenants/a/restaurant/tables?branchId=branch-a',{
+        credentials:'same-origin',headers:{
+          'x-pdv-device-id':localStorage.getItem(key+'-id'),
+          'x-pdv-device-credential':localStorage.getItem(key+'-credential')
+        }});
+      return resp.status;
+    });
+    assert.equal(waiterApi,200,'paired waiter account operates restaurant API on local HTTPS');
+  }finally{await waiterContext.close();}
   const live=await page.evaluate(async()=>{
     const base='/api/v1/tenants/a/lan';
     const req=async(url,method='GET',data)=>{
