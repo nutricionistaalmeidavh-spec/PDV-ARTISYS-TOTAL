@@ -1191,6 +1191,7 @@
           ${canManage?`<button type="button" class="secondary-button" data-web-edit="${escapeHtml(p.id)}">Editar</button>`:''}
           ${canManage?`<button type="button" class="secondary-button" data-web-menu-remove="${escapeHtml(p.id)}">Retirar do Cardápio</button>`:''}
           ${canManage&&!p.trackStock?`<button type="button" class="secondary-button" data-web-recipe="${escapeHtml(p.id)}">Ficha técnica</button>`:''}
+          <details class="web-product-options"><summary>Configurações e estoque</summary>
           ${canManage&&p.active!==false?`<button type="button" class="secondary-button" data-web-customize="${escapeHtml(p.id)}">Variações e adicionais</button>`:''}
           ${canManage&&p.active!==false?`<button type="button" class="secondary-button" data-web-pizza="${escapeHtml(p.id)}">Opções de pizza</button>`:''}
           ${canManage?`<button type="button" class="secondary-button" data-web-photo="${escapeHtml(p.id)}">${p.photo?'Trocar foto':'Adicionar foto'}</button>`:''}
@@ -1199,8 +1200,8 @@
           ${canStock&&p.trackStock&&p.active!==false?`<button type="button" class="secondary-button" data-web-reserve="${escapeHtml(p.id)}">Reservar</button><button type="button" class="secondary-button" data-web-stock="${escapeHtml(p.id)}">Registrar entrada</button>
           <button type="button" class="secondary-button" data-web-adjust="${escapeHtml(p.id)}">Ajustar saldo</button>
           <button type="button" class="secondary-button" data-web-transfer="${escapeHtml(p.id)}">Transferir</button>`:''}
-          ${p.trackStock?`<button type="button" class="secondary-button" data-web-moves="${escapeHtml(p.id)}">Movimentações</button>`:''}
-        </div>`).join(''):'<div class="empty-state">Nenhum produto encontrado. Cadastre o primeiro produto para começar.</div>'}
+          ${p.trackStock?`<button type="button" class="secondary-button" data-web-moves="${escapeHtml(p.id)}">Movimentações</button>`:''}</details>
+        </div>`).join(''):'<div class="empty-state">Nenhum item para mostrar. Use “Adicionar ao Cardápio” para selecionar um cadastro do Estoque, ou revise os filtros.</div>'}
       </div></section>`;
     content.querySelector('#web-new-product')?.addEventListener('click',openWebMenuSelector);
     content.querySelectorAll('[data-web-menu-remove]').forEach(button=>button.addEventListener('click',async()=>{

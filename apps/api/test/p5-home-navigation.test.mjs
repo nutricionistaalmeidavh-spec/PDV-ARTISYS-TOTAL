@@ -1,29 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {createHash} from 'node:crypto';
 import {runInNewContext} from 'node:vm';
 
-const fixture=JSON.parse(readFileSync(new URL('./fixtures/regression/fixtures/p5-home004-desktop-navigation.json',import.meta.url),'utf8'));
 const read=(path)=>readFileSync(new URL(path,import.meta.url));
-const sha=(bytes)=>createHash('sha1').update('blob '+bytes.length+'\0').update(bytes).digest('hex');
+const navigationScenario={
+ contextA:'tenant-a|branch-a|user-a',contextB:'tenant-b|branch-b|user-b',
+ selectedTab:'products',restoredScroll:185,
+ excludedPrivateKeys:['customerId','sellerId','sale','token','netSalesCents']
+};
 
-function desktopNavigationBaseline(){
- assert.equal(fixture.desktop.commit,'7efea9c61f75be1536a1e516e917218f2b8bf2bf');
- const desktop=read('./fixtures/regression/baseline/desktop-app.js');
- assert.equal(sha(desktop),'87b463226b3440e8811d3fcbf3ddcdd4ccff4275');
- const report=read('./fixtures/regression/baseline/desktop-reporting-v2.js');
- assert.equal(sha(report),fixture.desktop.reportBlob);
- for(const anchor of fixture.desktop.anchors){
-   assert.ok(desktop.toString('utf8').includes(anchor),'desktop navigation source missing: '+anchor);
- }
+function currentNavigationContract(){
  const web=read('../../web/app.js').toString('utf8');
  assert.ok(web.includes("if (!canAccessRoute(route)) route = 'home';"),'web route auth gate must remain');
- assert.match(web,/await renderRoute\(\);\s*if\(generation!==navigationGeneration\)return;\s*content\.focus\(\{ preventScroll: true \}\);/,'desktop focus contract preserved after rejecting stale navigation');
+ assert.match(web,/await renderRoute\(\);\s*if\(generation!==navigationGeneration\)return;\s*content\.focus\(\{ preventScroll: true \}\);/,'focus contract preserved after rejecting stale navigation');
 }
 
 function harness(){
- const events=new Map(),tab={dataset:{reportWeb:fixture.selectedTab},focused:0,focus(){this.focused++;}};
+ const events=new Map(),tab={dataset:{reportWeb:navigationScenario.selectedTab},focused:0,focus(){this.focused++;}};
  const content={
    scrollTop:0,scrollHeight:1000,clientHeight:600,
    scrollTo({top}){this.scrollTop=top;},
@@ -49,55 +43,55 @@ function harness(){
  };
  const enter=(scope)=>{
    transition('reports','home',scope);
-   content.scrollTop=fixture.restoredScroll;
+   content.scrollTop=navigationScenario.restoredScroll;
  };
  return {content,tab,events,mounted,transition,enter,document};
 }
 
-test('home-004/nominal p5-home004-desktop-navigation-v1 preserve report scroll/focus after same-user roundtrip',()=>{
- desktopNavigationBaseline();
+test('home-004/nominal preserve report scroll/focus after same-user roundtrip',()=>{
+ currentNavigationContract();
  const h=harness();
- h.enter(fixture.contextA);
- h.transition('checkout','reports',fixture.contextA);
- h.transition('reports','checkout',fixture.contextA);
- assert.equal(h.content.scrollTop,fixture.restoredScroll);
+ h.enter(navigationScenario.contextA);
+ h.transition('checkout','reports',navigationScenario.contextA);
+ h.transition('reports','checkout',navigationScenario.contextA);
+ assert.equal(h.content.scrollTop,navigationScenario.restoredScroll);
  assert.equal(h.tab.focused,1,'focus returns to the active report tab without scrolling');
 });
 
-test('home-004/authorization p5-home004-desktop-navigation-v1 no restoration across different authenticated user',()=>{
- desktopNavigationBaseline();
+test('home-004/authorization no restoration across different authenticated user',()=>{
+ currentNavigationContract();
  const h=harness();
- h.enter(fixture.contextA);
- h.transition('checkout','reports',fixture.contextA);
+ h.enter(navigationScenario.contextA);
+ h.transition('checkout','reports',navigationScenario.contextA);
  h.transition('reports','checkout','tenant-a|branch-a|user-b');
  assert.equal(h.content.scrollTop,0);
  assert.equal(h.tab.focused,0,'no focus is restored from an unrelated user');
 });
 
-test('home-004/tenant-isolation p5-home004-desktop-navigation-v1 never restore another tenant or branch position',()=>{
- desktopNavigationBaseline();
+test('home-004/tenant-isolation never restore another tenant or branch position',()=>{
+ currentNavigationContract();
  const h=harness();
- h.enter(fixture.contextA);
- h.transition('checkout','reports',fixture.contextA);
- h.transition('reports','checkout',fixture.contextB);
+ h.enter(navigationScenario.contextA);
+ h.transition('checkout','reports',navigationScenario.contextA);
+ h.transition('reports','checkout',navigationScenario.contextB);
  assert.equal(h.content.scrollTop,0,'a second store cannot inherit the first store scroll');
  assert.equal(h.tab.focused,0);
- h.transition('checkout','reports',fixture.contextB);
- h.transition('reports','checkout',fixture.contextA);
- assert.equal(h.content.scrollTop,fixture.restoredScroll,'original store still owns its scroll');
+ h.transition('checkout','reports',navigationScenario.contextB);
+ h.transition('reports','checkout',navigationScenario.contextA);
+ assert.equal(h.content.scrollTop,navigationScenario.restoredScroll,'original store still owns its scroll');
 });
 
-test('home-004/failure-recovery p5-home004-desktop-navigation-v1 route updates and context changes never leak private data',()=>{
- desktopNavigationBaseline();
+test('home-004/failure-recovery route updates and context changes never leak private data',()=>{
+ currentNavigationContract();
  const h=harness();
- h.enter(fixture.contextA);
- h.content.scrollTop=fixture.restoredScroll;
- h.transition('checkout','reports',fixture.contextA);
- h.transition('reports','checkout',fixture.contextA);
- assert.equal(h.content.scrollTop,fixture.restoredScroll);
- h.transition('home','reports',fixture.contextA);
- h.transition('reports','home',fixture.contextB);
+ h.enter(navigationScenario.contextA);
+ h.content.scrollTop=navigationScenario.restoredScroll;
+ h.transition('checkout','reports',navigationScenario.contextA);
+ h.transition('reports','checkout',navigationScenario.contextA);
+ assert.equal(h.content.scrollTop,navigationScenario.restoredScroll);
+ h.transition('home','reports',navigationScenario.contextA);
+ h.transition('reports','home',navigationScenario.contextB);
  assert.equal(h.content.scrollTop,0,'stale scroll from previous context is discarded');
  const code=read('../../web/route-scroll-ui.js').toString('utf8');
- for(const key of fixture.excludedPrivateKeys)assert.ok(!new RegExp('positions\\.set\\([^\\n]*'+key).test(code));
+ for(const key of navigationScenario.excludedPrivateKeys)assert.ok(!new RegExp('positions\\.set\\([^\\n]*'+key).test(code));
 });

@@ -73,7 +73,9 @@
   });
  }
  const bankState={file:null,rows:[]};
+ let bankRenderGeneration=0;
  async function renderBanks(filters={}){
+  const generation=++bankRenderGeneration;
   try{
    const bankFilters={accountId:String(filters.accountId||''),status:String(filters.status||''),
      direction:String(filters.direction||''),query:String(filters.query||''),
@@ -85,7 +87,7 @@
     request('transactions'+(bankQuery.size?'?'+bankQuery.toString():'')),
     request('transfers/suggestions'),request('dre/groups'),request('dre/categories'),request('dre/cost-centers')
    ]);
-   if(document.body.dataset.activeRoute!=='finance-banks')return;
+   if(document.body.dataset.activeRoute!=='finance-banks'||generation!==bankRenderGeneration)return;
    const list=accounts.accounts||[],items=transactions.transactions||[],
     planGroups=groups.groups||[],planCategories=categories.categories||[],planCenters=centers.costCenters||[];
    const selectOptions=(arr,selected,anyLabel='Todos')=>
@@ -196,8 +198,8 @@
     });
    }
    content.querySelector('#cloud-bank-create')?.addEventListener('submit',async ev=>{
-    ev.preventDefault();const data=Object.fromEntries(new FormData(ev.currentTarget));
-    try{await request('accounts',{method:'POST',body:data});toast('Conta bancária cadastrada.','success');await renderBanks();}catch(e){toast(e.message,'error');}
+    ev.preventDefault();const form=ev.currentTarget;if(form.dataset.pending)return;form.dataset.pending='true';const button=form.querySelector('[type=submit]');button.disabled=true;const data=Object.fromEntries(new FormData(form));
+    try{await request('accounts',{method:'POST',body:data});toast('Carteira cadastrada.','success');await renderBanks();}catch(e){toast(e.message,'error');}finally{delete form.dataset.pending;button.disabled=false;}
    });
    content.querySelector('#cloud-bank-file')?.addEventListener('change',async ev=>{
     const file=ev.currentTarget.files?.[0];bankState.file=null;bankState.rows=[];

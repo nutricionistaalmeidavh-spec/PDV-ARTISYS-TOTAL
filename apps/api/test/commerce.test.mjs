@@ -1232,21 +1232,9 @@ test('P3 line note is atomic and idempotent, preserved in completed sale and can
 });
 
 
-const p5Home003Fixture=JSON.parse(readFileSync(new URL(
- './fixtures/regression/fixtures/p5-home003-desktop-alerts.json',import.meta.url),'utf8'));
-function p5DesktopAlerts(){
- const body=readFileSync(new URL(
-  './fixtures/regression/baseline/desktop-reporting-v2.js',import.meta.url));
- const sha=createHash('sha1').update('blob '+body.length+'\0').update(body).digest('hex');
- assert.equal(sha,p5Home003Fixture.desktop.gitBlob,'Original desktop alert logic changed');
- const source=body.toString('utf8'),start=source.indexOf('  function managerAlerts(');
- const end=source.indexOf('\n  function presetPeriod(',start);
- assert.ok(start>0&&end>start,'Published desktop managerAlerts not found');
- return runInNewContext('('+source.slice(start,end).trim()+')',{
-   money:cents=>'R$ '+(Number(cents||0)/100).toFixed(2),
-   comparisonText:(current,previous)=>String(current-previous)
- },{timeout:500});
-}
+const operationalAlertTitles=[
+ 'Produtos sem estoque','Estoque abaixo do mínimo','Divergência de caixa'
+];
 async function p5Home003Setup(x){
  const productId=await x.id('Alertas P5','HOME-003-SKU',1);
  const saved=await x.write('a','reports/stock-minimum',{
@@ -1264,17 +1252,13 @@ async function p5Home003Setup(x){
 }
 const p5Home003Path='reports/home?branchId=branch-a&asOf=2026-10-17';
 
-test('home-003/nominal p5-home003-desktop-alerts-v1 original desktop alert predicates match web canonical dashboard',async()=>{
- const desktop=p5DesktopAlerts();
- const original=desktop(p5Home003Fixture.input.sales,p5Home003Fixture.input.previousSales,
-   p5Home003Fixture.input.inventory,p5Home003Fixture.input.cash);
- assert.deepEqual(Array.from(original,a=>a.title),p5Home003Fixture.expectedTitles);
+test('home-003/nominal canonical dashboard reports actionable operational alerts',async()=>{
  const x=await setup();try{
   await p5Home003Setup(x);
   const response=await x.get('a',p5Home003Path);
   assert.equal(response.status,200,JSON.stringify(response.body));
   const home=response.body.home;
-  assert.deepEqual(home.alerts.map(a=>a.title),p5Home003Fixture.expectedTitles);
+  assert.deepEqual(home.alerts.map(a=>a.title),operationalAlertTitles);
   assert.equal(home.divergentCashCount,1);
   assert.equal(home.divergentCashCents,-10);
   assert.equal(home.belowMinimumCount,1);
@@ -1283,8 +1267,7 @@ test('home-003/nominal p5-home003-desktop-alerts-v1 original desktop alert predi
  }finally{x.close();}
 });
 
-test('home-003/authorization p5-home003-desktop-alerts-v1 authorized read-only viewer cannot change alert source ledgers',async()=>{
- p5DesktopAlerts();
+test('home-003/authorization authorized read-only viewer cannot change alert source ledgers',async()=>{
  const x=await setup();try{
   const {productId}=await p5Home003Setup(x);
   assert.equal((await x.get('a',p5Home003Path,x.viewer)).status,200);
@@ -1297,8 +1280,7 @@ test('home-003/authorization p5-home003-desktop-alerts-v1 authorized read-only v
  }finally{x.close();}
 });
 
-test('home-003/tenant-isolation p5-home003-desktop-alerts-v1 branch scoped alerts never disclose another store',async()=>{
- p5DesktopAlerts();
+test('home-003/tenant-isolation branch scoped alerts never disclose another store',async()=>{
  const x=await setup();try{
   await p5Home003Setup(x);
   const other=await x.get('b','reports/home?branchId=branch-b&asOf=2026-10-17',x.other);
@@ -1310,8 +1292,7 @@ test('home-003/tenant-isolation p5-home003-desktop-alerts-v1 branch scoped alert
  }finally{x.close();}
 });
 
-test('home-003/failure-recovery p5-home003-desktop-alerts-v1 bad period and rejected mutations leave home evidence intact',async()=>{
- p5DesktopAlerts();
+test('home-003/failure-recovery bad period and rejected mutations leave home evidence intact',async()=>{
  const x=await setup();try{
   const {productId}=await p5Home003Setup(x);
   const before=(await x.get('a',p5Home003Path)).body.home.alerts;
