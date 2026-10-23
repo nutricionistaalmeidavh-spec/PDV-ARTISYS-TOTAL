@@ -5,6 +5,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {openLocalDatabase} from './local-db.mjs';
 import {applyLocalMigrations} from './local-migrations.mjs';
 import {pullOfflineBaseline} from './offline-replica.mjs';
+import {pushOfflineOutbox} from './offline-outbox.mjs';
 import {createApi} from './worker.mjs';
 import {serveLocalPwa} from './local-static.mjs';
 
@@ -139,12 +140,18 @@ async function start(){
       let syncing=false;
       syncInterval=setInterval(async()=>{
         if(syncing)return;syncing=true;
-        try{await pullOfflineBaseline(db,process.env);}
+        try{
+          // ACK local journal entries BEFORE accepting a fresh stock projection.
+          // Failed network or conflict leaves the outbox durable for the next retry.
+          const result=await pushOfflineOutbox(db,process.env);
+          if(result.conflicts)throw Object.assign(Error('OFFLINE_REPLAY_CONFLICT'),{status:409});
+          await pullOfflineBaseline(db,process.env);
+        }
         catch(error){
           try{db.exec("UPDATE offline_replica_state SET state='"+([401,403,412].includes(error.status)?'ERROR':'STALE')+"'");}catch{}
           console.error('[PDV Offline] Sincronização indisponível; operações comerciais locais bloqueadas. '+error.name);
         }finally{syncing=false;}
-      },60000);
+      },15000);
     }
     server.listen(config.port,config.bindHost,()=>{
       console.log('PDV TOTAL HTTPS LAN pronto em '+config.origin+
