@@ -1,11 +1,13 @@
 import {sha256} from './password.mjs';
 import {commerceRoute} from './commerce-router.mjs';
+import {verticalRoute} from './vertical-router.mjs';
+import {offlineMutationIds} from './offline-stable-ids.mjs';
 import {tenantWriteAllowed} from './saas-control.mjs';
 const reply=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const fail=(status,s)=>reply({error:s},status);
 const ID=/^[a-zA-Z0-9-]{1,128}$/;
 const MUT=/^[A-Za-z0-9_-]{8,100}$/;
-const WRITE_PATH=/^\/api\/v1\/tenants\/([^/]+)\/inventory\/(receipts|adjustments)$/;
+const WRITE_PATH=/^\/api\/v1\/tenants\/([^/]+)\/(inventory\/(?:receipts|adjustments)|restaurant\/(?:tables|orders|tables\/[a-zA-Z0-9-]{1,128}\/open|kitchen\/[a-zA-Z0-9-]{1,128}))$/;
 export async function activateOfflineBranch(db,tenantId,gatewayId,now){
  const gateway=await db.prepare('SELECT id,branch_id AS branchId FROM offline_gateways WHERE id=? AND tenant_id=? AND active=1')
   .bind(gatewayId,tenantId).first();
@@ -44,14 +46,17 @@ export async function offlineReplayRoute(request,db,env,now=Date.now()){
  if(raw.length>16384)return fail(413,'Operação grande demais.');
  let value;try{value=JSON.parse(raw);}catch{return fail(400,'JSON inválido.');}
  if(!value||typeof value!=='object'||Array.isArray(value))return fail(400,'Dados inválidos.');
- const {sequence,epoch,mutationId,path,method,body,operatorId,payloadHash}=value;
+ const {sequence,epoch,mutationId,path,method,body,operatorId,payloadHash,createdAt}=value;
  if(!Number.isInteger(sequence)||sequence<1||sequence>2147483647||
-  epoch!==auth.epoch||!MUT.test(mutationId)||method!=='POST'||!ID.test(operatorId)|| 
+  epoch!==auth.epoch||!MUT.test(mutationId)||!['POST','PATCH'].includes(method)||!ID.test(operatorId)|| 
   !WRITE_PATH.test(path||'')||!body||typeof body!=='object'||Array.isArray(body)||
   !/^[a-f0-9]{64}$/.test(payloadHash||''))
   return fail(409,'Lote offline incompatível com a autoridade atual.');
  const parsed=WRITE_PATH.exec(path);
- if(parsed[1]!==gateway.tenantId||body.branchId!==gateway.branchId)
+ if(parsed[1]!==gateway.tenantId||body.branchId!==gateway.branchId||
+  (method==='PATCH'&&!/\/restaurant\/kitchen\/[a-zA-Z0-9-]+$/.test(path))||
+  (method==='POST'&&/\/restaurant\/kitchen\//.test(path))||
+  !Number.isSafeInteger(createdAt)||createdAt<0)
   return fail(403,'Operação de outra empresa ou filial não autorizada.');
  const recomputed=await sha256(JSON.stringify({method,path,body:JSON.stringify(body),userId:operatorId}));
  if(recomputed!==payloadHash)return fail(409,'Conteúdo da operação foi modificado.');
@@ -71,11 +76,19 @@ export async function offlineReplayRoute(request,db,env,now=Date.now()){
  if(!priorGrant)await db.prepare('INSERT INTO offline_replay_grants(tenant_id,branch_id,mutation_id,gateway_id,epoch,payload_hash,created_at) VALUES(?,?,?,?,?,?,?)')
   .bind(gateway.tenantId,gateway.branchId,mutationId,gatewayId,auth.epoch,payloadHash,now).run();
  const origin=new URL(request.url).origin;
- const canonical=new Request(origin+path,{method:'POST',headers:{'content-type':'application/json','origin':origin,'x-mutation-id':mutationId},
+ const canonical=new Request(origin+path,{method,headers:{'content-type':'application/json','origin':origin,'x-mutation-id':mutationId},
   body:JSON.stringify(body)});
  let actual;try{
-  actual=await commerceRoute(canonical,db,{userId:operatorId},operator,gateway.tenantId,
-    path.replace('/api/v1/tenants/'+gateway.tenantId+'/',''),{now:()=>new Date(now).toISOString()});
+  const route=path.replace('/api/v1/tenants/'+gateway.tenantId+'/','');
+  if(route.startsWith('restaurant/')){
+    const idFactory=await offlineMutationIds({tenantId:gateway.tenantId,
+      branchId:gateway.branchId,method,path,mutationId});
+    actual=await verticalRoute(canonical,db,{userId:operatorId},operator,gateway.tenantId,route,
+      {idFactory,clock:()=>new Date(createdAt).toISOString()});
+  }else{
+    actual=await commerceRoute(canonical,db,{userId:operatorId},operator,gateway.tenantId,route,
+      {now:()=>new Date(createdAt).toISOString()});
+  }
  }catch{return fail(503,'Não foi possível confirmar lançamento.');}
  if(!actual||!actual.ok){
   const status=actual?.status||500;
