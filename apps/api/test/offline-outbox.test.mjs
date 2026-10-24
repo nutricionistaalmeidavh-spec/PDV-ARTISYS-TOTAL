@@ -95,9 +95,34 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
   OFFLINE_GATEWAY_TOKEN:credential},{fetcher});
  assert.equal((await cloud.prepare('SELECT COUNT(*) AS n FROM inventory_movements WHERE tenant_id=?').bind('a').first()).n,2);
  assert.equal((await cloud.prepare('SELECT balance_milli AS n FROM stock_positions WHERE tenant_id=? AND branch_id=? AND product_id=?').bind('a','a-branch','a-product').first()).n,7000);
+ // Restaurant waiter actions use the same IDs locally and on canonical D1.
+ // The table/session/order must replay in order, preserving every FK.
+ const table=await call(localApi,'/api/v1/tenants/a/restaurant/tables',{
+  method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-table-001'},
+  body:{branchId:'a-branch',label:'Mesa 7',seats:4}});
+ assert.equal(table.status,201,JSON.stringify(table.data));
+ assert.match(table.data.table.id,/^[a-f0-9-]{36}$/);
+ const tableId=table.data.table.id;
+ const opened=await call(localApi,'/api/v1/tenants/a/restaurant/tables/'+tableId+'/open',{
+  method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-table-open-001'},
+  body:{branchId:'a-branch',partySize:3}});
+ assert.equal(opened.status,201,JSON.stringify(opened.data));
+ const sessionId=opened.data.session.id;
+ const order=await call(localApi,'/api/v1/tenants/a/restaurant/orders',{
+  method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-food-order-001'},
+  body:{branchId:'a-branch',fulfillment:'TABLE',tableSessionId:sessionId,
+    items:[{productId:'a-product',quantity:1}]}});
+ assert.equal(order.status,201,JSON.stringify(order.data));
+ const orderId=order.data.order.id;
+ assert.equal((await local.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE status='PENDING'").bind().first()).n,3);
  const released=await finishOfflineAuthority(local,{OFFLINE_CLOUD_ORIGIN:origin+'/',OFFLINE_GATEWAY_ID:gateway.id,
   OFFLINE_GATEWAY_TOKEN:credential},{fetcher});
  assert.equal(released.released,true);
+ assert.equal(released.acknowledged,3);
+ assert.equal((await cloud.prepare('SELECT id FROM restaurant_tables WHERE tenant_id=? AND branch_id=?').bind('a','a-branch').first()).id,tableId);
+ assert.equal((await cloud.prepare('SELECT id FROM restaurant_table_sessions WHERE tenant_id=? AND branch_id=?').bind('a','a-branch').first()).id,sessionId);
+ assert.equal((await cloud.prepare('SELECT id FROM restaurant_orders WHERE tenant_id=? AND branch_id=?').bind('a','a-branch').first()).id,orderId);
+ assert.equal((await cloud.prepare('SELECT COUNT(*) AS n FROM restaurant_order_items WHERE tenant_id=?').bind('a').first()).n,1);
  assert.equal((await local.prepare('SELECT mode FROM offline_local_authority LIMIT 1').bind().first()).mode,'CLOUD');
  const resumed=await call(cloudApi,'/api/v1/tenants/a/inventory/receipts',{method:'POST',cookie:owner,
   headers:{'x-mutation-id':'cloud-after-handoff-001'},body:{branchId:'a-branch',productId:'a-product',quantity:1}});
