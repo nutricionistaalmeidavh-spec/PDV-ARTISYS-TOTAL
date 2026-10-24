@@ -3,16 +3,21 @@ import {sha256} from './password.mjs';
 // Only canonical inventory mutations with a durable commerce_mutations audit are
 // permitted in this first transactional replay protocol. Never queue an
 // unrecognized business operation: it would create an unrecoverable orphan.
-const SUPPORTED=new Set(['inventory/receipts','inventory/adjustments']);
+const SUPPORTED=new Set(['inventory/receipts','inventory/adjustments','restaurant/tables','restaurant/orders']);
 const MUTATION=/^[A-Za-z0-9_-]{8,100}$/;
 const VALID_ID=/^[a-zA-Z0-9-]{1,128}$/;
 function allowed(path,tenant){
- const match=path.match(/^\/api\/v1\/tenants\/([^/]+)\/(inventory\/(?:receipts|adjustments))$/);
- return match&&match[1]===tenant&&SUPPORTED.has(match[2]);
+ const match=path.match(/^\/api\/v1\/tenants\/([^/]+)\/(.+)$/);
+ if(!match||match[1]!==tenant)return false;
+ const part=match[2];
+ return SUPPORTED.has(part)||
+  /^restaurant\/tables\/[a-zA-Z0-9-]{1,128}\/open$/.test(part)||
+  /^restaurant\/kitchen\/[a-zA-Z0-9-]{1,128}$/.test(part);
+
 }
 export async function stageOfflineMutation(db,request,{tenantId,branchId,userId,now=Date.now()}){
  const path=new URL(request.url).pathname,mutationId=request.headers.get('x-mutation-id')||'';
- if(!allowed(path,tenantId)||request.method!=='POST'||!MUTATION.test(mutationId))
+ if(!allowed(path,tenantId)||!['POST','PATCH'].includes(request.method)||!MUTATION.test(mutationId))
   throw Object.assign(Error('Operação offline não suportada ou sem chave de idempotência.'),{status:403});
  const state=await db.prepare('SELECT a.gateway_id AS gatewayId,a.mode,a.refreshed_at AS refreshedAt FROM offline_local_authority a WHERE a.tenant_id=? AND a.branch_id=?').bind(tenantId,branchId).first();
  if(!state||state.mode!=='LOCAL'||now-state.refreshedAt>86400000)
@@ -20,7 +25,9 @@ export async function stageOfflineMutation(db,request,{tenantId,branchId,userId,
  const raw=await request.clone().text();
  if(raw.length>8192)throw Object.assign(Error('Pedido offline excede tamanho máximo.'),{status:413});
  let body;try{body=JSON.parse(raw);}catch{}
- if(!body||Array.isArray(body)||typeof body!=='object'||body.branchId!==branchId)
+ if(!body||Array.isArray(body)||typeof body!=='object'||body.branchId!==branchId||
+    (request.method==='PATCH'&&!/\/restaurant\/kitchen\/[a-zA-Z0-9-]+$/.test(path))||
+    (request.method==='POST'&&/\/restaurant\/kitchen\//.test(path)))
   throw Object.assign(Error('Filial da operação offline inválida.'),{status:400});
  const bodyJson=JSON.stringify(body);
  const hash=await sha256(JSON.stringify({method:request.method,path,body:bodyJson,userId}));
@@ -28,8 +35,8 @@ export async function stageOfflineMutation(db,request,{tenantId,branchId,userId,
  if(prior&&prior.hash!==hash)
   throw Object.assign(Error('Chave de operação reutilizada com valores diferentes.'),{status:409});
  if(!prior)await db.prepare('INSERT INTO offline_pending_requests(tenant_id,branch_id,mutation_id,operator_id,method,path,body_json,payload_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
-  .bind(tenantId,branchId,mutationId,userId,'POST',path,bodyJson,hash,now).run();
- return {mutationId,hash};
+  .bind(tenantId,branchId,mutationId,userId,request.method,path,bodyJson,hash,now).run();
+ return {mutationId,hash,createdAt:now};
 }
 export async function pushOfflineOutbox(db,env,{fetcher=fetch,maxBatch=25}={}){
  const {OFFLINE_CLOUD_ORIGIN:cloud,OFFLINE_GATEWAY_ID:gatewayId,OFFLINE_GATEWAY_TOKEN:token}=env;
