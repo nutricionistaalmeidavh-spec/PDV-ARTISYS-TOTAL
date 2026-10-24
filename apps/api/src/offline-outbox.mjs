@@ -12,7 +12,9 @@ function allowed(path,tenant){
  const part=match[2];
  return SUPPORTED.has(part)||
   /^restaurant\/tables\/[a-zA-Z0-9-]{1,128}\/open$/.test(part)||
-  /^restaurant\/kitchen\/[a-zA-Z0-9-]{1,128}$/.test(part);
+  /^restaurant\/kitchen\/[a-zA-Z0-9-]{1,128}$/.test(part)||
+  /^restaurant\/orders\/[a-zA-Z0-9-]{1,128}\/(?:deliver|cancel)$/.test(part)||
+  /^restaurant\/sessions\/[a-zA-Z0-9-]{1,128}\/close$/.test(part);
 
 }
 export async function stageOfflineMutation(db,request,{tenantId,branchId,userId,now=Date.now()}){
