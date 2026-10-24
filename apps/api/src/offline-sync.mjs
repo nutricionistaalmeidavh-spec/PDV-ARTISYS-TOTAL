@@ -83,7 +83,7 @@ export async function offlineReplayRoute(request,db,env,now=Date.now()){
  const parentOperation=operation.startsWith('sales/')?'sales':
    operation.startsWith('cash/sessions/')?'cash/open':null;
  if(parentOperation){
-  const parentId=operation.split('/')[1];
+  const parentId=parentOperation==='cash/open'?operation.split('/')[2]:operation.split('/')[1];
   const parent=await db.prepare('SELECT 1 AS ok FROM offline_replay_grants g JOIN offline_replay_receipts r ON r.tenant_id=g.tenant_id AND r.branch_id=g.branch_id AND r.epoch=g.epoch AND r.mutation_id=g.mutation_id AND r.payload_hash=g.payload_hash WHERE g.tenant_id=? AND g.branch_id=? AND g.epoch=? AND g.operation=? AND g.entity_id=? LIMIT 1')
     .bind(gateway.tenantId,gateway.branchId,auth.epoch,parentOperation,parentId).first();
   if(!parent)return fail(403,'Somente vendas e caixas abertos nesta geração offline podem receber operações.');
