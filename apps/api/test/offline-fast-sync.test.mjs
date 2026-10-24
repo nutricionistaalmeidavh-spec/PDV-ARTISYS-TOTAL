@@ -76,6 +76,11 @@ test('versioned summary avoids unchanged 300-product transfer, pages changed cat
  assert.equal((await interruptedDb.prepare('SELECT COUNT(*) AS n FROM products').bind().first()).n,302);
  assert.equal((await interruptedDb.prepare('SELECT COUNT(*) AS n FROM offline_download_pages').bind().first()).n,0,
   'staging removed atomically after successful projection');
+ await cloud.prepare('DELETE FROM products WHERE id=? AND tenant_id=?').bind('product-298','fast').run();
+ await assert.rejects(pullOfflineFast(local,env,{fetcher,pageSize:75}),/Exclusão ou divergência/,
+   'canonical deletion must not silently leave stale products locally');
+ assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM products WHERE tenant_id=?').bind('fast').first()).n,302,
+   'failed snapshot rolls back and preserves previous coherent local dataset');
  const unauthorized=await call('/api/v1/offline/gateway/summary');
  assert.equal(unauthorized.status,401);
  const foreign=await call('/api/v1/offline/gateway/page?table=products&after=0&limit=50',{
