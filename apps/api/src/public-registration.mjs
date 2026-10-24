@@ -4,7 +4,7 @@ const FIFTEEN_MINUTES=15*60*1000;
 const MAX_ATTEMPTS=3;
 const TEXT_CONTROL=/[\u0000-\u001f\u007f]/u;
 const EMAIL=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const successText='Se os dados estiverem disponíveis, sua solicitação foi registrada. O acesso depende de liberação da ArtiSys.';
+const successText='Solicitação recebida. A ArtiSys analisará os dados e, se aprovar, os 14 dias de teste grátis começarão na liberação.';
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const normalize=value=>typeof value==='string'?value.trim():'';
 function validName(name){return name.length>=3&&name.length<=100&&!TEXT_CONTROL.test(name);}
@@ -34,7 +34,7 @@ export async function registerPublicAccount(request,env,db,now){
   let input;
   try{input=JSON.parse(raw);}catch{return json({error:'Dados inválidos.'},400);}
   if(!input||Array.isArray(input)||typeof input!=='object')return json({error:'Dados inválidos.'},400);
-  if(input.website)return json({message:successText},202); // honeypot: no database write
+  if(input.website)return json({message:successText,status:'pending-approval'},202); // honeypot: no database write
   const displayName=normalize(input.displayName);
   const businessName=normalize(input.businessName);
   const email=normalize(input.email).toLowerCase();
@@ -46,7 +46,7 @@ export async function registerPublicAccount(request,env,db,now){
   if(!await countAttempt(db,request,env,now))
     return json({error:'Muitas solicitações. Tente novamente mais tarde.'},429);
   const current=await db.prepare('SELECT id FROM users WHERE email_norm=?').bind(email).first();
-  if(current)return json({message:successText},202);
+  if(current)return json({message:successText,status:'pending-approval'},202);
   const userId='u_'+crypto.randomUUID();
   const tenantId='t_'+crypto.randomUUID();
   const branchId='b_'+crypto.randomUUID();
@@ -68,7 +68,7 @@ export async function registerPublicAccount(request,env,db,now){
     // Concurrent duplicates are handled generically to avoid enumeration.
     if(/UNIQUE|constraint/i.test(String(error?.message||''))){
       const existing=await db.prepare('SELECT id FROM users WHERE email_norm=?').bind(email).first();
-      if(existing)return json({message:successText},202);
+      if(existing)return json({message:successText,status:'pending-approval'},202);
     }
     throw error;
   }
