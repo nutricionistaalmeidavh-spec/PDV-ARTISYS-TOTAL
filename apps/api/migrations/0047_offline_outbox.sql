@@ -15,10 +15,11 @@ CREATE TABLE offline_replay_grants(
  PRIMARY KEY(tenant_id,branch_id,mutation_id)
 );
 CREATE TABLE offline_replay_receipts(
- tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,sequence INTEGER NOT NULL,
+ tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,
+ epoch INTEGER NOT NULL CHECK(epoch>0),sequence INTEGER NOT NULL CHECK(sequence>0),
  mutation_id TEXT NOT NULL,payload_hash TEXT NOT NULL,
  result_json TEXT NOT NULL,acked_at INTEGER NOT NULL,
- PRIMARY KEY(tenant_id,branch_id,sequence),
+ PRIMARY KEY(tenant_id,branch_id,epoch,sequence),
  UNIQUE(tenant_id,branch_id,mutation_id)
 );
 -- The local-only intent is persisted BEFORE executing the canonical transaction.
