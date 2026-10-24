@@ -1,20 +1,30 @@
-# Funcionamento offline — transações confirmadas no D1
+# Funcionamento offline — sincronização do PDV TOTAL
 
-## Estado e limite de escopo
+## Escopo de implementação em validação
 
-O gateway do PDV TOTAL continua sendo SaaS, e a PWA abre o HTTPS local
-para operar sobre o Wi-Fi. A migração 0047 adiciona reconciliação **somente
-para** inventário/receipts e inventário/adjustments, usando o núcleo canônico
-de mutações, e nunca duplica saldo ao perder o ACK. Isso é uma evolução
-do baseline de leitura, **não** uma homologação de vendas, comandas,
-pagamentos e caixa offline.
+A contingência opera via servidor HTTPS no PC da loja e banco SQLite da
+mesma empresa/filial, com Wi-Fi local mantido quando a WAN cair.
 
-A interface do proprietário cria autorização do PC e depois oferece o
-botão para reservar exclusivamente a filial ao PC. A nuvem passa a
-rejeitar gravações na filial com HTTP 423 até que o gateway libere o
-bloqueio após reconciliação total. Há triggers de integridade no D1 para
-proteger movimento de estoque e venda mesmo se uma chamada já estava
-em andamento no momento da reserva.
+- Mesas, abertura de comandas, pedidos para cozinha, preparo, entrega,
+  cancelamento e fechamento permitido de mesa usam operações canônicas com
+  IDs estáveis entre SQLite e Cloudflare D1.
+- Entradas e ajustes de estoque usam outbox transacional persistente, ACK
+  idempotente e conciliação antes de liberar novamente os escritores online.
+- Um piloto separado de venda simples e **caixa em dinheiro físico** usa
+  abertura de caixa, itens de venda, conclusão e fechamento no mesmo protocolo.
+  Exige simultaneamente `OFFLINE_CASH_ENABLED=true` no Worker e
+  `PDV_OFFLINE_CASH_ENABLED=true` no servidor local. Desligado por padrão.
+- PIX, cartão, transações com adquirente, crediário, devoluções e
+  liquidação de venda originada de comanda/mesa NÃO podem ser confirmados
+  offline antes de paridade financeira específica e verificação externa.
+- A autorização de operação local permanece restrita a uma filial e uma
+  geração por vez. Nenhum evento local deve ser declarado sincronizado antes
+  de ACK no D1. Toda operação é verificada contra assinatura de gateway,
+  usuário e papel ativos, empresa, filial, epoch e hash do conteúdo.
+
+**Estado:** branch em QA, não representa liberação comercial automática.
+A documentação abaixo descreve princípios, limitações e gates de segurança.
+Nenhuma promessa de certificação física de iOS, impressora ou POS de cartão.
 
 ## Escrita local e sincronização
 
