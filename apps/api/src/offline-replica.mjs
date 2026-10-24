@@ -178,6 +178,17 @@ export async function applyOfflineBaseline(db,snapshot,scope){
   }
   const damaged=(await db.prepare('PRAGMA foreign_key_check').bind().all()).results;
   if(damaged.length)throw Error('Snapshot falhou na integridade referencial.');
+  // v2 transports only changed full datasets. An absent remote row may
+  // represent a real delete; never mark that table synced while silently
+  // retaining an orphan (particularly stock, sale or permission data).
+  for(const [table,meta] of Object.entries(snapshot.datasetVersions||{})){
+   if(outstanding>0&&(EXTRA.includes(table)||table==='stock_positions'))continue;
+   const tenantOnly=['product_categories','products','customers'].includes(table);
+   const result=await db.prepare('SELECT COUNT(*) AS n FROM '+table+' WHERE tenant_id=?'+
+     (tenantOnly?'':' AND branch_id=?')).bind(...(tenantOnly?[scope.tenantId]:[scope.tenantId,scope.branchId])).first();
+   if(Number(result.n)!==meta.count)
+    throw Error('Exclusão ou divergência detectada em '+table+': revisão requer reconciliação segura, não sobrescrita.');
+  }
   if(snapshot.datasetVersions){
    for(const [table,meta] of Object.entries(snapshot.datasetVersions)){
     if(!ORDER.includes(table)||!Number.isSafeInteger(meta.revision)||meta.revision<0||
