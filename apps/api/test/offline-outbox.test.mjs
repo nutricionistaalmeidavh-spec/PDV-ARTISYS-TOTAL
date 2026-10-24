@@ -40,6 +40,13 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
   {headers:{authorization:'Bearer '+credential,'x-pdv-offline-gateway-id':gateway.id}});
  assert.equal(snapshot.status,200);assert.equal(snapshot.data.authority.mode,'LOCAL');
  await applyOfflineBaseline(local,snapshot.data,{tenantId:'a',branchId:'a-branch',gatewayId:gateway.id});
+ // A periodic snapshot must not undo a local handoff in progress.
+ await local.prepare("UPDATE offline_local_authority SET mode='RECONCILING'").bind().run();
+ await applyOfflineBaseline(local,snapshot.data,{tenantId:'a',branchId:'a-branch',gatewayId:gateway.id});
+ assert.equal((await local.prepare('SELECT mode FROM offline_local_authority LIMIT 1').bind().first()).mode,
+  'RECONCILING','Cloud pull must not reopen local writes during handoff');
+ await local.prepare("UPDATE offline_local_authority SET mode='LOCAL'").bind().run();
+
  const localApi=createApi({DB:local,LAN_MODE:'true',AUTH_ENABLED:'true',COOKIE_SECURE:'true'});
  const localOwner=(await call(localApi,'/api/v1/auth/login',{method:'POST',body:{email:'a@test.local',password}})).cookie;
  const localPair=await call(localApi,'/api/v1/tenants/a/lan/pairings',{method:'POST',cookie:localOwner,body:{kind:'TERMINAL',branchId:'a-branch'}});
