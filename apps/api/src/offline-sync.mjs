@@ -7,7 +7,7 @@ const reply=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'con
 const fail=(status,s)=>reply({error:s},status);
 const ID=/^[a-zA-Z0-9-]{1,128}$/;
 const MUT=/^[A-Za-z0-9_-]{8,100}$/;
-const WRITE_PATH=/^\/api\/v1\/tenants\/([^/]+)\/(inventory\/(?:receipts|adjustments)|restaurant\/(?:tables|orders|tables\/[a-zA-Z0-9-]{1,128}\/open|kitchen\/[a-zA-Z0-9-]{1,128}|orders\/[a-zA-Z0-9-]{1,128}\/(?:deliver|cancel)|sessions\/[a-zA-Z0-9-]{1,128}\/close))$/;
+const WRITE_PATH=/^\/api\/v1\/tenants\/([^/]+)\/(inventory\/(?:receipts|adjustments)|restaurant\/(?:tables|orders|tables\/[a-zA-Z0-9-]{1,128}\/open|kitchen\/[a-zA-Z0-9-]{1,128}|orders\/[a-zA-Z0-9-]{1,128}\/(?:deliver|cancel)|sessions\/[a-zA-Z0-9-]{1,128}\/close)|cash\/open|cash\/sessions\/[a-zA-Z0-9-]{1,128}\/close|sales|sales\/[a-zA-Z0-9-]{1,128}\/(?:items|complete))$/;
 export async function activateOfflineBranch(db,tenantId,gatewayId,now){
  const gateway=await db.prepare('SELECT id,branch_id AS branchId FROM offline_gateways WHERE id=? AND tenant_id=? AND active=1')
   .bind(gatewayId,tenantId).first();
@@ -53,6 +53,16 @@ export async function offlineReplayRoute(request,db,env,now=Date.now()){
   !/^[a-f0-9]{64}$/.test(payloadHash||''))
   return fail(409,'Lote offline incompatível com a autoridade atual.');
  const parsed=WRITE_PATH.exec(path);
+ const operation=parsed?.[2]||'';
+ const cashOperation=/^(?:cash\/|sales(?:\/|$))/.test(operation);
+ if(cashOperation&&env.OFFLINE_CASH_ENABLED!=='true')return fail(403,'Caixa offline desabilitado.');
+ if(cashOperation&&operation.endsWith('/complete')&&
+  (!Array.isArray(body.payments)||!body.payments.length||
+  body.payments.some(p=>p?.method!=='CASH'||!Number.isSafeInteger(p.amountCents)||p.amountCents<=0)||
+  body.shares||body.storeCredit||body.customerId))return fail(403,'Somente dinheiro físico é permitido offline.');
+ if(cashOperation&&operation==='sales'&&
+  [body.restaurantSessionId,body.restaurantOrderId,body.wholesaleOrderId].some(Boolean))
+  return fail(403,'A liquidação de comandas exige reconciliação completa.');
  if(parsed[1]!==gateway.tenantId||body.branchId!==gateway.branchId||
   (method==='PATCH'&&!/\/restaurant\/kitchen\/[a-zA-Z0-9-]+$/.test(path))||
   (method==='POST'&&/\/restaurant\/kitchen\//.test(path))||
@@ -73,8 +83,12 @@ export async function offlineReplayRoute(request,db,env,now=Date.now()){
   .bind(gateway.tenantId,gateway.branchId,mutationId).first();
  if(priorGrant&&(priorGrant.payloadHash!==payloadHash||priorGrant.epoch!==auth.epoch||priorGrant.gatewayId!==gatewayId))
   return fail(409,'Chave de operação usada por outro evento.');
- if(!priorGrant)await db.prepare('INSERT INTO offline_replay_grants(tenant_id,branch_id,mutation_id,gateway_id,epoch,payload_hash,created_at) VALUES(?,?,?,?,?,?,?)')
-  .bind(gateway.tenantId,gateway.branchId,mutationId,gatewayId,auth.epoch,payloadHash,now).run();
+ const subjectMatch=operation.match(/^(?:sales|cash\/sessions)\/([a-zA-Z0-9-]{1,128})\//);
+ const entityId=(operation==='sales'||operation==='cash/open')
+  ?(await offlineMutationIds({tenantId:gateway.tenantId,branchId:gateway.branchId,method,path,mutationId}))()
+  :subjectMatch?.[1]||null;
+ if(!priorGrant)await db.prepare('INSERT INTO offline_replay_grants(tenant_id,branch_id,mutation_id,gateway_id,epoch,payload_hash,entity_id,created_at) VALUES(?,?,?,?,?,?,?,?)')
+  .bind(gateway.tenantId,gateway.branchId,mutationId,gatewayId,auth.epoch,payloadHash,entityId,now).run();
  const origin=new URL(request.url).origin;
  const canonical=new Request(origin+path,{method,headers:{'content-type':'application/json','origin':origin,'x-mutation-id':mutationId},
   body:JSON.stringify(body)});
@@ -87,7 +101,7 @@ export async function offlineReplayRoute(request,db,env,now=Date.now()){
       {idFactory,clock:()=>new Date(createdAt).toISOString()});
   }else{
     actual=await commerceRoute(canonical,db,{userId:operatorId},operator,gateway.tenantId,route,
-      {now:()=>new Date(createdAt).toISOString()});
+      {now:()=>new Date(createdAt).toISOString(),idFactory:await offlineMutationIds({tenantId:gateway.tenantId,branchId:gateway.branchId,method,path,mutationId})});
   }
  }catch{return fail(503,'Não foi possível confirmar lançamento.');}
  if(!actual||!actual.ok){
