@@ -9,6 +9,11 @@ const EXTRA=['customers','cash_sessions','sales','sale_items','sale_payments',
  'sale_returns','sale_return_items','sale_refund_movements'];
 const ORDER=['tenants','branches','users','tenant_memberships','saas_mfa_totp',
  'product_categories','products','stock_positions',...EXTRA];
+// Only mutable projections may be pruned. Historical, financial and
+// append-only records are never removed merely to match a cloud row count.
+const SAFE_DELETION_TABLES=new Set([
+ 'product_categories','products','customers','stock_positions','restaurant_tables'
+]);
 function verify(snapshot,scope){
  if(snapshot?.version!==1||snapshot.baselineOnly!==true||!snapshot.tables||
     snapshot.scope?.tenantId!==scope.tenantId||snapshot.scope?.branchId!==scope.branchId||
@@ -178,6 +183,30 @@ export async function applyOfflineBaseline(db,snapshot,scope){
      ?'RECONCILING':snapshot.authority.mode;
    await db.prepare('INSERT INTO offline_local_authority(tenant_id,branch_id,gateway_id,epoch,mode,refreshed_at) VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id) DO UPDATE SET epoch=excluded.epoch,mode=excluded.mode,refreshed_at=excluded.refreshed_at')
     .bind(scope.tenantId,scope.branchId,scope.gatewayId,snapshot.authority.epoch,mode,Date.now()).run();
+  }
+  // v2 transports a complete, revision-stable dataset per changed table.
+  // Reconcile cloud-side deletions only for mutable projections, inside the
+  // same SQLite transaction as inserts/updates and version stamping.
+  // Delete children before parents (stock -> products -> categories).
+  // Never discard rows while local mutations may still be awaiting D1 ACK.
+  for(const table of [...ORDER].reverse()){
+    if(!SAFE_DELETION_TABLES.has(table)||!Object.hasOwn(snapshot.datasetVersions||{},table)||
+       outstanding>0)continue;
+    const authoritativeIds=new Set(tables[table].map(row=>row.id));
+    if(authoritativeIds.size!==tables[table].length)
+      throw Error('Dataset duplicado: '+table);
+    const tenantOnly=['product_categories','products','customers'].includes(table);
+    const predicate='tenant_id=?'+(tenantOnly?'':' AND branch_id=?');
+    const scopeParams=tenantOnly?[scope.tenantId]:[scope.tenantId,scope.branchId];
+    const localIds=(await db.prepare('SELECT id FROM '+table+' WHERE '+predicate)
+      .bind(...scopeParams).all()).results;
+    for(const row of localIds){
+      if(authoritativeIds.has(row.id))continue;
+      // RESTRICT foreign keys and canonical guards remain active. Any
+      // referenced row or unexpected trigger causes full rollback.
+      await db.prepare('DELETE FROM '+table+' WHERE '+predicate+' AND id=?')
+        .bind(...scopeParams,row.id).run();
+    }
   }
   const damaged=(await db.prepare('PRAGMA foreign_key_check').bind().all()).results;
   if(damaged.length)throw Error('Snapshot falhou na integridade referencial.');
