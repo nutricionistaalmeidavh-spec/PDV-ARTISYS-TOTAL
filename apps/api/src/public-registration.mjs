@@ -1,5 +1,6 @@
 import {sha256,hashPassword} from './password.mjs';
 import {emailTransportPresent,sendTransactionalEmail} from './transactional-email.mjs';
+import {formatSubscriptionEnd} from '../../../packages/core/shared/subscription-presentation.mjs';
 
 const FIFTEEN_MINUTES=15*60*1000;
 const MAX_ATTEMPTS=3;
@@ -85,15 +86,26 @@ export async function registerPublicAccount(request,env,db,now){
   // completed trial; the user can immediately sign in with their own password.
   if(emailTransportPresent(env)){
     try{
-      const appUrl=new URL('/app/',new URL(request.url).origin).href;
+      const configured=env.EMAIL_PUBLIC_BASE_URL?new URL(env.EMAIL_PUBLIC_BASE_URL):null;
+      if(configured&&(configured.protocol!=='https:'||configured.username||configured.password||configured.pathname!=='/'||configured.search||configured.hash))throw Error('INVALID_EMAIL_PUBLIC_BASE_URL');
+      const appUrl=new URL('/app/',configured?.origin||new URL(request.url).origin).href;
+      const end=formatSubscriptionEnd(trialEndsAt);
+      const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       await sendTransactionalEmail(env,{
         to:email,
-        subject:'Seu teste grátis começou | PDV Total ArtiSys',
+        subject:'Seu acesso ao PDV Total está pronto | ArtiSys',
         text:'Seu estabelecimento '+businessName+' já pode usar o PDV Total.\n\n'
           +'Seus 14 dias de teste grátis começaram agora. Entre com o e-mail e a senha criados no cadastro:\n'
           +appUrl+'\n\nO teste termina em '
-          +new Date(trialEndsAt).toLocaleDateString('pt-BR',{timeZone:'UTC'})
-          +'.\n\nSe não reconhece este cadastro, entre em contato com a ArtiSys.'
+          +end
+          +'.\n\nSe não reconhece este cadastro, entre em contato com a ArtiSys.',
+        html:'<!doctype html><html lang="pt-BR"><body style="font-family:Arial,sans-serif;color:#172b42;line-height:1.6;max-width:560px;margin:32px auto;padding:24px">'
+          +'<p><strong>ArtiSys · PDV Total</strong></p><h1 style="font-size:24px">Seu acesso está pronto</h1>'
+          +'<p>O estabelecimento <strong>'+escape(businessName)+'</strong> já pode usar o PDV Total.</p>'
+          +'<p>Seus 14 dias de teste grátis começaram. Entre com o e-mail e a senha criados no cadastro.</p>'
+          +'<p><a href="'+escape(appUrl)+'">Acessar o PDV Total</a></p>'
+          +'<p>O teste termina em <strong>'+escape(end)+'</strong>.</p>'
+          +'<p>Se não reconhece este cadastro, entre em contato com a ArtiSys.</p></body></html>'
       });
     }catch{
       // No credential, token or provider failure details are disclosed.

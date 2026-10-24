@@ -79,8 +79,19 @@ export async function billingCustomerRoute(request,db,env,session,member,tenantI
  const cfg=config(env);if(!cfg)return out({error:'Cobrança ArtiSys opcional não configurada.'},503);
  try{
   if(path==='billing/orders'&&request.method==='GET'){
-   const {results}=await sql(db,'SELECT order_id AS orderId,plan_key AS period,amount_cents AS amountCents,checkout_url AS checkoutUrl,created_at AS createdAt FROM saas_billing_orders WHERE tenant_id=? ORDER BY created_at DESC LIMIT 50',tenantId).all();
-   return out({orders:results});
+   const {results}=await sql(db,'SELECT order_id AS orderId,owner_user_id AS userId,plan_key AS period,amount_cents AS amountCents,checkout_url AS checkoutUrl,created_at AS createdAt FROM saas_billing_orders WHERE tenant_id=? ORDER BY created_at DESC LIMIT 50',tenantId).all();
+   let states=new Map(),checkedAt=null;
+   if(results.length)try{
+    const path='/v1/integrations/pdv/billing-status',raw=JSON.stringify({tenantId,orders:results.map(o=>({orderId:o.orderId,userId:o.userId}))}),timestamp=String(now);
+    const response=await fetchImpl(serviceUrl(env)+path,{method:'POST',redirect:'manual',signal:AbortSignal.timeout(8000),
+     headers:{'content-type':'application/json','x-artisys-timestamp':timestamp,'x-artisys-signature':'sha256='+await signHex(cfg.secret,timestamp+'.'+path+'.'+raw)},body:raw});
+    if(response.ok){
+     const data=await response.json();
+     if(Array.isArray(data.orders)){states=new Map(data.orders.filter(o=>o&&typeof o.orderId==='string').map(o=>[o.orderId,o]));checkedAt=data.checkedAt||null;}
+    }
+   }catch{/* Unavailable is never reported as pending or paid. */}
+   const allowed=new Set(['pending','paid','canceled','expired','refunded']);
+   return out({orders:results.map(({userId,...o})=>({...o,status:allowed.has(states.get(o.orderId)?.status)?states.get(o.orderId).status:'unavailable'})),checkedAt});
   }
   if(path==='billing/plans'&&request.method==='GET')return out({plans:await offers(env,fetchImpl),provider:'ArtiSys / Asaas'});
   if(path!=='billing/checkout'||request.method!=='POST')return out({error:'Método não permitido.'},405);

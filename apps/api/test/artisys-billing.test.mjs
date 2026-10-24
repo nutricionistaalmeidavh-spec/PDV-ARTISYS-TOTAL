@@ -55,3 +55,54 @@ test('billing checkout remains optional and cashier cannot initiate it',async()=
   assert.equal((await billingCustomerRoute(req.clone(),db,{ARTISYS_BILLING_ENABLED:'true'},session,{profileKey:'CASHIER'},'company',path,at)).status,403);
  }finally{db.close();}
 });
+
+test('orders read authoritative central status, remain tenant-scoped, and never activate a trial',async()=>{
+ const db=await setup(),env={ARTISYS_BILLING_ENABLED:'true',ARTISYS_BILLING_SECRET:secret};
+ try{
+  const stamp=new Date(at).toISOString();
+  await db.prepare("INSERT INTO saas_subscriptions(tenant_id,plan_key,status,ends_at,updated_at,updated_by) VALUES(?,'trial','TRIAL',?,?,'PUBLIC_SIGNUP')")
+   .bind('company','2026-11-02T12:00:00.000Z',stamp).run();
+  await db.prepare('INSERT INTO saas_billing_orders VALUES(?,?,?,?,?,?,?,?,?)')
+   .bind('test-order','company','owner','monthly','monthly',8900,'https://asaas.com/checkoutSession/show?id=test','unique-idempotency-key',stamp).run();
+  const request=new Request(origin+'/api/v1/tenants/company/billing/orders');
+  const run=fetchImpl=>billingCustomerRoute(request,db,env,{userId:'owner'},{profileKey:'OWNER'},'company','billing/orders',at,{fetchImpl});
+  for(const status of ['pending','paid','expired','canceled','refunded']){
+   const response=await run(async(url,options)=>{
+    assert.match(url,/\/v1\/integrations\/pdv\/billing-status$/);
+    assert.equal(options.redirect,'manual');
+    assert.deepEqual(JSON.parse(options.body),{tenantId:'company',orders:[{orderId:'test-order',userId:'owner'}]});
+    assert.equal(options.headers['x-artisys-signature'],'sha256='+await signHex(secret,String(at)+'.'+'/v1/integrations/pdv/billing-status'+'.'+options.body));
+    return Response.json({orders:[{orderId:'test-order',status}],checkedAt:stamp});
+   });
+   const data=await response.json();assert.equal(data.orders[0].status,status);
+   assert.equal(Object.hasOwn(data.orders[0],'userId'),false);
+   assert.equal((await db.prepare('SELECT status FROM saas_subscriptions').bind().first()).status,'TRIAL');
+  }
+  for(const failure of [async()=>{throw Error('offline');},async()=>new Response(null,{status:401}),async()=>Response.json({orders:[{orderId:'test-order',status:'unknown'}]})]){
+   const data=await (await run(failure)).json();assert.equal(data.orders[0].status,'unavailable');
+  }
+  const other=await billingCustomerRoute(request,db,env,{userId:'owner'},{profileKey:'OWNER'},'other-company','billing/orders',at,{fetchImpl:()=>{throw Error('must not fetch');}});
+  assert.deepEqual((await other.json()).orders,[]);
+  assert.equal((await billingCustomerRoute(request,db,env,{userId:'owner'},{profileKey:'CASHIER'},'company','billing/orders',at)).status,403);
+ }finally{db.close();}
+});
+
+test('successful checkout creates a purchase but leaves existing trial unchanged',async()=>{
+ const db=await setup(),env={ARTISYS_BILLING_ENABLED:'true',ARTISYS_BILLING_SECRET:secret,ARTISYS_PDV_MONTHLY_OFFER_ID:'monthly-offer'};
+ try{
+  const stamp=new Date(at).toISOString(),ends='2026-11-02T12:00:00.000Z';
+  await db.prepare("INSERT INTO saas_subscriptions(tenant_id,plan_key,status,ends_at,updated_at,updated_by) VALUES(?,'trial','TRIAL',?,?,'PUBLIC_SIGNUP')").bind('company',ends,stamp).run();
+  const calls=[],fetchImpl=async(url)=>{
+   calls.push(url);
+   if(url.endsWith('/v1/catalog'))return Response.json({offers:[{id:'monthly-offer',productId:'pdv-total-saas',saleType:'monthly',deliveryMode:'webhook',priceCents:8900,name:'Mensal'}]});
+   if(url.endsWith('/v1/orders'))return Response.json({order:{id:'12345678-1234-4234-8234-123456789012',amountCents:8900},orderAccessToken:'private-access-token'});
+   return Response.json({checkoutUrl:'https://asaas.com/checkoutSession/show?id=123456'});
+  };
+  const request=new Request(origin+'/api/v1/tenants/company/billing/checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({period:'monthly',idempotencyKey:'checkout-test-idempotency'})});
+  assert.equal((await billingCustomerRoute(request,db,env,{userId:'owner'},{profileKey:'OWNER'},'company','billing/checkout',at,{fetchImpl})).status,201);
+  const sub=await db.prepare('SELECT status,ends_at FROM saas_subscriptions').bind().first();
+  assert.equal(sub.status,'TRIAL');assert.equal(sub.ends_at,ends);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM saas_billing_orders').bind().first()).n,1);
+  assert.equal(calls.length,3);
+ }finally{db.close();}
+});

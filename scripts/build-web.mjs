@@ -49,6 +49,7 @@ copyFileSync(resolve(root,'apps/landing/landing.js'),resolve(output,'landing.js'
 const adminDir=resolve(output,'admin');mkdirSync(adminDir,{recursive:true});
 for(const name of ['html','css','js'])copyFileSync(resolve(root,'apps/landing/admin.'+name),resolve(adminDir,name==='html'?'index.html':'admin.'+name));
 const accountDir=resolve(output,'conta');mkdirSync(accountDir,{recursive:true});
+copyFileSync(resolve(root,'packages/core/shared/subscription-presentation.mjs'),resolve(accountDir,'subscription-presentation.js'));
 for(const name of ['html','css','js'])copyFileSync(resolve(root,'apps/landing/conta.'+name),resolve(accountDir,name==='html'?'index.html':'conta.'+name));
 const verificationDir=resolve(output,'verificar-email');mkdirSync(verificationDir,{recursive:true});
 copyFileSync(resolve(root,'apps/landing/verificar-email.html'),resolve(verificationDir,'index.html'));

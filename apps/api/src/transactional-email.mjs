@@ -6,12 +6,13 @@ export const emailTransportReady=env=>Boolean(
  (typeof env?.EMAIL?.send==='function'&&email.test(String(env?.EMAIL_FROM||'')))||
  (typeof env?.EMAIL_DELIVERY_URL==='string'&&typeof env?.EMAIL_DELIVERY_TOKEN==='string'&&env.EMAIL_DELIVERY_TOKEN.length>=32)
 );
-export async function sendTransactionalEmail(env,{to,subject,text,link},{fetchImpl=fetch}={}){
+export async function sendTransactionalEmail(env,{to,subject,text,link,html},{fetchImpl=fetch}={}){
  if(typeof to!=='string'||!email.test(to)||typeof subject!=='string'||/\r|\n/.test(subject)||
-  typeof text!=='string'||!text||text.length>16000)throw Error('Invalid email payload');
+  typeof text!=='string'||!text||text.length>16000||
+  (html!==undefined&&(typeof html!=='string'||!html||html.length>32000)))throw Error('Invalid email payload');
  if(typeof env?.EMAIL?.send==='function'){
   if(!email.test(String(env.EMAIL_FROM||'')))throw Error('EMAIL_FROM_NOT_CONFIGURED');
-  const response=await env.EMAIL.send({to,from:{name:'ArtiSys PDV Total',email:env.EMAIL_FROM},subject,text});
+  const response=await env.EMAIL.send({to,from:{name:'ArtiSys PDV Total',email:env.EMAIL_FROM},subject,text,...(html?{html}:{})});
   if(!response?.messageId)throw Error('EMAIL_SEND_UNCONFIRMED');
   return {delivered:true,messageId:response.messageId};
  }
@@ -20,7 +21,7 @@ export async function sendTransactionalEmail(env,{to,subject,text,link},{fetchIm
  if(uri.protocol!=='https:'||uri.username||uri.password||uri.hash)throw Error('INVALID_EMAIL_BRIDGE_URL');
  const r=await fetchImpl(uri.href,{method:'POST',headers:{
   authorization:'Bearer '+env.EMAIL_DELIVERY_TOKEN,'content-type':'application/json'},
-  body:JSON.stringify({to,subject,text,...(link?{link}:{})}),redirect:'error'});
+  body:JSON.stringify({to,subject,text,...(link?{link}:{}),...(html?{html}:{})}),redirect:'error'});
  if(!r.ok)throw Error('EMAIL_BRIDGE_FAILED');
  return {delivered:true};
 }
