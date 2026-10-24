@@ -31,6 +31,7 @@
   "vars": {
     "AUTH_ENABLED": "true",
     "EMAIL_FROM": "welcome@artisys.dev",
+    "EMAIL_PUBLIC_BASE_URL": "https://pdv.artisys.dev",
     "REGISTRATION_ENABLED": "true",
     "SAAS_ENTITLEMENTS_ENABLED": "true",
     "TENANT_SELF_SIGNUP_ENABLED": "false",

@@ -1,3 +1,4 @@
+import {formatSubscriptionEnd,billingOrderLabel} from './subscription-presentation.js';
 (()=>{
 'use strict';
 const $=id=>document.getElementById(id);
@@ -57,7 +58,7 @@ async function refreshBilling(){
  try{
   const status=await api('tenants/'+encodeURIComponent(selected)+'/subscription');
   const s=status.subscription;
-  $('subscription-status').textContent=s?'Situação: '+s.status+' · Plano: '+s.planKey+' · Até: '+new Date(s.endsAt).toLocaleDateString('pt-BR'):'Sem assinatura ativa.';
+  $('subscription-status').textContent=s?'Situação: '+s.status+' · Plano: '+s.planKey+' · Até: '+formatSubscriptionEnd(s.endsAt):'Sem assinatura ativa.';
   const [available,orders]=await Promise.all([
    api('tenants/'+encodeURIComponent(selected)+'/billing/plans'),
    api('tenants/'+encodeURIComponent(selected)+'/billing/orders')]);
@@ -73,10 +74,12 @@ async function refreshBilling(){
   if(!plans.length)notify('Ainda não existem ofertas de assinatura publicadas na central.');
   for(const o of orders.orders||[]){const li=document.createElement('li');const a=document.createElement('a');
    a.href=o.checkoutUrl;a.target='_blank';a.rel='noopener noreferrer';
-   a.textContent=o.period+' · '+(o.amountCents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-   li.append(a);$('orders').append(li);}
+   a.textContent=(o.period==='monthly'?'Mensal':'Anual')+' · '+(o.amountCents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+   const state=document.createElement('span');state.className='order-status';state.textContent=billingOrderLabel(o.status);
+   li.append(a,state);$('orders').append(li);}
  }catch(e){notify(e.message);}
 }
+$('refresh-billing').addEventListener('click',refreshBilling);
 $('checkout-form').addEventListener('submit',async e=>{
  e.preventDefault();const period=selectedPlan();if(!selected||!period){notify('Escolha um plano.');return;}
  const button=$('checkout');button.disabled=true;notify('Criando checkout seguro…');

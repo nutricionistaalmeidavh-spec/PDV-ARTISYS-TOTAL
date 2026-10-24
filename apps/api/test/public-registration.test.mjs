@@ -8,10 +8,10 @@ const signupSchema=readFileSync(new URL('../migrations/0030_public_registration.
 const saasSchema=readFileSync(new URL('../migrations/0031_saas_access.sql',import.meta.url),'utf8');
 const origin='https://pdvtotal.example.test',now=Date.parse('2026-10-19T14:00:00Z');
 const valid={displayName:'Ana Silva',businessName:'Restaurante Ana',email:'ana@example.com',password:'SenhaLongaSegura2026!'};
-function fixture(vars={AUTH_ENABLED:'true',REGISTRATION_ENABLED:'true',TRUST_CF_CONNECTING_IP:'true'}){
+function fixture(vars={AUTH_ENABLED:'true',REGISTRATION_ENABLED:'true',TRUST_CF_CONNECTING_IP:'true'},clock=now){
   const db=openLocalDatabase();
   db.exec(schema);db.exec(signupSchema);db.exec(saasSchema);
-  const api=createApi({DB:db,...vars},{now:()=>now});
+  const api=createApi({DB:db,...vars},{now:()=>clock});
   const send=(payload=valid,ip='203.0.113.5')=>api.fetch(new Request(origin+'/api/v1/auth/register',{
     method:'POST',headers:{origin,'content-type':'application/json','cf-connecting-ip':ip},body:JSON.stringify(payload)
   }));
@@ -92,5 +92,33 @@ test('untrusted signup client headers cannot reset self-hosted rate limits',asyn
   for(let i=0;i<3;i++)
    assert.equal((await x.send({...valid,email:'untrusted'+i+'@example.test'},'198.51.100.'+(i+1))).status,202);
   assert.equal((await x.send({...valid,email:'blocked@example.test'},'198.51.100.75')).status,429);
+ }finally{x.close();}
+});
+
+
+test('welcome and account use Brasília at the UTC midnight boundary without changing 14 days',async()=>{
+ const sent=[],clock=Date.parse('2026-10-24T02:46:00Z');
+ const x=fixture({AUTH_ENABLED:'true',REGISTRATION_ENABLED:'true',EMAIL_FROM:'welcome@artisys.dev',
+  EMAIL_PUBLIC_BASE_URL:'https://pdv.artisys.dev',EMAIL:{async send(message){sent.push(message);return {messageId:'welcome-test'};}}},clock);
+ try{
+  assert.equal((await x.send({...valid,businessName:'Restaurante <img src=x onerror=alert(1)>'})).status,202);
+  const sub=await x.db.prepare('SELECT ends_at FROM saas_subscriptions').bind().first();
+  assert.equal(sub.ends_at,'2026-11-07T02:46:00.000Z');
+  assert.equal(sent.length,1);
+  assert.match(sent[0].text,/06\/11\/2026, 23:46 \(Brasília\)/);
+  assert.match(sent[0].html,/06\/11\/2026, 23:46 \(Brasília\)/);
+  assert.match(sent[0].text,/https:\/\/pdv\.artisys\.dev\/app\//);
+  assert.match(sent[0].html,/&lt;img/);
+  assert.doesNotMatch(sent[0].html,/<img|onerror=alert\(1\)>/);
+  assert.doesNotMatch(sent[0].text,/workers\.dev/);
+ }finally{x.close();}
+});
+
+test('email provider failure never revokes or blocks the automatic trial',async()=>{
+ const x=fixture({AUTH_ENABLED:'true',REGISTRATION_ENABLED:'true',EMAIL_FROM:'welcome@artisys.dev',
+  EMAIL:{async send(){throw Error('unavailable');}}});
+ try{
+  assert.equal((await x.send()).status,202);
+  assert.equal((await x.db.prepare('SELECT status FROM saas_subscriptions').bind().first()).status,'TRIAL');
  }finally{x.close();}
 });
