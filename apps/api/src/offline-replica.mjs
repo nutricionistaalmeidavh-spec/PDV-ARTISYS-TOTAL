@@ -82,9 +82,17 @@ export async function applyOfflineBaseline(db,snapshot,scope){
       finalSessionStatus.push({id:original.id,status:original.status,closedAt:original.closed_at});
       record={...original,status:'OPEN',closed_at:null};
     }
-    if(table==='sales'&&original.status!=='OPEN'){
-      finalSaleStatus.push({id:original.id,status:original.status,completedAt:original.completed_at});
-      record={...original,status:'OPEN',completed_at:null};
+    if(table==='sales'){
+      const existingSale=await db.prepare('SELECT status FROM sales WHERE tenant_id=? AND branch_id=? AND id=?')
+        .bind(scope.tenantId,scope.branchId,original.id).first();
+      if(['COMPLETED','CANCELLED'].includes(existingSale?.status)){
+        if(original.status!==existingSale.status)throw Error('Snapshot tenta reabrir venda finalizada.');
+        continue; // Canonical closed sales cannot be updated, including no-op UPDATE.
+      }
+      if(original.status!=='OPEN'){
+        finalSaleStatus.push({id:original.id,status:original.status,completedAt:original.completed_at});
+        record={...original,status:'OPEN',completed_at:null};
+      }
     }
     const names=Object.keys(record);
     if(!names.length||names.some(name=>!allowed.has(name)))throw Error('Schema incompatível em '+table);
