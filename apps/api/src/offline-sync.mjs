@@ -12,7 +12,7 @@ export async function activateOfflineBranch(db,tenantId,gatewayId,now){
  if(!gateway)return fail(404,'Servidor offline revogado ou não encontrado.');
  const exists=await db.prepare('SELECT mode,gateway_id AS gatewayId FROM offline_branch_authority WHERE tenant_id=? AND branch_id=?')
   .bind(tenantId,gateway.branchId).first();
- if(exists?.mode==='LOCAL')return fail(409,'Filial já reservada para operação local; não troque de PC sem reconciliação.');
+ if(exists&&exists.mode!=='CLOUD')return fail(409,'Filial já reservada ou em reconciliação; não troque de PC antes de concluir todos os ACKs.');
  await db.prepare("INSERT INTO offline_branch_authority(tenant_id,branch_id,gateway_id,epoch,mode,activated_at) VALUES(?,?,?,1,'LOCAL',?) ON CONFLICT(tenant_id,branch_id) DO UPDATE SET gateway_id=excluded.gateway_id,epoch=offline_branch_authority.epoch+1,mode='LOCAL',activated_at=excluded.activated_at")
   .bind(tenantId,gateway.branchId,gatewayId,now).run();
  const active=await db.prepare('SELECT epoch,mode FROM offline_branch_authority WHERE tenant_id=? AND branch_id=?')
@@ -55,9 +55,9 @@ export async function offlineReplayRoute(request,db,env,now=Date.now()){
   return fail(403,'Operação de outra empresa ou filial não autorizada.');
  const recomputed=await sha256(JSON.stringify({method,path,body:JSON.stringify(body),userId:operatorId}));
  if(recomputed!==payloadHash)return fail(409,'Conteúdo da operação foi modificado.');
- const old=await db.prepare('SELECT sequence,mutation_id AS mutationId,payload_hash AS payloadHash FROM offline_replay_receipts WHERE tenant_id=? AND branch_id=? AND (sequence=? OR mutation_id=?)')
-  .bind(gateway.tenantId,gateway.branchId,sequence,mutationId).first();
- if(old)return old.sequence===sequence&&old.mutationId===mutationId&&old.payloadHash===payloadHash?
+ const old=await db.prepare('SELECT epoch,sequence,mutation_id AS mutationId,payload_hash AS payloadHash FROM offline_replay_receipts WHERE tenant_id=? AND branch_id=? AND ((epoch=? AND sequence=?) OR mutation_id=?)')
+  .bind(gateway.tenantId,gateway.branchId,auth.epoch,sequence,mutationId).first();
+ if(old)return old.epoch===auth.epoch&&old.sequence===sequence&&old.mutationId===mutationId&&old.payloadHash===payloadHash?
   reply({acknowledged:true,sequence,payloadHash,repeated:true}):fail(409,'Conflito de sequência ou chave de operação.');
  const operator=await db.prepare('SELECT m.profile_key AS profileKey FROM tenant_memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.user_id=? AND m.active=1 AND u.active=1')
   .bind(gateway.tenantId,operatorId).first();
@@ -83,11 +83,11 @@ export async function offlineReplayRoute(request,db,env,now=Date.now()){
  }
  const result=await actual.text();
  try{
-  await db.prepare('INSERT INTO offline_replay_receipts(tenant_id,branch_id,sequence,mutation_id,payload_hash,result_json,acked_at) VALUES(?,?,?,?,?,?,?)')
-   .bind(gateway.tenantId,gateway.branchId,sequence,mutationId,payloadHash,result,now).run();
+  await db.prepare('INSERT INTO offline_replay_receipts(tenant_id,branch_id,epoch,sequence,mutation_id,payload_hash,result_json,acked_at) VALUES(?,?,?,?,?,?,?,?)')
+   .bind(gateway.tenantId,gateway.branchId,auth.epoch,sequence,mutationId,payloadHash,result,now).run();
  }catch(error){
-  const receipt=await db.prepare('SELECT payload_hash AS hash FROM offline_replay_receipts WHERE tenant_id=? AND branch_id=? AND sequence=? AND mutation_id=?')
-   .bind(gateway.tenantId,gateway.branchId,sequence,mutationId).first();
+  const receipt=await db.prepare('SELECT payload_hash AS hash FROM offline_replay_receipts WHERE tenant_id=? AND branch_id=? AND epoch=? AND sequence=? AND mutation_id=?')
+   .bind(gateway.tenantId,gateway.branchId,auth.epoch,sequence,mutationId).first();
   if(receipt?.hash!==payloadHash)return fail(409,'Conflito no registro de confirmação do D1.');
  }
  return reply({acknowledged:true,sequence,payloadHash});
@@ -112,8 +112,8 @@ export async function offlineReleaseRoute(request,db){
  if(!writer||writer.gatewayId!==gatewayId||writer.epoch!==data.epoch)return fail(409,'Autoridade alterada.');
  if(writer.mode==='CLOUD')return reply({released:true,epoch:writer.epoch,repeated:true});
  if(writer.mode!=='LOCAL')return fail(423,'Filial já em reconciliação.');
- const progress=await db.prepare('SELECT COUNT(*) AS n,COALESCE(MAX(sequence),0) AS latest FROM offline_replay_receipts WHERE tenant_id=? AND branch_id=?')
-  .bind(gateway.tenantId,gateway.branchId).first();
+ const progress=await db.prepare('SELECT COUNT(*) AS n,COALESCE(MAX(sequence),0) AS latest FROM offline_replay_receipts WHERE tenant_id=? AND branch_id=? AND epoch=?')
+  .bind(gateway.tenantId,gateway.branchId,writer.epoch).first();
  if(progress.n!==data.lastSequence||progress.latest!==data.lastSequence)
   return fail(409,'Há operações pendentes ou lacunas no histórico de confirmação.');
  const result=await db.prepare("UPDATE offline_branch_authority SET mode='CLOUD' WHERE tenant_id=? AND branch_id=? AND gateway_id=? AND epoch=? AND mode='LOCAL'")
