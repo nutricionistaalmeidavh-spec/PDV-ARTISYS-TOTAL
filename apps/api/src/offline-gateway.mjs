@@ -87,6 +87,7 @@ export async function offlineGatewayMachineRoute(request,db,env={}){
   const restaurantKitchenTickets=await rows(db,'SELECT * FROM restaurant_kitchen_tickets WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
   const restaurantServiceRequests=await rows(db,'SELECT * FROM restaurant_service_requests WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
   const restaurantSaleLinks=await rows(db,'SELECT * FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantItemTransfers=await rows(db,'SELECT * FROM r4_item_transfers WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
   const splitPlans=await rows(db,'SELECT * FROM r4_split_plans WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
   const cashAdjustments=await rows(db,'SELECT * FROM cash_adjustments WHERE tenant_id=? AND branch_id=? ORDER BY created_at ASC,id ASC',tenantId,branchId);
   const creditReceipts=await rows(db,'SELECT * FROM customer_credit_receipts WHERE tenant_id=? AND branch_id=? ORDER BY received_at ASC,id ASC',tenantId,branchId);
@@ -106,7 +107,8 @@ export async function offlineGatewayMachineRoute(request,db,env={}){
       cash_movements:cashMovements,restaurant_tables:restaurantTables,
       restaurant_table_sessions:restaurantSessions,restaurant_orders:restaurantOrders,
       restaurant_order_items:restaurantOrderItems,restaurant_kitchen_tickets:restaurantKitchenTickets,
-      restaurant_service_requests:restaurantServiceRequests,restaurant_sale_links:restaurantSaleLinks,r4_split_plans:splitPlans,
+      restaurant_service_requests:restaurantServiceRequests,restaurant_sale_links:restaurantSaleLinks,
+      r4_item_transfers:restaurantItemTransfers,r4_split_plans:splitPlans,
       cash_adjustments:cashAdjustments,customer_credit_receipts:creditReceipts,
       r4_table_prepayments:tablePrepayments,r4_table_prepayment_refunds:tablePrepaymentRefunds,
       sale_returns:saleReturns,sale_return_items:saleReturnItems,
