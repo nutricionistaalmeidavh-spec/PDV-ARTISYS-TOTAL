@@ -79,7 +79,12 @@ try{
   await negative.goto(origin+'/app/');
   await negative.locator('#web-email').fill('owner@example.test');
   await negative.locator('#web-password').fill('IncorrectSyntheticPassword2026');
+  // Observe the real rejected POST before moving to another browser context.
+  // Merely awaiting a visible login overlay races the request and can mask failures.
+  const rejected=negative.waitForResponse(response=>
+    new URL(response.url()).pathname==='/api/v1/auth/login');
   await negative.locator('#web-login-form button[type=submit]').click();
+  assert.equal((await rejected).status(),401,'invalid browser login must be rejected');
   await negative.locator('#auth-overlay').waitFor({state:'visible'});
   const wrong=await request('/api/v1/auth/login',{method:'POST',
     body:{email:'owner@example.test',password:'IncorrectSyntheticPassword2026'}});
@@ -91,7 +96,17 @@ try{
     const id=role.toLowerCase();
     const context=await browser.newContext({viewport:{width:390,height:844}});
     const page=await context.newPage();page.setDefaultTimeout(15000);
+    const authResponses=[],requestFailures=[];
     page.on('pageerror',e=>pageErrors.push(role+': '+e.message));
+    page.on('response',response=>{
+      const path=new URL(response.url()).pathname;
+      if(path==='/api/v1/auth/login'||path==='/api/v1/auth/session'||path.endsWith('/context')||path.endsWith('/branches'))
+        authResponses.push({path,status:response.status()});
+    });
+    page.on('requestfailed',req=>{
+      const path=new URL(req.url()).pathname;
+      if(path.startsWith('/api/'))requestFailures.push({path,reason:req.failure()?.errorText||'requestfailed'});
+    });
     await page.goto(origin+'/app/');
     await page.locator('#web-email').fill(id+'@example.test');
     await page.locator('#web-password').fill(password);
@@ -107,10 +122,18 @@ try{
           feedback:document.querySelector('#web-login-feedback')?.textContent?.slice(0,300)||'',
           overlayTitle:document.querySelector('#auth-overlay h1')?.textContent?.slice(0,100)||'',
           runtime:document.body.dataset.runtime||'',
-          route:document.body.dataset.activeRoute||''};
+          route:document.body.dataset.activeRoute||'',
+          formPending:document.querySelector('#web-login-form')?.dataset.pending||'',
+          submitDisabled:document.querySelector('#web-login-form button[type=submit]')?.disabled??null,
+          cookieCount:document.cookie.length>0?1:0,
+          secureContext:window.isSecureContext};
       }).catch(e=>({diagnosticError:e.name}));
       await page.screenshot({path:resolve(artifacts,'QA-00-'+id+'-login-failure.png'),fullPage:true});
+      const stored=await context.cookies(origin);
       throw new Error('Mobile '+engine+' login blocked: '+JSON.stringify(diagnostics)+
+        '; responseStatus='+JSON.stringify(authResponses)+
+        '; requestFailures='+JSON.stringify(requestFailures)+
+        '; cookieNames='+JSON.stringify(stored.map(c=>c.name))+
         '; pageErrors='+JSON.stringify(pageErrors.slice(-5))+'; '+error.message);
     }
     await page.locator('#route-content').getByRole('heading',{name:'Início',exact:true}).waitFor();

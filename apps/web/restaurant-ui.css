@@ -70,3 +70,58 @@
 [data-draft-items]{margin-top:10px}
 [data-draft-line] .restaurant-actions{align-items:center;flex-wrap:nowrap}
 @media(max-width:1050px){.restaurant-form-row{grid-template-columns:1fr}}
+
+
+/* PDV Total: visual restaurant floor map. Extends the canonical restaurant renderer. */
+.restaurant-floor-map{margin-top:18px;padding:12px 4px 4px}
+.restaurant-floor-legend{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:2px 0 16px}
+.restaurant-floor-legend>span{display:inline-flex;gap:7px;align-items:center;color:var(--text-subtle,#60708a);font-size:12px;font-weight:700}
+.restaurant-floor-legend>span:before{content:"";width:9px;height:9px;border-radius:999px;background:#a5bbd9}
+.restaurant-floor-legend>.is-occupied:before{background:#e66c84}
+.restaurant-floor-legend>.is-checkout:before{background:#e6ad43}
+.restaurant-floor-legend strong{color:var(--ink,#10172f)}
+.restaurant-floor-map .restaurant-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:30px 26px;padding:18px 10px 12px}
+.restaurant-floor-map .restaurant-floor-table{--table-bg:#f0f5fd;--table-edge:#ccdaee;--table-ink:#173d73;--table-seat:#cbd9ee;position:relative;display:flex;min-width:0;min-height:200px;padding:0;border:0;background:transparent;border-radius:20px;box-shadow:none;cursor:default;isolation:isolate}
+.restaurant-floor-map .restaurant-floor-table.is-occupied{--table-bg:#fff0f3;--table-edge:#f4a8b8;--table-ink:#a52e4f;--table-seat:#efb8c5}
+.restaurant-floor-map .restaurant-floor-table.is-checkout{--table-bg:#fff8e8;--table-edge:#efcb81;--table-ink:#946019;--table-seat:#e9ce93}
+.restaurant-floor-map .restaurant-floor-table:hover{transform:none;border-color:transparent}
+.restaurant-table-seat{position:absolute;z-index:0;display:block;border:1px solid var(--table-edge);border-radius:11px;background:var(--table-seat);box-shadow:inset 0 -4px 7px rgba(37,68,112,.07)}
+.restaurant-table-seat--top,.restaurant-table-seat--bottom{width:35%;height:22px;left:32.5%}
+.restaurant-table-seat--top{top:-12px}
+.restaurant-table-seat--bottom{bottom:-12px}
+.restaurant-table-seat--left,.restaurant-table-seat--right{width:22px;height:42%;top:29%}
+.restaurant-table-seat--left{left:-12px}
+.restaurant-table-seat--right{right:-12px}
+.restaurant-floor-map .restaurant-floor-face{position:relative;z-index:1;display:flex;flex:1;min-width:0;min-height:200px;flex-direction:column;align-items:stretch;gap:6px;justify-content:space-between;padding:15px 12px 11px;border:2px solid var(--table-edge);border-radius:21px;background:var(--table-bg);box-shadow:0 5px 16px rgba(16,40,85,.06),inset 0 1px 0 rgba(255,255,255,.82);font:inherit;text-align:center;color:var(--ink,#10172f);transition:box-shadow .18s,border-color .18s,transform .18s}
+.restaurant-floor-map button.restaurant-floor-face{cursor:pointer}
+.restaurant-floor-map button.restaurant-floor-face:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(16,40,85,.13)}
+.restaurant-floor-map button.restaurant-floor-face:active{transform:translateY(0)}
+.restaurant-floor-map button.restaurant-floor-face:focus-visible{outline:3px solid var(--artisys-blue,#0b6cff);outline-offset:4px}
+.restaurant-floor-top{display:flex;flex-direction:column;align-items:center;gap:1px;min-height:30px}
+.restaurant-floor-map .restaurant-floor-top strong{display:block;font-size:20px;line-height:1.1;margin:0;color:var(--table-ink);overflow-wrap:anywhere}
+.restaurant-floor-top>span{font-size:10px;font-weight:700;color:var(--text-subtle,#60708a)}
+.restaurant-floor-body{display:flex;flex:1;flex-direction:column;justify-content:center;align-items:center;gap:5px;min-width:0}
+.restaurant-floor-status{display:block;font-size:17px;line-height:1.2;font-weight:800;color:var(--table-ink)}
+.restaurant-floor-items{font-size:12px;font-weight:600;color:var(--text-subtle,#60708a)}
+.restaurant-floor-map .restaurant-floor-total{font-size:20px;line-height:1.2;font-weight:850;color:var(--ink,#10172f);font-variant-numeric:tabular-nums}
+.restaurant-floor-cta{display:block;margin-top:auto;color:var(--table-ink);font-size:11px;line-height:1.2;font-weight:700;opacity:.8}
+@media(max-width:700px){
+ .restaurant-floor-map{padding:8px 0}
+ .restaurant-floor-map .restaurant-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:25px 22px;padding:14px 12px}
+ .restaurant-floor-map .restaurant-floor-table{min-height:168px}
+ .restaurant-floor-map .restaurant-floor-face{min-height:168px;padding:12px 7px 10px}
+ .restaurant-floor-map .restaurant-floor-top strong{font-size:17px}
+ .restaurant-floor-status{font-size:15px}
+ .restaurant-floor-map .restaurant-floor-total{font-size:17px}
+ .restaurant-table-seat--left,.restaurant-table-seat--right{width:16px}
+ .restaurant-table-seat--left{left:-9px}
+ .restaurant-table-seat--right{right:-9px}
+}
+@media(max-width:370px){
+ .restaurant-floor-map .restaurant-grid{gap:22px 18px;padding-inline:8px}
+ .restaurant-floor-map .restaurant-floor-face{padding-inline:5px}
+ .restaurant-floor-map .restaurant-floor-total{font-size:15px}
+}
+@media(prefers-reduced-motion:reduce){
+ .restaurant-floor-map .restaurant-floor-face{transition:none}
+}
