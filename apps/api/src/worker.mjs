@@ -21,6 +21,7 @@ import {r2LanRoute,authorizeLanBusinessRequest,authorizeLanModule} from './r2-la
 import {offlineGatewayAdminRoute,offlineGatewayMachineRoute} from './offline-gateway.mjs';
 import {offlineReplayRoute,offlineReleaseRoute,offlineBranchCloudWriteDenied} from './offline-sync.mjs';
 import {stageOfflineMutation,finishOfflineAuthority} from './offline-outbox.mjs';
+import {offlineMutationIds} from './offline-stable-ids.mjs';
 import legacyAuthorization from '../../../packages/core/js/core/auth/authorization-service.js';
 import legacyProfiles from '../../../packages/core/js/core/auth/default-profiles.js';
 import legacyPrincipals from '../../../packages/core/js/core/auth/principal-resolver.js';
@@ -294,6 +295,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
       // Commerce belongs to the only canonical PDV core and its D1 transaction adapter.
       const commerceMatch=path.match(/^\/api\/v1\/tenants\/([^/]+)\/(.+)$/);
       if(commerceMatch){
+        let offlineReplayContext=null;
         const tenantId=decodeURIComponent(commerceMatch[1]);
         const membership=await requireMembership(db,session.userId,tenantId);
         if(!membership)return failure(404,'Estabelecimento não encontrado ou sem acesso.');
@@ -336,9 +338,15 @@ export function createApi(env,{now=()=>Date.now()}={}){
               .bind(tenantId).first();
             if(replica){
               try{
-                await stageOfflineMutation(db,request,{tenantId,branchId:request.clone?(
+                const staged=await stageOfflineMutation(db,request,{tenantId,branchId:request.clone?(
                   (await request.clone().json().catch(()=>({})))?.branchId||url.searchParams.get('branchId')
                 ):null,userId:session.userId,now:now()});
+                if(commerceMatch[2].startsWith('restaurant/')){
+                  const sourceBody=await request.clone().json();
+                  offlineReplayContext={idFactory:await offlineMutationIds({tenantId,
+                    branchId:sourceBody.branchId,method,path,mutationId:staged.mutationId}),
+                    clock:()=>new Date(staged.createdAt).toISOString()};
+                }
               }catch(error){return failure(error.status||503,error.message||'Operação offline indisponível.');}
             }
           }
@@ -362,7 +370,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
           now:()=>new Date(now()).toISOString()
         });
         if(commerce)return commerce;
-        const vertical=await verticalRoute(request,db,session,membership,tenantId,commerceMatch[2]);
+        const vertical=await verticalRoute(request,db,session,membership,tenantId,commerceMatch[2],offlineReplayContext||{});
         if(vertical)return vertical;
       }
       return failure(404,'Rota não disponível neste estágio da migração.');
