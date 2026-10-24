@@ -20,7 +20,7 @@
     "offline:start": "node scripts/offline-start.mjs",
     "test:offline:setup": "node --test scripts/offline-profile.test.mjs",
     "check:landing": "node --check apps/landing/landing.js && node --check apps/landing/landing-gallery.js && node --check apps/landing/landing-video.js && node --check apps/landing/landing-motion.js && node --check apps/landing/recuperar-senha.js && node --test scripts/public-landing.test.mjs",
-    "test:ux": "node --test scripts/web-navigation.test.mjs scripts/enterprise-web-routes.test.mjs scripts/web-settings-ui.test.mjs",
+    "test:ux": "node --test scripts/web-navigation.test.mjs scripts/enterprise-web-routes.test.mjs scripts/web-settings-ui.test.mjs scripts/restaurant-table-map.test.mjs",
     "test:ux:browser": "node --experimental-sqlite scripts/audit-fixes-browser.mjs && node scripts/recipe-ui-browser.mjs && node scripts/catalog-master-browser.mjs && node scripts/web-settings-browser.mjs && node scripts/peripherals-settings-browser.mjs && node scripts/mobile-print-relay-browser.mjs",
     "test:operations": "node --test scripts/pricing-regression.test.mjs scripts/saas-branch-selection.test.mjs scripts/cloudflare-d1-bootstrap.test.mjs scripts/saas-admin-ui.test.mjs scripts/report-xlsx.test.mjs scripts/offline-profile.test.mjs scripts/offline-failover.test.mjs scripts/offline-pairing.test.mjs scripts/subscription-presentation.test.mjs"
   },
