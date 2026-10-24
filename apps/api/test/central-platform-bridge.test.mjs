@@ -117,7 +117,7 @@ test('production flags persist through Wrangler deploy while legacy admin cutove
  assert.equal(config.vars.ARTISYS_BILLING_ENABLED,'true');
  assert.equal(config.vars.ARTISYS_PLATFORM_BRIDGE_ENABLED,'true');
  assert.equal(config.vars.ARTISYS_PLATFORM_CENTRAL_ENABLED,'false');
- assert.equal(config.vars.REGISTRATION_ENABLED,'false');
+ assert.equal(config.vars.REGISTRATION_ENABLED,'true');
  assert.equal(config.vars.EMAIL_VERIFICATION_REQUIRED,'false');
  assert.equal(config.d1_databases[0].database_name,'pdv-artisys-total');
 });
