@@ -56,6 +56,26 @@ test('versioned summary avoids unchanged 300-product transfer, pages changed cat
  const third=await pullOfflineFast(local,env,{fetcher,pageSize:75});
  assert.ok(third.changed.includes('products'),'triggers detect update even if updated_at did not change');
  assert.equal((await local.prepare('SELECT name FROM products WHERE id=?').bind('product-299').first()).name,'New price label');
+ // Interrupted transfer retains verified pages in local SQLite so a reboot
+ // can resume without re-requesting all prior 75-row batches.
+ const interruptedDb=openLocalDatabase();t.after(()=>interruptedDb.close());
+ await applyLocalMigrations(interruptedDb);
+ let pageCount=0;
+ const dropAfterTwo=async(url,opts)=>{
+  if(new URL(url).pathname.endsWith('/page')&&new URL(url).searchParams.get('table')==='products'){
+   pageCount++;
+   if(pageCount===3)throw Error('WAN_LOST_DURING_PAGE');
+  }
+  return fetcher(url,opts);
+ };
+ await assert.rejects(pullOfflineFast(interruptedDb,env,{fetcher:dropAfterTwo,pageSize:75}),
+  /WAN_LOST_DURING_PAGE/);
+ assert.equal((await interruptedDb.prepare("SELECT COUNT(*) AS n FROM offline_download_pages WHERE table_name='products'").bind().first()).n,2);
+ const resumed=await pullOfflineFast(interruptedDb,env,{fetcher,pageSize:75});
+ assert.ok(resumed.resumedPages>=2,'verified pages survive WAN loss and resume after restart');
+ assert.equal((await interruptedDb.prepare('SELECT COUNT(*) AS n FROM products').bind().first()).n,302);
+ assert.equal((await interruptedDb.prepare('SELECT COUNT(*) AS n FROM offline_download_pages').bind().first()).n,0,
+  'staging removed atomically after successful projection');
  const unauthorized=await call('/api/v1/offline/gateway/summary');
  assert.equal(unauthorized.status,401);
  const foreign=await call('/api/v1/offline/gateway/page?table=products&after=0&limit=50',{
