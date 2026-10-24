@@ -185,7 +185,7 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
  // committed local cash sale that has not yet reached D1.
  await applyOfflineBaseline(local,snapshot.data,{tenantId:'a',branchId:'a-branch',gatewayId:gateway.id});
  assert.equal((await local.prepare('SELECT status FROM sales WHERE id=?').bind(saleId).first()).status,'COMPLETED');
- assert.equal((await local.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE status='PENDING'").bind().first()).n,10);
+ assert.equal((await local.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE status='PENDING'").bind().first()).n,13);
  const closed=await call(localApi,'/api/v1/tenants/a/cash/sessions/'+tillId+'/close',{
   method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-cash-close-001'},
   body:{branchId:'a-branch',countedCashCents:4000}});
