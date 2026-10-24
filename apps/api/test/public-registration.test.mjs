@@ -39,8 +39,12 @@ test('registration atomically creates one pending tenant, owner and branch; appr
 test('duplicate emails receive a generic response and do not create extra tenants',async()=>{
   const x=fixture();
   try {
-    assert.equal((await x.send()).status,202);
-    assert.equal((await x.send()).status,202);
+    const first=await x.send();
+    const repeated=await x.send();
+    assert.equal(first.status,202);
+    assert.equal(repeated.status,202);
+    assert.deepEqual(await repeated.json(),await first.json(),
+      'duplicate e-mail must not be discoverable from the signup response');
     assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM tenants').bind().first()).n,1);
   }finally{x.close();}
 });
@@ -74,7 +78,9 @@ test('production auth flag disables registration before database writes',async()
 test('bot honeypot does not provision identity records',async()=>{
   const x=fixture();
   try{
-    assert.equal((await x.send({...valid,website:'bot.example'})).status,202);
+    const response=await x.send({...valid,website:'bot.example'});
+    assert.equal(response.status,202);
+    assert.equal((await response.json()).status,'pending-approval');
     assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM users').bind().first()).n,0);
   }finally{x.close();}
 });
