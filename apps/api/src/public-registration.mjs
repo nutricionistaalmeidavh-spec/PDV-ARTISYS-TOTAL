@@ -89,11 +89,11 @@ export async function registerPublicAccount(request,env,db,now){
       await sendTransactionalEmail(env,{
         to:email,
         subject:'Seu teste grátis começou | PDV Total ArtiSys',
-        text:'Seu estabelecimento '+businessName+' já pode usar o PDV Total.\\n\\n'
-          +'Seus 14 dias de teste grátis começaram agora. Entre com o e-mail e a senha criados no cadastro:\\n'
-          +appUrl+'\\n\\nO teste termina em '
+        text:'Seu estabelecimento '+businessName+' já pode usar o PDV Total.\n\n'
+          +'Seus 14 dias de teste grátis começaram agora. Entre com o e-mail e a senha criados no cadastro:\n'
+          +appUrl+'\n\nO teste termina em '
           +new Date(trialEndsAt).toLocaleDateString('pt-BR',{timeZone:'UTC'})
-          +'.\\n\\nSe não reconhece este cadastro, entre em contato com a ArtiSys.'
+          +'.\n\nSe não reconhece este cadastro, entre em contato com a ArtiSys.'
       });
     }catch{
       // No credential, token or provider failure details are disclosed.
