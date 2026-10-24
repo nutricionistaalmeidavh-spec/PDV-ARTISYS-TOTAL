@@ -5,35 +5,36 @@ import {openLocalDatabase} from '../src/local-db.mjs';
 import {createApi} from '../src/worker.mjs';
 const schema=readFileSync(new URL('../migrations/0001_identity.sql',import.meta.url),'utf8');
 const signupSchema=readFileSync(new URL('../migrations/0030_public_registration.sql',import.meta.url),'utf8');
+const saasSchema=readFileSync(new URL('../migrations/0031_saas_access.sql',import.meta.url),'utf8');
 const origin='https://pdvtotal.example.test',now=Date.parse('2026-10-19T14:00:00Z');
 const valid={displayName:'Ana Silva',businessName:'Restaurante Ana',email:'ana@example.com',password:'SenhaLongaSegura2026!'};
 function fixture(vars={AUTH_ENABLED:'true',REGISTRATION_ENABLED:'true',TRUST_CF_CONNECTING_IP:'true'}){
   const db=openLocalDatabase();
-  db.exec(schema);db.exec(signupSchema);
+  db.exec(schema);db.exec(signupSchema);db.exec(saasSchema);
   const api=createApi({DB:db,...vars},{now:()=>now});
   const send=(payload=valid,ip='203.0.113.5')=>api.fetch(new Request(origin+'/api/v1/auth/register',{
     method:'POST',headers:{origin,'content-type':'application/json','cf-connecting-ip':ip},body:JSON.stringify(payload)
   }));
   return {db,api,send,close:()=>db.close()};
 }
-test('registration atomically creates one pending tenant, owner and branch; approval unlocks existing login',async()=>{
+test('registration atomically activates scoped tenant, owner and 14-day trial without review',async()=>{
   const x=fixture();
   try {
     const out=await x.send();
     assert.equal(out.status,202);
-    assert.equal((await out.json()).status,'pending-approval');
+    assert.equal((await out.json()).status,'trial-ready');
     const user=await x.db.prepare('SELECT id,email_norm AS email FROM users').bind().first();
     const tenant=await x.db.prepare('SELECT id,name,active FROM tenants').bind().first();
     const member=await x.db.prepare('SELECT active,profile_key AS profile FROM tenant_memberships').bind().first();
     const branch=await x.db.prepare('SELECT tenant_id AS tenantId,code FROM branches').bind().first();
     assert.equal(user.email,'ana@example.com');assert.equal(tenant.name,'Restaurante Ana');
-    assert.equal(tenant.active,0);assert.equal(member.profile,'OWNER');assert.equal(member.active,0);
+    assert.equal(tenant.active,1);assert.equal(member.profile,'OWNER');assert.equal(member.active,1);
     assert.equal(branch.tenantId,tenant.id);assert.equal(branch.code,'MAIN');
     const login=()=>x.api.fetch(new Request(origin+'/api/v1/auth/login',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({email:valid.email,password:valid.password})}));
-    assert.equal((await login()).status,403);
-    await x.db.prepare('UPDATE tenants SET active=1 WHERE id=?').bind(tenant.id).run();
-    await x.db.prepare('UPDATE tenant_memberships SET active=1 WHERE tenant_id=?').bind(tenant.id).run();
     assert.equal((await login()).status,200);
+    const trial=await x.db.prepare('SELECT status,plan_key AS planKey,ends_at AS endsAt FROM saas_subscriptions WHERE tenant_id=?').bind(tenant.id).first();
+    assert.equal(trial.status,'TRIAL');assert.equal(trial.planKey,'trial');
+    assert.equal(trial.endsAt,new Date(now+14*86400000).toISOString());
   }finally{x.close();}
 });
 test('duplicate emails receive a generic response and do not create extra tenants',async()=>{
@@ -80,7 +81,7 @@ test('bot honeypot does not provision identity records',async()=>{
   try{
     const response=await x.send({...valid,website:'bot.example'});
     assert.equal(response.status,202);
-    assert.equal((await response.json()).status,'pending-approval');
+    assert.equal((await response.json()).status,'trial-ready');
     assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM users').bind().first()).n,0);
   }finally{x.close();}
 });
