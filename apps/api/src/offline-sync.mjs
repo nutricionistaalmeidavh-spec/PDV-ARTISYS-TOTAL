@@ -112,9 +112,11 @@ export async function offlineReleaseRoute(request,db){
  if(!writer||writer.gatewayId!==gatewayId||writer.epoch!==data.epoch)return fail(409,'Autoridade alterada.');
  if(writer.mode==='CLOUD')return reply({released:true,epoch:writer.epoch,repeated:true});
  if(writer.mode!=='LOCAL')return fail(423,'Filial já em reconciliação.');
- const progress=await db.prepare('SELECT COUNT(*) AS n,COALESCE(MAX(sequence),0) AS latest FROM offline_replay_receipts WHERE tenant_id=? AND branch_id=? AND epoch=?')
+ const progress=await db.prepare('SELECT COUNT(*) AS n,COALESCE(MIN(sequence),0) AS earliest,COALESCE(MAX(sequence),0) AS latest FROM offline_replay_receipts WHERE tenant_id=? AND branch_id=? AND epoch=?')
   .bind(gateway.tenantId,gateway.branchId,writer.epoch).first();
- if(progress.n!==data.lastSequence||progress.latest!==data.lastSequence)
+ if((progress.n===0&&data.lastSequence!==0)||
+    (progress.n>0&&(progress.latest!==data.lastSequence||
+      progress.n!==progress.latest-progress.earliest+1)))
   return fail(409,'Há operações pendentes ou lacunas no histórico de confirmação.');
  const result=await db.prepare("UPDATE offline_branch_authority SET mode='CLOUD' WHERE tenant_id=? AND branch_id=? AND gateway_id=? AND epoch=? AND mode='LOCAL'")
   .bind(gateway.tenantId,gateway.branchId,gatewayId,writer.epoch).run();
