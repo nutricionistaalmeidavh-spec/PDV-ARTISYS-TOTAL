@@ -11,6 +11,7 @@ CREATE TABLE offline_branch_authority (
 CREATE TABLE offline_replay_grants(
  tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,mutation_id TEXT NOT NULL,
  gateway_id TEXT NOT NULL,epoch INTEGER NOT NULL,payload_hash TEXT NOT NULL,
+ entity_id TEXT,
  created_at INTEGER NOT NULL,
  PRIMARY KEY(tenant_id,branch_id,mutation_id)
 );
@@ -59,7 +60,9 @@ WHEN EXISTS(
  WHERE p.tenant_id=NEW.tenant_id AND p.mutation_id=NEW.mutation_id
  AND a.mode='LOCAL' AND
   (NEW.scope IN('inventory.receipt:'||p.branch_id,'inventory.adjust:'||p.branch_id)
-   OR (p.path LIKE '/api/v1/tenants/%/restaurant/%' AND NEW.scope LIKE 'restaurant.%'))
+   OR (p.path LIKE '/api/v1/tenants/%/restaurant/%' AND NEW.scope LIKE 'restaurant.%')
+   OR (p.path LIKE '/api/v1/tenants/%/sales%' AND NEW.scope LIKE 'sale.%')
+   OR (p.path LIKE '/api/v1/tenants/%/cash/%' AND NEW.scope LIKE 'cash.%'))
 )
 BEGIN
  INSERT INTO offline_outbox(tenant_id,branch_id,gateway_id,epoch,mutation_id,
@@ -87,8 +90,27 @@ AND NOT EXISTS (
 BEGIN SELECT RAISE(ABORT,'OFFLINE_BRANCH_FENCED'); END;
 -- Other ledger writes do not have a replay path yet. Block them in D1 while
 -- this branch is under local authority (fail closed rather than split-brain).
+-- Only the exact deterministic sale UUID pre-authorized by the machine replay
+-- can cross the branch lock. Browser/cloud sales use random IDs, so they are fenced.
 CREATE TRIGGER offline_fence_sales
 BEFORE INSERT ON sales
 WHEN EXISTS(SELECT 1 FROM offline_branch_authority a
  WHERE a.tenant_id=NEW.tenant_id AND a.branch_id=NEW.branch_id AND a.mode IN('LOCAL','RECONCILING'))
+ AND NOT EXISTS(
+ SELECT 1 FROM offline_replay_grants g JOIN offline_branch_authority a
+ ON a.tenant_id=g.tenant_id AND a.branch_id=g.branch_id
+ WHERE g.tenant_id=NEW.tenant_id AND g.branch_id=NEW.branch_id
+ AND g.entity_id=NEW.id AND g.epoch=a.epoch AND g.gateway_id=a.gateway_id
+ )
+BEGIN SELECT RAISE(ABORT,'OFFLINE_BRANCH_FENCED'); END;
+CREATE TRIGGER offline_fence_cash_open
+BEFORE INSERT ON cash_sessions
+WHEN EXISTS(SELECT 1 FROM offline_branch_authority a
+ WHERE a.tenant_id=NEW.tenant_id AND a.branch_id=NEW.branch_id AND a.mode IN('LOCAL','RECONCILING'))
+ AND NOT EXISTS(
+ SELECT 1 FROM offline_replay_grants g JOIN offline_branch_authority a
+ ON a.tenant_id=g.tenant_id AND a.branch_id=g.branch_id
+ WHERE g.tenant_id=NEW.tenant_id AND g.branch_id=NEW.branch_id
+ AND g.entity_id=NEW.id AND g.epoch=a.epoch AND g.gateway_id=a.gateway_id
+ )
 BEGIN SELECT RAISE(ABORT,'OFFLINE_BRANCH_FENCED'); END;
