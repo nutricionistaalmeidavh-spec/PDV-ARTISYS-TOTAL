@@ -88,13 +88,13 @@ export async function offlineGatewayMachineRoute(request,db,env={}){
   const restaurantServiceRequests=await rows(db,'SELECT * FROM restaurant_service_requests WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
   const restaurantSaleLinks=await rows(db,'SELECT * FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
   const splitPlans=await rows(db,'SELECT * FROM r4_split_plans WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
-  const cashAdjustments=await rows(db,'SELECT * FROM cash_adjustments WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
-  const creditReceipts=await rows(db,'SELECT * FROM customer_credit_receipts WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
-  const tablePrepayments=await rows(db,'SELECT * FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
-  const tablePrepaymentRefunds=await rows(db,'SELECT * FROM r4_table_prepayment_refunds WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const cashAdjustments=await rows(db,'SELECT * FROM cash_adjustments WHERE tenant_id=? AND branch_id=? ORDER BY created_at ASC,id ASC',tenantId,branchId);
+  const creditReceipts=await rows(db,'SELECT * FROM customer_credit_receipts WHERE tenant_id=? AND branch_id=? ORDER BY received_at ASC,id ASC',tenantId,branchId);
+  const tablePrepayments=await rows(db,'SELECT * FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? ORDER BY received_at ASC,id ASC',tenantId,branchId);
+  const tablePrepaymentRefunds=await rows(db,'SELECT * FROM r4_table_prepayment_refunds WHERE tenant_id=? AND branch_id=? ORDER BY refunded_at ASC,id ASC',tenantId,branchId);
   const saleReturns=await rows(db,'SELECT * FROM sale_returns WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
   const saleReturnItems=await rows(db,'SELECT * FROM sale_return_items WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
-  const saleRefundMovements=await rows(db,'SELECT * FROM sale_refund_movements WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const saleRefundMovements=await rows(db,'SELECT * FROM sale_refund_movements WHERE tenant_id=? AND branch_id=? ORDER BY created_at ASC,id ASC',tenantId,branchId);
 
   const authority=await db.prepare('SELECT epoch,mode,gateway_id AS gatewayId FROM offline_branch_authority WHERE tenant_id=? AND branch_id=?').bind(tenantId,branchId).first();
   // No auth sessions, SaaS license secrets, payments, cash or sales copied.
