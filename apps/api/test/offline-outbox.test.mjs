@@ -95,6 +95,26 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
  const resumed=await call(cloudApi,'/api/v1/tenants/a/inventory/receipts',{method:'POST',cookie:owner,
   headers:{'x-mutation-id':'cloud-after-handoff-001'},body:{branchId:'a-branch',productId:'a-product',quantity:1}});
  assert.equal(resumed.status,201,'normal SaaS writers resume only after complete release');
+ // Reuse the same authorized PC for a second offline period: its SQLite
+ // AUTOINCREMENT sequence must not block return-to-cloud in a new epoch.
+ const secondActivation=await call(cloudApi,'/api/v1/tenants/a/offline/gateways/'+gateway.id+'/activate',{
+   method:'POST',cookie:owner,body:{}});
+ assert.equal(secondActivation.status,200,JSON.stringify(secondActivation.data));
+ assert.ok(secondActivation.data.epoch>activate.data.epoch);
+ const secondSnapshot=await call(cloudApi,'/api/v1/offline/gateway/snapshot',{
+   headers:{authorization:'Bearer '+credential,'x-pdv-offline-gateway-id':gateway.id}});
+ assert.equal(secondSnapshot.status,200);
+ await applyOfflineBaseline(local,secondSnapshot.data,{tenantId:'a',branchId:'a-branch',gatewayId:gateway.id});
+ const next=await call(localApi,'/api/v1/tenants/a/inventory/receipts',{
+   ...request,headers:{...deviceHeaders,'x-mutation-id':'offline-receipt-003'},
+   body:{branchId:'a-branch',productId:'a-product',quantity:2}});
+ assert.equal(next.status,201,JSON.stringify(next.data));
+ const secondRelease=await finishOfflineAuthority(local,{
+  OFFLINE_CLOUD_ORIGIN:origin+'/',OFFLINE_GATEWAY_ID:gateway.id,
+  OFFLINE_GATEWAY_TOKEN:credential},{fetcher});
+ assert.equal(secondRelease.released,true,'second offline authority epoch must reconcile');
+ assert.equal((await cloud.prepare('SELECT balance_milli AS n FROM stock_positions WHERE tenant_id=? AND branch_id=? AND product_id=?')
+   .bind('a','a-branch','a-product').first()).n,10000);
 });
 
 test('a new authorized gateway epoch may reuse sequence 1 without colliding with an earlier completed offline session',async t=>{
