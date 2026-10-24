@@ -71,12 +71,34 @@ export async function offlineGatewayMachineRoute(request,db,env={}){
   const productCategories=await rows(db,'SELECT * FROM product_categories WHERE tenant_id=?',tenantId);
   const products=await rows(db,'SELECT * FROM products WHERE tenant_id=? ORDER BY CASE WHEN parent_product_id IS NULL THEN 0 ELSE 1 END,id',tenantId);
   const stockPositions=await rows(db,'SELECT * FROM stock_positions WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  // Read-only canonical restaurant & tender baseline. All branch-scoped
+  // queries are parameterized; never include records belonging to another tenant.
+  // An oversized branch fails closed instead of silently truncating dependencies.
+  const customers=await rows(db,'SELECT * FROM customers WHERE tenant_id=?',tenantId);
+  const cashSessions=await rows(db,'SELECT * FROM cash_sessions WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const sales=await rows(db,'SELECT * FROM sales WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const saleItems=await rows(db,'SELECT * FROM sale_items WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const salePayments=await rows(db,'SELECT * FROM sale_payments WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const cashMovements=await rows(db,'SELECT * FROM cash_movements WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantTables=await rows(db,'SELECT * FROM restaurant_tables WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantSessions=await rows(db,'SELECT * FROM restaurant_table_sessions WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantOrders=await rows(db,'SELECT * FROM restaurant_orders WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantOrderItems=await rows(db,'SELECT * FROM restaurant_order_items WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantKitchenTickets=await rows(db,'SELECT * FROM restaurant_kitchen_tickets WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantServiceRequests=await rows(db,'SELECT * FROM restaurant_service_requests WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantSaleLinks=await rows(db,'SELECT * FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+
   const authority=await db.prepare('SELECT epoch,mode,gateway_id AS gatewayId FROM offline_branch_authority WHERE tenant_id=? AND branch_id=?').bind(tenantId,branchId).first();
   // No auth sessions, SaaS license secrets, payments, cash or sales copied.
   return json({version:1,scope:{tenantId,branchId,gatewayId},baselineOnly:true,
     authority:authority&&authority.gatewayId===gatewayId?{mode:authority.mode,epoch:authority.epoch}:{mode:'CLOUD',epoch:0},
     createdAt:new Date().toISOString(),tables:{tenants:[tenant],branches,users,
-      tenant_memberships:memberships,saas_mfa_totp:offlineMfa,product_categories:productCategories,products,stock_positions:stockPositions}});
+      tenant_memberships:memberships,saas_mfa_totp:offlineMfa,product_categories:productCategories,products,stock_positions:stockPositions,
+      customers,cash_sessions:cashSessions,sales,sale_items:saleItems,sale_payments:salePayments,
+      cash_movements:cashMovements,restaurant_tables:restaurantTables,
+      restaurant_table_sessions:restaurantSessions,restaurant_orders:restaurantOrders,
+      restaurant_order_items:restaurantOrderItems,restaurant_kitchen_tickets:restaurantKitchenTickets,
+      restaurant_service_requests:restaurantServiceRequests,restaurant_sale_links:restaurantSaleLinks}});
  }catch(error){
   return bad(error.status===413?413:503,'Não foi possível criar a cópia. Operações offline bloqueadas.');
  }
