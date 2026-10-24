@@ -2,6 +2,7 @@ import {sha256} from './password.mjs';
 import {commerceRoute} from './commerce-router.mjs';
 import {verticalRoute} from './vertical-router.mjs';
 import {offlineMutationIds} from './offline-stable-ids.mjs';
+import {offlineLinkedCheckoutAllowed} from './offline-linked-checkout.mjs';
 import {tenantWriteAllowed} from './saas-control.mjs';
 const reply=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const fail=(status,s)=>reply({error:s},status);
@@ -60,9 +61,10 @@ export async function offlineReplayRoute(request,db,env,now=Date.now()){
   (!Array.isArray(body.payments)||!body.payments.length||
   body.payments.some(p=>p?.method!=='CASH'||!Number.isSafeInteger(p.amountCents)||p.amountCents<=0)||
   body.shares||body.storeCredit||body.customerId))return fail(403,'Somente dinheiro físico é permitido offline.');
- if(cashOperation&&operation==='sales'&&
-  [body.restaurantSessionId,body.restaurantOrderId,body.wholesaleOrderId].some(Boolean))
-  return fail(403,'A liquidação de comandas exige reconciliação completa.');
+ if(cashOperation&&operation==='sales'){
+  try{await offlineLinkedCheckoutAllowed(db,gateway.tenantId,gateway.branchId,body);}
+  catch(error){return fail(error.status||403,'Comanda não elegível para liquidação segura no caixa offline.');}
+ }
  if(parsed[1]!==gateway.tenantId||body.branchId!==gateway.branchId||
   (method==='PATCH'&&!/\/restaurant\/kitchen\/[a-zA-Z0-9-]+$/.test(path))||
   (method==='POST'&&/\/restaurant\/kitchen\//.test(path))||

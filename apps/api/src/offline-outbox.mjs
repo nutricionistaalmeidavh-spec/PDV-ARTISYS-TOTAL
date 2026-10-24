@@ -1,4 +1,5 @@
 import {sha256} from './password.mjs';
+import {offlineLinkedCheckoutAllowed} from './offline-linked-checkout.mjs';
 
 // Only canonical inventory mutations with a durable commerce_mutations audit are
 // permitted in this first transactional replay protocol. Never queue an
@@ -37,9 +38,8 @@ export async function stageOfflineMutation(db,request,{tenantId,branchId,userId,
  // or a sale that predates the current offline authority epoch.
  if(CASH_PATH.test(path.split('/').slice(5).join('/'))){
    if(!allowCash)throw Object.assign(Error('Caixa offline não habilitado.'),{status:403});
-   if(/\/sales$/.test(path)&&
-     [body.restaurantSessionId,body.restaurantOrderId,body.wholesaleOrderId].some(Boolean))
-     throw Object.assign(Error('Comandas, entregas e crediário exigem conferência no online antes da liquidação.'),{status:403});
+   if(/\/sales$/.test(path))
+     await offlineLinkedCheckoutAllowed(db,tenantId,branchId,body);
    if(/\/complete$/.test(path)){
      if(!Array.isArray(body.payments)||body.payments.length<1||
         body.payments.some(p=>p?.method!=='CASH'||!Number.isSafeInteger(p.amountCents)||p.amountCents<=0)||
