@@ -78,10 +78,16 @@ test('versioned summary avoids unchanged 300-product transfer, pages changed cat
  assert.equal((await interruptedDb.prepare('SELECT COUNT(*) AS n FROM offline_download_pages').bind().first()).n,0,
   'staging removed atomically after successful projection');
  await cloud.prepare('DELETE FROM products WHERE id=? AND tenant_id=?').bind('product-298','fast').run();
- await assert.rejects(pullOfflineFast(local,env,{fetcher,pageSize:75}),/Exclusão ou divergência/,
-   'canonical deletion must not silently leave stale products locally');
- assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM products WHERE tenant_id=?').bind('fast').first()).n,302,
-   'failed snapshot rolls back and preserves previous coherent local dataset');
+ const removed=await pullOfflineFast(local,env,{fetcher,pageSize:75});
+ assert.ok(removed.changed.includes('products'),'canonical deletion must increment the product revision');
+ assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM products WHERE tenant_id=?').bind('fast').first()).n,301,
+   'safe cloud deletion must not leave stale catalog rows in local SQLite');
+ assert.equal((await local.prepare('SELECT id FROM products WHERE id=?').bind('product-298').first()),null,
+   'deleted product must disappear only after a fully verified dataset transfer');
+ observations.length=0;
+ const unchangedAfterDeletion=await pullOfflineFast(local,env,{fetcher,pageSize:75});
+ assert.equal(unchangedAfterDeletion.changed.includes('products'),false,'committed deletion must retain its revision');
+ assert.equal(observations.filter(x=>x.table==='products').length,0,'unchanged catalog must fetch zero pages');
  const unauthorized=await call('/api/v1/offline/gateway/summary');
  assert.equal(unauthorized.status,401);
  const foreign=await call('/api/v1/offline/gateway/page?table=products&after=0&limit=50',{
