@@ -99,7 +99,7 @@ export async function authorizeLanModule(db,tenantId,path,{useDefaults=true}={})
   return null;
 }
 
-export async function r2LanRoute(request,db,session,member,tenantId,path,{now=()=>Date.now()}={}){
+export async function r2LanRoute(request,db,session,member,tenantId,path,{now=()=>Date.now(),offlineCashEnabled=false}={}){
   if(!path.startsWith('lan/'))return null;
   const method=request.method,parts=path.split('/'),owner=isAdmin(member);
   const instant=now();
@@ -118,6 +118,7 @@ export async function r2LanRoute(request,db,session,member,tenantId,path,{now=()
             const backlog=await db.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE tenant_id=? AND status IN('PENDING','CONFLICT')").bind(tenantId).first();
             return {state:state.state,cloudLinked:true,lastCloudSyncAt:state.lastPull,
               commercialWritesEnabled:false,inventoryOfflineEnabled:writer?.mode==='LOCAL',
+              restaurantOfflineEnabled:writer?.mode==='LOCAL',cashOfflineEnabled:offlineCashEnabled&&writer?.mode==='LOCAL',
               writerMode:writer?.mode||'CLOUD',epoch:writer?.epoch||0,pendingOperations:backlog.n};
           }
           return {state:'NOT_CONFIGURED',cloudLinked:false,lastCloudSyncAt:null,commercialWritesEnabled:false};
