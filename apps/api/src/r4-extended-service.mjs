@@ -1,8 +1,7 @@
 // R4 additive tenant+branch facade. Operational records are never a second cash/stock ledger.
 import {planShares,parseWeightedEAN13} from './r4-saas-rules.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
-const stamp=()=>new Date().toISOString();
-const id=()=>crypto.randomUUID();
+
 const keyValid=key=>typeof key==='string'&&/^[A-Za-z0-9_-]{8,100}$/.test(key);
 const label=(value,max=100)=>typeof value==='string'?value.trim().slice(0,max):'';
 const integer=(v,min,max,caption)=>{
@@ -19,7 +18,9 @@ const options=(values,kind,required)=>{
  });
 };
 
-export function createR4ExtendedService(db){
+export function createR4ExtendedService(db,{idFactory,clock}={}){
+ const id=idFactory||(()=>crypto.randomUUID());
+ const stamp=clock||(()=>new Date().toISOString());
  const q=(sql,...args)=>db.prepare(sql).bind(...args);
  const first=(sql,...args)=>q(sql,...args).first();
  const all=async(sql,...args)=>(await q(sql,...args).all()).results;

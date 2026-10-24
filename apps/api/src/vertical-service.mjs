@@ -7,8 +7,7 @@ import {localTicketDay} from './r4-saas-rules.mjs';
 const {calculateSaleTotals}=canonicalPricing;
 const {roundQuantity}=inventoryRules;
 const err=(status,message)=>Object.assign(new Error(message),{status});
-const uuid=()=>crypto.randomUUID();
-const now=()=>new Date().toISOString();
+
 const clean=(x,max=150)=>typeof x==='string'?x.trim().slice(0,max):'';
 const cents=(x,label='Valor')=>{
  if(!Number.isSafeInteger(x)||x<0||x>1_000_000_000)throw err(400,label+' inválido.');
@@ -22,7 +21,9 @@ const qty=(x)=>{
 };
 const keyOK=key=>typeof key==='string'&&/^[a-zA-Z0-9_-]{8,100}$/.test(key);
 
-export function createVerticalService(db){
+export function createVerticalService(db,{idFactory,clock}={}){
+ const uuid=idFactory||(()=>crypto.randomUUID());
+ const now=clock||(()=>new Date().toISOString());
  const q=(sql,...args)=>db.prepare(sql).bind(...args);
  const first=(sql,...args)=>q(sql,...args).first();
  const all=async(sql,...args)=>(await q(sql,...args).all()).results;

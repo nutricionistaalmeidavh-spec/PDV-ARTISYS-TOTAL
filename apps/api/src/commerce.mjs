@@ -31,7 +31,7 @@ const canonicalTerminalId=(raw)=>{
   return id;
 };
 const nowISO=()=>new Date().toISOString();
-const randomId=()=>crypto.randomUUID();
+
 const error=(status,message)=>Object.assign(new Error(message),{status});
 const allowedPayments=new Set(['CASH','PIX','DEBIT_CARD','CREDIT_CARD','OTHER','STORE_CREDIT']);
 const validKey=value=>typeof value==='string'&&/^[a-zA-Z0-9_-]{8,100}$/.test(value);
@@ -99,7 +99,8 @@ function formatSale(sale,items=[],payments=[]){
   };
 }
 
-export function createCommerceService(db,{now=nowISO}={}){
+export function createCommerceService(db,{now=nowISO,idFactory}={}){
+ const randomId=idFactory||(()=>crypto.randomUUID());
   const q=(sql,...params)=>db.prepare(sql).bind(...params);
   const first=(sql,...params)=>q(sql,...params).first();
   const all=async(sql,...params)=>(await q(sql,...params).all()).results;

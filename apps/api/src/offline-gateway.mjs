@@ -1,6 +1,8 @@
 // Opt-in Cloudflare -> local PC read-only baseline; never a sale-sync endpoint.
 // Machine credentials and password hashes must never enter browser JS or logs.
 import {newSessionToken,sha256} from './password.mjs';
+import {activateOfflineBranch} from './offline-sync.mjs';
+import {exportOfflineMfa} from './account-security.mjs';
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{
  'content-type':'application/json; charset=utf-8','cache-control':'no-store',
  'x-content-type-options':'nosniff','referrer-policy':'no-referrer'}});
@@ -30,6 +32,8 @@ export async function offlineGatewayAdminRoute(request,db,member,session,tenantI
   return json({gateway:{id,tenantId,branchId,label},credential,
    note:'Guarde o segredo somente no servidor local. A cópia atual é somente leitura; operações comerciais não são sincronizadas.'},201);
  }
+ const activate=/^offline\/gateways\/([0-9a-zA-Z-]{1,128})\/activate$/.exec(path);
+ if(activate&&request.method==='POST')return activateOfflineBranch(db,tenantId,activate[1],now);
  const revoke=/^offline\/gateways\/([0-9a-zA-Z-]{1,128})$/.exec(path);
  if(revoke&&request.method==='DELETE'){
   const result=await db.prepare('UPDATE offline_gateways SET active=0,revoked_at=? WHERE id=? AND tenant_id=? AND active=1')
@@ -54,12 +58,10 @@ export async function offlineGatewayMachineRoute(request,db,env={}){
   const tenant=await db.prepare('SELECT id,slug,name,active,created_at FROM tenants WHERE id=?').bind(tenantId).first();
   const branches=await rows(db,'SELECT id,tenant_id,code,name,active,created_at FROM branches WHERE tenant_id=? AND id=?',tenantId,branchId);
   const memberships=await rows(db,'SELECT tenant_id,user_id,profile_key,active,created_at FROM tenant_memberships WHERE tenant_id=?',tenantId);
-  // Only associated users. Password hashes are machine-only and never logged.
-  // Enrolled MFA is not safely portable without TOTP key material. Fail closed:
-  // never convert an MFA-protected SaaS account into password-only local login.
-  const protectedUsers=await db.prepare('SELECT COUNT(*) AS n FROM saas_mfa_totp t JOIN tenant_memberships m ON m.user_id=t.user_id WHERE m.tenant_id=? AND t.enrolled_at IS NOT NULL')
-    .bind(tenantId).first();
-  if(protectedUsers?.n>0)return bad(412,'Há conta com MFA ativo. Autenticação MFA local ainda não homologada.');
+  // Rewrap enrolled MFA per authorized gateway; do not export platform keys.
+  let offlineMfa;
+  try{offlineMfa=await exportOfflineMfa(db,env,tenantId,match[1]);}
+  catch{return bad(412,'MFA não pode ser disponibilizado com segurança ao gateway.');}
   if(env.EMAIL_VERIFICATION_REQUIRED==='true'){
     const unverified=await db.prepare('SELECT COUNT(*) AS n FROM users u JOIN tenant_memberships m ON m.user_id=u.id WHERE m.tenant_id=? AND u.active=1 AND u.email_verified_at IS NULL')
       .bind(tenantId).first();
@@ -69,10 +71,46 @@ export async function offlineGatewayMachineRoute(request,db,env={}){
   const productCategories=await rows(db,'SELECT * FROM product_categories WHERE tenant_id=?',tenantId);
   const products=await rows(db,'SELECT * FROM products WHERE tenant_id=? ORDER BY CASE WHEN parent_product_id IS NULL THEN 0 ELSE 1 END,id',tenantId);
   const stockPositions=await rows(db,'SELECT * FROM stock_positions WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  // Read-only canonical restaurant & tender baseline. All branch-scoped
+  // queries are parameterized; never include records belonging to another tenant.
+  // An oversized branch fails closed instead of silently truncating dependencies.
+  const customers=await rows(db,'SELECT * FROM customers WHERE tenant_id=?',tenantId);
+  const cashSessions=await rows(db,'SELECT * FROM cash_sessions WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const sales=await rows(db,'SELECT * FROM sales WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const saleItems=await rows(db,'SELECT * FROM sale_items WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const salePayments=await rows(db,'SELECT * FROM sale_payments WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const cashMovements=await rows(db,'SELECT * FROM cash_movements WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantTables=await rows(db,'SELECT * FROM restaurant_tables WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantSessions=await rows(db,'SELECT * FROM restaurant_table_sessions WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantOrders=await rows(db,'SELECT * FROM restaurant_orders WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantOrderItems=await rows(db,'SELECT * FROM restaurant_order_items WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantKitchenTickets=await rows(db,'SELECT * FROM restaurant_kitchen_tickets WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantServiceRequests=await rows(db,'SELECT * FROM restaurant_service_requests WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const restaurantSaleLinks=await rows(db,'SELECT * FROM restaurant_sale_links WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const splitPlans=await rows(db,'SELECT * FROM r4_split_plans WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const cashAdjustments=await rows(db,'SELECT * FROM cash_adjustments WHERE tenant_id=? AND branch_id=? ORDER BY created_at ASC,id ASC',tenantId,branchId);
+  const creditReceipts=await rows(db,'SELECT * FROM customer_credit_receipts WHERE tenant_id=? AND branch_id=? ORDER BY received_at ASC,id ASC',tenantId,branchId);
+  const tablePrepayments=await rows(db,'SELECT * FROM r4_table_prepayments WHERE tenant_id=? AND branch_id=? ORDER BY received_at ASC,id ASC',tenantId,branchId);
+  const tablePrepaymentRefunds=await rows(db,'SELECT * FROM r4_table_prepayment_refunds WHERE tenant_id=? AND branch_id=? ORDER BY refunded_at ASC,id ASC',tenantId,branchId);
+  const saleReturns=await rows(db,'SELECT * FROM sale_returns WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const saleReturnItems=await rows(db,'SELECT * FROM sale_return_items WHERE tenant_id=? AND branch_id=?',tenantId,branchId);
+  const saleRefundMovements=await rows(db,'SELECT * FROM sale_refund_movements WHERE tenant_id=? AND branch_id=? ORDER BY created_at ASC,id ASC',tenantId,branchId);
+
+  const authority=await db.prepare('SELECT epoch,mode,gateway_id AS gatewayId FROM offline_branch_authority WHERE tenant_id=? AND branch_id=?').bind(tenantId,branchId).first();
   // No auth sessions, SaaS license secrets, payments, cash or sales copied.
   return json({version:1,scope:{tenantId,branchId,gatewayId},baselineOnly:true,
+    authority:authority&&authority.gatewayId===gatewayId?{mode:authority.mode,epoch:authority.epoch}:{mode:'CLOUD',epoch:0},
     createdAt:new Date().toISOString(),tables:{tenants:[tenant],branches,users,
-      tenant_memberships:memberships,product_categories:productCategories,products,stock_positions:stockPositions}});
+      tenant_memberships:memberships,saas_mfa_totp:offlineMfa,product_categories:productCategories,products,stock_positions:stockPositions,
+      customers,cash_sessions:cashSessions,sales,sale_items:saleItems,sale_payments:salePayments,
+      cash_movements:cashMovements,restaurant_tables:restaurantTables,
+      restaurant_table_sessions:restaurantSessions,restaurant_orders:restaurantOrders,
+      restaurant_order_items:restaurantOrderItems,restaurant_kitchen_tickets:restaurantKitchenTickets,
+      restaurant_service_requests:restaurantServiceRequests,restaurant_sale_links:restaurantSaleLinks,r4_split_plans:splitPlans,
+      cash_adjustments:cashAdjustments,customer_credit_receipts:creditReceipts,
+      r4_table_prepayments:tablePrepayments,r4_table_prepayment_refunds:tablePrepaymentRefunds,
+      sale_returns:saleReturns,sale_return_items:saleReturnItems,
+      sale_refund_movements:saleRefundMovements}});
  }catch(error){
   return bad(error.status===413?413:503,'Não foi possível criar a cópia. Operações offline bloqueadas.');
  }

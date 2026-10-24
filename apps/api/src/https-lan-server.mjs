@@ -5,6 +5,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {openLocalDatabase} from './local-db.mjs';
 import {applyLocalMigrations} from './local-migrations.mjs';
 import {pullOfflineBaseline} from './offline-replica.mjs';
+import {pushOfflineOutbox} from './offline-outbox.mjs';
 import {createApi} from './worker.mjs';
 import {serveLocalPwa} from './local-static.mjs';
 
@@ -75,7 +76,7 @@ export function createLanServer({origin,tlsKey,tlsCert,db,webRoot}){
     throw Error('Servidor LAN exige origem HTTPS exata.');
   if(!db||!tlsKey||!tlsCert)throw Error('Banco e TLS obrigatórios.');
   requireWebBuild(webRoot);
-  const api=createApi({DB:db,COOKIE_SECURE:'true',AUTH_ENABLED:'true',LOCAL_MEDIA_ENABLED:'true',LAN_MODE:'true',MFA_ENABLED:process.env.MFA_ENABLED||'false',MFA_ENCRYPTION_KEY:process.env.MFA_ENCRYPTION_KEY,EMAIL_VERIFICATION_REQUIRED:process.env.EMAIL_VERIFICATION_REQUIRED||'false',EMAIL_DELIVERY_URL:process.env.EMAIL_DELIVERY_URL,EMAIL_DELIVERY_TOKEN:process.env.EMAIL_DELIVERY_TOKEN,ARTISYS_BILLING_ENABLED:process.env.ARTISYS_BILLING_ENABLED||'false',ARTISYS_BILLING_SECRET:process.env.ARTISYS_BILLING_SECRET,ARTISYS_BINDING_SECRET:process.env.ARTISYS_BINDING_SECRET,ARTISYS_PAYMENTS_URL:process.env.ARTISYS_PAYMENTS_URL,ARTISYS_PDV_MONTHLY_OFFER_ID:process.env.ARTISYS_PDV_MONTHLY_OFFER_ID,ARTISYS_PDV_YEARLY_OFFER_ID:process.env.ARTISYS_PDV_YEARLY_OFFER_ID,SAAS_ENTITLEMENTS_ENABLED:process.env.SAAS_ENTITLEMENTS_ENABLED||'false',PLATFORM_ADMIN_TOKEN:process.env.PLATFORM_ADMIN_TOKEN});
+  const api=createApi({DB:db,COOKIE_SECURE:'true',AUTH_ENABLED:'true',LOCAL_MEDIA_ENABLED:'true',LAN_MODE:'true',OFFLINE_REPLICA_ENABLED:process.env.PDV_OFFLINE_REPLICA_ENABLED||'false',OFFLINE_CASH_ENABLED:process.env.PDV_OFFLINE_CASH_ENABLED||'false',OFFLINE_GATEWAY_ID:process.env.OFFLINE_GATEWAY_ID,OFFLINE_GATEWAY_TOKEN:process.env.OFFLINE_GATEWAY_TOKEN,OFFLINE_CLOUD_ORIGIN:process.env.OFFLINE_CLOUD_ORIGIN,MFA_ENABLED:process.env.PDV_OFFLINE_REPLICA_ENABLED==='true'?'true':process.env.MFA_ENABLED||'false',MFA_ENCRYPTION_KEY:process.env.PDV_OFFLINE_REPLICA_ENABLED==='true'?'pdv-offline-device-mfa:'+process.env.OFFLINE_GATEWAY_TOKEN:process.env.MFA_ENCRYPTION_KEY,EMAIL_VERIFICATION_REQUIRED:process.env.EMAIL_VERIFICATION_REQUIRED||'false',EMAIL_DELIVERY_URL:process.env.EMAIL_DELIVERY_URL,EMAIL_DELIVERY_TOKEN:process.env.EMAIL_DELIVERY_TOKEN,ARTISYS_BILLING_ENABLED:process.env.ARTISYS_BILLING_ENABLED||'false',ARTISYS_BILLING_SECRET:process.env.ARTISYS_BILLING_SECRET,ARTISYS_BINDING_SECRET:process.env.ARTISYS_BINDING_SECRET,ARTISYS_PAYMENTS_URL:process.env.ARTISYS_PAYMENTS_URL,ARTISYS_PDV_MONTHLY_OFFER_ID:process.env.ARTISYS_PDV_MONTHLY_OFFER_ID,ARTISYS_PDV_YEARLY_OFFER_ID:process.env.ARTISYS_PDV_YEARLY_OFFER_ID,SAAS_ENTITLEMENTS_ENABLED:process.env.SAAS_ENTITLEMENTS_ENABLED||'false',PLATFORM_ADMIN_TOKEN:process.env.PLATFORM_ADMIN_TOKEN});
   return createServer({key:tlsKey,cert:tlsCert,minVersion:'TLSv1.2'},async(req,res)=>{
     try{
       if(req.headers.host!==expected.host){
@@ -139,12 +140,18 @@ async function start(){
       let syncing=false;
       syncInterval=setInterval(async()=>{
         if(syncing)return;syncing=true;
-        try{await pullOfflineBaseline(db,process.env);}
+        try{
+          // ACK local journal entries BEFORE accepting a fresh stock projection.
+          // Failed network or conflict leaves the outbox durable for the next retry.
+          const result=await pushOfflineOutbox(db,process.env);
+          if(result.conflicts)throw Object.assign(Error('OFFLINE_REPLAY_CONFLICT'),{status:409});
+          await pullOfflineBaseline(db,process.env);
+        }
         catch(error){
           try{db.exec("UPDATE offline_replica_state SET state='"+([401,403,412].includes(error.status)?'ERROR':'STALE')+"'");}catch{}
           console.error('[PDV Offline] Sincronização indisponível; operações comerciais locais bloqueadas. '+error.name);
         }finally{syncing=false;}
-      },60000);
+      },15000);
     }
     server.listen(config.port,config.bindHost,()=>{
       console.log('PDV TOTAL HTTPS LAN pronto em '+config.origin+

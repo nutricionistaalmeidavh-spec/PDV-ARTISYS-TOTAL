@@ -65,7 +65,7 @@
       '<label>Filial<select name="branchId" required>'+branches.map(b=>'<option value="'+esc(b.id)+'">'+esc(b.name)+'</option>').join('')+'</select></label>'+
       '<label>Identificação do PC<input name="label" maxlength="80" required placeholder="PC principal da loja"></label>'+
       '<button class="secondary-button" type="submit">Gerar autorização da cópia inicial</button>'+
-      '<p data-settings-offline-feedback role="status" class="ops-muted">O segredo aparecerá apenas uma vez. Guarde-o somente no PC da loja.</p></form>':'<p>Somente o proprietário autoriza PCs para cópia local.</p>')+'</section>'+ 
+      '<p data-settings-offline-feedback role="status" class="ops-muted">O segredo aparecerá apenas uma vez. Guarde-o somente no PC da loja.</p><button type="button" class="secondary-button" data-settings-offline-activate hidden>Reservar filial para funcionamento offline</button></form>':'<p>Somente o proprietário autoriza PCs para cópia local.</p>')+'</section>'+ 
       '<section class="data-card" role="tabpanel" id="web-settings-panel-modules" aria-labelledby="web-settings-tab-modules" hidden><h2>Áreas da operação</h2>'+
       '<p>Balcão, Caixa, Cardápio, Estoque, Clientes e Gestão usam a mesma base. Alimentação acrescenta mesas, comandas, pedidos e cozinha. Personalizações, fichas técnicas e unidade de venda pertencem ao produto. Ative as áreas que utilizar; esta escolha não cria outra empresa nem uma cobrança.</p>'+errorMarkup(resultError(modulesResult))+
       modules.map(item=>'<article class="module-family"><h3>'+esc(item.name)+'</h3><p>'+esc(item.description)+'</p><label><input type="checkbox" data-settings-module="'+esc(item.id)+'" '+(item.enabled?'checked ':'')+(!can('modules.manage')?'disabled':'')+'> Área ativa</label></article>').join('')+
@@ -82,10 +82,23 @@
         if(context.profileKey!=='OWNER')throw Error('Somente o proprietário autoriza o PC.');
         const values=Object.fromEntries(new FormData(form));
         const result=await api.request(path+'/offline/gateways',{method:'POST',body:values});
+        form.dataset.gatewayId=result.gateway.id;
+        const activate=form.querySelector('[data-settings-offline-activate]');if(activate)activate.hidden=false;
         feedback.textContent='ID do gateway: '+result.gateway.id+' | Credencial (exibida uma única vez): '+result.credential+
           '. Salve em segredo no servidor HTTPS local. Nenhuma venda offline está habilitada.';
       }catch(error){feedback.textContent='Não foi possível autorizar cópia: '+error.message;}
       finally{submit.disabled=false;}
+    });
+    host.querySelector('[data-settings-offline-activate]')?.addEventListener('click',async event=>{
+      const form=event.currentTarget.closest('form'),id=form?.dataset.gatewayId;
+      if(!id||context.profileKey!=='OWNER')return;
+      if(!root.confirm('Reservar esta filial para operar somente pelo PC local? A Cloudflare bloqueará novas vendas nesta filial até a reconciliação ser concluída no PC.'))return;
+      const button=event.currentTarget;button.disabled=true;
+      const feedback=form.querySelector('[data-settings-offline-feedback]');
+      try{
+        const result=await api.request(path+'/offline/gateways/'+encodeURIComponent(id)+'/activate',{method:'POST',body:{}});
+        feedback.textContent='Filial reservada para o PC (época '+result.epoch+'). Faça nova cópia no servidor local antes de usar. Depois, retorne ao online pelo próprio PC.';
+      }catch(error){feedback.textContent='Não foi possível reservar a filial: '+error.message;button.disabled=false;}
     });
     routeButtons(host,options);
     host.querySelector('[data-settings-profile]')?.addEventListener('click',()=>void root.PdvR4AdvancedUi?.show?.({section:'segments'}));

@@ -22,11 +22,11 @@ async function readBody(request){
  if(!body||typeof body!=='object'||Array.isArray(body))throw Object.assign(new Error('Dados inválidos.'),{status:400});
  return body;
 }
-export async function verticalRoute(request,db,session,member,tenantId,path){
+export async function verticalRoute(request,db,session,member,tenantId,path,{idFactory,clock}={}){
  const url=new URL(request.url),method=request.method,parts=path.split('/').filter(Boolean);
  const feature=parts[0];
  if(!['customers','suppliers','sellers','restaurant','recipes','onboarding','wholesale','commissions','credit'].includes(feature))return null;
- const svc=createVerticalService(db),ext=createR4ExtendedService(db),user=session.userId;
+ const svc=createVerticalService(db,{idFactory,clock}),ext=createR4ExtendedService(db,{idFactory,clock}),user=session.userId;
  try{
    const write=['POST','PATCH','PUT','DELETE'].includes(method),body=write?await readBody(request):{};
    const branch=body.branchId||url.searchParams.get('branchId');

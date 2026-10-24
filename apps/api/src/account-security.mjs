@@ -23,6 +23,23 @@ async function decrypt(env,row){
  const key=await keyFor(env),clear=await crypto.subtle.decrypt({name:'AES-GCM',iv:from64(row.iv)},key,from64(row.cipher));
  return new TextDecoder().decode(clear);
 }
+// Re-encrypt enrolled TOTP separately for one specific store gateway.
+ // The Cloudflare MFA master key NEVER leaves Cloudflare. A stolen gateway
+ // token is revocable; a gateway can decrypt only its own replicated factors.
+export async function exportOfflineMfa(db,env,tenantId,gatewayToken){
+ const {results}=await q(db,'SELECT t.user_id,t.cipher,t.iv,t.enrolled_at,t.last_counter FROM saas_mfa_totp t JOIN tenant_memberships m ON m.user_id=t.user_id WHERE m.tenant_id=? AND m.active=1 AND t.enrolled_at IS NOT NULL',tenantId).all();
+ if(results.length&&!/^[a-f0-9]{64}$/.test(gatewayToken||''))throw Error('Chave de gateway inválida.');
+ if(results.length&&env.MFA_ENABLED!=='true')throw Error('MFA da plataforma deve estar habilitado.');
+ const localEnv={MFA_ENCRYPTION_KEY:'pdv-offline-device-mfa:'+gatewayToken};
+ const exported=[];
+ for(const row of results){
+  const secret=await decrypt(env,row);
+  const wrapped=await encrypt(localEnv,secret);
+  exported.push({user_id:row.user_id,cipher:wrapped.cipher,iv:wrapped.iv,
+   enrolled_at:row.enrolled_at,last_counter:row.last_counter});
+ }
+ return exported;
+}
 async function codeAt(secret,counter){
  const data=new Uint8Array(8);let v=BigInt(counter);for(let i=7;i>=0;i--){data[i]=Number(v&255n);v>>=8n;}
  const key=await crypto.subtle.importKey('raw',base32Bytes(secret),{name:'HMAC',hash:'SHA-1'},false,['sign']);

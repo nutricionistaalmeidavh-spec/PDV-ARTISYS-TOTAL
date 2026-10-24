@@ -96,7 +96,23 @@ try{
     await page.locator('#web-email').fill(id+'@example.test');
     await page.locator('#web-password').fill(password);
     await page.locator('#web-login-form button[type=submit]').click();
-    await page.locator('#auth-overlay').waitFor({state:'hidden'});
+    try{
+      await page.locator('#auth-overlay').waitFor({state:'hidden',timeout:15000});
+    }catch(error){
+      // Capture only UI state and HTTP status. Never persist passwords, cookies or tokens.
+      const diagnostics=await page.evaluate(async()=>{
+        const sessionStatus=await fetch('/api/v1/auth/session',{credentials:'same-origin'})
+          .then(response=>response.status).catch(()=>0);
+        return {sessionStatus,
+          feedback:document.querySelector('#web-login-feedback')?.textContent?.slice(0,300)||'',
+          overlayTitle:document.querySelector('#auth-overlay h1')?.textContent?.slice(0,100)||'',
+          runtime:document.body.dataset.runtime||'',
+          route:document.body.dataset.activeRoute||''};
+      }).catch(e=>({diagnosticError:e.name}));
+      await page.screenshot({path:resolve(artifacts,'QA-00-'+id+'-login-failure.png'),fullPage:true});
+      throw new Error('Mobile '+engine+' login blocked: '+JSON.stringify(diagnostics)+
+        '; pageErrors='+JSON.stringify(pageErrors.slice(-5))+'; '+error.message);
+    }
     await page.locator('#route-content').getByRole('heading',{name:'Início',exact:true}).waitFor();
     const {cookies}=await context.storageState();
     const cookie=cookies.map(x=>x.name+'='+x.value).join('; ');
