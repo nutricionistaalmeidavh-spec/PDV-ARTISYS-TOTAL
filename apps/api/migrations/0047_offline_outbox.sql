@@ -11,7 +11,7 @@ CREATE TABLE offline_branch_authority (
 CREATE TABLE offline_replay_grants(
  tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,mutation_id TEXT NOT NULL,
  gateway_id TEXT NOT NULL,epoch INTEGER NOT NULL,payload_hash TEXT NOT NULL,
- entity_id TEXT,
+ operation TEXT NOT NULL,entity_id TEXT,
  created_at INTEGER NOT NULL,
  PRIMARY KEY(tenant_id,branch_id,mutation_id)
 );
