@@ -9,16 +9,30 @@ const EXTRA=['customers','cash_sessions','sales','sale_items','sale_payments',
  'sale_returns','sale_return_items','sale_refund_movements'];
 const ORDER=['tenants','branches','users','tenant_memberships','saas_mfa_totp',
  'product_categories','products','stock_positions',...EXTRA];
+// Only mutable projections may be pruned. Historical, financial and
+// append-only records are never removed merely to match a cloud row count.
+const SAFE_DELETION_TABLES=new Set([
+ 'product_categories','products','customers','stock_positions','restaurant_tables'
+]);
 function verify(snapshot,scope){
  if(snapshot?.version!==1||snapshot.baselineOnly!==true||!snapshot.tables||
     snapshot.scope?.tenantId!==scope.tenantId||snapshot.scope?.branchId!==scope.branchId||
     snapshot.scope?.gatewayId!==scope.gatewayId)throw Error('Snapshot fora do escopo autorizado.');
  const tables=snapshot.tables;
+ const changed=snapshot.changedTables;
+ if(changed!==undefined&&(!Array.isArray(changed)||changed.some(name=>!ORDER.includes(name))))
+  throw Error('Lista de tabelas alteradas inválida.');
+ if(changed!==undefined&&['tenants','branches','users','tenant_memberships','saas_mfa_totp'].some(t=>!changed.includes(t)))
+  throw Error('Identidade não está completa na sincronização incremental.');
+
  if(!tables.saas_mfa_totp)tables.saas_mfa_totp=[]; // pre-MFA v1 snapshots had no enrolled factors
  for(const table of EXTRA)if(!tables[table])tables[table]=[]; // pre-extension baseline
  if(snapshot.authority&&(!['CLOUD','LOCAL','RECONCILING'].includes(snapshot.authority.mode)||
    !Number.isSafeInteger(snapshot.authority.epoch)||snapshot.authority.epoch<0))throw Error('Autoridade offline inválida.');
- for(const key of ORDER)if(!Array.isArray(tables[key])||tables[key].length>2500)
+ // v1 is a single bounded JSON snapshot; v2 uses authenticated, checksum-
+ // verified pages and permits large sets without silently dropping records.
+ const maxRows=snapshot.changedTables?100000:2500;
+ for(const key of ORDER)if(!Array.isArray(tables[key])||tables[key].length>maxRows)
    throw Error('Snapshot incompleto ou muito grande: '+key);
  if(tables.tenants.length!==1||tables.tenants[0].id!==scope.tenantId)throw Error('Empresa inválida.');
  if(tables.branches.length!==1||tables.branches[0].id!==scope.branchId||
@@ -60,6 +74,7 @@ export async function applyOfflineBaseline(db,snapshot,scope){
   const finalSaleStatus=[];
   const finalCashStatus=[];
   for(const table of ORDER){
+   if(snapshot.changedTables&&!snapshot.changedTables.includes(table))continue;
    // WAN may return while waiter/cash writes are still queued. Never import a
    // cloud business projection over those newer local changes before every
    // event has a durable D1 ACK. Users and product catalog can still refresh.
@@ -169,8 +184,57 @@ export async function applyOfflineBaseline(db,snapshot,scope){
    await db.prepare('INSERT INTO offline_local_authority(tenant_id,branch_id,gateway_id,epoch,mode,refreshed_at) VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id) DO UPDATE SET epoch=excluded.epoch,mode=excluded.mode,refreshed_at=excluded.refreshed_at')
     .bind(scope.tenantId,scope.branchId,scope.gatewayId,snapshot.authority.epoch,mode,Date.now()).run();
   }
+  // v2 transports a complete, revision-stable dataset per changed table.
+  // Reconcile cloud-side deletions only for mutable projections, inside the
+  // same SQLite transaction as inserts/updates and version stamping.
+  // Delete children before parents (stock -> products -> categories).
+  // Never discard rows while local mutations may still be awaiting D1 ACK.
+  for(const table of [...ORDER].reverse()){
+    if(!SAFE_DELETION_TABLES.has(table)||!Object.hasOwn(snapshot.datasetVersions||{},table)||
+       outstanding>0)continue;
+    // stock_positions has composite scope+product_id, not an id column.
+    const keyColumn=table==='stock_positions'?'product_id':'id';
+    const authoritativeIds=new Set(tables[table].map(row=>row[keyColumn]));
+    if(authoritativeIds.size!==tables[table].length||authoritativeIds.has(undefined))
+      throw Error('Dataset duplicado ou sem chave: '+table);
+    const tenantOnly=['product_categories','products','customers'].includes(table);
+    const predicate='tenant_id=?'+(tenantOnly?'':' AND branch_id=?');
+    const scopeParams=tenantOnly?[scope.tenantId]:[scope.tenantId,scope.branchId];
+    const localIds=(await db.prepare('SELECT '+keyColumn+' AS local_key FROM '+table+' WHERE '+predicate)
+      .bind(...scopeParams).all()).results;
+    for(const row of localIds){
+      if(authoritativeIds.has(row.local_key))continue;
+      // RESTRICT foreign keys and canonical guards remain active. Any
+      // referenced row or unexpected trigger causes full rollback.
+      await db.prepare('DELETE FROM '+table+' WHERE '+predicate+' AND '+keyColumn+'=?')
+        .bind(...scopeParams,row.local_key).run();
+    }
+  }
   const damaged=(await db.prepare('PRAGMA foreign_key_check').bind().all()).results;
   if(damaged.length)throw Error('Snapshot falhou na integridade referencial.');
+  // v2 transports only changed full datasets. An absent remote row may
+  // represent a real delete; never mark that table synced while silently
+  // retaining an orphan (particularly stock, sale or permission data).
+  for(const [table,meta] of Object.entries(snapshot.datasetVersions||{})){
+   if(outstanding>0&&(EXTRA.includes(table)||table==='stock_positions'))continue;
+   const tenantOnly=['product_categories','products','customers'].includes(table);
+   const result=await db.prepare('SELECT COUNT(*) AS n FROM '+table+' WHERE tenant_id=?'+
+     (tenantOnly?'':' AND branch_id=?')).bind(...(tenantOnly?[scope.tenantId]:[scope.tenantId,scope.branchId])).first();
+   if(Number(result.n)!==meta.count)
+    throw Error('Exclusão ou divergência detectada em '+table+': revisão requer reconciliação segura, não sobrescrita.');
+  }
+  if(snapshot.datasetVersions){
+   for(const [table,meta] of Object.entries(snapshot.datasetVersions)){
+    if(!ORDER.includes(table)||!Number.isSafeInteger(meta.revision)||meta.revision<0||
+      !Number.isSafeInteger(meta.count)||meta.count<0)throw Error('Versão de dataset inválida.');
+    if(outstanding>0&&EXTRA.includes(table))continue;
+    if(outstanding>0&&table==='stock_positions')continue;
+    await db.prepare('INSERT INTO offline_downloaded_versions(tenant_id,branch_id,table_name,cloud_revision,row_count,last_success_at) VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,table_name) DO UPDATE SET cloud_revision=excluded.cloud_revision,row_count=excluded.row_count,last_success_at=excluded.last_success_at')
+     .bind(scope.tenantId,scope.branchId,table,meta.revision,meta.count,Date.now()).run();
+    await db.prepare('DELETE FROM offline_download_pages WHERE tenant_id=? AND branch_id=? AND table_name=?')
+     .bind(scope.tenantId,scope.branchId,table).run();
+   }
+  }
   const stamp=new Date().toISOString();
   await db.prepare('INSERT INTO offline_replica_state(tenant_id,branch_id,gateway_id,last_pull_at,state) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,branch_id) DO UPDATE SET last_pull_at=excluded.last_pull_at,state=excluded.state')
    .bind(scope.tenantId,scope.branchId,scope.gatewayId,stamp,'BASELINE_ONLY').run();

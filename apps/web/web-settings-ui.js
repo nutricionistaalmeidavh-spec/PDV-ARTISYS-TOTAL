@@ -59,12 +59,13 @@
       '<button type="button" class="primary-button" data-settings-devices>Configurar dispositivos</button></section>'+
       '<section class="data-card" role="tabpanel" id="web-settings-panel-offline" aria-labelledby="web-settings-tab-offline" hidden><h2>Funcionamento offline</h2>'+
       '<p>Seu PDV continuará na Cloudflare. A opção de contingência usará um PC autorizado como servidor local para os aparelhos no Wi-Fi quando a internet externa cair.</p>'+
-      '<p role="status"><strong>Etapa disponível: cópia inicial controlada de usuários, perfis e catálogo para consulta.</strong> A autorização depende da configuração no servidor Cloudflare. Sincronização de vendas, caixa e estoque ainda não disponível; nenhuma venda offline pode ser considerada sincronizada.</p>'+
-      '<p>O QR Code de garçom é gerado pelo PC local quando o servidor HTTPS e a conta do funcionário estiverem configurados.</p>'+
-      (context.profileKey==='OWNER'?'<form data-settings-offline-gateway class="field-grid"><h3>Autorizar PC para cópia inicial (sem vendas)</h3>'+
+      '<p role="status"><strong>Etapa disponível: gateway autorizado com cópia de dados e fila transacional por filial.</strong> A autorização depende da configuração no servidor Cloudflare. Vendas, caixa e estoque usam fila e confirmação do D1 quando o modo local está configurado. Não ative a contingência sem homologação operacional.</p>'+
+      '<p>O QR Code de garçom é gerado pelo PC local com endereço HTTPS e conta criada pelo administrador.</p>'+
+      '<form data-settings-local-fallback class="field-grid"><h3>Alternância segura para o PC local</h3><label>Endereço HTTPS local autorizado<input name="localOrigin" placeholder="https://pdv.loja.lan:8443" value="'+esc(root.PdvOfflineFailover?.current?.(context.tenantId)||'')+'"></label><button type="submit" class="secondary-button">Salvar servidor offline deste aparelho</button><p role="status" data-settings-local-feedback class="ops-muted">Quando a Cloudflare não responder, consultas podem abrir o PC autorizado. Vendas nunca são reenviadas automaticamente; a origem local mantém seu próprio login.</p></form>'+
+      (context.profileKey==='OWNER'?'<form data-settings-offline-gateway class="field-grid"><h3>Autorizar servidor do restaurante</h3>'+
       '<label>Filial<select name="branchId" required>'+branches.map(b=>'<option value="'+esc(b.id)+'">'+esc(b.name)+'</option>').join('')+'</select></label>'+
       '<label>Identificação do PC<input name="label" maxlength="80" required placeholder="PC principal da loja"></label>'+
-      '<button class="secondary-button" type="submit">Gerar autorização da cópia inicial</button>'+
+      '<button class="secondary-button" type="submit">Gerar autorização segura do PC</button>'+
       '<p data-settings-offline-feedback role="status" class="ops-muted">O segredo aparecerá apenas uma vez. Guarde-o somente no PC da loja.</p><button type="button" class="secondary-button" data-settings-offline-activate hidden>Reservar filial para funcionamento offline</button></form>':'<p>Somente o proprietário autoriza PCs para cópia local.</p>')+'</section>'+ 
       '<section class="data-card" role="tabpanel" id="web-settings-panel-modules" aria-labelledby="web-settings-tab-modules" hidden><h2>Áreas da operação</h2>'+
       '<p>Balcão, Caixa, Cardápio, Estoque, Clientes e Gestão usam a mesma base. Alimentação acrescenta mesas, comandas, pedidos e cozinha. Personalizações, fichas técnicas e unidade de venda pertencem ao produto. Ative as áreas que utilizar; esta escolha não cria outra empresa nem uma cobrança.</p>'+errorMarkup(resultError(modulesResult))+
@@ -73,6 +74,16 @@
       '<section class="data-card" role="tabpanel" id="web-settings-panel-security" aria-labelledby="web-settings-tab-security" hidden><h2>Sua conta e segurança</h2>'+
       '<p>Consulte suas sessões e encerre o acesso de outros navegadores em Acessos. Senha e autenticação em duas etapas são gerenciadas na sua conta.</p>'+
       '<button class="secondary-button" type="button" data-settings-route="access">Ver sessões</button> <a class="secondary-button" href="/conta/">Abrir segurança da conta</a></section></section>';
+    host.querySelector('[data-settings-local-fallback]')?.addEventListener('submit',event=>{
+      event.preventDefault();
+      const form=event.currentTarget,feedback=form.querySelector('[data-settings-local-feedback]');
+      try{
+        if(!root.confirm('Este é o PC local autorizado e com certificado HTTPS confiável para esta loja?'))return;
+        const value=form.querySelector('[name="localOrigin"]').value.trim();
+        root.PdvOfflineFailover.configure(context.tenantId,value);
+        feedback.textContent='Servidor local registrado neste navegador. Operações financeiras nunca são reenviadas automaticamente.';
+      }catch(error){feedback.textContent='Não foi possível registrar servidor: '+error.message;}
+    });
     host.querySelector('[data-settings-offline-gateway]')?.addEventListener('submit',async event=>{
       event.preventDefault();
       const form=event.currentTarget,feedback=form.querySelector('[data-settings-offline-feedback]');
@@ -85,7 +96,7 @@
         form.dataset.gatewayId=result.gateway.id;
         const activate=form.querySelector('[data-settings-offline-activate]');if(activate)activate.hidden=false;
         feedback.textContent='ID do gateway: '+result.gateway.id+' | Credencial (exibida uma única vez): '+result.credential+
-          '. Salve em segredo no servidor HTTPS local. Nenhuma venda offline está habilitada.';
+          '. Salve em segredo somente no servidor HTTPS local; a filial precisa ser reservada antes da operação.';
       }catch(error){feedback.textContent='Não foi possível autorizar cópia: '+error.message;}
       finally{submit.disabled=false;}
     });

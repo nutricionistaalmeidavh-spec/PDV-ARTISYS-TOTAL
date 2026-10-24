@@ -4,7 +4,7 @@ import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {openLocalDatabase} from './local-db.mjs';
 import {applyLocalMigrations} from './local-migrations.mjs';
-import {pullOfflineBaseline} from './offline-replica.mjs';
+import {pullOfflineFast} from './offline-fast-client.mjs';
 import {pushOfflineOutbox} from './offline-outbox.mjs';
 import {createApi} from './worker.mjs';
 import {serveLocalPwa} from './local-static.mjs';
@@ -126,7 +126,7 @@ async function start(){
     const migrated=await applyLocalMigrations(db);
     const enabled=process.env.PDV_OFFLINE_REPLICA_ENABLED==='true';
     if(enabled){
-      try{await pullOfflineBaseline(db,process.env);}
+      try{await pullOfflineFast(db,process.env);}
       catch(error){
         const previous=await db.prepare('SELECT last_pull_at FROM offline_replica_state LIMIT 1').bind().first();
         if(!previous)throw Error('A cópia inicial falhou. Não há dados locais de contingência.');
@@ -145,7 +145,7 @@ async function start(){
           // Failed network or conflict leaves the outbox durable for the next retry.
           const result=await pushOfflineOutbox(db,process.env);
           if(result.conflicts)throw Object.assign(Error('OFFLINE_REPLAY_CONFLICT'),{status:409});
-          await pullOfflineBaseline(db,process.env);
+          await pullOfflineFast(db,process.env);
         }
         catch(error){
           try{db.exec("UPDATE offline_replica_state SET state='"+([401,403,412].includes(error.status)?'ERROR':'STALE')+"'");}catch{}

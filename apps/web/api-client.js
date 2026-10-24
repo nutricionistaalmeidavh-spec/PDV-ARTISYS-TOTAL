@@ -128,6 +128,9 @@
       try{response=await root.fetch(target,{method,credentials:'same-origin',headers,
         ...(['GET','HEAD'].includes(method)?{}:{body:JSON.stringify(payload)})});}
       catch{
+        // GET/HEAD navigation is safe; never replay a possibly-committed sale.
+        if(!isTelemetry&&this.tenantId&&['GET','HEAD'].includes(method))
+          root.PdvOfflineFailover?.onNetworkError(this.tenantId,method);
         if(!isTelemetry)root.PdvTelemetryUi?.observeRequest({operation,status:0,durationMs:Date.now()-startedAt});
         throw new Error('Sem conexão. Seus dados permanecem na tela; tente novamente.');
       }
