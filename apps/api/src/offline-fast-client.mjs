@@ -75,7 +75,12 @@ export async function pullOfflineFast(db,env,{fetcher=fetch,pageSize=75}={}){
   }
   let limit=pageSize;
   while(rows.length<target.count){
-   const page=await request('page?table='+encodeURIComponent(table)+'&after='+cursor+'&limit='+limit);
+   let page;
+   try{page=await request('page?table='+encodeURIComponent(table)+'&after='+cursor+'&limit='+limit);}
+   catch(error){
+    if(error.status===413&&limit>1){limit=Math.max(1,Math.floor(limit/2));continue;}
+    throw error;
+   }
    if(page?.version!==2||page.table!==table||page.after!==cursor||
     !Array.isArray(page.rows)||page.rows.length<1||page.rows.length>limit||
     !Number.isSafeInteger(page.next)||page.next<=cursor||page.count!==page.rows.length||
