@@ -254,7 +254,7 @@ test('legacy pending signup can still be approved once without granting extra tr
   }));
   assert.equal((await approve()).status,200);
   assert.equal((await approve()).status,409,'trial approval is never renewable');
-  const trial=await db.prepare("SELECT status,ends_at AS endsAt FROM saas_subscriptions WHERE tenant_id='legacy-tenant'").first();
+  const trial=await db.prepare("SELECT status,ends_at AS endsAt FROM saas_subscriptions WHERE tenant_id='legacy-tenant'").bind().first();
   assert.equal(trial.status,'TRIAL');
   assert.equal(trial.endsAt,new Date(NOW+14*86400000).toISOString());
   const login=await api.fetch(new Request(origin+'/api/v1/auth/login',{method:'POST',
