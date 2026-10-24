@@ -157,6 +157,22 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
   method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-sale-item-001'},
   body:{branchId:'a-branch',productId:'a-product',quantity:1}});
  assert.equal(item.status,200,JSON.stringify(item.data));
+ // A delivered table session must be settled through the SAME canonical
+ // sale, not a new independent amount. Keep source order and link on D1.
+ const tableSale=await call(localApi,'/api/v1/tenants/a/sales',{
+  method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-linked-sale-001'},
+  body:{branchId:'a-branch',terminalId,restaurantSessionId:sessionId}});
+ assert.equal(tableSale.status,201,JSON.stringify(tableSale.data));
+ const linkedId=tableSale.data.sale.id;
+ assert.equal((await local.prepare('SELECT sale_id AS id FROM restaurant_sale_links WHERE table_session_id=?').bind(sessionId).first()).id,linkedId);
+ const paidTable=await call(localApi,'/api/v1/tenants/a/sales/'+linkedId+'/complete',{
+  method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-linked-paid-001'},
+  body:{branchId:'a-branch',payments:[{method:'CASH',amountCents:1000}]}});
+ assert.equal(paidTable.status,200,JSON.stringify(paidTable.data));
+ const tableClosed=await call(localApi,'/api/v1/tenants/a/restaurant/sessions/'+sessionId+'/close',{
+  method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-linked-close-001'},
+  body:{branchId:'a-branch'}});
+ assert.equal(tableClosed.status,200,JSON.stringify(tableClosed.data));
  const blockedPix=await call(localApi,'/api/v1/tenants/a/sales/'+saleId+'/complete',{
   method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-pix-denied-001'},
   body:{branchId:'a-branch',payments:[{method:'PIX',amountCents:1000}]}});
@@ -172,13 +188,13 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
  assert.equal((await local.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE status='PENDING'").bind().first()).n,10);
  const closed=await call(localApi,'/api/v1/tenants/a/cash/sessions/'+tillId+'/close',{
   method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-cash-close-001'},
-  body:{branchId:'a-branch',countedCashCents:3000}});
+  body:{branchId:'a-branch',countedCashCents:4000}});
  assert.equal(closed.status,200,JSON.stringify(closed.data));
- assert.equal((await local.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE status='PENDING'").bind().first()).n,11);
+ assert.equal((await local.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE status='PENDING'").bind().first()).n,14);
  const released=await finishOfflineAuthority(local,{OFFLINE_CLOUD_ORIGIN:origin+'/',OFFLINE_GATEWAY_ID:gateway.id,
   OFFLINE_GATEWAY_TOKEN:credential},{fetcher});
  assert.equal(released.released,true);
- assert.equal(released.acknowledged,11);
+ assert.equal(released.acknowledged,14);
  assert.equal((await cloud.prepare('SELECT id FROM restaurant_tables WHERE tenant_id=? AND branch_id=?').bind('a','a-branch').first()).id,tableId);
  assert.equal((await cloud.prepare('SELECT id FROM restaurant_table_sessions WHERE tenant_id=? AND branch_id=?').bind('a','a-branch').first()).id,sessionId);
  assert.equal((await cloud.prepare('SELECT id FROM restaurant_orders WHERE tenant_id=? AND branch_id=?').bind('a','a-branch').first()).id,orderId);
@@ -188,8 +204,12 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
  assert.equal((await cloud.prepare('SELECT status FROM cash_sessions WHERE id=?').bind(tillId).first()).status,'CLOSED');
  assert.equal((await cloud.prepare('SELECT status FROM sales WHERE id=?').bind(saleId).first()).status,'COMPLETED');
  assert.equal((await cloud.prepare('SELECT COUNT(*) AS n FROM sale_payments WHERE sale_id=?').bind(saleId).first()).n,1);
+ assert.equal((await cloud.prepare('SELECT sale_id AS id FROM restaurant_sale_links WHERE table_session_id=?').bind(sessionId).first()).id,linkedId);
+ assert.equal((await cloud.prepare('SELECT status FROM restaurant_table_sessions WHERE id=?').bind(sessionId).first()).status,'CLOSED');
+ assert.equal((await cloud.prepare('SELECT status FROM sales WHERE id=?').bind(linkedId).first()).status,'COMPLETED');
+
  assert.equal((await cloud.prepare('SELECT balance_milli AS n FROM stock_positions WHERE tenant_id=? AND branch_id=? AND product_id=?')
-  .bind('a','a-branch','a-product').first()).n,6000);
+  .bind('a','a-branch','a-product').first()).n,5000);
  assert.equal((await local.prepare('SELECT mode FROM offline_local_authority LIMIT 1').bind().first()).mode,'CLOUD');
  const resumed=await call(cloudApi,'/api/v1/tenants/a/inventory/receipts',{method:'POST',cookie:owner,
   headers:{'x-mutation-id':'cloud-after-handoff-001'},body:{branchId:'a-branch',productId:'a-product',quantity:1}});
@@ -221,7 +241,7 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
   OFFLINE_GATEWAY_TOKEN:credential},{fetcher});
  assert.equal(secondRelease.released,true,'second offline authority epoch must reconcile');
  assert.equal((await cloud.prepare('SELECT balance_milli AS n FROM stock_positions WHERE tenant_id=? AND branch_id=? AND product_id=?')
-   .bind('a','a-branch','a-product').first()).n,35000);
+   .bind('a','a-branch','a-product').first()).n,34000);
 });
 
 test('a new authorized gateway epoch may reuse sequence 1 without colliding with an earlier completed offline session',async t=>{
