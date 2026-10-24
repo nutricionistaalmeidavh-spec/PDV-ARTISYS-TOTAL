@@ -3,6 +3,7 @@ import {commerceRoute} from './commerce-router.mjs';
 import {verticalRoute} from './vertical-router.mjs';
 import {offlineMutationIds} from './offline-stable-ids.mjs';
 import {offlineLinkedCheckoutAllowed} from './offline-linked-checkout.mjs';
+import {validOfflineManualSettlement} from './offline-manual-payments.mjs';
 import {tenantWriteAllowed} from './saas-control.mjs';
 const reply=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const fail=(status,s)=>reply({error:s},status);
@@ -57,10 +58,8 @@ export async function offlineReplayRoute(request,db,env,now=Date.now()){
  const operation=parsed?.[2]||'';
  const cashOperation=/^(?:cash\/|sales(?:\/|$))/.test(operation);
  if(cashOperation&&env.OFFLINE_CASH_ENABLED!=='true')return fail(403,'Caixa offline desabilitado.');
- if(cashOperation&&operation.endsWith('/complete')&&
-  (!Array.isArray(body.payments)||!body.payments.length||
-  body.payments.some(p=>p?.method!=='CASH'||!Number.isSafeInteger(p.amountCents)||p.amountCents<=0)||
-  body.shares||body.storeCredit||body.customerId))return fail(403,'Somente dinheiro físico é permitido offline.');
+ if(cashOperation&&operation.endsWith('/complete')&&!validOfflineManualSettlement(body))
+  return fail(403,'Forma de pagamento manual offline inválida: use dinheiro, PIX, débito ou crédito.');
  if(cashOperation&&operation==='sales'){
   try{await offlineLinkedCheckoutAllowed(db,gateway.tenantId,gateway.branchId,body);}
   catch(error){return fail(error.status||403,'Comanda não elegível para liquidação segura no caixa offline.');}

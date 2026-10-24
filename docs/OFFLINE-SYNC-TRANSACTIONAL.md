@@ -10,19 +10,28 @@ mesma empresa/filial, com Wi-Fi local mantido quando a WAN cair.
   IDs estáveis entre SQLite e Cloudflare D1.
 - Entradas e ajustes de estoque usam outbox transacional persistente, ACK
   idempotente e conciliação antes de liberar novamente os escritores online.
-- Um piloto separado de venda simples e **caixa em dinheiro físico** usa
-  abertura de caixa, itens de venda, conclusão e fechamento no mesmo protocolo.
-  Exige simultaneamente `OFFLINE_CASH_ENABLED=true` no Worker e
-  `PDV_OFFLINE_CASH_ENABLED=true` no servidor local. Desligado por padrão.
-- PIX, cartão, transações com adquirente, crediário, devoluções e
-  liquidação de venda originada de comanda/mesa NÃO podem ser confirmados
-  offline antes de paridade financeira específica e verificação externa.
+- O fluxo de vendas e caixa registra **pagamentos manuais**: dinheiro,
+  PIX, cartão de débito e cartão de crédito, inclusive combinações na mesma
+  venda. O operador verifica o recebimento fora do PDV (comprovante PIX ou
+  maquininha) e registra a forma e o valor; **não existe TEF, adquirente
+  integrada nem confirmação bancária automática**. O recibo do sistema
+  comprova um lançamento feito pelo operador, não a liquidação bancária.
+- Abertura e fechamento de caixa, estoque, pedidos e vendas continuam no
+  mesmo protocolo de replay com IDs canônicos e ACK idempotente. Permite
+  comanda entregue elegível, sem divisão de conta, antecipação ou transferência.
+  A flag legada `OFFLINE_CASH_ENABLED=true` no Worker e
+  `PDV_OFFLINE_CASH_ENABLED=true` no servidor local ativam o registro manual
+  de pagamentos (mantidas para compatibilidade). Desligado por padrão.
+- Crediário, devoluções, estornos e operações dependentes de integrações
+  externas continuam fora da contingência. Se PIX ou cartão não tiverem sido
+  efetivamente recebidos/confirmados na operação externa, o caixa não deve
+  registrá-los como pagos.
 - A autorização de operação local permanece restrita a uma filial e uma
   geração por vez. Nenhum evento local deve ser declarado sincronizado antes
   de ACK no D1. Toda operação é verificada contra assinatura de gateway,
   usuário e papel ativos, empresa, filial, epoch e hash do conteúdo.
 
-**Estado:** branch em QA, não representa liberação comercial automática.
+**Estado:** recurso integrado em main com ativação opcional; exigir configuração segura do gateway e ensaio operacional na loja.
 A documentação abaixo descreve princípios, limitações e gates de segurança.
 Nenhuma promessa de certificação física de iOS, impressora ou POS de cartão.
 
