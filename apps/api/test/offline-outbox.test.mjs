@@ -96,3 +96,17 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
   headers:{'x-mutation-id':'cloud-after-handoff-001'},body:{branchId:'a-branch',productId:'a-product',quantity:1}});
  assert.equal(resumed.status,201,'normal SaaS writers resume only after complete release');
 });
+
+test('a new authorized gateway epoch may reuse sequence 1 without colliding with an earlier completed offline session',async t=>{
+ const db=openLocalDatabase();t.after(()=>db.close());await applyLocalMigrations(db);
+ const stamp='2026-10-23T00:00:00.000Z';
+ await db.prepare('INSERT INTO tenants(id,slug,name,created_at) VALUES(?,?,?,?)')
+  .bind('epoch-shop','epoch-shop','Epoch Shop',stamp).run();
+ await db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)')
+  .bind('epoch-branch','epoch-shop','MAIN','Main',stamp).run();
+ const sql='INSERT INTO offline_replay_receipts(tenant_id,branch_id,epoch,sequence,mutation_id,payload_hash,result_json,acked_at) VALUES(?,?,?,?,?,?,?,?)';
+ await db.prepare(sql).bind('epoch-shop','epoch-branch',1,1,'first-epoch-event','a'.repeat(64),'{}',100).run();
+ await db.prepare(sql).bind('epoch-shop','epoch-branch',2,1,'second-epoch-event','b'.repeat(64),'{}',200).run();
+ const rows=(await db.prepare('SELECT epoch,sequence FROM offline_replay_receipts ORDER BY epoch').bind().all()).results;
+ assert.deepEqual(rows,[{epoch:1,sequence:1},{epoch:2,sequence:1}]);
+});
