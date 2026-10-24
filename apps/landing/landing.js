@@ -95,7 +95,7 @@
     }
     const button=form.querySelector('button[type="submit"]');
     const original=button.textContent;
-    form.dataset.pending='true';button.disabled=true;button.textContent='Enviando solicitação…';
+    form.dataset.pending='true';button.disabled=true;button.textContent='Criando teste grátis…';
     feedback.classList.remove('success');feedback.textContent='';
     try{
       const response=await fetch('/api/v1/auth/register',{
@@ -109,11 +109,29 @@
         throw new Error(unavailable||payload.error||'Não foi possível criar a conta.');
       }
       feedback.classList.add('success');
-      feedback.textContent=payload.status==='pending-approval'
-        ?'Solicitação recebida. A ArtiSys analisará seu cadastro. Os 14 dias grátis começam após a aprovação; você poderá entrar com o e-mail e a senha que acabou de escolher.'
-        :(payload.message||'Solicitação recebida. Aguarde a avaliação da ArtiSys.');
-      form.reset();
-      button.textContent='Solicitação recebida';
+      feedback.textContent='Cadastro processado. Verificando seu acesso ao teste grátis…';
+      // The server returns the same registration response for new/existing email
+      // to avoid account enumeration. Authentication is the proof of access.
+      try{
+        const session=await request('/api/v1/auth/login',{
+          email:String(body.email||'').trim(),password:body.password
+        });
+        if(session.mfaRequired){
+          openLogin();
+          mfaChallenge=session.challengeToken;
+          loginForm.hidden=true;
+          mfaForm.hidden=false;
+          mfaForm.elements.code.focus();
+          return;
+        }
+        form.reset();
+        location.assign('/app/');
+        return;
+      }catch{
+        feedback.textContent='Se o e-mail estiver disponível, o teste grátis de 14 dias já está ativo. Entre com sua senha. Se já tinha conta, use Entrar ou Esqueci minha senha.';
+        form.reset();
+        button.textContent='Começar teste grátis';
+      }
     }catch(error){
       feedback.textContent=error instanceof TypeError?'Sem conexão com o servidor. Tente novamente.':error.message;
       button.disabled=false;button.textContent=original;
