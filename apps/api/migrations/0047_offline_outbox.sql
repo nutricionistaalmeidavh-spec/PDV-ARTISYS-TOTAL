@@ -57,7 +57,9 @@ WHEN EXISTS(
  SELECT 1 FROM offline_pending_requests p JOIN offline_local_authority a
  ON a.tenant_id=p.tenant_id AND a.branch_id=p.branch_id
  WHERE p.tenant_id=NEW.tenant_id AND p.mutation_id=NEW.mutation_id
- AND a.mode='LOCAL' AND NEW.scope IN('inventory.receipt:'||p.branch_id,'inventory.adjust:'||p.branch_id)
+ AND a.mode='LOCAL' AND
+  (NEW.scope IN('inventory.receipt:'||p.branch_id,'inventory.adjust:'||p.branch_id)
+   OR (p.path LIKE '/api/v1/tenants/%/restaurant/%' AND NEW.scope LIKE 'restaurant.%'))
 )
 BEGIN
  INSERT INTO offline_outbox(tenant_id,branch_id,gateway_id,epoch,mutation_id,
