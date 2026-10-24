@@ -327,7 +327,7 @@ export function createApi(env,{now=()=>Date.now()}={}){
           if(modules)return modules;
         }
         if(env.LAN_MODE==='true'){
-          const lan=await r2LanRoute(request,db,session,membership,tenantId,commerceMatch[2],{now});
+          const lan=await r2LanRoute(request,db,session,membership,tenantId,commerceMatch[2],{now,offlineCashEnabled:env.OFFLINE_CASH_ENABLED==='true'});
           if(lan)return lan;
           const deviceDenied=await authorizeLanBusinessRequest(request,db,membership,tenantId);
           if(deviceDenied)return deviceDenied;
