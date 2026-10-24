@@ -52,6 +52,7 @@ export async function applyOfflineBaseline(db,snapshot,scope){
   await db.prepare('UPDATE tenant_memberships SET active=0 WHERE tenant_id=?').bind(scope.tenantId).run();
   await db.prepare('UPDATE users SET active=0 WHERE id IN(SELECT user_id FROM tenant_memberships WHERE tenant_id=?)').bind(scope.tenantId).run();
   const finalSessionStatus=[];
+  const finalSaleStatus=[];
   for(const table of ORDER){
    if(table==='stock_positions'&&outstanding>0)continue;
    const columns=(await db.prepare('PRAGMA table_info('+table+')').bind().all()).results.map(x=>x.name);
@@ -81,6 +82,10 @@ export async function applyOfflineBaseline(db,snapshot,scope){
       finalSessionStatus.push({id:original.id,status:original.status,closedAt:original.closed_at});
       record={...original,status:'OPEN',closed_at:null};
     }
+    if(table==='sales'&&original.status!=='OPEN'){
+      finalSaleStatus.push({id:original.id,status:original.status,completedAt:original.completed_at});
+      record={...original,status:'OPEN',completed_at:null};
+    }
     const names=Object.keys(record);
     if(!names.length||names.some(name=>!allowed.has(name)))throw Error('Schema incompatível em '+table);
     const placeholders=names.map(()=>'?').join(',');
@@ -94,6 +99,10 @@ export async function applyOfflineBaseline(db,snapshot,scope){
     // A primary-key-only record needs DO NOTHING; all supported rows have mutable columns.
     await db.prepare(sql).bind(...names.map(n=>record[n]===undefined?null:record[n])).run();
    }
+  }
+  for(const update of finalSaleStatus){
+    await db.prepare('UPDATE sales SET status=?,completed_at=? WHERE tenant_id=? AND branch_id=? AND id=?')
+      .bind(update.status,update.completedAt,scope.tenantId,scope.branchId,update.id).run();
   }
   for(const update of finalSessionStatus){
     await db.prepare('UPDATE restaurant_table_sessions SET status=?,closed_at=? WHERE tenant_id=? AND branch_id=? AND id=?')
