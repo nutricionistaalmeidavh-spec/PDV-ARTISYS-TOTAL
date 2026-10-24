@@ -24,7 +24,10 @@ function verify(snapshot,scope){
  for(const table of EXTRA)if(!tables[table])tables[table]=[]; // pre-extension baseline
  if(snapshot.authority&&(!['CLOUD','LOCAL','RECONCILING'].includes(snapshot.authority.mode)||
    !Number.isSafeInteger(snapshot.authority.epoch)||snapshot.authority.epoch<0))throw Error('Autoridade offline inválida.');
- for(const key of ORDER)if(!Array.isArray(tables[key])||tables[key].length>2500)
+ // v1 is a single bounded JSON snapshot; v2 uses authenticated, checksum-
+ // verified pages and permits large sets without silently dropping records.
+ const maxRows=snapshot.changedTables?100000:2500;
+ for(const key of ORDER)if(!Array.isArray(tables[key])||tables[key].length>maxRows)
    throw Error('Snapshot incompleto ou muito grande: '+key);
  if(tables.tenants.length!==1||tables.tenants[0].id!==scope.tenantId)throw Error('Empresa inválida.');
  if(tables.branches.length!==1||tables.branches[0].id!==scope.branchId||
