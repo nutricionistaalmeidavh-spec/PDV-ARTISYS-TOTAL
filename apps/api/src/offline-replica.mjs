@@ -53,6 +53,7 @@ export async function applyOfflineBaseline(db,snapshot,scope){
   await db.prepare('UPDATE users SET active=0 WHERE id IN(SELECT user_id FROM tenant_memberships WHERE tenant_id=?)').bind(scope.tenantId).run();
   const finalSessionStatus=[];
   const finalSaleStatus=[];
+  const finalCashStatus=[];
   for(const table of ORDER){
    if(table==='stock_positions'&&outstanding>0)continue;
    const columns=(await db.prepare('PRAGMA table_info('+table+')').bind().all()).results.map(x=>x.name);
@@ -81,6 +82,18 @@ export async function applyOfflineBaseline(db,snapshot,scope){
     if(table==='restaurant_table_sessions'&&original.status!=='OPEN'){
       finalSessionStatus.push({id:original.id,status:original.status,closedAt:original.closed_at});
       record={...original,status:'OPEN',closed_at:null};
+    }
+    if(table==='cash_sessions'&&original.status==='CLOSED'){
+      const oldDrawer=await db.prepare('SELECT status FROM cash_sessions WHERE tenant_id=? AND branch_id=? AND id=?')
+       .bind(scope.tenantId,scope.branchId,original.id).first();
+      if(oldDrawer?.status==='CLOSED')continue; // Never update closed immutable ledger projections.
+      finalCashStatus.push({
+        id:original.id,closedAt:original.closed_at,closedBy:original.closed_by_user_id,
+        counted:original.counted_cash_cents,expected:original.expected_cash_cents,
+        divergence:original.divergence_cents
+      });
+      record={...original,status:'OPEN',closed_at:null,closed_by_user_id:null,
+        counted_cash_cents:null,expected_cash_cents:null,divergence_cents:null};
     }
     if(table==='sales'){
       const existingSale=await db.prepare('SELECT status FROM sales WHERE tenant_id=? AND branch_id=? AND id=?')
@@ -111,6 +124,10 @@ export async function applyOfflineBaseline(db,snapshot,scope){
   for(const update of finalSaleStatus){
     await db.prepare('UPDATE sales SET status=?,completed_at=? WHERE tenant_id=? AND branch_id=? AND id=?')
       .bind(update.status,update.completedAt,scope.tenantId,scope.branchId,update.id).run();
+  }
+  for(const update of finalCashStatus){
+    await db.prepare('UPDATE cash_sessions SET status=?,closed_at=?,closed_by_user_id=?,expected_cash_cents=?,counted_cash_cents=?,divergence_cents=? WHERE tenant_id=? AND branch_id=? AND id=?')
+      .bind('CLOSED',update.closedAt,update.closedBy,update.expected,update.counted,update.divergence,scope.tenantId,scope.branchId,update.id).run();
   }
   for(const update of finalSessionStatus){
     await db.prepare('UPDATE restaurant_table_sessions SET status=?,closed_at=? WHERE tenant_id=? AND branch_id=? AND id=?')
