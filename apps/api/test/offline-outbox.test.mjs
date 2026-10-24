@@ -128,5 +128,5 @@ test('a new authorized gateway epoch may reuse sequence 1 without colliding with
  await db.prepare(sql).bind('epoch-shop','epoch-branch',1,1,'first-epoch-event','a'.repeat(64),'{}',100).run();
  await db.prepare(sql).bind('epoch-shop','epoch-branch',2,1,'second-epoch-event','b'.repeat(64),'{}',200).run();
  const rows=(await db.prepare('SELECT epoch,sequence FROM offline_replay_receipts ORDER BY epoch').bind().all()).results;
- assert.deepEqual(rows,[{epoch:1,sequence:1},{epoch:2,sequence:1}]);
+ assert.deepEqual(rows.map(row=>({epoch:row.epoch,sequence:row.sequence})),[{epoch:1,sequence:1},{epoch:2,sequence:1}]);
 });
