@@ -77,8 +77,8 @@ export async function finishOfflineAuthority(db,env,{fetcher=fetch}={}){
  if(result.conflicts)throw Object.assign(Error('Conflitos precisam de revisão; não é seguro liberar a nuvem.'),{status:409});
  const progress=await db.prepare("SELECT COUNT(*) AS pending,COALESCE(MAX(sequence),0) AS lastSequence FROM offline_outbox WHERE tenant_id=? AND branch_id=? AND status IN('PENDING','CONFLICT')").bind(scope.tenantId,scope.branchId).first();
  if(progress.pending)throw Object.assign(Error('Há operações sem ACK do D1.'),{status:409});
- const seq=await db.prepare('SELECT COALESCE(MAX(sequence),0) AS seq FROM offline_outbox WHERE tenant_id=? AND branch_id=?')
-  .bind(scope.tenantId,scope.branchId).first();
+ const seq=await db.prepare('SELECT COALESCE(MAX(sequence),0) AS seq FROM offline_outbox WHERE tenant_id=? AND branch_id=? AND epoch=?')
+  .bind(scope.tenantId,scope.branchId,scope.epoch).first();
  const origin=new URL(env.OFFLINE_CLOUD_ORIGIN);
  const response=await fetcher(origin.origin+'/api/v1/offline/gateway/release',{
   method:'POST',headers:{authorization:'Bearer '+env.OFFLINE_GATEWAY_TOKEN,
