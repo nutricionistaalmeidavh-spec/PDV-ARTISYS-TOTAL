@@ -455,3 +455,21 @@ BEGIN
  VALUES(OLD.tenant_id,OLD.branch_id,'sale_refund_movements',1)
  ON CONFLICT(tenant_id,branch_id,table_name) DO UPDATE SET revision=revision+1;
 END;
+
+-- Node stores D1 versions separately: local SQLite has its own write triggers.
+CREATE TABLE IF NOT EXISTS offline_downloaded_versions(
+ tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,table_name TEXT NOT NULL,
+ cloud_revision INTEGER NOT NULL, row_count INTEGER NOT NULL,
+ last_success_at INTEGER NOT NULL,
+ PRIMARY KEY(tenant_id,branch_id,table_name)
+);
+-- Resume a large multi-page transfer after a dropped connection or PC restart.
+-- Cached pages are discarded when the cloud revision changes.
+CREATE TABLE IF NOT EXISTS offline_download_pages(
+ tenant_id TEXT NOT NULL,branch_id TEXT NOT NULL,table_name TEXT NOT NULL,
+ cloud_revision INTEGER NOT NULL,page_start INTEGER NOT NULL,page_end INTEGER NOT NULL,
+ payload_json TEXT NOT NULL,checksum TEXT NOT NULL,
+ PRIMARY KEY(tenant_id,branch_id,table_name,cloud_revision,page_start)
+);
+CREATE INDEX IF NOT EXISTS offline_download_pages_resume
+ ON offline_download_pages(tenant_id,branch_id,table_name,cloud_revision,page_end);
