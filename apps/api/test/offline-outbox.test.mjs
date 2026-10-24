@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openLocalDatabase} from '../src/local-db.mjs';
 import {applyLocalMigrations} from '../src/local-migrations.mjs';
-import {hashPassword} from '../src/password.mjs';
+import {hashPassword,sha256} from '../src/password.mjs';
 import {createApi} from '../src/worker.mjs';
 import {applyOfflineBaseline} from '../src/offline-replica.mjs';
 import {pushOfflineOutbox,finishOfflineAuthority} from '../src/offline-outbox.mjs';
@@ -36,6 +36,18 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
  const denied=await call(cloudApi,'/api/v1/tenants/a/inventory/receipts',{method:'POST',cookie:owner,
   headers:{'x-mutation-id':'remote-write-0001'},body:{branchId:'a-branch',productId:'a-product',quantity:2}});
  assert.equal(denied.status,423,'cloud writer blocked during LAN authority');
+ // A signed gateway message must not settle an old cloud sale outside this
+ // authority epoch. No machine can fabricate a prior accepted sale.
+ const forgedPath='/api/v1/tenants/a/sales/legacy-sale/complete';
+ const forgedBody={branchId:'a-branch',payments:[{method:'CASH',amountCents:1000}]};
+ const forgedHash=await sha256(JSON.stringify({method:'POST',path:forgedPath,
+   body:JSON.stringify(forgedBody),userId:'a-owner'}));
+ const rogue=await call(cloudApi,'/api/v1/offline/gateway/replay',{
+  method:'POST',headers:{authorization:'Bearer '+credential,'x-pdv-offline-gateway-id':gateway.id},
+  body:{sequence:1,epoch:activate.data.epoch,mutationId:'forged-sale-0001',method:'POST',
+   path:forgedPath,body:forgedBody,operatorId:'a-owner',payloadHash:forgedHash,createdAt:Date.now()}});
+ assert.equal(rogue.status,403,'historic sale cannot be settled by forged gateway replay');
+
  const snapshot=await call(cloudApi,'/api/v1/offline/gateway/snapshot',
   {headers:{authorization:'Bearer '+credential,'x-pdv-offline-gateway-id':gateway.id}});
  assert.equal(snapshot.status,200);assert.equal(snapshot.data.authority.mode,'LOCAL');
