@@ -7,7 +7,7 @@ const reply=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'con
 const fail=(status,s)=>reply({error:s},status);
 const ID=/^[a-zA-Z0-9-]{1,128}$/;
 const MUT=/^[A-Za-z0-9_-]{8,100}$/;
-const WRITE_PATH=/^\/api\/v1\/tenants\/([^/]+)\/(inventory\/(?:receipts|adjustments)|restaurant\/(?:tables|orders|tables\/[a-zA-Z0-9-]{1,128}\/open|kitchen\/[a-zA-Z0-9-]{1,128}))$/;
+const WRITE_PATH=/^\/api\/v1\/tenants\/([^/]+)\/(inventory\/(?:receipts|adjustments)|restaurant\/(?:tables|orders|tables\/[a-zA-Z0-9-]{1,128}\/open|kitchen\/[a-zA-Z0-9-]{1,128}|orders\/[a-zA-Z0-9-]{1,128}\/(?:deliver|cancel)|sessions\/[a-zA-Z0-9-]{1,128}\/close))$/;
 export async function activateOfflineBranch(db,tenantId,gatewayId,now){
  const gateway=await db.prepare('SELECT id,branch_id AS branchId FROM offline_gateways WHERE id=? AND tenant_id=? AND active=1')
   .bind(gatewayId,tenantId).first();
