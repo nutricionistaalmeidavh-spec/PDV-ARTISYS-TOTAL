@@ -14,6 +14,12 @@ function verify(snapshot,scope){
     snapshot.scope?.tenantId!==scope.tenantId||snapshot.scope?.branchId!==scope.branchId||
     snapshot.scope?.gatewayId!==scope.gatewayId)throw Error('Snapshot fora do escopo autorizado.');
  const tables=snapshot.tables;
+ const changed=snapshot.changedTables;
+ if(changed!==undefined&&(!Array.isArray(changed)||changed.some(name=>!ORDER.includes(name))))
+  throw Error('Lista de tabelas alteradas inválida.');
+ if(changed!==undefined&&['tenants','branches','users','tenant_memberships','saas_mfa_totp'].some(t=>!changed.includes(t)))
+  throw Error('Identidade não está completa na sincronização incremental.');
+
  if(!tables.saas_mfa_totp)tables.saas_mfa_totp=[]; // pre-MFA v1 snapshots had no enrolled factors
  for(const table of EXTRA)if(!tables[table])tables[table]=[]; // pre-extension baseline
  if(snapshot.authority&&(!['CLOUD','LOCAL','RECONCILING'].includes(snapshot.authority.mode)||
@@ -60,6 +66,7 @@ export async function applyOfflineBaseline(db,snapshot,scope){
   const finalSaleStatus=[];
   const finalCashStatus=[];
   for(const table of ORDER){
+   if(snapshot.changedTables&&!snapshot.changedTables.includes(table))continue;
    // WAN may return while waiter/cash writes are still queued. Never import a
    // cloud business projection over those newer local changes before every
    // event has a durable D1 ACK. Users and product catalog can still refresh.
@@ -171,6 +178,18 @@ export async function applyOfflineBaseline(db,snapshot,scope){
   }
   const damaged=(await db.prepare('PRAGMA foreign_key_check').bind().all()).results;
   if(damaged.length)throw Error('Snapshot falhou na integridade referencial.');
+  if(snapshot.datasetVersions){
+   for(const [table,meta] of Object.entries(snapshot.datasetVersions)){
+    if(!ORDER.includes(table)||!Number.isSafeInteger(meta.revision)||meta.revision<0||
+      !Number.isSafeInteger(meta.count)||meta.count<0)throw Error('Versão de dataset inválida.');
+    if(outstanding>0&&EXTRA.includes(table))continue;
+    if(outstanding>0&&table==='stock_positions')continue;
+    await db.prepare('INSERT INTO offline_downloaded_versions(tenant_id,branch_id,table_name,cloud_revision,row_count,last_success_at) VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id,table_name) DO UPDATE SET cloud_revision=excluded.cloud_revision,row_count=excluded.row_count,last_success_at=excluded.last_success_at')
+     .bind(scope.tenantId,scope.branchId,table,meta.revision,meta.count,Date.now()).run();
+    await db.prepare('DELETE FROM offline_download_pages WHERE tenant_id=? AND branch_id=? AND table_name=?')
+     .bind(scope.tenantId,scope.branchId,table).run();
+   }
+  }
   const stamp=new Date().toISOString();
   await db.prepare('INSERT INTO offline_replica_state(tenant_id,branch_id,gateway_id,last_pull_at,state) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,branch_id) DO UPDATE SET last_pull_at=excluded.last_pull_at,state=excluded.state')
    .bind(scope.tenantId,scope.branchId,scope.gatewayId,stamp,'BASELINE_ONLY').run();
