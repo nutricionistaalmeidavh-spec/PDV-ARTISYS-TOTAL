@@ -5,6 +5,7 @@ import {applyLocalMigrations} from '../src/local-migrations.mjs';
 import {hashPassword} from '../src/password.mjs';
 import {createApi} from '../src/worker.mjs';
 import {pullOfflineFast} from '../src/offline-fast-client.mjs';
+import {applyOfflineBaseline} from '../src/offline-replica.mjs';
 
 test('versioned summary avoids unchanged 300-product transfer, pages changed catalogs and authenticates each request',async t=>{
  const cloud=openLocalDatabase(),local=openLocalDatabase(); t.after(()=>{cloud.close();local.close();});
@@ -86,4 +87,23 @@ test('versioned summary avoids unchanged 300-product transfer, pages changed cat
  const foreign=await call('/api/v1/offline/gateway/page?table=products&after=0&limit=50',{
   headers:{authorization:'Bearer '+credential,'x-pdv-offline-gateway-id':'not-my-gateway'}});
  assert.equal(foreign.status,401);
+});
+
+test('v2 authenticated pages import more than 2500 rows without reintroducing legacy snapshot cap',async t=>{
+ const db=openLocalDatabase();t.after(()=>db.close());await applyLocalMigrations(db);
+ const stamp='2026-10-23T00:00:00.000Z',scope={tenantId:'stress',branchId:'stress-branch',gatewayId:'stress-gateway'};
+ const products=Array.from({length:2550},(_,i)=>({
+  id:'catalog-'+i,tenant_id:'stress',sku:'PRODUCT-'+i,name:'Menu '+i,
+  sale_price_cents:1000,created_at:stamp,updated_at:stamp
+ }));
+ const snapshot={version:1,baselineOnly:true,scope,changedTables:[
+  'tenants','branches','users','tenant_memberships','saas_mfa_totp','products'
+ ],tables:{
+  tenants:[{id:'stress',slug:'stress',name:'Stress',active:1,created_at:stamp}],
+  branches:[{id:'stress-branch',tenant_id:'stress',code:'MAIN',name:'Main',active:1,created_at:stamp}],
+  users:[],tenant_memberships:[],saas_mfa_totp:[],product_categories:[],products,stock_positions:[]
+ }};
+ const imported=await applyOfflineBaseline(db,snapshot,scope);
+ assert.equal(imported.imported.products,2550);
+ assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM products WHERE tenant_id='stress'").bind().first()).n,2550);
 });
