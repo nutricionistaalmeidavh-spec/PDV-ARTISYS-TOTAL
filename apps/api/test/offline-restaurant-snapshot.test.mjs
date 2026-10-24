@@ -38,7 +38,11 @@ test('D1 restaurant snapshot preserves linked closed table, served orders and se
  await cloud.prepare('INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)')
   .bind('sold-item',tId,branch,'paid-sale','alpha-product','Pizza','MAIN',1000,2500,stamp).run();
  await cloud.prepare('INSERT INTO sale_payments(id,tenant_id,branch_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?)')
-  .bind('pix-payment',tId,branch,'paid-sale','PIX',2500,stamp).run();
+  .bind('cash-payment',tId,branch,'paid-sale','CASH',2500,stamp).run();
+ await cloud.prepare('INSERT INTO cash_movements(id,tenant_id,branch_id,cash_session_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?,?)')
+  .bind('cash-movement',tId,branch,'cash-session','paid-sale','CASH',2500,stamp).run();
+ await cloud.prepare('UPDATE cash_sessions SET status=?,closed_at=?,closed_by_user_id=?,expected_cash_cents=?,counted_cash_cents=?,divergence_cents=? WHERE id=?')
+  .bind('CLOSED',stamp,'alpha-owner',7500,7500,0,'cash-session').run();
  await cloud.prepare('UPDATE sales SET status=?,completed_at=? WHERE id=?')
   .bind('COMPLETED',stamp,'paid-sale').run();
  await cloud.prepare('INSERT INTO restaurant_sale_links(id,tenant_id,branch_id,table_session_id,sale_id,created_at) VALUES(?,?,?,?,?,?)')
@@ -75,6 +79,8 @@ test('D1 restaurant snapshot preserves linked closed table, served orders and se
  assert.equal(localSession.closedAt,stamp);
  assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM restaurant_order_items').bind().first()).n,1);
  assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM sale_payments').bind().first()).n,1);
+ assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM cash_movements').bind().first()).n,1);
+ assert.equal((await local.prepare('SELECT status,expected_cash_cents AS balance FROM cash_sessions WHERE id=?').bind('cash-session').first()).status,'CLOSED');
  assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM restaurant_sale_links').bind().first()).n,1);
  await applyOfflineBaseline(local,snapshot,scope);
  assert.equal((await local.prepare('SELECT COUNT(*) AS n FROM restaurant_order_items').bind().first()).n,1,'second pull must not duplicate immutable order rows');
