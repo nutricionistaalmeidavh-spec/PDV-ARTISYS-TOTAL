@@ -173,14 +173,24 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
   method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-linked-close-001'},
   body:{branchId:'a-branch'}});
  assert.equal(tableClosed.status,200,JSON.stringify(tableClosed.data));
- const blockedPix=await call(localApi,'/api/v1/tenants/a/sales/'+saleId+'/complete',{
-  method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-pix-denied-001'},
-  body:{branchId:'a-branch',payments:[{method:'PIX',amountCents:1000}]}});
- assert.equal(blockedPix.status,403,'Do not mark unverifiable PIX/card transactions paid offline');
+ // Manual payments: cashier checks PIX receipt and physical card machine.
+ // No TEF/acquirer API is required or implied by these PDV ledger records.
+ const deniedCredit=await call(localApi,'/api/v1/tenants/a/sales/'+saleId+'/complete',{
+  method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-credit-denied-001'},
+  body:{branchId:'a-branch',payments:[{method:'STORE_CREDIT',amountCents:1000}]}});
+ assert.equal(deniedCredit.status,403,'store credit must not be silently treated as a manual payment');
  const paid=await call(localApi,'/api/v1/tenants/a/sales/'+saleId+'/complete',{
-  method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-sale-paid-001'},
-  body:{branchId:'a-branch',payments:[{method:'CASH',amountCents:1000}]}});
- assert.equal(paid.status,200,JSON.stringify(paid.data));
+  method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-sale-manual-mixed-001'},
+  body:{branchId:'a-branch',payments:[
+   {method:'CASH',amountCents:200},{method:'PIX',amountCents:300},
+   {method:'DEBIT_CARD',amountCents:200},{method:'CREDIT_CARD',amountCents:300}
+  ]}});
+ assert.equal(paid.status,200,'mixed manual tender should work on local Wi-Fi without TEF: '+JSON.stringify(paid.data));
+ const localTenders=(await local.prepare('SELECT method,amount_cents AS amountCents FROM sale_payments WHERE sale_id=? ORDER BY method').bind(saleId).all()).results;
+ assert.deepEqual(localTenders.map(row=>({...row})),[
+  {method:'CASH',amountCents:200},{method:'CREDIT_CARD',amountCents:300},
+  {method:'DEBIT_CARD',amountCents:200},{method:'PIX',amountCents:300}
+ ]);
  // A stale cloud pull during a WAN recovery must not erase an already
  // committed local cash sale that has not yet reached D1.
  await applyOfflineBaseline(local,snapshot.data,{tenantId:'a',branchId:'a-branch',gatewayId:gateway.id});
@@ -188,7 +198,7 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
  assert.equal((await local.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE status='PENDING'").bind().first()).n,13);
  const closed=await call(localApi,'/api/v1/tenants/a/cash/sessions/'+tillId+'/close',{
   method:'POST',cookie:localOwner,headers:{...deviceHeaders,'x-mutation-id':'offline-cash-close-001'},
-  body:{branchId:'a-branch',countedCashCents:4000}});
+  body:{branchId:'a-branch',countedCashCents:3200}});
  assert.equal(closed.status,200,JSON.stringify(closed.data));
  assert.equal((await local.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE status='PENDING'").bind().first()).n,14);
  const released=await finishOfflineAuthority(local,{OFFLINE_CLOUD_ORIGIN:origin+'/',OFFLINE_GATEWAY_ID:gateway.id,
@@ -203,7 +213,10 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
  assert.equal((await cloud.prepare('SELECT status FROM restaurant_kitchen_tickets WHERE id=?').bind(kitchenId).first()).status,'READY');
  assert.equal((await cloud.prepare('SELECT status FROM cash_sessions WHERE id=?').bind(tillId).first()).status,'CLOSED');
  assert.equal((await cloud.prepare('SELECT status FROM sales WHERE id=?').bind(saleId).first()).status,'COMPLETED');
- assert.equal((await cloud.prepare('SELECT COUNT(*) AS n FROM sale_payments WHERE sale_id=?').bind(saleId).first()).n,1);
+ assert.equal((await cloud.prepare('SELECT COUNT(*) AS n FROM sale_payments WHERE sale_id=?').bind(saleId).first()).n,4);
+ const replayed=(await cloud.prepare('SELECT method,amount_cents AS amountCents FROM sale_payments WHERE sale_id=? ORDER BY method').bind(saleId).all()).results;
+ assert.deepEqual(replayed.map(row=>({...row})),localTenders.map(row=>({...row})),
+  'Cloud D1 must reproduce the same 4 manually recorded payment rows, exactly once');
  assert.equal((await cloud.prepare('SELECT sale_id AS id FROM restaurant_sale_links WHERE table_session_id=?').bind(sessionId).first()).id,linkedId);
  assert.equal((await cloud.prepare('SELECT status FROM restaurant_table_sessions WHERE id=?').bind(sessionId).first()).status,'CLOSED');
  assert.equal((await cloud.prepare('SELECT status FROM sales WHERE id=?').bind(linkedId).first()).status,'COMPLETED');
