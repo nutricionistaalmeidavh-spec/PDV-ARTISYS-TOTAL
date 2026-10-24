@@ -1,5 +1,6 @@
 import {sha256} from './password.mjs';
 import {offlineLinkedCheckoutAllowed} from './offline-linked-checkout.mjs';
+import {validOfflineManualSettlement} from './offline-manual-payments.mjs';
 
 // Only canonical inventory mutations with a durable commerce_mutations audit are
 // permitted in this first transactional replay protocol. Never queue an
@@ -33,18 +34,16 @@ export async function stageOfflineMutation(db,request,{tenantId,branchId,userId,
     (request.method==='PATCH'&&!/\/restaurant\/kitchen\/[a-zA-Z0-9-]+$/.test(path))||
     (request.method==='POST'&&/\/restaurant\/kitchen\//.test(path)))
   throw Object.assign(Error('Filial da operação offline inválida.'),{status:400});
- // Physical CASH-only pilot: no card/PIX charge can be labelled paid without
- // an independent acquirer confirmation. Never settle a restaurant prepayment
- // or a sale that predates the current offline authority epoch.
+ // Offline manual tender: cashier confirms cash received, PIX receipt, or
+ // physical card terminal operation before recording it in the PDV.
+ // There is NO TEF/acquirer integration. Historical sale epochs remain fenced.
  if(CASH_PATH.test(path.split('/').slice(5).join('/'))){
    if(!allowCash)throw Object.assign(Error('Caixa offline não habilitado.'),{status:403});
    if(/\/sales$/.test(path))
      await offlineLinkedCheckoutAllowed(db,tenantId,branchId,body);
    if(/\/complete$/.test(path)){
-     if(!Array.isArray(body.payments)||body.payments.length<1||
-        body.payments.some(p=>p?.method!=='CASH'||!Number.isSafeInteger(p.amountCents)||p.amountCents<=0)||
-        body.shares||body.customerId||body.storeCredit)
-       throw Object.assign(Error('Somente dinheiro físico é aceito no caixa offline.'),{status:403});
+     if(!validOfflineManualSettlement(body))
+       throw Object.assign(Error('Forma de pagamento manual offline inválida: use dinheiro, PIX, débito ou crédito.'),{status:403});
    }
    const dependentSale=path.match(/\/sales\/([a-zA-Z0-9-]+)\/(?:items|complete)$/);
    if(dependentSale){
