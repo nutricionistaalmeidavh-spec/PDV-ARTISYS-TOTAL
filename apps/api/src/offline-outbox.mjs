@@ -22,7 +22,7 @@ export async function stageOfflineMutation(db,request,{tenantId,branchId,userId,
  const path=new URL(request.url).pathname,mutationId=request.headers.get('x-mutation-id')||'';
  if(!allowed(path,tenantId,allowCash)||!['POST','PATCH'].includes(request.method)||!MUTATION.test(mutationId))
   throw Object.assign(Error('Operação offline não suportada ou sem chave de idempotência.'),{status:403});
- const state=await db.prepare('SELECT a.gateway_id AS gatewayId,a.mode,a.refreshed_at AS refreshedAt FROM offline_local_authority a WHERE a.tenant_id=? AND a.branch_id=?').bind(tenantId,branchId).first();
+ const state=await db.prepare('SELECT a.gateway_id AS gatewayId,a.epoch,a.mode,a.refreshed_at AS refreshedAt FROM offline_local_authority a WHERE a.tenant_id=? AND a.branch_id=?').bind(tenantId,branchId).first();
  if(!state||state.mode!=='LOCAL'||now-state.refreshedAt>86400000)
   throw Object.assign(Error('Autoridade offline não confirmada para esta filial.'),{status:503});
  const raw=await request.clone().text();
@@ -45,6 +45,12 @@ export async function stageOfflineMutation(db,request,{tenantId,branchId,userId,
         body.payments.some(p=>p?.method!=='CASH'||!Number.isSafeInteger(p.amountCents)||p.amountCents<=0)||
         body.shares||body.customerId||body.storeCredit)
        throw Object.assign(Error('Somente dinheiro físico é aceito no caixa offline.'),{status:403});
+   }
+   const dependentSale=path.match(/\/sales\/([a-zA-Z0-9-]+)\/(?:items|complete)$/);
+   if(dependentSale){
+     const opened=await db.prepare("SELECT 1 AS ok FROM offline_outbox o JOIN commerce_mutations m ON m.tenant_id=o.tenant_id AND m.mutation_id=o.mutation_id WHERE o.tenant_id=? AND o.branch_id=? AND o.epoch=? AND m.scope LIKE 'sale.open:%' AND json_extract(m.result_json,'$.id')=? LIMIT 1")
+      .bind(tenantId,branchId,state.epoch,dependentSale[1]).first();
+     if(!opened)throw Object.assign(Error('Somente vendas abertas neste período offline podem ser alteradas ou recebidas.'),{status:403});
    }
    const close=path.match(/\/cash\/sessions\/([a-zA-Z0-9-]+)\/close$/);
    if(close){
