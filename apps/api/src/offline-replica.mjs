@@ -3,7 +3,10 @@
 // Parent entities precede branch-scoped operational records.
 const EXTRA=['customers','cash_sessions','sales','sale_items','sale_payments',
  'cash_movements','restaurant_tables','restaurant_table_sessions','restaurant_orders',
- 'restaurant_order_items','restaurant_kitchen_tickets','restaurant_service_requests','restaurant_sale_links'];
+ 'restaurant_order_items','restaurant_kitchen_tickets','restaurant_service_requests',
+ 'restaurant_sale_links','r4_split_plans','cash_adjustments','customer_credit_receipts',
+ 'r4_table_prepayments','r4_table_prepayment_refunds',
+ 'sale_returns','sale_return_items','sale_refund_movements'];
 const ORDER=['tenants','branches','users','tenant_memberships','saas_mfa_totp',
  'product_categories','products','stock_positions',...EXTRA];
 function verify(snapshot,scope){
@@ -111,7 +114,9 @@ export async function applyOfflineBaseline(db,snapshot,scope){
     if(!names.length||names.some(name=>!allowed.has(name)))throw Error('Schema incompatível em '+table);
     const placeholders=names.map(()=>'?').join(',');
     const appendOnly=['sale_items','sale_payments','cash_movements',
-      'restaurant_order_items','restaurant_sale_links'].includes(table);
+      'restaurant_order_items','restaurant_sale_links','cash_adjustments',
+      'customer_credit_receipts','r4_table_prepayments','r4_table_prepayment_refunds',
+      'sale_returns','sale_return_items','sale_refund_movements'].includes(table);
     const sql='INSERT INTO '+table+'('+names.join(',')+') VALUES('+placeholders+') '+
       (appendOnly?'ON CONFLICT DO NOTHING':'ON CONFLICT DO UPDATE SET '+
       names.filter(k=>!['id','tenant_id','branch_id','user_id','product_id'].includes(k)).map(k=>
