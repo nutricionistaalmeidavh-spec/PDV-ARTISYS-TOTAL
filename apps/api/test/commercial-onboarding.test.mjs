@@ -43,56 +43,53 @@ async function fixture({failEmail=false}={}){
  return {db,env,api,sent,post,central,close:()=>db.close()};
 }
 
-test('production opt-in and landing invite users to request a reviewed 14-day trial, not immediate unapproved access',()=>{
+test('public trial is enabled with immediate access; no platform approval or free owner-created tenants',()=>{
  const raw=readFileSync(new URL('../../../wrangler.jsonc',import.meta.url),'utf8');
  const config=JSON.parse(raw.replace(/^\s*\/\/.*$/gm,''));
  assert.equal(config.vars.REGISTRATION_ENABLED,'true');
  assert.equal(config.vars.TENANT_SELF_SIGNUP_ENABLED,'false');
  const html=readFileSync(new URL('../../../apps/landing/index.html',import.meta.url),'utf8');
- assert.match(html,/Solicitar teste grátis/);
+ assert.match(html,/Começar teste grátis/);
  assert.match(html,/14 dias/);
- assert.match(html,/aprovação da ArtiSys/i);
+ assert.doesNotMatch(html,/depende da aprovação da ArtiSys/i);
  const js=readFileSync(new URL('../../../apps/landing/landing.js',import.meta.url),'utf8');
  assert.match(js,/fetch\('\/api\/v1\/auth\/register'/);
  assert.match(js,/credentials:'same-origin'/);
 });
 
-test('landing request → signed ArtiSys approval → new 14-day trial → existing owner login and monthly license',async()=>{
+test('landing signup → immediately active scoped 14-day trial → owner login and month license; no central approval',async()=>{
  const x=await fixture();
  try{
   const register=await x.post('/api/v1/auth/register',buyer,{'cf-connecting-ip':'198.51.100.10'});
   assert.equal(register.status,202,await register.clone().text());
   const tenant=await x.db.prepare('SELECT id,active FROM tenants WHERE name=?').bind(buyer.businessName).first();
-  assert.equal(tenant.active,0);
-  assert.equal((await x.post('/api/v1/auth/login',{email:buyer.email,password:buyer.password})).status,403);
-  assert.equal(await tenantWriteAllowed(x.db,tenant.id,x.env,NOW),false);
-  assert.equal(x.sent.length,0);
-
-  const pending=await x.central({action:'tenants'});
-  assert.equal(pending.status,200);
-  const listings=(await pending.json()).pendingTenants;
-  assert.equal(listings.filter(t=>t.id===tenant.id).length,1);
-  const approved=await x.central({action:'approve',tenantId:tenant.id});
-  assert.equal(approved.status,200,await approved.clone().text());
-  const approvedData=await approved.json();
-  assert.equal(approvedData.approved,true);
-  assert.equal(approvedData.emailSent,true);
-  assert.equal(approvedData.trialEndsAt,new Date(NOW+14*86400000).toISOString());
+  assert.equal(tenant.active,1);
+  const membership=await x.db.prepare('SELECT active,profile_key AS role FROM tenant_memberships WHERE tenant_id=?').bind(tenant.id).first();
+  assert.equal(membership.active,1);
+  assert.equal(membership.role,'OWNER');
+  const subscription=await x.db.prepare('SELECT status,plan_key AS planKey,ends_at AS endsAt FROM saas_subscriptions WHERE tenant_id=?').bind(tenant.id).first();
+  assert.equal(subscription.status,'TRIAL');
+  assert.equal(subscription.planKey,'trial');
+  assert.equal(subscription.endsAt,new Date(NOW+14*86400000).toISOString());
+  assert.equal(await tenantWriteAllowed(x.db,tenant.id,x.env,NOW),true);
+  assert.equal(await tenantWriteAllowed(x.db,tenant.id,x.env,NOW+14*86400000),false);
+  const audit=await x.db.prepare("SELECT COUNT(*) AS n FROM saas_audit_events WHERE tenant_id=? AND kind='PUBLIC_AUTO_TRIAL_STARTED'").bind(tenant.id).first();
+  assert.equal(audit.n,1);
+  assert.equal((await x.post('/api/v1/auth/login',{email:buyer.email,password:buyer.password})).status,200);
   assert.equal(x.sent.length,1);
   assert.equal(x.sent[0].to,buyer.email);
   assert.match(x.sent[0].text,/14 dias/);
   assert.match(x.sent[0].text,/https:\/\/pdv\.artisys\.dev\/app\//);
-
-  const duplicate=await x.central({action:'approve',tenantId:tenant.id});
-  assert.equal(duplicate.status,409);
+  const tenants=await (await x.central({action:'tenants'})).json();
+  assert.equal(tenants.pendingTenants.length,0);
+  const forbiddenRepeat=await x.central({action:'approve',tenantId:tenant.id});
+  assert.equal(forbiddenRepeat.status,409);
   assert.equal(x.sent.length,1);
-  const subscription=await x.db.prepare('SELECT status,plan_key AS planKey,ends_at AS endsAt FROM saas_subscriptions WHERE tenant_id=?').bind(tenant.id).first();
-  assert.equal(subscription.status,'TRIAL');
-  assert.equal(subscription.planKey,'trial');
-  assert.equal(subscription.endsAt,approvedData.trialEndsAt);
-  assert.equal(await tenantWriteAllowed(x.db,tenant.id,x.env,NOW),true);
-  assert.equal(await tenantWriteAllowed(x.db,tenant.id,x.env,NOW+14*86400000),false);
-  assert.equal((await x.post('/api/v1/auth/login',{email:buyer.email,password:buyer.password})).status,200);
+  const again=await x.post('/api/v1/auth/register',buyer);
+  assert.equal(again.status,202);
+  assert.equal((await x.db.prepare('SELECT COUNT(*) AS n FROM tenants').bind().first()).n,1);
+  assert.equal((await x.db.prepare("SELECT COUNT(*) AS n FROM saas_subscriptions WHERE tenant_id=?").bind(tenant.id).first()).n,1);
+  assert.equal(x.sent.length,1);
 
   const grant=await x.central({action:'owner-license',data:{email:buyer.email,months:1,reason:'Contrato ArtiSys aprovado para o estabelecimento'}});
   assert.equal(grant.status,201,await grant.clone().text());
@@ -107,15 +104,13 @@ test('landing request → signed ArtiSys approval → new 14-day trial → exist
  }finally{x.close();}
 });
 
-test('approval remains committed and returns emailSent=false when transactional email transport fails',async()=>{
+test('signup remains automatically active if optional welcome email transport fails',async()=>{
  const x=await fixture({failEmail:true});
  try{
   assert.equal((await x.post('/api/v1/auth/register',buyer)).status,202);
   const tenant=await x.db.prepare('SELECT id FROM tenants').bind().first();
-  const approved=await x.central({action:'approve',tenantId:tenant.id});
-  assert.equal(approved.status,200);
-  assert.equal((await approved.json()).emailSent,false);
   assert.equal(await tenantWriteAllowed(x.db,tenant.id,x.env,NOW),true);
+  assert.equal(x.sent.length,0);
   assert.equal((await x.post('/api/v1/auth/login',{email:buyer.email,password:buyer.password})).status,200);
  }finally{x.close();}
 });
