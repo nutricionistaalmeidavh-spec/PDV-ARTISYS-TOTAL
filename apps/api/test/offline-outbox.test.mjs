@@ -116,12 +116,20 @@ test('offline inventory receipt is captured atomically, replayed with same idemp
    ...request,headers:{...deviceHeaders,'x-mutation-id':'offline-receipt-003'},
    body:{branchId:'a-branch',productId:'a-product',quantity:2}});
  assert.equal(next.status,201,JSON.stringify(next.data));
+ // One uninterrupted handoff must drain more than the per-request 25-event
+ // transport batch; no false release when the queue is larger than one batch.
+ for(let i=0;i<26;i++){
+   const burst=await call(localApi,'/api/v1/tenants/a/inventory/receipts',{
+     ...request,headers:{...deviceHeaders,'x-mutation-id':'offline-burst-'+String(i).padStart(3,'0')},
+     body:{branchId:'a-branch',productId:'a-product',quantity:1}});
+   assert.equal(burst.status,201,'offline burst write '+i+': '+JSON.stringify(burst.data));
+ }
  const secondRelease=await finishOfflineAuthority(local,{
   OFFLINE_CLOUD_ORIGIN:origin+'/',OFFLINE_GATEWAY_ID:gateway.id,
   OFFLINE_GATEWAY_TOKEN:credential},{fetcher});
  assert.equal(secondRelease.released,true,'second offline authority epoch must reconcile');
  assert.equal((await cloud.prepare('SELECT balance_milli AS n FROM stock_positions WHERE tenant_id=? AND branch_id=? AND product_id=?')
-   .bind('a','a-branch','a-product').first()).n,10000);
+   .bind('a','a-branch','a-product').first()).n,36000);
 });
 
 test('a new authorized gateway epoch may reuse sequence 1 without colliding with an earlier completed offline session',async t=>{
