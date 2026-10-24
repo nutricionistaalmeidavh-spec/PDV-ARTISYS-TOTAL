@@ -51,7 +51,7 @@ export async function pushOfflineOutbox(db,env,{fetcher=fetch,maxBatch=25}={}){
   if(row.gateway_id!==gatewayId)throw Error('Gateway da fila não corresponde ao servidor configurado.');
   const message={sequence:row.sequence,epoch:row.epoch,mutationId:row.mutation_id,
     path:row.path,method:row.method,body:JSON.parse(row.body_json),
-    operatorId:row.operator_id,payloadHash:row.payload_hash};
+    operatorId:row.operator_id,payloadHash:row.payload_hash,createdAt:row.created_at};
   const response=await fetcher(origin.origin+'/api/v1/offline/gateway/replay',{
     method:'POST',headers:{authorization:'Bearer '+token,'x-pdv-offline-gateway-id':gatewayId,
       'content-type':'application/json'},body:JSON.stringify(message),redirect:'error',
