@@ -72,15 +72,47 @@
    ]);
    Object.assign(state,{tables,orders:orderPage.orders||[],nextCursor:orderPage.nextCursor||null,tickets,stationTickets,printJobs,requests,products,report,reportRows:reportPage.orders||[],reportNextCursor:reportPage.nextCursor||null,prepayments:prepayments||null,splitPlan:splitPlan||null});
  }
+ function floorTable(t){
+   const status=t.sessionId?(t.sessionStatus==='CHECKOUT'?'checkout':'occupied'):'free';
+   const label=status==='free'?'Livre':status==='checkout'?'Pré-conta':'Ocupada';
+   const associated=state.orders.filter(o=>(o.table_session_id||o.tableSessionId)===t.sessionId&&o.status!=='CANCELLED');
+   const quantities=associated.reduce((sum,o)=>sum+(o.items||[]).reduce((count,item)=>count+Number(item.quantity||0),0),0);
+   const itemText=quantities>0?quantities.toLocaleString('pt-BR')+' '+(quantities===1?'item':'itens'):
+     associated.length?associated.length+' '+(associated.length===1?'pedido':'pedidos'):'Sem pedidos';
+   const total=associated.reduce((sum,o)=>sum+Number(o.total_cents??o.totalCents??0),0);
+   const hasFullTotal=!state.nextCursor&&associated.length>0&&associated.every(o=>Number.isFinite(Number(o.total_cents??o.totalCents)));
+   const action=t.sessionId?'select':'open',id=t.sessionId||t.id,allowed=Boolean(t.sessionId||can('restaurant.tables.manage'));
+   const tag=allowed?'button':'div',attributes=allowed?' type="button" data-r4-action="'+action+'" data-id="'+esc(id)+
+     '" aria-label="'+esc((t.sessionId?'Ver comanda da mesa ':'Abrir mesa ')+t.label)+'"':'';
+   return '<article class="restaurant-table restaurant-floor-table is-'+status+'">'+
+     '<span class="restaurant-table-seat restaurant-table-seat--top" aria-hidden="true"></span>'+
+     '<span class="restaurant-table-seat restaurant-table-seat--right" aria-hidden="true"></span>'+
+     '<span class="restaurant-table-seat restaurant-table-seat--bottom" aria-hidden="true"></span>'+
+     '<span class="restaurant-table-seat restaurant-table-seat--left" aria-hidden="true"></span>'+
+     '<'+tag+' class="restaurant-floor-face"'+attributes+'>'+
+       '<span class="restaurant-floor-top"><strong>'+esc(t.label)+'</strong>'+
+         (t.sessionId&&Number(t.partySize)>0?'<span>'+esc(t.partySize)+' pessoa(s)</span>':'')+'</span>'+
+       '<span class="restaurant-floor-body"><span class="restaurant-floor-status">'+label+'</span>'+
+         (t.sessionId?'<span class="restaurant-floor-items">'+esc(state.nextCursor?'Ver pedidos':itemText)+'</span>'+
+           (hasFullTotal?'<strong class="restaurant-floor-total">'+money(total)+'</strong>':''):'')+
+       '</span>'+
+       '<span class="restaurant-floor-cta">'+(allowed?(t.sessionId?'Ver comanda':'Abrir mesa'):'Disponível')+'</span>'+
+     '</'+tag+'></article>';
+ }
  function tableSection(){
    if(!can('restaurant.orders.view'))return '<p class="vertical-empty">Seu perfil não possui acesso às mesas.</p>';
    const open=state.tables.filter(t=>t.sessionId),free=state.tables.filter(t=>!t.sessionId&&t.active!==0);
    return '<section class="data-card"><h2>Mesas e comandas</h2>'+
      (can('restaurant.tables.manage')?'<div class="restaurant-actions"><button type="button" class="primary-button" data-r4-new-table>+ Mesa</button></div><div data-r4-new-table-form hidden><form data-r4-form="table" class="vertical-form">'+field('Identificação','label','text','required maxlength="80"')+field('Lugares','seats','number','min="0" max="1000" value="4"')+'<div class="restaurant-actions"><button class="primary-button">Salvar mesa</button><button type="button" class="secondary-button" data-r4-cancel-table>Cancelar</button></div></form></div>':'')+
-     '<div class="restaurant-grid">'+state.tables.map(t=>
-       '<article class="restaurant-table"><strong>'+esc(t.label)+'</strong><small>'+esc(t.sessionId?'Ocupada / '+title(t.sessionStatus):'Livre')+'</small>'+
-       (t.sessionId?'<div class="restaurant-actions">'+btn('Ver comanda','select',t.sessionId)+'</div>':
-         can('restaurant.tables.manage')?btn('Abrir mesa','open',t.id):'')+'</article>').join('')+'</div>'+
+     '<div class="restaurant-floor-map" aria-label="Mapa de mesas">'+
+       '<div class="restaurant-floor-legend" aria-label="Resumo das mesas">'+
+         '<span class="is-free">Livres <strong>'+free.length+'</strong></span>'+
+         '<span class="is-occupied">Ocupadas <strong>'+open.filter(t=>t.sessionStatus!=='CHECKOUT').length+'</strong></span>'+
+         '<span class="is-checkout">Pré-conta <strong>'+open.filter(t=>t.sessionStatus==='CHECKOUT').length+'</strong></span>'+
+       '</div>'+
+       '<div class="restaurant-grid">'+state.tables.filter(t=>t.active!==0||t.sessionId).map(floorTable).join('')+'</div>'+
+       (!state.tables.some(t=>t.active!==0||t.sessionId)?'<p class="restaurant-empty">Nenhuma mesa ativa cadastrada.</p>':'')+
+     '</div>'+
      (state.selected?(()=>{
        const s=open.find(t=>t.sessionId===state.selected);if(!s)return'';
        const orders=state.orders.filter(o=>o.table_session_id===state.selected);
