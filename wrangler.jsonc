@@ -31,7 +31,7 @@
   "vars": {
     "AUTH_ENABLED": "true",
     "EMAIL_FROM": "welcome@artisys.dev",
-    "REGISTRATION_ENABLED": "false",
+    "REGISTRATION_ENABLED": "true",
     "SAAS_ENTITLEMENTS_ENABLED": "true",
     "TENANT_SELF_SIGNUP_ENABLED": "false",
     "TRUST_CF_CONNECTING_IP": "true",

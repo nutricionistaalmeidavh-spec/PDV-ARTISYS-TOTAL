@@ -189,7 +189,7 @@ test('new tenant creation is owner-only, capped and cannot renew an expired subs
  }finally{x.close();}
 });
 
-test('public signup stays pending until private platform approval; approval is single-use and grants trial without client payment flags',async()=>{
+test('public signup grants 14-day TRIAL immediately; admin cannot reapprove or override entitlements',async()=>{
  const db=openLocalDatabase();
  const adminToken='platform-approval-secret-with-32-plus-characters';
  try{
@@ -209,18 +209,19 @@ test('public signup stays pending until private platform approval; approval is s
   assert.equal(registered.status,202,await registered.clone().text());
   assert.equal((await request('/api/v1/platform/tenants')).status,403);
   const auth={authorization:'Bearer '+adminToken};
-  const pending=await request('/api/v1/platform/tenants','GET',null,auth);
-  assert.equal(pending.status,200);
-  const list=(await pending.json()).pendingTenants;
-  assert.equal(list.length,1);assert.equal(list[0].ownerEmail,data.email);
-  const tenantId=list[0].id;
-  assert.equal((await request('/api/v1/auth/login','POST',{email:data.email,password:data.password})).status,403);
+  const listing=await request('/api/v1/platform/tenants','GET',null,auth);
+  assert.equal(listing.status,200);
+  const result=await listing.json();
+  assert.equal(result.pendingTenants.length,0);
+  const company=result.tenants.find(t=>t.ownerEmail===data.email);
+  assert.equal(company?.active,1);
+  assert.equal(company?.subscriptionStatus,'TRIAL');
+  const tenantId=company.id;
   assert.equal((await request('/api/v1/platform/tenants/'+tenantId+'/approve','POST',{},{})).status,403);
-  const approved=await request('/api/v1/platform/tenants/'+tenantId+'/approve','POST',{},auth);
-  assert.equal(approved.status,200,await approved.clone().text());
   assert.equal((await request('/api/v1/platform/tenants/'+tenantId+'/approve','POST',{},auth)).status,409);
-  const sub=await db.prepare('SELECT status,plan_key AS plan FROM saas_subscriptions WHERE tenant_id=?').bind(tenantId).first();
+  const sub=await db.prepare('SELECT status,plan_key AS plan,ends_at AS endsAt FROM saas_subscriptions WHERE tenant_id=?').bind(tenantId).first();
   assert.equal(sub.status,'TRIAL');assert.equal(sub.plan,'trial');
+  assert.equal(sub.endsAt,new Date(NOW+14*86400000).toISOString());
   const login=await request('/api/v1/auth/login','POST',{email:data.email,password:data.password});
   assert.equal(login.status,200,await login.clone().text());
   const cookie=login.headers.get('set-cookie').split(';')[0];
@@ -228,5 +229,37 @@ test('public signup stays pending until private platform approval; approval is s
   assert.equal(created.status,201,await created.clone().text());
   const foreign=await request('/api/v1/tenants/some-other-company/branches','POST',{code:'XX',name:'Other'},{cookie});
   assert.equal(foreign.status,404);
+ }finally{db.close();}
+});
+
+test('legacy pending signup can still be approved once without granting extra trial to active accounts',async()=>{
+ const db=openLocalDatabase(),adminToken='platform-approval-secret-with-32-plus-characters';
+ try{
+  for(const filename of ['0001_identity.sql','0030_public_registration.sql','0031_saas_access.sql'])
+   db.exec(readFileSync(new URL('../migrations/'+filename,import.meta.url),'utf8'));
+  const pass='StrongLegacySignupPassword2026!',when=new Date(NOW).toISOString();
+  await db.batch([
+   db.prepare('INSERT INTO users(id,email_norm,display_name,password_hash,created_at) VALUES(?,?,?,?,?)')
+    .bind('legacy-owner','legacy@example.test','Legacy Owner',await hashPassword(pass),when),
+   db.prepare('INSERT INTO tenants(id,slug,name,active,created_at) VALUES(?,?,?,0,?)')
+    .bind('legacy-tenant','legacy-store','Legacy Store',when),
+   db.prepare('INSERT INTO branches(id,tenant_id,code,name,created_at) VALUES(?,?,?,?,?)')
+    .bind('legacy-branch','legacy-tenant','MAIN','Matriz',when),
+   db.prepare("INSERT INTO tenant_memberships(tenant_id,user_id,profile_key,active,created_at) VALUES(?,?,'OWNER',0,?)")
+    .bind('legacy-tenant','legacy-owner',when)
+  ]);
+  const api=createApi({DB:db,AUTH_ENABLED:'true',PLATFORM_ADMIN_TOKEN:adminToken},{now:()=>NOW});
+  const approve=()=>api.fetch(new Request(origin+'/api/v1/platform/tenants/legacy-tenant/approve',{
+   method:'POST',headers:{origin,authorization:'Bearer '+adminToken,'content-type':'application/json'},body:'{}'
+  }));
+  assert.equal((await approve()).status,200);
+  assert.equal((await approve()).status,409,'trial approval is never renewable');
+  const trial=await db.prepare("SELECT status,ends_at AS endsAt FROM saas_subscriptions WHERE tenant_id='legacy-tenant'").bind().first();
+  assert.equal(trial.status,'TRIAL');
+  assert.equal(trial.endsAt,new Date(NOW+14*86400000).toISOString());
+  const login=await api.fetch(new Request(origin+'/api/v1/auth/login',{method:'POST',
+   headers:{origin,'content-type':'application/json'},body:JSON.stringify({email:'legacy@example.test',password:pass})
+  }));
+  assert.equal(login.status,200,await login.clone().text());
  }finally{db.close();}
 });

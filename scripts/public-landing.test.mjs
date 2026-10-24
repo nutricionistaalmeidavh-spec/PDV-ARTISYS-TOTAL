@@ -25,7 +25,7 @@ test('registration sends only to the same-origin API and has no external depende
   assert.match(js,/credentials:'same-origin'/);
   assert.doesNotMatch(js,/https?:\/\//);
   const wrangler=source('wrangler.jsonc');
-  assert.match(wrangler,/"REGISTRATION_ENABLED": "false"/);
+  assert.match(wrangler,/"REGISTRATION_ENABLED": "true"/);
 });
 test('landing login authenticates in place and continues into the operational app',()=>{
   const html=source('apps/landing/index.html');

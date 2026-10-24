@@ -295,7 +295,11 @@ export async function platformManagementRoute(request,db,env,path,now,{centralVe
    const tenant=await q(db,'SELECT active FROM tenants WHERE id=?',tenantId).first();
    if(!tenant)throw fail(404,'Empresa não encontrada.');
    if(tenant.active!==0)throw fail(409,'Empresa já avaliada.');
-   const membership=await q(db,"SELECT user_id AS ownerId FROM tenant_memberships WHERE tenant_id=? AND profile_key='OWNER' AND active=0",tenantId).first();
+   const membership=await q(db,`SELECT m.user_id AS ownerId,u.email_norm AS ownerEmail,t.name AS shopName
+    FROM tenant_memberships m
+    JOIN users u ON u.id=m.user_id
+    JOIN tenants t ON t.id=m.tenant_id
+    WHERE m.tenant_id=? AND m.profile_key='OWNER' AND m.active=0`,tenantId).first();
    if(!membership)throw fail(409,'Cadastro incompleto: proprietário não encontrado.');
    const approvedAt=stamp(now),endsAt=stamp(now+14*86400000);
    await db.batch([
@@ -305,7 +309,29 @@ export async function platformManagementRoute(request,db,env,path,now,{centralVe
     q(db,"UPDATE tenant_memberships SET active=1 WHERE tenant_id=? AND user_id=? AND profile_key='OWNER' AND active=0",tenantId,membership.ownerId),
     audit(db,tenantId,'PLATFORM','PUBLIC_TENANT_APPROVED',membership.ownerId,now)
    ]);
-   return output({approved:true,tenantId,trialEndsAt:endsAt});
+   // Approval is the only operation that starts the 14-day trial. Keep the
+   // committed entitlement if the optional email provider is unavailable:
+   // returning a 503 here would wrongly invite the central to retry approval.
+   let emailSent=false;
+   if(emailTransportPresent(env)){
+    try{
+     const appUrl=new URL('/app/',new URL(request.url).origin).href;
+     await sendTransactionalEmail(env,{
+      to:membership.ownerEmail,
+      subject:'Seu teste grátis foi liberado | PDV Total ArtiSys',
+      text:'O cadastro de '+membership.shopName+' foi aprovado pela ArtiSys.\n\n'
+       +'Seus 14 dias de teste grátis começam agora. Acesse o PDV Total com o mesmo e-mail e a senha escolhidos no cadastro:\n'
+       +appUrl+'\n\nO período de avaliação termina em '
+       +new Date(endsAt).toLocaleDateString('pt-BR',{timeZone:'UTC'})
+       +'.\n\nSe não reconhece esta solicitação, entre em contato com a ArtiSys.'
+     });
+     emailSent=true;
+    }catch{
+     // The central sees emailSent=false and can contact the owner securely.
+     // No trial is renewed, no password is reset and no token is exposed.
+    }
+   }
+   return output({approved:true,tenantId,trialEndsAt:endsAt,emailSent});
   }catch(e){return e.status?err(e):output({error:'Cadastro já aprovado ou inconsistência na ativação.'},409);}
  }
 
