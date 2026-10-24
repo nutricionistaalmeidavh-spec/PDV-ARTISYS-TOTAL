@@ -116,6 +116,17 @@ export async function applyOfflineBaseline(db,snapshot,scope){
         record={...original,status:'OPEN',completed_at:null};
       }
     }
+    // An immutable ledger row can already be installed by a previous pull.
+    // Avoid issuing INSERT (even ON CONFLICT DO NOTHING), because database
+    // BEFORE INSERT triggers run before SQLite resolves uniqueness conflicts.
+    if(['sale_items','sale_payments','cash_movements','restaurant_order_items',
+      'restaurant_sale_links','cash_adjustments','customer_credit_receipts',
+      'r4_table_prepayments','r4_table_prepayment_refunds','sale_returns',
+      'sale_return_items','sale_refund_movements'].includes(table)){
+      const current=await db.prepare('SELECT id FROM '+table+' WHERE id=? AND tenant_id=? AND branch_id=?')
+        .bind(record.id,scope.tenantId,scope.branchId).first();
+      if(current)continue;
+    }
     const names=Object.keys(record);
     if(!names.length||names.some(name=>!allowed.has(name)))throw Error('Schema incompatível em '+table);
     const placeholders=names.map(()=>'?').join(',');
