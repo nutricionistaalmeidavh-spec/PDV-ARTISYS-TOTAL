@@ -340,8 +340,8 @@ export function createApi(env,{now=()=>Date.now()}={}){
               try{
                 const staged=await stageOfflineMutation(db,request,{tenantId,branchId:request.clone?(
                   (await request.clone().json().catch(()=>({})))?.branchId||url.searchParams.get('branchId')
-                ):null,userId:session.userId,now:now()});
-                if(commerceMatch[2].startsWith('restaurant/')){
+                ):null,userId:session.userId,now:now(),allowCash:env.OFFLINE_CASH_ENABLED==='true'});
+                if(/^(restaurant|cash|sales)(?:\/|$)/.test(commerceMatch[2])){
                   const sourceBody=await request.clone().json();
                   offlineReplayContext={idFactory:await offlineMutationIds({tenantId,
                     branchId:sourceBody.branchId,method,path,mutationId:staged.mutationId}),
@@ -367,7 +367,8 @@ export function createApi(env,{now=()=>Date.now()}={}){
         const receipts=await receiptRoute(request,db,session,membership,tenantId,commerceMatch[2]);
         if(receipts)return receipts;
         const commerce=await commerceRoute(request,db,session,membership,tenantId,commerceMatch[2],{
-          now:()=>new Date(now()).toISOString()
+          now:offlineReplayContext?.clock||(()=>new Date(now()).toISOString()),
+          idFactory:offlineReplayContext?.idFactory
         });
         if(commerce)return commerce;
         const vertical=await verticalRoute(request,db,session,membership,tenantId,commerceMatch[2],offlineReplayContext||{});
