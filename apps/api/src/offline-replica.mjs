@@ -72,8 +72,18 @@ export async function applyOfflineBaseline(db,snapshot,scope){
    }
   }
   if(snapshot.authority){
+   const previous=await db.prepare('SELECT mode,epoch,gateway_id AS gatewayId FROM offline_local_authority WHERE tenant_id=? AND branch_id=?')
+    .bind(scope.tenantId,scope.branchId).first();
+   if(previous&&previous.gatewayId!==scope.gatewayId)
+    throw Error('O PC local não corresponde mais ao gateway autorizado.');
+   if(previous&&previous.epoch!==snapshot.authority.epoch&&outstanding>0)
+    throw Error('Fila local pendente: não mude geração da autoridade sem conciliação.');
+   // The 15-second cloud pull and the manual handoff can run concurrently.
+   // Never turn RECONCILING back into LOCAL from a stale cloud snapshot.
+   const mode=previous?.mode==='RECONCILING'&&snapshot.authority.mode==='LOCAL'
+     ?'RECONCILING':snapshot.authority.mode;
    await db.prepare('INSERT INTO offline_local_authority(tenant_id,branch_id,gateway_id,epoch,mode,refreshed_at) VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,branch_id) DO UPDATE SET epoch=excluded.epoch,mode=excluded.mode,refreshed_at=excluded.refreshed_at')
-    .bind(scope.tenantId,scope.branchId,scope.gatewayId,snapshot.authority.epoch,snapshot.authority.mode,Date.now()).run();
+    .bind(scope.tenantId,scope.branchId,scope.gatewayId,snapshot.authority.epoch,mode,Date.now()).run();
   }
   const damaged=(await db.prepare('PRAGMA foreign_key_check').bind().all()).results;
   if(damaged.length)throw Error('Snapshot falhou na integridade referencial.');
