@@ -46,8 +46,10 @@ export async function applyOfflineBaseline(db,snapshot,scope){
     state.results[0].tenantId!==scope.tenantId||state.results[0].branchId!==scope.branchId||
     state.results[0].gatewayId!==scope.gatewayId))
    throw Error('Banco já provisionado: nunca sobrescrever uma loja local. Use um SQLite vazio e separado.');
- const count=await db.prepare('SELECT COUNT(*) AS n FROM sales').bind().first();
- if(count.n>0)throw Error('Vendas locais presentes: reconciliação obrigatória antes de atualizar cópia.');
+ // A database from another shop was rejected above using the gateway-bound
+ // offline_replica_state. Authorized, reconciled local sales MUST be allowed to
+ // remain: an unconditional sales.count guard would break the second pull.
+
  const outstanding=(await db.prepare("SELECT COUNT(*) AS n FROM offline_outbox WHERE status IN('PENDING','CONFLICT')").bind().first()).n;
  db.exec('BEGIN IMMEDIATE');
  try{
@@ -58,6 +60,10 @@ export async function applyOfflineBaseline(db,snapshot,scope){
   const finalSaleStatus=[];
   const finalCashStatus=[];
   for(const table of ORDER){
+   // WAN may return while waiter/cash writes are still queued. Never import a
+   // cloud business projection over those newer local changes before every
+   // event has a durable D1 ACK. Users and product catalog can still refresh.
+   if(outstanding>0&&table!=='customers'&&EXTRA.includes(table))continue;
    if(table==='stock_positions'&&outstanding>0)continue;
    const columns=(await db.prepare('PRAGMA table_info('+table+')').bind().all()).results.map(x=>x.name);
    if(!columns.length)throw Error('Tabela inexistente: '+table);
