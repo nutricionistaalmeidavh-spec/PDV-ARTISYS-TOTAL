@@ -192,20 +192,22 @@ export async function applyOfflineBaseline(db,snapshot,scope){
   for(const table of [...ORDER].reverse()){
     if(!SAFE_DELETION_TABLES.has(table)||!Object.hasOwn(snapshot.datasetVersions||{},table)||
        outstanding>0)continue;
-    const authoritativeIds=new Set(tables[table].map(row=>row.id));
-    if(authoritativeIds.size!==tables[table].length)
-      throw Error('Dataset duplicado: '+table);
+    // stock_positions has composite scope+product_id, not an id column.
+    const keyColumn=table==='stock_positions'?'product_id':'id';
+    const authoritativeIds=new Set(tables[table].map(row=>row[keyColumn]));
+    if(authoritativeIds.size!==tables[table].length||authoritativeIds.has(undefined))
+      throw Error('Dataset duplicado ou sem chave: '+table);
     const tenantOnly=['product_categories','products','customers'].includes(table);
     const predicate='tenant_id=?'+(tenantOnly?'':' AND branch_id=?');
     const scopeParams=tenantOnly?[scope.tenantId]:[scope.tenantId,scope.branchId];
-    const localIds=(await db.prepare('SELECT id FROM '+table+' WHERE '+predicate)
+    const localIds=(await db.prepare('SELECT '+keyColumn+' AS local_key FROM '+table+' WHERE '+predicate)
       .bind(...scopeParams).all()).results;
     for(const row of localIds){
-      if(authoritativeIds.has(row.id))continue;
+      if(authoritativeIds.has(row.local_key))continue;
       // RESTRICT foreign keys and canonical guards remain active. Any
       // referenced row or unexpected trigger causes full rollback.
-      await db.prepare('DELETE FROM '+table+' WHERE '+predicate+' AND id=?')
-        .bind(...scopeParams,row.id).run();
+      await db.prepare('DELETE FROM '+table+' WHERE '+predicate+' AND '+keyColumn+'=?')
+        .bind(...scopeParams,row.local_key).run();
     }
   }
   const damaged=(await db.prepare('PRAGMA foreign_key_check').bind().all()).results;
