@@ -73,9 +73,18 @@ export async function finishOfflineAuthority(db,env,{fetcher=fetch}={}){
  if(scope.gatewayId!==env.OFFLINE_GATEWAY_ID)throw Error('O gateway local não corresponde à autorização.');
  await db.prepare("UPDATE offline_local_authority SET mode='RECONCILING' WHERE tenant_id=? AND branch_id=?")
   .bind(scope.tenantId,scope.branchId).run();
- const result=await pushOfflineOutbox(db,env,{fetcher});
- if(result.conflicts)throw Object.assign(Error('Conflitos precisam de revisão; não é seguro liberar a nuvem.'),{status:409});
- const progress=await db.prepare("SELECT COUNT(*) AS pending,COALESCE(MAX(sequence),0) AS lastSequence FROM offline_outbox WHERE tenant_id=? AND branch_id=? AND status IN('PENDING','CONFLICT')").bind(scope.tenantId,scope.branchId).first();
+ let acknowledged=0;
+ // The transport batch is intentionally small; a restaurant may accumulate
+ // hundreds of movements through a WAN outage. Drain in bounded pages while
+ // keeping the local write fence active until the full queue is ACKed.
+ for(let batch=0;batch<80;batch++){
+   const result=await pushOfflineOutbox(db,env,{fetcher,maxBatch:25});
+   acknowledged+=result.acknowledged;
+   if(result.conflicts)throw Object.assign(Error('Conflitos precisam de revisão; não é seguro liberar a nuvem.'),{status:409});
+   if(result.acknowledged<25)break;
+ }
+ const progress=await db.prepare("SELECT COUNT(*) AS pending FROM offline_outbox WHERE tenant_id=? AND branch_id=? AND status IN('PENDING','CONFLICT')")
+  .bind(scope.tenantId,scope.branchId).first();
  if(progress.pending)throw Object.assign(Error('Há operações sem ACK do D1.'),{status:409});
  const seq=await db.prepare('SELECT COALESCE(MAX(sequence),0) AS seq FROM offline_outbox WHERE tenant_id=? AND branch_id=? AND epoch=?')
   .bind(scope.tenantId,scope.branchId,scope.epoch).first();
@@ -90,5 +99,5 @@ export async function finishOfflineAuthority(db,env,{fetcher=fetch}={}){
  if(ack.released!==true||ack.epoch!==scope.epoch)throw Error('Confirmação de liberação inválida.');
  await db.prepare("UPDATE offline_local_authority SET mode='CLOUD',refreshed_at=? WHERE tenant_id=? AND branch_id=?")
   .bind(Date.now(),scope.tenantId,scope.branchId).run();
- return {released:true,epoch:scope.epoch,acknowledged:result.acknowledged};
+ return {released:true,epoch:scope.epoch,acknowledged};
 }
