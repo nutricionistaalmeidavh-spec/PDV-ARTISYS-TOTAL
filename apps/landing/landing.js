@@ -109,7 +109,9 @@
         throw new Error(unavailable||payload.error||'Não foi possível criar a conta.');
       }
       feedback.classList.add('success');
-      feedback.textContent=payload.message||'Cadastro recebido. Aguarde a liberação da sua conta.';
+      feedback.textContent=payload.status==='pending-approval'
+        ?'Solicitação recebida. A ArtiSys analisará seu cadastro. Os 14 dias grátis começam após a aprovação; você poderá entrar com o e-mail e a senha que acabou de escolher.'
+        :(payload.message||'Solicitação recebida. Aguarde a avaliação da ArtiSys.');
       form.reset();
       button.textContent='Solicitação recebida';
     }catch(error){
