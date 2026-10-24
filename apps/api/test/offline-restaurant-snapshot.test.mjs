@@ -34,11 +34,13 @@ test('D1 restaurant snapshot preserves linked closed table, served orders and se
  await cloud.prepare('INSERT INTO cash_sessions(id,tenant_id,branch_id,operator_id,status,opening_cents,opened_at) VALUES(?,?,?,?,?,?,?)')
   .bind('cash-session',tId,branch,'alpha-owner','OPEN',5000,stamp).run();
  await cloud.prepare('INSERT INTO sales(id,tenant_id,branch_id,operator_id,sale_number,status,subtotal_cents,total_cents,cash_session_id,created_at,completed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
-  .bind('paid-sale',tId,branch,'alpha-owner','001','COMPLETED',2500,2500,'cash-session',stamp,stamp).run();
+  .bind('paid-sale',tId,branch,'alpha-owner','001','OPEN',2500,2500,'cash-session',stamp,null).run();
  await cloud.prepare('INSERT INTO sale_items(id,tenant_id,branch_id,sale_id,product_id,product_name,sku,quantity_milli,unit_price_cents,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)')
   .bind('sold-item',tId,branch,'paid-sale','alpha-product','Pizza','MAIN',1000,2500,stamp).run();
  await cloud.prepare('INSERT INTO sale_payments(id,tenant_id,branch_id,sale_id,method,amount_cents,created_at) VALUES(?,?,?,?,?,?,?)')
   .bind('pix-payment',tId,branch,'paid-sale','PIX',2500,stamp).run();
+ await cloud.prepare('UPDATE sales SET status=?,completed_at=? WHERE id=?')
+  .bind('COMPLETED',stamp,'paid-sale').run();
  await cloud.prepare('INSERT INTO restaurant_sale_links(id,tenant_id,branch_id,table_session_id,sale_id,created_at) VALUES(?,?,?,?,?,?)')
   .bind('linked-checkout',tId,branch,'table-session','paid-sale',stamp).run();
  const origin='https://cloud.example.test';
