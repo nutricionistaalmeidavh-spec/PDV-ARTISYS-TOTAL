@@ -42,7 +42,9 @@ test('hosted settings show business, receipts, equipment and areas without loadi
   assert.match(host.innerHTML,/Identificação nos comprovantes/);
   assert.match(host.innerHTML,/Impressão e periféricos/);
   assert.match(host.innerHTML,/Funcionamento offline/);
-  assert.match(host.innerHTML,/vendas, caixa e estoque ainda não disponível/i);
+  assert.match(host.innerHTML,/gateway autorizado com cópia de dados e fila transacional por filial/i);
+  assert.match(host.innerHTML,/data-settings-local-fallback/);
+  assert.match(host.innerHTML,/origem local mantém seu próprio login/i);
   assert.match(host.innerHTML,/data-settings-offline-gateway/);
   assert.doesNotMatch(host.innerHTML,/data-settings-offline-enable/);
 
