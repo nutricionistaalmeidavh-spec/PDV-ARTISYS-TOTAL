@@ -31,7 +31,9 @@ try{
   const shell=await fetch(base+'/');
   assert.equal(shell.status,200);
   const html=await shell.text();
-  assert.match(html,/PDV Total|PDV TOTAL/i);
+  assert.match(html,/PDV ArtiSys/i);
+  assert.match(html,/R\$ 89,90/);
+  assert.doesNotMatch(html,/teste grátis|data-open-login|data-open-register/i);
   assert.match(html,/id="hero-title"/);
   const app=await fetch(base+'/app/');
   assert.equal(app.status,200);
