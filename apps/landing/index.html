@@ -3,12 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="PDV Total ArtiSys: cardápio, mesas, pedidos, cozinha, caixa e gestão do seu negócio em uma plataforma web.">
+  <meta name="description" content="PDV ArtiSys: sistema instalável para restaurantes com cardápio digital, comandas, mesas, cozinha e caixa. R$ 89,90, pagamento único, sem mensalidade.">
   <meta name="theme-color" content="#090d18">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; form-action 'self'">
-  <title>PDV Total ArtiSys | Cardápio, mesas e gestão no mesmo lugar</title>
+  <title>PDV ArtiSys | Cardápio, mesas e gestão no mesmo lugar</title>
   <link rel="stylesheet" href="/landing.css">
-  <link rel="stylesheet" href="/landing-auth.css">
   <link rel="stylesheet" href="/landing-premium.css">
   <link rel="stylesheet" href="/landing-gallery.css">
   <link rel="stylesheet" href="/landing-video.css">
@@ -21,27 +20,28 @@
   <a class="skip" href="#conteudo">Pular para o conteúdo</a>
   <header class="site-header">
     <nav class="nav container" aria-label="Principal">
-      <a class="brand" href="/" aria-label="PDV Total ArtiSys, início"><span class="brand-symbol">A</span><span><strong>artisys</strong><small>PDV TOTAL</small></span></a>
+      <a class="brand" href="/" aria-label="PDV ArtiSys, início"><span class="brand-symbol">A</span><span><strong>artisys</strong><small>PDV ARTISYS</small></span></a>
       <div class="nav-links">
         <a href="#solucao">O sistema</a>
         <a href="#restaurante">Restaurantes</a>
         <a href="#recursos">Funcionalidades</a>
       </div>
-      <div class="nav-actions"><button class="nav-login" type="button" data-open-login>Entrar</button><button class="button button-primary nav-cta" type="button" data-open-register>Começar teste grátis <span aria-hidden="true">↗</span></button></div>
+      <div class="nav-actions"><a class="button button-primary nav-cta" href="https://www.instagram.com/artisysdev/" target="_blank" rel="noopener noreferrer" data-purchase>Comprar por R$ 89,90 <span aria-hidden="true">↗</span></a></div>
     </nav>
   </header>
   <main id="conteudo">
     <section class="hero premium-hero container" aria-labelledby="hero-title">
       <div class="hero-copy premium-hero-copy">
-        <p class="premium-kicker">ARTISYS · PDV TOTAL PARA RESTAURANTES</p>
+        <p class="premium-kicker">ARTISYS · PDV INSTALÁVEL PARA RESTAURANTES</p>
         <h1 id="hero-title">Tudo conectado.<br><em>Do salão à cozinha.</em></h1>
-        <p>Cardápio, mesas, comandas, cozinha, caixa e gestão no mesmo sistema. Uma operação conectada, da equipe ao cliente.</p>
+        <p>Instale o PDV ArtiSys no computador e organize cardápio, mesas, comandas, cozinha e caixa. Pagamento único, sem assinatura ou mensalidade.</p>
         <div class="hero-actions">
-          <button class="button button-primary button-large" type="button" data-open-register>Começar teste grátis <span aria-hidden="true">↗</span></button>
+          <a class="button button-primary button-large" href="https://www.instagram.com/artisysdev/" target="_blank" rel="noopener noreferrer" data-purchase>Comprar por R$ 89,90 <span aria-hidden="true">↗</span></a>
           <a class="button button-outline button-large" href="#demonstracao">Explorar o sistema <span aria-hidden="true">↓</span></a>
         </div>
+        <p class="purchase-note">R$ 89,90 · pagamento único · sem mensalidade</p>
       </div>
-      <div class="hero-visual premium-stage" aria-label="Montagem fotográfica ilustrativa do PDV Total em notebook, cardápio digital e celulares de atendimento e cozinha">
+      <div class="hero-visual premium-stage" aria-label="Montagem fotográfica ilustrativa do PDV ArtiSys em notebook, cardápio digital e celulares de atendimento e cozinha">
         <figure class="photo-hero" data-photo-hero>
           <img src="/media/pdv-integrado.webp" width="948" height="699" alt="Notebook com painel de vendas, tablet com cardápio de hambúrgueres e celulares com telas de garçom e cozinha sobre balcão de restaurante." fetchpriority="high" decoding="async">
           
@@ -59,17 +59,17 @@
     </section>
     <section class="section demo-section" id="demonstracao">
       <div class="container demo-layout">
-        <div class="demo-copy"><h2>Veja como o PDV Total organiza a operação.</h2><p>Deslize sobre a tela para explorar outras áreas do PDV. Toque em ampliar para enxergar cada detalhe.</p><div class="demo-tabs" role="tablist" aria-label="Prévias de funcionalidades">
+        <div class="demo-copy"><h2>Veja como o PDV ArtiSys organiza a operação.</h2><p>Deslize sobre a tela para explorar outras áreas do PDV. Toque em ampliar para enxergar cada detalhe.</p><div class="demo-tabs" role="tablist" aria-label="Prévias de funcionalidades">
           <button type="button" id="tab-mesas" role="tab" aria-controls="painel-mesas" aria-selected="true" tabindex="0" data-demo="mesas"><strong>01</strong><span>Mesas e atendimento<small>Visão do salão e comandas</small></span></button>
           <button type="button" id="tab-cardapio" role="tab" aria-controls="painel-cardapio" aria-selected="false" tabindex="-1" data-demo="cardapio"><strong>02</strong><span>Cardápio e produtos<small>Categorias, variações e adicionais</small></span></button>
           <button type="button" id="tab-cozinha" role="tab" aria-controls="painel-cozinha" aria-selected="false" tabindex="-1" data-demo="cozinha"><strong>03</strong><span>Pedidos e cozinha<small>Acompanhe a preparação</small></span></button>
           <button type="button" id="tab-caixa" role="tab" aria-controls="painel-caixa" aria-selected="false" tabindex="-1" data-demo="caixa"><strong>04</strong><span>Atendimento e caixa<small>Pedidos, comandas e fechamento</small></span></button>
         </div></div>
         <div class="demo-frame">
-          <div class="demo-frame-title"><span class="demo-frame-brand">PDV Total</span><div class="demo-gallery-actions" aria-label="Controles da galeria"><button type="button" data-gallery-prev aria-label="Ver tela anterior" title="Tela anterior">←</button><output data-gallery-counter aria-live="polite" aria-atomic="true">1 de 4</output><button type="button" data-gallery-next aria-label="Ver próxima tela" title="Próxima tela">→</button><button type="button" data-gallery-expand aria-label="Ampliar tela selecionada" title="Ampliar tela">Ampliar ↗</button></div></div>
+          <div class="demo-frame-title"><span class="demo-frame-brand">PDV ArtiSys</span><div class="demo-gallery-actions" aria-label="Controles da galeria"><button type="button" data-gallery-prev aria-label="Ver tela anterior" title="Tela anterior">←</button><output data-gallery-counter aria-live="polite" aria-atomic="true">1 de 4</output><button type="button" data-gallery-next aria-label="Ver próxima tela" title="Próxima tela">→</button><button type="button" data-gallery-expand aria-label="Ampliar tela selecionada" title="Ampliar tela">Ampliar ↗</button></div></div>
           <div id="painel-mesas" class="demo-panel demo-photo-panel" role="tabpanel" aria-labelledby="tab-mesas" data-panel="mesas" >
             <figure class="demo-photo-figure">
-              <img src="/media/pdv-mesas.webp" width="950" height="623" alt="Mapa de mesas e comandas no sistema PDV Total, exibido em tablet sobre balcão de restaurante." loading="eager" decoding="async">
+              <img src="/media/pdv-mesas.webp" width="950" height="623" alt="Mapa de mesas e comandas no sistema PDV ArtiSys, exibido em tablet sobre balcão de restaurante." loading="eager" decoding="async">
               <figcaption><strong>Salão e comandas</strong><span>Gerencie mesas, comandas e acompanhe pedidos do salão.</span></figcaption>
             </figure>
           </div>
@@ -98,7 +98,7 @@
       <div class="container">
         <div class="video-showcase-head">
           <div>
-            <p class="video-eyebrow">PDV TOTAL EM AÇÃO</p>
+            <p class="video-eyebrow">PDV ARTISYS EM AÇÃO</p>
             <h2 id="video-showcase-title">Veja como o atendimento ganha ritmo.</h2>
             <p>Duas demonstrações visuais para conhecer o fluxo de mesas e o controle de produtos e estoque. Cenas ilustrativas da interface.</p>
           </div>
@@ -114,7 +114,7 @@
             </div>
             <div class="video-device-stage">
               <div class="video-device">
-                <video data-video="mesas" muted playsinline controls loop preload="none" poster="/media/pdv-demo-mesas-poster.webp" aria-label="Demonstração visual da abertura de uma mesa no PDV Total">
+                <video data-video="mesas" muted playsinline controls loop preload="none" poster="/media/pdv-demo-mesas-poster.webp" aria-label="Demonstração visual da abertura de uma mesa no PDV ArtiSys">
                   <source src="/media/pdv-demo-mesas.mp4" type="video/mp4">
                   <p>Vídeo indisponível neste navegador. <a href="/media/pdv-demo-mesas.mp4">Abrir demonstração de mesas</a>.</p>
                 </video>
@@ -131,7 +131,7 @@
             </div>
             <div class="video-device-stage">
               <div class="video-device">
-                <video data-video="estoque" muted playsinline controls loop preload="none" poster="/media/pdv-demo-estoque-poster.webp" aria-label="Demonstração visual do cadastro de um produto no estoque do PDV Total">
+                <video data-video="estoque" muted playsinline controls loop preload="none" poster="/media/pdv-demo-estoque-poster.webp" aria-label="Demonstração visual do cadastro de um produto no estoque do PDV ArtiSys">
                   <source src="/media/pdv-demo-estoque.mp4" type="video/mp4">
                   <p>Vídeo indisponível neste navegador. <a href="/media/pdv-demo-estoque.mp4">Abrir demonstração de estoque</a>.</p>
                 </video>
@@ -142,13 +142,11 @@
         </div>
       </div>
     </section>
-    <section class="section container" id="restaurante"><div class="restaurant-layout"><div><h2>Do salão ao caixa, tudo conversa.</h2><p>Restaurantes, lanchonetes e operações de balcão têm fluxos diferentes. O PDV Total reúne ferramentas para atender essas rotinas com clareza.</p><div class="restaurant-points"><div><span>01</span><div><strong>Comandas e pedidos</strong><small>Atendimento, alterações e acompanhamento</small></div></div><div><span>02</span><div><strong>Cozinha e produção</strong><small>Encaminhamento e andamento do preparo</small></div></div><div><span>03</span><div><strong>Fechamento e gestão</strong><small>Vendas, caixa e visão operacional</small></div></div></div></div><div class="restaurant-quote"><span class="quote-mark">“</span><h3>O pedido entra em um lugar e a operação inteira acompanha.</h3><p>Menos alternância de ferramentas para quem precisa atender bem.</p><div class="quote-line"></div><strong>ARTISYS / PDV TOTAL</strong></div></div></section>
-    <section class="section resources-section" id="recursos"><div class="container"><div class="section-intro"><h2>Tudo que sustenta o seu dia a dia.</h2><p>Recursos de gestão reunidos no mesmo PDV, com acesso conforme as permissões de cada usuário.</p></div><div class="resource-grid"><div><span>▤</span><h3>Frente de caixa</h3><p>Vendas, pagamentos registrados e movimentação do caixa.</p></div><div><span>▣</span><h3>Produtos e estoque</h3><p>Catálogo, controle de entradas, saídas e movimentações.</p></div><div><span>▥</span><h3>Financeiro e relatórios</h3><p>Visão de resultados e acompanhamento operacional.</p></div><div><span>◷</span><h3>Equipe e permissões</h3><p>Perfis de acesso para diferentes funções da operação.</p></div><div><span>▧</span><h3>Pedidos e entregas</h3><p>Fluxos para balcão, restaurante e delivery.</p></div><div><span>⌘</span><h3>Acesso web responsivo</h3><p>Utilize o navegador no computador, tablet ou celular compatível.</p></div></div></div></section>
-    <section class="cta-section"><div class="container cta-content"><div><h2>Pronto para organizar sua operação?</h2><p>Cadastre seu estabelecimento e comece o teste grátis de 14 dias automaticamente, sem aguardar aprovação.</p></div><div class="cta-buttons"><button class="button button-light button-large" data-open-register type="button">Começar teste grátis <span aria-hidden="true">↗</span></button><button class="button button-transparent button-large" type="button" data-open-login>Já tenho acesso</button></div></div></section>
+    <section class="section container" id="restaurante"><div class="restaurant-layout"><div><h2>Do salão ao caixa, tudo conversa.</h2><p>Restaurantes, lanchonetes e operações de balcão têm fluxos diferentes. O PDV ArtiSys reúne ferramentas para atender essas rotinas com clareza.</p><div class="restaurant-points"><div><span>01</span><div><strong>Comandas e pedidos</strong><small>Atendimento, alterações e acompanhamento</small></div></div><div><span>02</span><div><strong>Cozinha e produção</strong><small>Encaminhamento e andamento do preparo</small></div></div><div><span>03</span><div><strong>Fechamento e gestão</strong><small>Vendas, caixa e visão operacional</small></div></div></div></div><div class="restaurant-quote"><span class="quote-mark">“</span><h3>O pedido entra em um lugar e a operação inteira acompanha.</h3><p>Menos alternância de ferramentas para quem precisa atender bem.</p><div class="quote-line"></div><strong>ARTISYS / PDV ARTISYS</strong></div></div></section>
+    <section class="section resources-section" id="recursos"><div class="container"><div class="section-intro"><h2>Tudo que sustenta o seu dia a dia.</h2><p>Recursos de gestão reunidos no mesmo PDV, com acesso conforme as permissões de cada usuário.</p></div><div class="resource-grid"><div><span>▤</span><h3>Frente de caixa</h3><p>Vendas, pagamentos registrados e movimentação do caixa.</p></div><div><span>▣</span><h3>Produtos e estoque</h3><p>Catálogo, controle de entradas, saídas e movimentações.</p></div><div><span>▥</span><h3>Financeiro e relatórios</h3><p>Visão de resultados e acompanhamento operacional.</p></div><div><span>◷</span><h3>Equipe e permissões</h3><p>Perfis de acesso para diferentes funções da operação.</p></div><div><span>▧</span><h3>Pedidos e entregas</h3><p>Fluxos para balcão, restaurante e delivery.</p></div><div><span>⌘</span><h3>Atendimento integrado</h3><p>Cardápio digital e operação do salão à cozinha com dispositivos na rede local.</p></div></div></div></section>
+    <section class="cta-section"><div class="container cta-content"><div><h2>Seu PDV, sem mensalidade.</h2><p>Adquira o PDV ArtiSys por R$ 89,90, pagamento único, para instalar no computador e usar no seu estabelecimento. Entre em contato para receber as orientações de compra e instalação.</p></div><div class="cta-buttons"><a class="button button-light button-large" href="https://www.instagram.com/artisysdev/" target="_blank" rel="noopener noreferrer" data-purchase>Solicitar compra por R$ 89,90 <span aria-hidden="true">↗</span></a><a class="button button-transparent button-large" href="#demonstracao">Ver demonstração</a></div></div></section>
   </main>
-  <footer class="site-footer"><div class="container footer-inner"><a class="brand" href="/" aria-label="Voltar ao início"><span class="brand-symbol">A</span><span><strong>artisys</strong><small>PDV TOTAL</small></span></a><p>Uma operação mais organizada começa aqui.</p><button class="footer-login" type="button" data-open-login>Acessar o sistema ↗</button></div><div class="container footer-bottom">© ArtiSys · PDV Total <span>Software para o seu negócio.</span></div></footer>
+  <footer class="site-footer"><div class="container footer-inner"><a class="brand" href="/" aria-label="Voltar ao início"><span class="brand-symbol">A</span><span><strong>artisys</strong><small>PDV ARTISYS</small></span></a><p>Uma operação mais organizada começa aqui.</p><a class="footer-login" href="https://www.instagram.com/artisysdev/" target="_blank" rel="noopener noreferrer" data-purchase>Solicitar compra ↗</a></div><div class="container footer-bottom">© ArtiSys · PDV ArtiSys <span>Software para o seu negócio.</span></div></footer>
   <dialog id="demo-gallery-zoom" class="demo-gallery-zoom" aria-label="Prévia ampliada do sistema"><div class="demo-gallery-zoom-head"><strong data-gallery-zoom-title>Visualização ampliada</strong><button type="button" data-gallery-zoom-close aria-label="Fechar visualização ampliada">Fechar ×</button></div><div class="demo-gallery-zoom-content" data-gallery-zoom-content></div></dialog>
-  <dialog id="registration-dialog" class="registration-dialog" aria-labelledby="registration-title"><div class="dialog-head"><a class="brand" href="/"><span class="brand-symbol">A</span><span><strong>artisys</strong><small>PDV TOTAL</small></span></a><button type="button" class="dialog-close" aria-label="Fechar cadastro" data-close-register>×</button></div><div class="dialog-content"><span class="section-label">ACESSO AO PDV TOTAL</span><h2 id="registration-title">Comece 14 dias de teste grátis</h2><p>Cadastre seu estabelecimento, crie uma senha e entre no PDV imediatamente. Seus 14 dias grátis começam no cadastro.</p><form id="registration-form"><label>Seu nome<input type="text" name="displayName" minlength="3" maxlength="100" autocomplete="name" required placeholder="Nome e sobrenome"></label><label>Nome do estabelecimento<input type="text" name="businessName" minlength="3" maxlength="100" autocomplete="organization" required placeholder="Ex.: Restaurante Central"></label><label>E-mail de acesso<input type="email" name="email" maxlength="254" autocomplete="email" required placeholder="voce@empresa.com.br"></label><label>Senha<input type="password" name="password" minlength="12" maxlength="256" autocomplete="new-password" required aria-describedby="password-tip" placeholder="Mínimo de 12 caracteres"></label><small id="password-tip">Use pelo menos 12 caracteres, incluindo letras e números.</small><div class="honeypot" aria-hidden="true"><label>Site da empresa<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div><p id="registration-feedback" class="registration-feedback" role="status" aria-live="polite"></p><button type="submit" class="button button-primary button-large">Começar teste grátis <span aria-hidden="true">↗</span></button></form><p class="dialog-footer">Já possui conta? <button type="button" data-switch-login>Fazer login</button></p></div></dialog>
-  <dialog id="login-dialog" class="registration-dialog" aria-labelledby="login-title"><div class="dialog-head"><a class="brand" href="/"><span class="brand-symbol">A</span><span><strong>artisys</strong><small>PDV TOTAL</small></span></a><button type="button" class="dialog-close" aria-label="Fechar login" data-close-login>×</button></div><div class="dialog-content"><span class="section-label">ENTRAR NO PDV TOTAL</span><h2 id="login-title">Entre na sua loja</h2><p>Use o e-mail e a senha cadastrados para abrir a operação.</p><form id="landing-login-form"><label>E-mail<input type="email" name="email" maxlength="254" autocomplete="username" required placeholder="voce@empresa.com.br"></label><label>Senha<input type="password" name="password" autocomplete="current-password" required></label><p id="login-feedback" class="registration-feedback" role="status" aria-live="polite"></p><button type="submit" class="button button-primary button-large">Entrar no PDV</button></form><form id="landing-mfa-form" hidden><label>Código de autenticação<input name="code" inputmode="text" autocomplete="one-time-code" maxlength="32" required placeholder="Código de 6 dígitos"></label><p id="mfa-feedback" class="registration-feedback" role="status" aria-live="polite"></p><button type="submit" class="button button-primary button-large">Confirmar acesso</button><button type="button" class="button button-outline button-large" data-back-login>Voltar</button></form><p class="dialog-footer"><a href="/recuperar-senha/">Esqueci minha senha</a> · <button type="button" data-switch-register>Criar conta</button></p></div></dialog>
 </body>
 </html>
