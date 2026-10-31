@@ -43,20 +43,20 @@ async function fixture({failEmail=false}={}){
  return {db,env,api,sent,post,central,close:()=>db.close()};
 }
 
-test('public trial is enabled with immediate access; no platform approval or free owner-created tenants',()=>{
+test('legacy SaaS APIs remain intact while public marketing sells only installed PDV',()=>{
  const raw=readFileSync(new URL('../../../wrangler.jsonc',import.meta.url),'utf8');
  const config=JSON.parse(raw.replace(/^\s*\/\/.*$/gm,''));
+ // Preserve existing tenant/auth integrations; only commercial landing changes.
  assert.equal(config.vars.REGISTRATION_ENABLED,'true');
  assert.equal(config.vars.TENANT_SELF_SIGNUP_ENABLED,'false');
  const html=readFileSync(new URL('../../../apps/landing/index.html',import.meta.url),'utf8');
- assert.match(html,/Começar teste grátis/);
- assert.match(html,/14 dias/);
- assert.doesNotMatch(html,/depende da aprovação da ArtiSys/i);
+ assert.match(html,/R\$ 89,90/);
+ assert.match(html,/sem mensalidade/i);
+ assert.doesNotMatch(html,/Começar teste grátis|14 dias|data-open-register|data-open-login/);
+ assert.doesNotMatch(html,/registration-form|landing-login-form|login-dialog/);
  const js=readFileSync(new URL('../../../apps/landing/landing.js',import.meta.url),'utf8');
- assert.match(js,/fetch\('\/api\/v1\/auth\/register'/);
- assert.match(js,/credentials:'same-origin'/);
+ assert.doesNotMatch(js,/fetch\(|\/api\/v1\/auth\//);
 });
-
 test('landing signup → immediately active scoped 14-day trial → owner login and month license; no central approval',async()=>{
  const x=await fixture();
  try{
