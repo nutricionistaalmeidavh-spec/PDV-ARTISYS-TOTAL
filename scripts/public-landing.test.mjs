@@ -6,39 +6,36 @@ import {join} from 'node:path';
 import {serveLocalPwa} from '../apps/api/src/local-static.mjs';
 const source=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 
-test('marketing is a distinct public entry, not a duplicate operating renderer',()=>{
+test('public landing displays the installed ArtiSys PDV, without SaaS entrypoints',()=>{
   const html=source('apps/landing/index.html');
-  assert.match(html,/<main id="conteudo">/);
-  assert.match(html,/id="registration-form"/);
-  assert.match(html,/id="landing-login-form"/);
-  assert.match(html,/id="landing-mfa-form"/);
-  assert.match(html,/data-open-login/);
-  assert.match(html,/data-demo="mesas"/);
-  assert.match(html,/data-demo="cardapio"/);
-  assert.match(html,/data-demo="cozinha"/);
-  assert.doesNotMatch(html,/src="\/app\.js"/);
-  assert.match(source('scripts/build-web.mjs'),/app\/index\.html/);
+  assert.ok(html.includes('<main id="conteudo">'));
+  assert.ok(html.includes('PDV ArtiSys'));
+  assert.ok(html.includes('R$ 89,90'));
+  assert.ok(html.includes('sem mensalidade'));
+  for(const item of ['data-demo="mesas"','data-demo="cardapio"','data-demo="cozinha"'])
+    assert.ok(html.includes(item));
+  assert.ok(!html.includes('src="/app.js"'));
+  assert.ok(source('scripts/build-web.mjs').includes('app/index.html'));
 });
-test('registration sends only to the same-origin API and has no external dependencies',()=>{
-  const js=source('apps/landing/landing.js');
-  assert.match(js,/fetch\('\/api\/v1\/auth\/register'/);
-  assert.match(js,/credentials:'same-origin'/);
-  assert.doesNotMatch(js,/https?:\/\//);
-  const wrangler=source('wrangler.jsonc');
-  assert.match(wrangler,/"REGISTRATION_ENABLED": "true"/);
-});
-test('landing login authenticates in place and continues into the operational app',()=>{
+
+test('public marketing is a one-time installed offer with direct purchase contact',()=>{
   const html=source('apps/landing/index.html');
-  const js=source('apps/landing/landing.js');
-  assert.match(html,/autocomplete="username"/);
-  assert.match(html,/autocomplete="current-password"/);
-  assert.match(html,/autocomplete="one-time-code"/);
-  assert.match(js,/request\('\/api\/v1\/auth\/login'/);
-  assert.match(js,/request\('\/api\/v1\/auth\/mfa\/login'/);
-  assert.match(js,/session\.mfaRequired/);
-  assert.match(js,/location\.assign\('\/app\/'\)/);
-  assert.doesNotMatch(html,/class="nav-login" href="\/app\//);
+  assert.ok(html.includes('instalar no computador'));
+  assert.ok(html.includes('pagamento único'));
+  assert.ok(html.includes('https://www.instagram.com/artisysdev/'));
+  assert.ok(html.includes('data-purchase'));
+  for(const blocked of ['14 dias','teste grátis','data-open-register','data-open-login','registration-dialog','login-dialog','registration-form','landing-login-form','landing-mfa-form','href="/conta/','<form'])
+    assert.ok(!html.includes(blocked),'legacy SaaS content: '+blocked);
 });
+
+test('landing JS only controls the gallery, never authenticates or registers',()=>{
+  const js=source('apps/landing/landing.js');
+  for(const blocked of ['fetch(','/api/v1/auth/','location.assign(','mfa','registration'])
+    assert.ok(!js.includes(blocked),'legacy auth handler: '+blocked);
+  assert.ok(js.includes('data-demo'));
+  assert.ok(js.includes('aria-selected'));
+});
+
 test('PWA opens the operational system, never marketing, when installed',()=>{
   const manifest=JSON.parse(source('apps/web/manifest.webmanifest'));
   assert.equal(manifest.start_url,'/app/');
@@ -67,7 +64,7 @@ test('self-hosted static server resolves only exact landing and app entrypoints'
 });
 
 
-test('premium landing is bundled without remote runtime dependencies or auth route changes',()=>{
+test('premium landing is bundled without remote runtime dependencies',()=>{
   const html=source('apps/landing/index.html');
   const css=source('apps/landing/landing-premium.css');
   const motion=source('apps/landing/landing-motion.js');
@@ -80,8 +77,7 @@ test('premium landing is bundled without remote runtime dependencies or auth rou
   assert.match(html,/class="demo-panel demo-photo-panel"/);
   assert.doesNotMatch(html,/class="premium-laptop"/);
   assert.match(builder,/cpSync\(resolve\(root,'apps\/landing\/media'/);
-  for(const selector of ['data-open-login','data-open-register','registration-form','landing-login-form','landing-mfa-form'])
-    assert.match(html,new RegExp(selector));
+  assert.doesNotMatch(html,/landing-auth\.css|data-open-login|data-open-register/);
   assert.match(motion,/IntersectionObserver/);
   assert.match(motion,/prefers-reduced-motion/);
   assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
@@ -89,7 +85,6 @@ test('premium landing is bundled without remote runtime dependencies or auth rou
   assert.doesNotMatch(css,/@import|https?:\/\//);
   assert.match(source('apps/web/manifest.webmanifest'),/\/app\//);
 });
-
 
 test('preview gallery remains first-party, swipeable and scoped outside auth',()=>{
   const html=source('apps/landing/index.html');
@@ -129,7 +124,7 @@ test('marketing photos are real local WebP files and four gallery images can enl
 });
 
 
-test('hero prioritizes the real integrated mockup, with visible text and no unwanted disclaimers',()=>{
+test('hero and gallery remain intact when switching to the installed offer',()=>{
   const html=source('apps/landing/index.html');
   const css=source('apps/landing/landing-gallery.css');
   assert.match(html,/<section class="hero premium-hero container"/);
@@ -140,17 +135,8 @@ test('hero prioritizes the real integrated mockup, with visible text and no unwa
   assert.match(css,/\.premium-hero::before\{/);
   assert.match(css,/\.premium-hero \.premium-stage \.photo-hero img\{/);
   assert.match(css,/@media\(max-width:760px\)/);
-  for(const label of [
-    'Apresentação visual ilustrativa',
-    'As prévias são ilustrativas',
-    'Demonstração ilustrativa',
-    'Dados fictícios',
-    'Prévia ilustrativa;',
-    'Deslize para o lado ou use as setas'
-  ])assert.ok(!html.includes(label),label+' must not appear');
-  for(const id of ['registration-form','landing-login-form','landing-mfa-form','demo-gallery-zoom']){
-    assert.match(html,new RegExp('id="'+id+'"'));
-  }
+  assert.ok(html.includes('id="demo-gallery-zoom"'));
+  assert.ok(!html.includes('id="registration-form"'));
 });
 
 test('PDV custom hostname shares the existing Worker, API and legacy workers.dev link',()=>{
@@ -165,8 +151,8 @@ test('PDV custom hostname shares the existing Worker, API and legacy workers.dev
  assert.ok(api.includes("path==='/api/v1/integrations/artisys/platform'"));
  assert.ok(api.includes("path==='/api/v1/integrations/artisys/billing'"));
  const landing=source('apps/landing/landing.js');
- assert.ok(landing.includes("'/api/v1/auth/login'")||landing.includes("request('/api/v1/auth/login'"));
- assert.ok(!landing.includes('pdv.artisys.dev'),'frontend must use relative, same-origin API endpoints');
+ assert.ok(!landing.includes('/api/v1/auth/login'),'frontend marketing must not authenticate');
+ assert.ok(!landing.includes('pdv.artisys.dev'),'frontend must avoid hardcoded own hostname');
 });
 
 test('local workerd smoke uses a temporary config without production routes',()=>{
@@ -205,8 +191,7 @@ test('product videos are first-party lazy, accessible, and do not affect auth ro
   assert.doesNotMatch(js,/fetch\(|https?:\/\//);
   assert.doesNotMatch(html,/src="https?:\/\//);
   assert.match(html,/src="\/media\/pdv-integrado\.webp"/);
-  assert.match(html,/id="registration-dialog"/);
-  assert.match(html,/id="login-dialog"/);
+  assert.doesNotMatch(html,/id="registration-dialog"|id="login-dialog"/);
 });
 
 test('product showcase files are actual locally optimized MP4s',()=>{

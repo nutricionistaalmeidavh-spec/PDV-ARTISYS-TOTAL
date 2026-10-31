@@ -377,3 +377,15 @@ body{max-width:100%}
 
 /* Decorative bloom must never widen a narrow viewport. */
 @media(max-width:720px){.premium-stage-aura{inset:6% 0 7%}}
+
+/* Installed-product offer: clear pricing without changing the existing layout. */
+.premium-hero .purchase-note{
+  margin:16px 0 0;
+  font-size:clamp(13px,1.3vw,15px);
+  font-weight:700;
+  letter-spacing:.01em;
+  color:#d8c5ff;
+}
+@media(max-width:720px){
+  .premium-hero .purchase-note{margin-top:14px;line-height:1.5}
+}
