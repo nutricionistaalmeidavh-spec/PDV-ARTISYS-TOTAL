@@ -177,13 +177,13 @@ try{
     'the public landing must not advertise online login or SaaS trials');
   await page.setViewportSize({width:1366,height:860});
 
-  // The operating app still needs an authenticated test fixture. Login through
-  // the internal API so commercial marketing never exposes the retired form.
-  const auth=await context.request.post(origin+'/api/v1/auth/login',{
-    data:{email:'owner@example.test',password:'DummyStrongPassOnlyForCI2026'}
-  });
-  assert.equal(auth.status(),200,'internal fixture login must remain operational');
+  // Marketing remains public and has no login. Authenticate the QA fixture
+  // inside the pre-existing operational app, using its regular login overlay.
   await page.goto(origin+'/app/',{waitUntil:'domcontentloaded'});
+  await page.locator('#web-login-form').waitFor({timeout:12000});
+  await page.locator('#web-email').fill('owner@example.test');
+  await page.locator('#web-password').fill('DummyStrongPassOnlyForCI2026');
+  await page.locator('#web-login-form button[type=submit]').click();
   await page.locator('body[data-active-route=home]').waitFor({timeout:12000});
   await page.getByRole('heading',{name:'Início',exact:true}).waitFor();
   await page.locator('#web-home-live').waitFor({timeout:30000});
