@@ -18,11 +18,14 @@ test('public landing displays the installed ArtiSys PDV, without SaaS entrypoint
   assert.ok(source('scripts/build-web.mjs').includes('app/index.html'));
 });
 
-test('public marketing is a one-time installed offer with direct purchase contact',()=>{
+test('public marketing links all purchase CTAs to the canonical active checkout',()=>{
   const html=source('apps/landing/index.html');
   assert.ok(html.includes('instalar no computador'));
   assert.ok(html.includes('pagamento único'));
-  assert.ok(html.includes('https://www.instagram.com/artisysdev/'));
+  const checkout='https://pagamentos-artisys-central.nutricionistaalmeidavh.workers.dev/comprar?oferta=pdv-artisys-restaurantes';
+  assert.equal((html.match(/data-purchase/g)||[]).length,4);
+  assert.equal(html.split(checkout).length-1,4,'all purchase CTAs must open the canonical checkout');
+  assert.ok(!html.includes('instagram.com/artisysdev'),'do not route purchase to an invalid Instagram handle');
   assert.ok(html.includes('data-purchase'));
   for(const blocked of ['14 dias','teste grátis','data-open-register','data-open-login','registration-dialog','login-dialog','registration-form','landing-login-form','landing-mfa-form','href="/conta/','<form'])
     assert.ok(!html.includes(blocked),'legacy SaaS content: '+blocked);
