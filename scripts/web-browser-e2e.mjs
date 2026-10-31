@@ -164,25 +164,26 @@ try{
   await page.locator('.demo-frame').screenshot({path:'qa-artifacts/pdv-landing-gallery-mobile.png'});
   await page.locator('#tab-mesas').click();
   const landingMobileGeometry=await page.evaluate(()=>({
-    viewport:innerWidth,scroll:document.documentElement.scrollWidth,
-    loginVisible:!!document.querySelector('[data-open-login]')?.getBoundingClientRect().width,
-    registerVisible:!!document.querySelector('[data-open-register]')?.getBoundingClientRect().width
+    viewport:innerWidth,
+    scroll:document.documentElement.scrollWidth,
+    purchaseVisible:!!document.querySelector('[data-purchase]')?.getBoundingClientRect().width,
+    legacyLoginPresent:!!document.querySelector('[data-open-login], [data-open-register], #login-dialog, #registration-dialog')
   }));
   assert.ok(landingMobileGeometry.scroll<=landingMobileGeometry.viewport+2,
     'premium mobile landing horizontal overflow '+JSON.stringify(landingMobileGeometry));
-  assert.ok(landingMobileGeometry.loginVisible&&landingMobileGeometry.registerVisible,
-    'mobile login and registration CTAs must remain accessible');
+  assert.ok(landingMobileGeometry.purchaseVisible,
+    'mobile installed-software purchase CTA must be accessible');
+  assert.ok(!landingMobileGeometry.legacyLoginPresent,
+    'the public landing must not advertise online login or SaaS trials');
   await page.setViewportSize({width:1366,height:860});
 
-  await page.locator('[data-open-register]').first().click();
-  assert.equal(await page.locator('#registration-dialog').evaluate(el=>el.open),true);
-  await page.locator('[data-close-register]').click();
-  await page.locator('[data-open-login]').first().click();
-  assert.equal(await page.locator('#login-dialog').evaluate(el=>el.open),true);
-  await page.locator('#landing-login-form input[name=email]').fill('owner@example.test');
-  await page.locator('#landing-login-form input[name=password]').fill('DummyStrongPassOnlyForCI2026');
-  await page.locator('#landing-login-form button[type=submit]').click();
-  await page.waitForURL(origin+'/app/',{timeout:12000});
+  // The operating app still needs an authenticated test fixture. Login through
+  // the internal API so commercial marketing never exposes the retired form.
+  const auth=await context.request.post(origin+'/api/v1/auth/login',{
+    data:{email:'owner@example.test',password:'DummyStrongPassOnlyForCI2026'}
+  });
+  assert.equal(auth.status(),200,'internal fixture login must remain operational');
+  await page.goto(origin+'/app/',{waitUntil:'domcontentloaded'});
   await page.locator('body[data-active-route=home]').waitFor({timeout:12000});
   await page.getByRole('heading',{name:'Início',exact:true}).waitFor();
   await page.locator('#web-home-live').waitFor({timeout:30000});
